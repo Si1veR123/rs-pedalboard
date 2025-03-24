@@ -19,8 +19,6 @@ impl Pedalboard {
     }
 
     pub fn process_audio(&mut self, buffer: &mut [f32]) {
-        for pedal in &mut self.pedals {
-            pedal.process_audio(buffer);
-        }
+        self.pedals.iter_mut().for_each(|pedal| pedal.process_audio(buffer));
     }
 }
