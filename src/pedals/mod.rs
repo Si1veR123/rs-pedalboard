@@ -2,30 +2,43 @@ pub mod bypass_pedal;
 
 use std::collections::HashMap;
 
-pub trait Pedal<T>: Send {
+#[derive(Clone, Debug)]
+pub enum PedalParameter {
+    // (current value, min, max)
+    BoundedFloat((f32, f32, f32)),
+    String(String),
+    Bool(bool),
+    // (current value, max option)
+    Selection((u8, u8))
+}
+
+impl PedalParameter {
+    fn is_valid(&self) -> bool {
+        match self {
+            PedalParameter::BoundedFloat((value, min, max)) => value >= min && value <= max,
+            PedalParameter::String(_) => true,
+            PedalParameter::Bool(_) => true,
+            PedalParameter::Selection((value, max)) => value <= max
+        }
+    }
+}
+
+pub trait Pedal: Send {
     fn init(&mut self) {}
 
-    fn process_audio(&mut self, buffer: &mut [T]);
+    fn process_audio(&mut self, buffer: &mut [f32]);
 
-    fn get_properties(&self) -> &HashMap<String, f32>;
-    fn get_properties_mut(&mut self) -> &mut HashMap<String, f32>;
+    fn get_properties(&self) -> &HashMap<String, PedalParameter>;
+    fn get_properties_mut(&mut self) -> &mut HashMap<String, PedalParameter>;
 
-    fn update_property(&mut self, key: &str, value: f32) {
-        if self.get_properties().contains_key(key) {
-            self.get_properties_mut().insert(key.to_string(), value);
+    fn update_property(&mut self, key: &str, value: PedalParameter) -> Option<PedalParameter> {
+        if value.is_valid() {
+            self.get_properties_mut().insert(key.to_string(), value)
+        } else {
+            None
         }
     }
-    fn get_property(&self, key: &str) -> f32 {
-        match self.get_properties().get(key) {
-            Some(value) => *value,
-            None => 0.0,
-        }
-    }
-
-    fn get_functions(&self) -> &[String] {
-        &[]
-    }
-    fn activate_function(&mut self, _function: &str) {
-        // Do nothing by default
+    fn get_property(&self, key: &str) -> Option<PedalParameter> {
+        self.get_properties().get(key).cloned()
     }
 }

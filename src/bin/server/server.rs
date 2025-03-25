@@ -27,7 +27,7 @@ pub fn ring_buffer_size(buffer_size: usize, latency: f32, sample_rate: f32) -> u
     buffer_size * 2 + latency_frames as usize
 }
 
-pub fn create_linked_streams(in_device: Device, out_device: Device, pedalboard_set: PedalboardSet<f32>, latency: f32, buffer_size: usize) -> (Stream, Stream) {
+pub fn create_linked_streams(in_device: Device, out_device: Device, pedalboard_set: PedalboardSet, latency: f32, buffer_size: usize) -> (Stream, Stream) {
     let ring_buffer_size = ring_buffer_size(buffer_size, latency, 48000.0);
     log::info!("Ring buffer size: {}", ring_buffer_size);
     let ring_buffer: HeapRb<f32> = HeapRb::new(ring_buffer_size);
@@ -64,14 +64,14 @@ pub fn create_linked_streams(in_device: Device, out_device: Device, pedalboard_s
     (stream_in, stream_out)
 }
 
-struct InputProcessor<T> {
-    pedalboard_set: PedalboardSet<T>,
-    writer: HeapProd<T>,
-    processing_buffer: Vec<T>
+struct InputProcessor {
+    pedalboard_set: PedalboardSet,
+    writer: HeapProd<f32>,
+    processing_buffer: Vec<f32>
 }
 
-impl<T: Copy> InputProcessor<T> {
-    fn process_audio(&mut self, data: &[T]) {
+impl InputProcessor {
+    fn process_audio(&mut self, data: &[f32]) {
         self.processing_buffer.clear();
         self.processing_buffer.extend_from_slice(data);
 

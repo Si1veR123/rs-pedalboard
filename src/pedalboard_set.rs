@@ -1,12 +1,12 @@
 use crate::pedalboard::Pedalboard;
 
-pub struct PedalboardSet<T> {
-    pub pedalboards: Vec<Pedalboard<T>>,
+pub struct PedalboardSet {
+    pub pedalboards: Vec<Pedalboard>,
     pub active_pedalboard: usize
 }
 
-impl<T> Default for PedalboardSet<T> {
-    fn default() -> PedalboardSet<T> {
+impl Default for PedalboardSet {
+    fn default() -> PedalboardSet {
         PedalboardSet {
             pedalboards: Vec::new(),
             active_pedalboard: 0
@@ -14,7 +14,7 @@ impl<T> Default for PedalboardSet<T> {
     }
 }
 
-impl<T> PedalboardSet<T> {
+impl PedalboardSet {
     pub fn set_active_pedalboard(&mut self, index: usize) {
         if index < self.pedalboards.len() {
             self.active_pedalboard = index;
@@ -23,7 +23,7 @@ impl<T> PedalboardSet<T> {
         }
     }
 
-    pub fn process_audio(&mut self, buffer: &mut [T]) {
+    pub fn process_audio(&mut self, buffer: &mut [f32]) {
         if self.pedalboards.is_empty() {
             return;
         }
