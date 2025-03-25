@@ -1,9 +1,9 @@
-mod jack_init;
+mod jack_server;
+mod audio_devices;
 
-use std::io::{stdin, stdout, Write};
-use cpal::{traits::{DeviceTrait, HostTrait, StreamTrait}, Device, Host, Stream, StreamConfig};
-use ringbuf::{traits::{ring_buffer, Consumer, Producer, Split}, HeapCons, HeapProd, HeapRb};
-use rs_pedalboard::pedalboard_set::{self, PedalboardSet};
+use cpal::{traits::{DeviceTrait, StreamTrait}, Device, Stream, StreamConfig};
+use ringbuf::{traits::{Consumer, Producer, Split}, HeapProd, HeapRb};
+use rs_pedalboard::pedalboard_set::PedalboardSet;
 
 use simplelog::*;
 
@@ -84,12 +84,12 @@ fn main() {
     ).expect("Failed to start logging");
     log::info!("Started logging...");
 
-    let (in_device, out_device) = jack_init::io_device_selector();
+    let (in_device, out_device) = audio_devices::io_device_selector();
     
-    jack_init::start_jack_server(JACK_FRAMES_PER_PERIOD, JACK_PERIODS_PER_BUFFER, in_device, out_device).expect("Failed to start JACK server");
-    jack_init::jack_server_wait();
+    jack_server::start_jack_server(JACK_FRAMES_PER_PERIOD, JACK_PERIODS_PER_BUFFER, in_device, out_device).expect("Failed to start JACK server");
+    jack_server::jack_server_wait();
 
-    let (jack_host, jack_input, jack_output) = jack_init::get_jack_host();
+    let (jack_host, jack_input, jack_output) = jack_server::get_jack_host();
 
     let pedalboard_set = PedalboardSet::default();
 
@@ -98,7 +98,7 @@ fn main() {
     in_stream.play().expect("Failed to play input stream");
     out_stream.play().expect("Failed to play output stream");
 
-    jack_init::stereo_output();
+    jack_server::stereo_output();
 
     loop {
         std::thread::sleep(std::time::Duration::from_secs(1));
