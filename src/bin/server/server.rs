@@ -11,7 +11,7 @@ use simplelog::*;
 // This is the number of samples provided to JACK callbacks
 const JACK_FRAMES_PER_PERIOD: usize = 256;
 const JACK_PERIODS_PER_BUFFER: usize = 3;
-const RING_BUFFER_LATENCY_MS: f32 = 3.0;
+const RING_BUFFER_LATENCY_MS: f32 = 5.0;
 
 pub fn ring_buffer_size(buffer_size: usize, latency: f32, sample_rate: f32) -> usize {
     let latency_frames = (latency / 1000.0) * sample_rate;
@@ -90,7 +90,6 @@ fn main() {
     jack_init::jack_server_wait();
 
     let (jack_host, jack_input, jack_output) = jack_init::get_jack_host();
-    jack_init::stereo_output();
 
     let pedalboard_set = PedalboardSet::default();
 
@@ -98,6 +97,8 @@ fn main() {
 
     in_stream.play().expect("Failed to play input stream");
     out_stream.play().expect("Failed to play output stream");
+
+    jack_init::stereo_output();
 
     loop {
         std::thread::sleep(std::time::Duration::from_secs(1));

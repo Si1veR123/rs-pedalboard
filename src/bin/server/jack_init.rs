@@ -1,41 +1,23 @@
 use cpal::{traits::{DeviceTrait, HostTrait}, Host, Device};
-use std::{fs::File, io::{self, stdin, stdout, Write}, process::{Child, Command}};
+use regex::Regex;
+use std::{fs::File, io::{self, stdin, stdout, Read, Write}, process::{Child, Command, Stdio}};
 
-fn get_alsa_host() -> Option<Host> {
-    cpal::host_from_id(
-        cpal::available_hosts()
-            .into_iter()
-            .find(|id| *id == cpal::HostId::Alsa)?
-    ).ok()
+
+fn get_hw_devices() -> Vec<String> {
+    let mut sound_cards = String::new();
+    File::open("/proc/asound/cards")
+        .expect("Failed to open sound cards file")
+        .read_to_string(&mut sound_cards)
+        .expect("Failed to read sound cards");
+
+    let re = Regex::new(r"\[(.*)\]").unwrap();
+    re.captures_iter(&sound_cards).map(|c| {
+        let (_full, [name]) = c.extract();
+        format!("hw:{}", name.trim())
+    }).collect()
 }
 
-/// Convert an alsa device name such as 'hw:CARD=CODEC,DEV=0' to 'hw:CODEC'
-fn device_name_from_alsa_name(alsa_name: String) -> Option<String> {
-    if alsa_name.starts_with("hw:CARD") {
-        let comma_index = alsa_name.find(',')?;
-        Some(format!("hw:{}", &alsa_name[8..comma_index]))
-    } else {
-        None
-    }
-}
-
-fn get_alsa_input_strings() -> Vec<String> {
-    let alsa = get_alsa_host().expect("Failed to get ALSA host");
-    alsa.input_devices().unwrap()
-        .filter_map(|d| d.name().ok())
-        .filter_map(|name| device_name_from_alsa_name(name))
-        .collect()
-}
-
-fn get_alsa_output_strings() -> Vec<String> {
-    let alsa = get_alsa_host().expect("Failed to get ALSA host");
-    alsa.output_devices().unwrap()
-        .filter_map(|d| d.name().ok())
-        .filter_map(|name| device_name_from_alsa_name(name))
-        .collect()
-}
-
-fn device_select_menu(mut devices: Vec<String>) -> String {
+fn device_select_menu(devices: &[String]) -> String {
     let mut input_buf = String::new();
 
     for (i, device) in devices.iter().enumerate() {
@@ -44,18 +26,20 @@ fn device_select_menu(mut devices: Vec<String>) -> String {
     print!("Select a device: ");
     stdout().flush().expect("Failed to flush stdout");
     stdin().read_line(&mut input_buf).expect("Failed to read stdin");
-    devices.remove(input_buf.trim().parse::<usize>().expect("Failed to parse device index"))
+
+    devices.get(
+        input_buf.trim().parse::<usize>().expect("Failed to parse device index")
+    ).expect("Invalid index").clone()
 }
 
 pub fn io_device_selector() -> (String, String) {
-    let input_devices = get_alsa_input_strings();
-    let output_devices = get_alsa_output_strings();
+    let devices = get_hw_devices();
 
     println!("Input Devices:");
-    let input_device = device_select_menu(input_devices);
+    let input_device = device_select_menu(&devices);
     
     println!("Output Devices:");
-    let output_device = device_select_menu(output_devices);
+    let output_device = device_select_menu(&devices);
 
     log::info!("Selected ALSA Devices: Input {input_device}, Output {output_device}");
 
@@ -84,7 +68,14 @@ pub fn get_jack_host() -> (Host, Device, Device) {
     (jack_host, input_device, output_device)
 }
 
+pub fn kill_jack_servers() {
+    log::info!("Killing existing JACK servers");    
+    Command::new("pkill").arg("jackd").spawn().expect("Failed to kill any existing JACK servers.").wait().unwrap();
+}
+
 pub fn start_jack_server(frames_per_period: usize, periods_per_buffer: usize, input: String, output: String) -> io::Result<Child> {
+    kill_jack_servers();
+
     log::info!("Starting JACK server with: Frames per Period {frames_per_period}, Periods per Buffer {periods_per_buffer}, Input {input}, Output {output}");
 
     Command::new("jackd")
@@ -100,17 +91,16 @@ pub fn start_jack_server(frames_per_period: usize, periods_per_buffer: usize, in
 }
 
 pub fn jack_server_wait() {
-    let code = Command::new("jack_wait")
+    log::info!("Starting jack_wait");
+    let status = Command::new("jack_wait")
         .arg("-t 10")
         .arg("-w")
-        .stdout(File::create("jack_wait_out.log").expect("Failed to create file for jack wait stdout"))
-        .stderr(File::create("jack_wait_err.log").expect("Failed to create file for jack wait stderr"))
-        .spawn()
-        .expect("Failed to execute jack_wait")
-        .wait()
-        .expect("Failed to wait");
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .expect("Failed to execute jack_wait");
 
-    if code.code().unwrap() == 1 {
+    if status.code().unwrap() == 1 {
         panic!("jack_wait timeout")
     }
 
@@ -118,9 +108,10 @@ pub fn jack_server_wait() {
 }
 
 pub fn stereo_output() {
+    log::info!("Connecting output to second playback port.");
     Command::new("jack_connect")
         .arg("cpal_client_out:out_0")
         .arg("system:playback_2")
         .spawn()
-        .expect("Failed to connect to second output port");
-    }
+        .expect("Failed to connect to second playback port");
+}
