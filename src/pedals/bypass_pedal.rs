@@ -9,8 +9,8 @@ impl Default for BypassPedal {
     }
 }
 
-impl Pedal for BypassPedal {
-    fn process_audio(&mut self, _buffer: &mut [f32]) {
+impl<T> Pedal<T> for BypassPedal {
+    fn process_audio(&mut self, _buffer: &mut [T]) {
         // Do nothing
     }
 

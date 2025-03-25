@@ -1,14 +1,12 @@
-use log::error;
-
 use crate::pedalboard::Pedalboard;
 
-pub struct PedalboardSet {
-    pub pedalboards: Vec<Pedalboard>,
+pub struct PedalboardSet<T> {
+    pub pedalboards: Vec<Pedalboard<T>>,
     pub active_pedalboard: usize
 }
 
-impl Default for PedalboardSet {
-    fn default() -> PedalboardSet {
+impl<T> Default for PedalboardSet<T> {
+    fn default() -> PedalboardSet<T> {
         PedalboardSet {
             pedalboards: Vec::new(),
             active_pedalboard: 0
@@ -16,16 +14,16 @@ impl Default for PedalboardSet {
     }
 }
 
-impl PedalboardSet {
+impl<T> PedalboardSet<T> {
     pub fn set_active_pedalboard(&mut self, index: usize) {
         if index < self.pedalboards.len() {
             self.active_pedalboard = index;
         } else {
-            error!("Pedalboard index out of bounds");
+            log::error!("Pedalboard index out of bounds");
         }
     }
 
-    pub fn process_audio(&mut self, buffer: &mut [f32]) {
+    pub fn process_audio(&mut self, buffer: &mut [T]) {
         if self.pedalboards.is_empty() {
             return;
         }

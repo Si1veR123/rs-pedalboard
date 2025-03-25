@@ -12,6 +12,7 @@ name = "client"
 path = "src/bin/client/client.rs"
 
 [dependencies]
-log = {version = "0.4.26", features=["release_max_level_warn"]}
+log = "0.4.26"
 cpal = {version = "0.15.3", features=["jack"]}
+simplelog = "0.12.2"
 ringbuf = "0.4.7"

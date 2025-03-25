@@ -2,10 +2,10 @@ pub mod bypass_pedal;
 
 use std::collections::HashMap;
 
-pub trait Pedal: Send {
+pub trait Pedal<T>: Send {
     fn init(&mut self) {}
 
-    fn process_audio(&mut self, buffer: &mut [f32]);
+    fn process_audio(&mut self, buffer: &mut [T]);
 
     fn get_properties(&self) -> &HashMap<String, f32>;
     fn get_properties_mut(&mut self) -> &mut HashMap<String, f32>;
