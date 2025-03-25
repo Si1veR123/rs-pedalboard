@@ -1,6 +1,6 @@
-use std::{fs::File, io::{stdin, stdout, Read, Write}};
+use std::{fs::File, io::Read};
 use regex::Regex;
-use super::device_select::device_select_menu;
+use crate::device_select::device_select_menu;
 
 fn get_hw_devices() -> Vec<String> {
     let mut sound_cards = String::new();

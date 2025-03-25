@@ -31,6 +31,7 @@ pub fn kill_jack_servers() {
 
 pub fn start_jack_server(frames_per_period: usize, periods_per_buffer: usize, input: String, output: String) -> io::Result<Child> {
     kill_jack_servers();
+    jack_server_wait(false);
 
     log::info!("Starting JACK server with: Frames per Period {frames_per_period}, Periods per Buffer {periods_per_buffer}, Input {input}, Output {output}");
 
@@ -46,11 +47,19 @@ pub fn start_jack_server(frames_per_period: usize, periods_per_buffer: usize, in
         .spawn()
 }
 
-pub fn jack_server_wait() {
-    log::info!("Starting jack_wait");
-    let status = Command::new("jack_wait")
-        .arg("-t 10")
-        .arg("-w")
+pub fn jack_server_wait(wait_until_open: bool) {
+    log::info!("Starting jack_wait. Waiting until open={wait_until_open}");
+
+    let mut command = Command::new("jack_wait");
+    command.arg("-t 10");
+
+    if !wait_until_open {
+        command.arg("-q")
+    } else {
+        command.arg("-w")
+    };
+
+    let status = command
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
