@@ -1,44 +1,113 @@
-pub mod bypass_pedal;
+mod volume;
+pub use volume::Volume;
+mod fuzz;
+pub use fuzz::Fuzz;
 
 use std::collections::HashMap;
 
-#[derive(Clone, Debug)]
-pub enum PedalParameter {
-    // (current value, min, max)
-    BoundedFloat((f32, f32, f32)),
-    String(String),
-    Bool(bool),
-    // (current value, max option)
-    Selection((u8, u8))
+pub struct PedalParameter {
+    pub value: PedalParameterValue,
+    // min and max are used for floats and selections
+    min: Option<PedalParameterValue>,
+    max: Option<PedalParameterValue>,
+    // For floats only
+    step: Option<PedalParameterValue>
 }
 
 impl PedalParameter {
-    fn is_valid(&self) -> bool {
-        match self {
-            PedalParameter::BoundedFloat((value, min, max)) => value >= min && value <= max,
-            PedalParameter::String(_) => true,
-            PedalParameter::Bool(_) => true,
-            PedalParameter::Selection((value, max)) => value <= max
+    pub fn is_valid(&self, value: &PedalParameterValue) -> bool {
+        match value {
+            PedalParameterValue::Float(value) => {
+                if let Some(PedalParameterValue::Float(min)) = self.min {
+                    if *value < min {
+                        return false;
+                    }
+                }
+                if let Some(PedalParameterValue::Float(max)) = self.max {
+                    if *value > max {
+                        return false;
+                    }
+                }
+                if let Some(PedalParameterValue::Float(step)) = self.step {
+                    if (*value % step) != 0.0 {
+                        return false;
+                    }
+                }
+                true
+            }
+            PedalParameterValue::Selection(value) => {
+                if let Some(PedalParameterValue::Selection(min)) = self.min {
+                    if *value < min {
+                        return false;
+                    }
+                }
+                if let Some(PedalParameterValue::Selection(max)) = self.max {
+                    if *value > max {
+                        return false;
+                    }
+                }
+                true
+            },
+            _ => true
         }
     }
 }
+
+#[derive(Clone, Debug)]
+pub enum PedalParameterValue {
+    Float(f32),
+    String(String),
+    Bool(bool),
+    Selection(u8)
+}
+
+impl PedalParameterValue {
+    pub fn as_float(&self) -> Option<f32> {
+        match self {
+            PedalParameterValue::Float(value) => Some(*value),
+            _ => None
+        }
+    }
+
+    pub fn as_string(&self) -> Option<&str> {
+        match self {
+            PedalParameterValue::String(value) => Some(value),
+            _ => None
+        }
+    }
+
+    pub fn as_bool(&self) -> Option<bool> {
+        match self {
+            PedalParameterValue::Bool(value) => Some(*value),
+            _ => None
+        }
+    }
+
+    pub fn as_selection(&self) -> Option<u8> {
+        match self {
+            PedalParameterValue::Selection(value) => Some(*value),
+            _ => None
+        }
+    }
+}
+
 
 pub trait Pedal: Send {
     fn init(&mut self) {}
 
     fn process_audio(&mut self, buffer: &mut [f32]);
 
-    fn get_properties(&self) -> &HashMap<String, PedalParameter>;
-    fn get_properties_mut(&mut self) -> &mut HashMap<String, PedalParameter>;
+    fn get_parameters(&self) -> &HashMap<String, PedalParameter>;
+    fn get_parameters_mut(&mut self) -> &mut HashMap<String, PedalParameter>;
 
-    fn update_property(&mut self, key: &str, value: PedalParameter) -> Option<PedalParameter> {
-        if value.is_valid() {
-            self.get_properties_mut().insert(key.to_string(), value)
-        } else {
-            None
+    fn set_parameter_value(&mut self, name: &str, value: PedalParameterValue) {
+        let parameters = self.get_parameters_mut();
+        if let Some(parameter) = parameters.get_mut(name) {
+            if parameter.is_valid(&value) {
+                parameter.value = value;
+            } else {
+                log::warn!("Attempted to set invalid value for parameter {}: {:?}", name, value);
+            }
         }
-    }
-    fn get_property(&self, key: &str) -> Option<PedalParameter> {
-        self.get_properties().get(key).cloned()
     }
 }

@@ -15,6 +15,13 @@ impl Default for PedalboardSet {
 }
 
 impl PedalboardSet {
+    pub fn from_pedalboards(pedalboards: Vec<Pedalboard>) -> PedalboardSet {
+        PedalboardSet {
+            pedalboards,
+            active_pedalboard: 0
+        }
+    }
+
     pub fn set_active_pedalboard(&mut self, index: usize) {
         if index < self.pedalboards.len() {
             self.active_pedalboard = index;

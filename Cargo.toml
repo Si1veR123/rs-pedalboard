@@ -17,3 +17,5 @@ cpal = {version = "0.15.3", features=["jack"]}
 simplelog = "0.12.2"
 ringbuf = "0.4.7"
 regex = "1.11.1"
+strum = "0.27"
+strum_macros = "0.27"

@@ -12,7 +12,7 @@ mod device_select;
 
 use cpal::{traits::{DeviceTrait, StreamTrait}, Device, Stream, StreamConfig};
 use ringbuf::{traits::{Consumer, Producer, Split}, HeapProd, HeapRb};
-use rs_pedalboard::pedalboard_set::PedalboardSet;
+use rs_pedalboard::{pedalboard::{self, Pedalboard}, pedalboard_set::PedalboardSet, pedals::{Fuzz, Pedal, PedalParameterValue}};
 
 use simplelog::*;
 
@@ -95,7 +95,11 @@ fn main() {
 
     let (_host, input, output) = setup();
 
-    let pedalboard_set = PedalboardSet::default();
+    let mut fuzz = Fuzz::new();
+    fuzz.set_parameter_value("gain", PedalParameterValue::Float(100.0));
+    fuzz.set_parameter_value("level", PedalParameterValue::Float(1.0));
+    let pedalboard = Pedalboard::from_pedals(vec![Box::new(fuzz)]);
+    let pedalboard_set = PedalboardSet::from_pedalboards(vec![pedalboard]);
 
     let (in_stream, out_stream) = create_linked_streams(input, output, pedalboard_set, RING_BUFFER_LATENCY_MS, FRAMES_PER_PERIOD);
 

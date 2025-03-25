@@ -18,6 +18,10 @@ impl Pedalboard {
         Self::default()
     }
 
+    pub fn from_pedals(pedals: Vec<Box<dyn Pedal>>) -> Pedalboard {
+        Pedalboard { pedals }
+    }
+
     pub fn process_audio(&mut self, buffer: &mut [f32]) {
         self.pedals.iter_mut().for_each(|pedal| pedal.process_audio(buffer));
     }
