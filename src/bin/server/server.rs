@@ -1,5 +1,14 @@
-mod jack_server;
-mod audio_devices;
+#[cfg(target_os = "linux")]
+mod linux;
+#[cfg(target_os = "linux")]
+use linux::{setup, after_setup};
+
+#[cfg(target_os = "windows")]
+mod windows;
+#[cfg(target_os = "windows")]
+use windows::{setup, after_setup};
+
+mod device_select;
 
 use cpal::{traits::{DeviceTrait, StreamTrait}, Device, Stream, StreamConfig};
 use ringbuf::{traits::{Consumer, Producer, Split}, HeapProd, HeapRb};
@@ -8,10 +17,10 @@ use rs_pedalboard::pedalboard_set::PedalboardSet;
 use simplelog::*;
 
 // Frames=Samples for mono channel
-// This is the number of samples provided to JACK callbacks
-const JACK_FRAMES_PER_PERIOD: usize = 256;
-const JACK_PERIODS_PER_BUFFER: usize = 3;
-const RING_BUFFER_LATENCY_MS: f32 = 5.0;
+// This is the number of samples provided to callbacks
+const FRAMES_PER_PERIOD: usize = 1024;
+const PERIODS_PER_BUFFER: usize = 3;
+const RING_BUFFER_LATENCY_MS: f32 = 50.0;
 
 pub fn ring_buffer_size(buffer_size: usize, latency: f32, sample_rate: f32) -> usize {
     let latency_frames = (latency / 1000.0) * sample_rate;
@@ -84,21 +93,16 @@ fn main() {
     ).expect("Failed to start logging");
     log::info!("Started logging...");
 
-    let (in_device, out_device) = audio_devices::io_device_selector();
-    
-    jack_server::start_jack_server(JACK_FRAMES_PER_PERIOD, JACK_PERIODS_PER_BUFFER, in_device, out_device).expect("Failed to start JACK server");
-    jack_server::jack_server_wait();
-
-    let (jack_host, jack_input, jack_output) = jack_server::get_jack_host();
+    let (_host, input, output) = setup();
 
     let pedalboard_set = PedalboardSet::default();
 
-    let (in_stream, out_stream) = create_linked_streams(jack_input, jack_output, pedalboard_set, RING_BUFFER_LATENCY_MS, JACK_FRAMES_PER_PERIOD);
+    let (in_stream, out_stream) = create_linked_streams(input, output, pedalboard_set, RING_BUFFER_LATENCY_MS, FRAMES_PER_PERIOD);
 
     in_stream.play().expect("Failed to play input stream");
     out_stream.play().expect("Failed to play output stream");
 
-    jack_server::stereo_output();
+    after_setup();
 
     loop {
         std::thread::sleep(std::time::Duration::from_secs(1));

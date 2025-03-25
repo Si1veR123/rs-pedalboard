@@ -8,7 +8,7 @@ pub fn get_jack_host() -> (Host, Device, Device) {
             .into_iter()
             .find(|id| *id == cpal::HostId::Jack)
             .expect("JACK host not found")
-        ).unwrap();
+    ).unwrap();
 
     if jack_host.devices().unwrap().count() == 0 {
         panic!("Failed to initialise JACK client");
