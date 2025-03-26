@@ -12,15 +12,15 @@ mod device_select;
 
 use cpal::{traits::{DeviceTrait, StreamTrait}, Device, Stream, StreamConfig};
 use ringbuf::{traits::{Consumer, Producer, Split}, HeapProd, HeapRb};
-use rs_pedalboard::{pedalboard::{self, Pedalboard}, pedalboard_set::PedalboardSet, pedals::{Fuzz, Pedal, PedalParameterValue}};
+use rs_pedalboard::{pedalboard::{self, Pedalboard}, pedalboard_set::PedalboardSet, pedals::{self, Pedal, PedalParameterValue}};
 
 use simplelog::*;
 
 // Frames=Samples for mono channel
 // This is the number of samples provided to callbacks
-const FRAMES_PER_PERIOD: usize = 256;
+const FRAMES_PER_PERIOD: usize = 1024;
 const PERIODS_PER_BUFFER: usize = 3;
-const RING_BUFFER_LATENCY_MS: f32 = 3.0;
+const RING_BUFFER_LATENCY_MS: f32 = 20.0;
 
 pub fn ring_buffer_size(buffer_size: usize, latency: f32, sample_rate: f32) -> usize {
     let latency_frames = (latency / 1000.0) * sample_rate;
@@ -95,10 +95,8 @@ fn main() {
 
     let (_host, input, output) = setup();
 
-    let mut fuzz = Fuzz::new();
-    fuzz.set_parameter_value("gain", PedalParameterValue::Float(30.0));
-    fuzz.set_parameter_value("level", PedalParameterValue::Float(1.0));
-    let pedalboard = Pedalboard::from_pedals(vec![Box::new(fuzz)]);
+    let mut pitch_shift = pedals::PitchShift::new();
+    let pedalboard = Pedalboard::from_pedals(vec![Box::new(pitch_shift)]);
     let pedalboard_set = PedalboardSet::from_pedalboards(vec![pedalboard]);
 
     let (in_stream, out_stream) = create_linked_streams(input, output, pedalboard_set, RING_BUFFER_LATENCY_MS, FRAMES_PER_PERIOD);
