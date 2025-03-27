@@ -23,7 +23,7 @@ impl PitchShift {
             },
         );
 
-        let phase_vocoder = PhaseVocoder::new(120, 0.5);
+        let phase_vocoder = PhaseVocoder::new(60, 1.0);
 
         PitchShift { parameters, phase_vocoder, output_buffer: None }
     }
@@ -34,7 +34,7 @@ impl Pedal for PitchShift {
         if self.output_buffer.is_none() {
             self.output_buffer = Some(vec![0.0; buffer.len()]);
         }
-
+        
         self.phase_vocoder.process_buffer(buffer, self.output_buffer.as_mut().unwrap());
         buffer.copy_from_slice(&self.output_buffer.as_ref().unwrap()[..buffer.len()]);
     }

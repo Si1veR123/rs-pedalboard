@@ -51,6 +51,8 @@ impl PhaseVocoder {
     }
 
     pub fn process_buffer(&mut self, in_buffer: &[f32], out_buffer: &mut [f32]) {
+        out_buffer.fill(0.0);
+
         // Copy incomplete buffer from last process
         out_buffer[..self.hop_size].copy_from_slice(&self.last_buffer_output_incomplete);
 
@@ -64,28 +66,29 @@ impl PhaseVocoder {
         }
 
         // Process the rest of the in_buffer
-        let mut buffer_index = 0;
-        while buffer_index + self.fft_size < in_buffer.len() {
+        let mut buffer_index = self.hop_size;
+        while buffer_index + self.fft_size <= in_buffer.len() {
             let frame = &in_buffer[buffer_index..buffer_index + self.fft_size];
 
             self.fft_input_frame.copy_from_slice(frame);
-            self.process_frame();
+            //self.process_frame();
 
             // Overlap and add
-            for i in 0..self.hop_size {
-                // Write to the out buffer delayed by hop size, as there are hop size samples already written
+            for i in 0..self.fft_size.min(out_buffer.len() - buffer_index - self.hop_size) {
                 out_buffer[buffer_index + i + self.hop_size] += self.fft_input_frame[i] * self.hann_window[i];
             }
 
             buffer_index += self.hop_size;
         }
-
+        log::info!("IN BUFFER {:?}", in_buffer);
+        log::info!("OUT BUFFER {:?}", out_buffer);
+        // Save the incomplete buffer for the next process
         self.last_buffer_input_incomplete.copy_from_slice(&in_buffer[in_buffer.len() - self.hop_size..]);
-        self.last_buffer_output_incomplete.copy_from_slice(&out_buffer[out_buffer.len() - self.hop_size..]);
+        self.last_buffer_output_incomplete.copy_from_slice(&self.fft_input_frame[self.hop_size..]);
     }
 
     fn process_frame(&mut self) {
-        // Apply hann window
+        // Apply Hann window
         for i in 0..self.fft_size {
             self.fft_input_frame[i] *= self.hann_window[i];
         }
@@ -94,46 +97,46 @@ impl PhaseVocoder {
         self.fft.process_with_scratch(&mut self.fft_input_frame, &mut self.fft_output_vec, &mut self.scratch_buffer).unwrap();
 
         // Phase vocoder processing
-        //let mut magnitudes = vec![0.0; self.fft_size / 2 + 1];
-        //let mut phases = vec![0.0; self.fft_size / 2 + 1];
-//
-        //for k in 0..=self.fft_size / 2 {
-        //    let re = self.fft_output_vec[k].re;
-        //    let im = self.fft_output_vec[k].im;
-        //    magnitudes[k] = (re * re + im * im).sqrt();
-        //    let phase = im.atan2(re);
-//
-        //    // Phase difference
-        //    let delta_phase = phase - self.prev_phase[k];
-        //    self.prev_phase[k] = phase;
-//
-        //    // Unwrap phase difference
-        //    let expected_phase = (k as f32 * self.hop_size as f32 * std::f32::consts::TAU) / self.fft_size as f32;
-        //    let phase_dev = delta_phase - expected_phase;
-        //    let adjusted_phase_dev = phase_dev - (std::f32::consts::TAU * (phase_dev / std::f32::consts::TAU).round());
-//
-        //    // Accumulate phase
-        //    self.phase_acc[k] += expected_phase + adjusted_phase_dev * self.pitch_shift;
-        //    phases[k] = self.phase_acc[k];
-        //}
-//
-        //// Synthesize new spectrum
-        //for k in 0..=self.fft_size / 2 {
-        //    self.fft_output_vec[k] = Complex::new(
-        //        magnitudes[k] * phases[k].cos(),
-        //        magnitudes[k] * phases[k].sin(),
-        //    );
-        //}
-//
-        //// Ensure symmetry for IFFT
-        //for k in 1..self.fft_size / 2 {
-        //    self.fft_output_vec[self.fft_size - k] = self.fft_output_vec[k].conj(); // Mirror the spectrum
-        //}
+        let mut magnitudes = vec![0.0; self.fft_size / 2 + 1];
+        let mut phases = vec![0.0; self.fft_size / 2 + 1];
+
+        for k in 0..=self.fft_size / 2 {
+            let re = self.fft_output_vec[k].re;
+            let im = self.fft_output_vec[k].im;
+            magnitudes[k] = (re * re + im * im).sqrt();
+            let phase = im.atan2(re);
+
+            // Phase difference
+            let delta_phase = phase - self.prev_phase[k];
+            self.prev_phase[k] = phase;
+
+            // Unwrap phase difference
+            let expected_phase = (k as f32 * self.hop_size as f32 * std::f32::consts::TAU) / self.fft_size as f32;
+            let phase_dev = delta_phase - expected_phase;
+            let adjusted_phase_dev = phase_dev - (std::f32::consts::TAU * (phase_dev / std::f32::consts::TAU).round());
+
+            // Accumulate phase
+            self.phase_acc[k] += expected_phase + adjusted_phase_dev * self.pitch_shift;
+            phases[k] = self.phase_acc[k];
+        }
+
+        // Synthesize new spectrum
+        for k in 0..=self.fft_size / 2 {
+            self.fft_output_vec[k] = Complex::new(
+                magnitudes[k] * phases[k].cos(),
+                magnitudes[k] * phases[k].sin(),
+            );
+        }
+
+        let last = self.fft_output_vec.len() - 1;
+        self.fft_output_vec[0].im = 0.0;
+        self.fft_output_vec[last].im = 0.0;
 
         // Apply inverse FFT
         self.ifft.process(&mut self.fft_output_vec, &mut self.fft_input_frame).unwrap();
 
         // Normalize output
-        self.fft_input_frame.iter_mut().for_each(|s| *s = *s / self.fft_size as f32)
+        let hann_correction_factor = 1.0 / (self.fft_size as f32 * 0.5); // Adjust for 50% overlap
+        self.fft_input_frame.iter_mut().for_each(|s| *s *= hann_correction_factor);
     }
 }
