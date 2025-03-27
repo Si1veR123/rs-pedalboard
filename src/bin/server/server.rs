@@ -18,9 +18,9 @@ use simplelog::*;
 
 // Frames=Samples for mono channel
 // This is the number of samples provided to callbacks
-const FRAMES_PER_PERIOD: usize = 1024;
+const FRAMES_PER_PERIOD: usize = 256;
 const PERIODS_PER_BUFFER: usize = 3;
-const RING_BUFFER_LATENCY_MS: f32 = 20.0;
+const RING_BUFFER_LATENCY_MS: f32 = 5.0;
 
 pub fn ring_buffer_size(buffer_size: usize, latency: f32, sample_rate: f32) -> usize {
     let latency_frames = (latency / 1000.0) * sample_rate;
@@ -95,7 +95,7 @@ fn main() {
 
     let (_host, input, output) = setup();
 
-    let mut pitch_shift = pedals::PitchShift::new();
+    let mut pitch_shift = pedals::Fuzz::new();
     let pedalboard = Pedalboard::from_pedals(vec![Box::new(pitch_shift)]);
     let pedalboard_set = PedalboardSet::from_pedalboards(vec![pedalboard]);
 

@@ -23,7 +23,7 @@ impl PitchShift {
             },
         );
 
-        let phase_vocoder = PhaseVocoder::new(60, 1.0);
+        let phase_vocoder = PhaseVocoder::new(128, 0.5);
 
         PitchShift { parameters, phase_vocoder, output_buffer: None }
     }

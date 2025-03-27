@@ -13,7 +13,7 @@ impl Fuzz {
         parameters.insert(
             "gain".to_string(),
             PedalParameter {
-                value: PedalParameterValue::Float(1.0),
+                value: PedalParameterValue::Float(20.0),
                 min: Some(PedalParameterValue::Float(0.0)),
                 max: Some(PedalParameterValue::Float(100.0)),
                 step: None

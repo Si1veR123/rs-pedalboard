@@ -61,17 +61,17 @@ impl PhaseVocoder {
         self.fft_input_frame[self.hop_size..].copy_from_slice(&in_buffer[..self.hop_size]);
         self.process_frame();
 
-        for i in 0..self.hop_size {
+        for i in 0..self.fft_size {
             out_buffer[i] += self.fft_input_frame[i] * self.hann_window[i];
         }
 
         // Process the rest of the in_buffer
-        let mut buffer_index = self.hop_size;
+        let mut buffer_index = 0;
         while buffer_index + self.fft_size <= in_buffer.len() {
             let frame = &in_buffer[buffer_index..buffer_index + self.fft_size];
 
             self.fft_input_frame.copy_from_slice(frame);
-            //self.process_frame();
+            self.process_frame();
 
             // Overlap and add
             for i in 0..self.fft_size.min(out_buffer.len() - buffer_index - self.hop_size) {
@@ -80,11 +80,11 @@ impl PhaseVocoder {
 
             buffer_index += self.hop_size;
         }
-        log::info!("IN BUFFER {:?}", in_buffer);
-        log::info!("OUT BUFFER {:?}", out_buffer);
+
         // Save the incomplete buffer for the next process
         self.last_buffer_input_incomplete.copy_from_slice(&in_buffer[in_buffer.len() - self.hop_size..]);
         self.last_buffer_output_incomplete.copy_from_slice(&self.fft_input_frame[self.hop_size..]);
+        self.last_buffer_output_incomplete.iter_mut().enumerate().for_each(|(i, s)| *s *= self.hann_window[i + self.hop_size]);
     }
 
     fn process_frame(&mut self) {
@@ -138,5 +138,26 @@ impl PhaseVocoder {
         // Normalize output
         let hann_correction_factor = 1.0 / (self.fft_size as f32 * 0.5); // Adjust for 50% overlap
         self.fft_input_frame.iter_mut().for_each(|s| *s *= hann_correction_factor);
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_phase_vocoder() {
+        let mut phase_vocoder = PhaseVocoder::new(32, 1.0);
+        let mut in_buffer = vec![10.0; 128];
+
+        let mut out_buffer = vec![0.0; 128];
+        phase_vocoder.process_buffer(&in_buffer, &mut out_buffer);
+
+        println!("OUT BUFFER 1 {:?}", out_buffer);
+
+        phase_vocoder.process_buffer(&in_buffer, &mut out_buffer);
+        
+        println!("OUT BUFFER 2 {:?}", out_buffer);
     }
 }
