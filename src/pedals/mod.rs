@@ -5,6 +5,8 @@ mod fuzz;
 pub use fuzz::Fuzz;
 mod pitch_shift;
 pub use pitch_shift::PitchShift;
+mod chorus;
+pub use chorus::Chorus;
 
 pub struct PedalParameter {
     pub value: PedalParameterValue,

@@ -95,7 +95,7 @@ fn main() {
 
     let (_host, input, output) = setup();
 
-    let mut pitch_shift = pedals::Fuzz::new();
+    let mut pitch_shift = pedals::Chorus::new();
     let pedalboard = Pedalboard::from_pedals(vec![Box::new(pitch_shift)]);
     let pedalboard_set = PedalboardSet::from_pedalboards(vec![pedalboard]);
 
