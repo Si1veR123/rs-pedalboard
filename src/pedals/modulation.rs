@@ -79,5 +79,5 @@ macro_rules! var_delay_phaser {
     };
 }
 
-var_delay_phaser!(Chorus, (3.0, 0.05, 6.0), (10.0, 5.0, 40.0), 0.5);
+var_delay_phaser!(Chorus, (0.8, 0.05, 6.0), (10.0, 5.0, 40.0), 0.5);
 var_delay_phaser!(Flanger, (5.0, 0.1, 10.0), (2.0, 0.1, 6.0), 0.5);

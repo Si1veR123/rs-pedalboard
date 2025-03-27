@@ -95,8 +95,10 @@ fn main() {
 
     let (_host, input, output) = setup();
 
-    let pitch_shift = pedals::Chorus::new();
-    let pedalboard = Pedalboard::from_pedals(vec![Box::new(pitch_shift)]);
+    let chorus = pedals::Chorus::new();
+    let fuzz = pedals::Fuzz::new();
+
+    let pedalboard = Pedalboard::from_pedals(vec![Box::new(chorus), Box::new(fuzz)]);
     let pedalboard_set = PedalboardSet::from_pedalboards(vec![pedalboard]);
 
     let (in_stream, out_stream) = create_linked_streams(input, output, pedalboard_set, RING_BUFFER_LATENCY_MS, FRAMES_PER_PERIOD);
