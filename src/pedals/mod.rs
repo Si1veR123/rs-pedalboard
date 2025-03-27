@@ -5,8 +5,10 @@ mod fuzz;
 pub use fuzz::Fuzz;
 mod pitch_shift;
 pub use pitch_shift::PitchShift;
-mod chorus;
-pub use chorus::Chorus;
+
+
+mod modulation;
+pub use modulation::{Chorus, Flanger};
 
 pub struct PedalParameter {
     pub value: PedalParameterValue,
@@ -72,7 +74,7 @@ impl PedalParameterValue {
         }
     }
 
-    pub fn as_string(&self) -> Option<&str> {
+    pub fn as_str(&self) -> Option<&str> {
         match self {
             PedalParameterValue::String(value) => Some(value),
             _ => None

@@ -16,7 +16,7 @@ impl Volume {
             PedalParameter {
                 value: PedalParameterValue::Float(1.0),
                 min: Some(PedalParameterValue::Float(0.0)),
-                max: Some(PedalParameterValue::Float(2.0)),
+                max: Some(PedalParameterValue::Float(3.0)),
                 step: None
             },
         );

@@ -3,6 +3,7 @@ pub mod phase_vocoder;
 pub mod delay;
 pub mod variable_delay;
 pub mod oscillator;
+pub mod variable_delay_phaser;
 
 pub fn hann_window(size: usize) -> Vec<f32> {
     let mut window = vec![0.0; size];

@@ -12,7 +12,7 @@ mod device_select;
 
 use cpal::{traits::{DeviceTrait, StreamTrait}, Device, Stream, StreamConfig};
 use ringbuf::{traits::{Consumer, Producer, Split}, HeapProd, HeapRb};
-use rs_pedalboard::{pedalboard::{self, Pedalboard}, pedalboard_set::PedalboardSet, pedals::{self, Pedal, PedalParameterValue}};
+use rs_pedalboard::{pedalboard::Pedalboard, pedalboard_set::PedalboardSet, pedals};
 
 use simplelog::*;
 
@@ -95,7 +95,7 @@ fn main() {
 
     let (_host, input, output) = setup();
 
-    let mut pitch_shift = pedals::Chorus::new();
+    let pitch_shift = pedals::Chorus::new();
     let pedalboard = Pedalboard::from_pedals(vec![Box::new(pitch_shift)]);
     let pedalboard_set = PedalboardSet::from_pedalboards(vec![pedalboard]);
 

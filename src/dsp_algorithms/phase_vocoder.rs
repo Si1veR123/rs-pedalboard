@@ -1,6 +1,5 @@
 use realfft::{RealFftPlanner, RealToComplex, ComplexToReal};
 use realfft::num_complex::Complex;
-use std::hash::BuildHasher;
 use std::sync::Arc;
 
 pub struct PhaseVocoder {
@@ -149,7 +148,7 @@ mod tests {
     #[test]
     fn test_phase_vocoder() {
         let mut phase_vocoder = PhaseVocoder::new(32, 1.0);
-        let mut in_buffer = vec![10.0; 128];
+        let in_buffer = vec![10.0; 128];
 
         let mut out_buffer = vec![0.0; 128];
         phase_vocoder.process_buffer(&in_buffer, &mut out_buffer);

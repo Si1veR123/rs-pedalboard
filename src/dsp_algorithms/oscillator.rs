@@ -7,6 +7,26 @@ pub enum Oscillator {
     Triangle(Triangle)
 }
 
+impl Oscillator {
+    pub fn get_frequency(&self) -> f32 {
+        match self {
+            Oscillator::Sine(sine) => sine.frequency,
+            Oscillator::Square(square) => square.frequency,
+            Oscillator::Sawtooth(sawtooth) => sawtooth.frequency,
+            Oscillator::Triangle(triangle) => triangle.frequency
+        }
+    }
+
+    pub fn set_frequency(&mut self, frequency: f32) {
+        match self {
+            Oscillator::Sine(sine) => sine.frequency = frequency,
+            Oscillator::Square(square) => square.frequency = frequency,
+            Oscillator::Sawtooth(sawtooth) => sawtooth.frequency = frequency,
+            Oscillator::Triangle(triangle) => triangle.frequency = frequency
+        }
+    }
+}
+
 impl Iterator for Oscillator {
     type Item = f32;
 
@@ -24,7 +44,7 @@ impl Iterator for Oscillator {
 pub struct Sine {
     sample_rate: f32,
     phase: f32,
-    frequency: f32
+    pub frequency: f32
 }
 
 impl Sine {
@@ -55,7 +75,7 @@ impl Iterator for Sine {
 pub struct Square {
     sample_rate: f32,
     phase: f32,
-    frequency: f32
+    pub frequency: f32
 }
 
 impl Square {
@@ -89,7 +109,7 @@ impl Iterator for Square {
 pub struct Sawtooth {
     sample_rate: f32,
     phase: f32,
-    frequency: f32
+    pub frequency: f32
 }
 
 impl Sawtooth {
@@ -119,7 +139,7 @@ impl Iterator for Sawtooth {
 pub struct Triangle {
     sample_rate: f32,
     phase: f32,
-    frequency: f32
+    pub frequency: f32
 }
 
 impl Triangle {
