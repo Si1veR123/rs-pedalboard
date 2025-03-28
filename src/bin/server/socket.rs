@@ -6,14 +6,14 @@ use crossbeam::channel::Sender;
 
 pub struct TcpServer {
     port: u16,
-    command_sender: Sender<Box<[u8]>>,
+    command_sender: Sender<Box<str>>,
 }
 
 impl TcpServer {
-    pub fn new(port: u16, command_sender: Sender<Box<[u8]>>) -> Self {
+    pub fn new(port: u16, command_sender: Sender<Box<str>>) -> Self {
         TcpServer {
             port,
-            command_sender: command_sender,
+            command_sender,
         }
     }
 
@@ -41,12 +41,16 @@ impl TcpServer {
             match stream.read(&mut buffer) {
                 Ok(0) => break, // Connection closed
                 Ok(n) => {
-                    let received = buffer[..n].to_vec().into_boxed_slice();
-                    log::info!("Received: {:?}", received);
+                    if let Ok(received_str) = std::str::from_utf8(&buffer[..n]) {
+                        log::info!("Received: {:?}", received_str);
                         
-                    if self.command_sender.send(received).is_err() {
-                        log::error!("Failed to send command to audio thread");
-                        break;
+                        if self.command_sender.send(received_str.into()).is_err() {
+                            log::error!("Failed to send command to audio thread");
+                            break;
+                        }
+                    } else {
+                        log::error!("Received invalid UTF-8 string");
+                        continue;
                     }
                 },
                 Err(e) => {

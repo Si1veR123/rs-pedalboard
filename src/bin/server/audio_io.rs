@@ -1,7 +1,7 @@
 use cpal::{traits::DeviceTrait, Device, Stream, StreamConfig};
 use crossbeam::channel::Receiver;
 use ringbuf::{traits::{Consumer, Producer, Split}, HeapProd, HeapRb};
-use rs_pedalboard::{pedalboard_set::PedalboardSet, pedals::{PedalParameterValue, PedalTrait}};
+use rs_pedalboard::{pedalboard_set::PedalboardSet, pedals::PedalTrait};
 
 pub fn ring_buffer_size(buffer_size: usize, latency: f32, sample_rate: f32) -> usize {
     let latency_frames = (latency / 1000.0) * sample_rate;
@@ -14,7 +14,7 @@ pub fn create_linked_streams(
     pedalboard_set: PedalboardSet,
     latency: f32,
     buffer_size: usize,
-    command_receiver: Receiver<Box<[u8]>>
+    command_receiver: Receiver<Box<str>>
 ) -> (Stream, Stream) {
     let ring_buffer_size = ring_buffer_size(buffer_size, latency, 48000.0);
     log::info!("Ring buffer size: {}", ring_buffer_size);
@@ -56,7 +56,7 @@ pub fn create_linked_streams(
 
 struct InputProcessor {
     pedalboard_set: PedalboardSet,
-    command_receiver: Receiver<Box<[u8]>>,
+    command_receiver: Receiver<Box<str>>,
     writer: HeapProd<f32>,
     processing_buffer: Vec<f32>
 }
@@ -72,6 +72,10 @@ impl InputProcessor {
         if written != self.processing_buffer.len() {
             log::error!("Failed to write all processed data. Output is behind.")
         }
+
+        while let Ok(command) = self.command_receiver.try_recv() {
+            self.handle_command(command);
+        }
     }
 
     /// setparameter <pedalboard index> <pedal index> <parameter name> <parameter value>
@@ -84,25 +88,25 @@ impl InputProcessor {
     /// loadset <pedalboardset stringified>
     /// play <pedalboard index>
     /// master <volume 0-1>
-    fn handle_command(&mut self, command: Box<[u8]>) -> Option<()> {
-        let mut words = command.split(|&byte| byte == ' ' as u8);
+    fn handle_command(&mut self, command: Box<str>) -> Option<()> {
+        let mut words = command.split_whitespace();
         let command_name = words.next()?;
 
-        match std::str::from_utf8(command_name).ok()? {
+        match command_name {
             "setparameter" => {
-                let pedalboard_index = std::str::from_utf8(words.next()?).ok()?.parse::<usize>().ok()?;
-                let pedal_index = std::str::from_utf8(words.next()?).ok()?.parse::<usize>().ok()?;
-                let parameter_name = std::str::from_utf8(words.next()?).ok()?;
+                let pedalboard_index = words.next()?.parse::<usize>().ok()?;
+                let pedal_index = words.next()?.parse::<usize>().ok()?;
+                let parameter_name = words.next()?;
 
-                // Temporary
-                let parameter_value = PedalParameterValue::Bool(false);
+                let pedalboard_ser_start_index = parameter_name.as_ptr() as usize + parameter_name.len() - command.as_ptr() as usize;
+                let parameter_value = serde_json::from_str(&command[pedalboard_ser_start_index..]).ok()?;
                 self.pedalboard_set.pedalboards.get_mut(pedalboard_index)?
                     .pedals.get_mut(pedal_index)?
                     .set_parameter_value(parameter_name, parameter_value);
             },
             "movepedalboard" => {
-                let src_index = std::str::from_utf8(words.next()?).ok()?.parse::<usize>().ok()?;
-                let dest_index = std::str::from_utf8(words.next()?).ok()?.parse::<usize>().ok()?;
+                let src_index = words.next()?.parse::<usize>().ok()?;
+                let dest_index = words.next()?.parse::<usize>().ok()?;
 
                 let pedalboard = self.pedalboard_set.pedalboards.remove(src_index);
                 self.pedalboard_set.pedalboards.insert(dest_index, pedalboard);
