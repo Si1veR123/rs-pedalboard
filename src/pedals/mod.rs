@@ -1,4 +1,7 @@
 use std::collections::HashMap;
+use enum_dispatch::enum_dispatch;
+use serde::{ Deserialize, Serialize};
+
 mod volume;
 pub use volume::Volume;
 mod fuzz;
@@ -6,10 +9,10 @@ pub use fuzz::Fuzz;
 mod pitch_shift;
 pub use pitch_shift::PitchShift;
 
-
 mod modulation;
 pub use modulation::{Chorus, Flanger};
 
+#[derive(Serialize, Deserialize)]
 pub struct PedalParameter {
     pub value: PedalParameterValue,
     // min and max are used for floats and selections
@@ -58,7 +61,8 @@ impl PedalParameter {
     }
 }
 
-#[derive(Clone, Debug)]
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum PedalParameterValue {
     Float(f32),
     String(String),
@@ -96,8 +100,8 @@ impl PedalParameterValue {
     }
 }
 
-
-pub trait Pedal: Send {
+#[enum_dispatch]
+pub trait PedalTrait: Send {
     fn init(&mut self) {}
 
     fn process_audio(&mut self, buffer: &mut [f32]);
@@ -115,4 +119,15 @@ pub trait Pedal: Send {
             }
         }
     }
+}
+
+/// Wrapper type for serialization
+#[derive(Serialize, Deserialize)]
+#[enum_dispatch(PedalTrait)]
+pub enum Pedal {
+    Volume(Volume),
+    Fuzz(Fuzz),
+    PitchShift(PitchShift),
+    Chorus(Chorus),
+    Flanger(Flanger)
 }

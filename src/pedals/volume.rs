@@ -1,9 +1,11 @@
 use std::collections::HashMap;
 
-use super::Pedal;
+use super::PedalTrait;
 use super::PedalParameter;
 use super::PedalParameterValue;
 
+use serde::{Serialize, Deserialize};
+#[derive(Serialize, Deserialize)]
 pub struct Volume {
     parameters: HashMap<String, PedalParameter>,
 }
@@ -24,7 +26,7 @@ impl Volume {
     }
 }
 
-impl Pedal for Volume {
+impl PedalTrait for Volume {
     fn process_audio(&mut self, buffer: &mut [f32]) {
         let volume = self.parameters.get("volume").unwrap().value.as_float().unwrap();
         

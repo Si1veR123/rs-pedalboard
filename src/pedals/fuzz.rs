@@ -1,8 +1,10 @@
 use std::collections::HashMap;
-use super::Pedal;
+use super::PedalTrait;
 use super::PedalParameter;
 use super::PedalParameterValue;
 
+use serde::{Serialize, Deserialize};
+#[derive(Serialize, Deserialize)]
 pub struct Fuzz {
     parameters: HashMap<String, PedalParameter>,
 }
@@ -32,7 +34,7 @@ impl Fuzz {
     }
 }
 
-impl Pedal for Fuzz {
+impl PedalTrait for Fuzz {
     fn process_audio(&mut self, buffer: &mut [f32]) {
 
         let gain = self.parameters.get("gain").unwrap().value.as_float().unwrap();

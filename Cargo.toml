@@ -5,7 +5,7 @@ edition = "2021"
 
 [[bin]]
 name = "server"
-path = "src/bin/server/server.rs"
+path = "src/bin/server/bin.rs"
 
 [[bin]]
 name = "client"
@@ -20,3 +20,6 @@ regex = "1.11.1"
 strum = "0.27"
 strum_macros = "0.27"
 realfft = "3.4.0"
+crossbeam = "0.8.4"
+serde = { version = "1.0.219", features=["derive"]}
+enum_dispatch = "0.3.13"

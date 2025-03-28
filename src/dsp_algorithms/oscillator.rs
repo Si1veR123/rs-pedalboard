@@ -41,6 +41,8 @@ impl Iterator for Oscillator {
 }
 
 
+use serde::{Serialize, Deserialize};
+#[derive(Serialize, Deserialize)]
 pub struct Sine {
     sample_rate: f32,
     phase: f32,

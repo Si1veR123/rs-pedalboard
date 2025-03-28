@@ -1,13 +1,74 @@
 use std::collections::HashMap;
 
 use crate::dsp_algorithms::variable_delay_phaser::VariableDelayPhaser;
-use super::{Pedal, PedalParameter, PedalParameterValue};
+use super::{PedalTrait, PedalParameter, PedalParameterValue};
+use serde::{Serialize, Deserialize};
+
 
 macro_rules! var_delay_phaser {
-    ($name:ident, ($default_rate:expr, $min_rate:expr, $max_rate:expr), ($default_min_depth:expr, $default_max_depth:expr, $min_depth: expr, $max_depth: expr), $default_mix: expr) => {
+    ($name:ident, $serde_name:ident, ($default_rate:expr, $min_rate:expr, $max_rate:expr), ($default_min_depth:expr, $default_max_depth:expr, $min_depth: expr, $max_depth: expr), $default_mix: expr) => {
         pub struct $name {
             variable_delay_phaser: VariableDelayPhaser,
             parameters: HashMap<String, PedalParameter>,
+        }
+
+        impl Serialize for $name {
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: serde::Serializer,
+            {
+                let serde = $serde_name::from(self);
+                serde.serialize(serializer)
+            }
+        }
+
+        impl<'a> Deserialize<'a> for $name {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: serde::Deserializer<'a>,
+            {
+                let serde = $serde_name::deserialize(deserializer)?;
+                Ok($name::from(serde))
+            }
+        }
+
+        #[derive(Clone, Serialize, Deserialize)]
+        struct $serde_name {
+            rate: f32,
+            min_depth: f32,
+            max_depth: f32,
+            mix: f32,
+            oscillator: u8
+        }
+
+        impl From<&$name> for $serde_name {
+            fn from(pedal: &$name) -> Self {
+                let rate = pedal.parameters.get("rate").unwrap().value.as_float().unwrap();
+                let min_depth = pedal.parameters.get("min_depth").unwrap().value.as_float().unwrap();
+                let max_depth = pedal.parameters.get("max_depth").unwrap().value.as_float().unwrap();
+                let mix = pedal.parameters.get("mix").unwrap().value.as_float().unwrap();
+                let oscillator = pedal.parameters.get("oscillator").unwrap().value.as_selection().unwrap();
+
+                Self {
+                    rate,
+                    min_depth,
+                    max_depth,
+                    mix,
+                    oscillator
+                }
+            }
+        }
+
+        impl From<$serde_name> for $name {
+            fn from(serde: $serde_name) -> Self {
+                let mut pedal = Self::new();
+                pedal.set_parameter_value("rate", PedalParameterValue::Float(serde.rate));
+                pedal.set_parameter_value("min_depth", PedalParameterValue::Float(serde.min_depth));
+                pedal.set_parameter_value("max_depth", PedalParameterValue::Float(serde.max_depth));
+                pedal.set_parameter_value("mix", PedalParameterValue::Float(serde.mix));
+                pedal.set_parameter_value("oscillator", PedalParameterValue::Selection(serde.oscillator as u8));
+                pedal
+            }
         }
 
         impl $name {
@@ -73,7 +134,7 @@ macro_rules! var_delay_phaser {
             }
         }
         
-        impl Pedal for $name {
+        impl PedalTrait for $name {
             fn process_audio(&mut self, buffer: &mut [f32]) {
                 self.variable_delay_phaser.process_audio(buffer);
             }
@@ -133,5 +194,5 @@ macro_rules! var_delay_phaser {
     };
 }
 
-var_delay_phaser!(Chorus, (0.8, 0.05, 6.0), (8.0, 25.0, 5.0, 50.0), 0.5);
-var_delay_phaser!(Flanger, (3.0, 0.05, 15.0), (0.5, 5.0, 0.0, 10.0), 0.5);
+var_delay_phaser!(Chorus, ChorusSerde, (0.8, 0.05, 6.0), (8.0, 25.0, 5.0, 50.0), 0.5);
+var_delay_phaser!(Flanger, FlangerSerde, (3.0, 0.05, 15.0), (0.5, 5.0, 0.0, 10.0), 0.5);

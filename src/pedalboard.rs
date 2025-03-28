@@ -1,8 +1,10 @@
-use crate::pedals::Pedal;
+use serde::{Deserialize, Serialize};
+use crate::pedals::{Pedal, PedalTrait};
 
 
+#[derive(Serialize, Deserialize)]
 pub struct Pedalboard {
-    pub pedals: Vec<Box<dyn Pedal>>
+    pub pedals: Vec<Pedal>
 }
 
 impl Default for Pedalboard {
@@ -18,7 +20,7 @@ impl Pedalboard {
         Self::default()
     }
 
-    pub fn from_pedals(pedals: Vec<Box<dyn Pedal>>) -> Pedalboard {
+    pub fn from_pedals(pedals: Vec<Pedal>) -> Pedalboard {
         Pedalboard { pedals }
     }
 
