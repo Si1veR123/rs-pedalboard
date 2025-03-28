@@ -8,6 +8,19 @@ mod windows;
 #[cfg(target_os = "windows")]
 use windows::{setup, after_setup};
 
+#[cfg(target_os = "linux")]
+pub mod constants {
+    pub const FRAMES_PER_PERIOD: usize = 256;
+    pub const PERIODS_PER_BUFFER: usize = 3;
+    pub const RING_BUFFER_LATENCY_MS: f32 = 5.0;
+}
+#[cfg(target_os = "windows")]
+pub mod constants {
+    pub const FRAMES_PER_PERIOD: usize = 256;
+    pub const RING_BUFFER_LATENCY_MS: f32 = 5.0;
+}
+
+
 mod device_select;
 
 use cpal::{traits::{DeviceTrait, StreamTrait}, Device, Stream, StreamConfig};
@@ -16,11 +29,6 @@ use rs_pedalboard::{pedalboard::Pedalboard, pedalboard_set::PedalboardSet, pedal
 
 use simplelog::*;
 
-// Frames=Samples for mono channel
-// This is the number of samples provided to callbacks
-const FRAMES_PER_PERIOD: usize = 256;
-const PERIODS_PER_BUFFER: usize = 3;
-const RING_BUFFER_LATENCY_MS: f32 = 5.0;
 
 pub fn ring_buffer_size(buffer_size: usize, latency: f32, sample_rate: f32) -> usize {
     let latency_frames = (latency / 1000.0) * sample_rate;
@@ -94,14 +102,16 @@ fn main() {
     log::info!("Started logging...");
 
     let (_host, input, output) = setup();
-
+    output.supported_output_configs().unwrap().for_each(|config| {
+        log::info!("Supported output config: {:?}", config);
+    });
     let chorus = pedals::Chorus::new();
     let fuzz = pedals::Fuzz::new();
 
     let pedalboard = Pedalboard::from_pedals(vec![Box::new(chorus), Box::new(fuzz)]);
     let pedalboard_set = PedalboardSet::from_pedalboards(vec![pedalboard]);
 
-    let (in_stream, out_stream) = create_linked_streams(input, output, pedalboard_set, RING_BUFFER_LATENCY_MS, FRAMES_PER_PERIOD);
+    let (in_stream, out_stream) = create_linked_streams(input, output, pedalboard_set, constants::RING_BUFFER_LATENCY_MS, constants::FRAMES_PER_PERIOD);
 
     in_stream.play().expect("Failed to play input stream");
     out_stream.play().expect("Failed to play output stream");

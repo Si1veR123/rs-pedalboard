@@ -13,8 +13,6 @@ pub fn get_windows_host() -> Host{
             .find(|id| *id == cpal::HostId::Wasapi)
             .expect("Wasapi host not found")
     ).unwrap()
-
-    
 }
 
 pub fn setup() -> (Host, Device, Device) {

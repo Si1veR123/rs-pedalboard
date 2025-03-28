@@ -6,7 +6,7 @@ pub struct Delay {
 
 impl Delay {
     pub fn new(delay_length_samples: usize) -> Self {
-        Delay {
+        Self {
             buffer: VecDeque::from_iter(std::iter::repeat(0.0).take(delay_length_samples))
         }
     }

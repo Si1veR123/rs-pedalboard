@@ -4,8 +4,9 @@ use std::iter::Iterator;
 
 pub struct VariableDelayPhaser {
     pub mix: f32,
-    pub delay: VariableDelay,
-    pub oscillator: Oscillator,
+    delay: VariableDelay,
+    min_delay_samples: usize,
+    oscillator: Oscillator,
 }
 
 impl VariableDelayPhaser {
@@ -19,10 +20,11 @@ impl VariableDelayPhaser {
         }
     }
 
-    pub fn new(depth_ms: f32, rate_hz: f32, mix: f32, oscillator_selection: usize) -> Self {
-        let depth_samples = ((depth_ms / 1000.0) * 48000.0) as usize;
+    pub fn new(depth_min_ms: f32, depth_max_ms: f32, rate_hz: f32, mix: f32, oscillator_selection: usize) -> Self {
+        let depth_samples = ((depth_max_ms / 1000.0) * 48000.0) as usize;
         VariableDelayPhaser {
             mix,
+            min_delay_samples: ((depth_min_ms / 1000.0) * 48000.0) as usize,
             delay: VariableDelay::new(depth_samples),
             oscillator: Self::oscillator_from_selection(oscillator_selection as u8, 48000.0, rate_hz)
         }
@@ -30,10 +32,10 @@ impl VariableDelayPhaser {
 
     pub fn process_audio(&mut self, buffer: &mut [f32]) {
         for sample in buffer.iter_mut() {
-            let oscillator_val = (self.oscillator.next().unwrap() + 1.0) / 2.0;
+            let max_depth_samples = self.delay.buffer.len();
 
-            let depth_samples = self.delay.buffer.len();
-            let delay_val = (oscillator_val * depth_samples as f32) as usize;
+            let oscillator_val = (self.oscillator.next().unwrap() + 1.0) / 2.0;
+            let delay_val = (oscillator_val * (max_depth_samples-self.min_delay_samples) as f32) as usize + self.min_delay_samples;
 
             let delayed_sample = self.delay.process_sample(*sample, delay_val);
             *sample = self.mix * delayed_sample + (1.0 - self.mix) * *sample;
@@ -44,12 +46,16 @@ impl VariableDelayPhaser {
         self.oscillator.set_frequency(rate_hz);
     }
 
-    pub fn set_depth(&mut self, depth_ms: f32) {
+    pub fn set_min_depth(&mut self, depth_ms: f32) {
+        self.min_delay_samples = ((depth_ms / 1000.0) * 48000.0) as usize;
+    }
+
+    pub fn set_max_depth(&mut self, depth_ms: f32) {
         let depth_samples = ((depth_ms / 1000.0) * 48000.0) as usize;
         self.delay = VariableDelay::new(depth_samples);
     }
 
-    pub fn set_oscillator(&mut self, selection: usize) {
-        self.oscillator = Self::oscillator_from_selection(selection as u8, 48000.0, self.oscillator.get_frequency());
+    pub fn set_oscillator(&mut self, selection: u8) {
+        self.oscillator = Self::oscillator_from_selection(selection, 48000.0, self.oscillator.get_frequency());
     }
 }
