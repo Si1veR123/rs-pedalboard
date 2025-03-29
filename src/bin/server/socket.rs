@@ -4,14 +4,14 @@ use std::net::Ipv4Addr;
 
 use crossbeam::channel::Sender;
 
-pub struct TcpServer {
+pub struct ServerSocket {
     port: u16,
     command_sender: Sender<Box<str>>,
 }
 
-impl TcpServer {
+impl ServerSocket {
     pub fn new(port: u16, command_sender: Sender<Box<str>>) -> Self {
-        TcpServer {
+        ServerSocket {
             port,
             command_sender,
         }

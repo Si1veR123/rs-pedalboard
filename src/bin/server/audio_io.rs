@@ -25,7 +25,8 @@ pub fn create_linked_streams(
         pedalboard_set,
         command_receiver,
         writer: audio_buffer_writer,
-        processing_buffer: Vec::with_capacity(buffer_size as usize)
+        processing_buffer: Vec::with_capacity(buffer_size as usize),
+        master_volume: 1.0
     };
 
     let config = StreamConfig {
@@ -58,7 +59,8 @@ struct InputProcessor {
     pedalboard_set: PedalboardSet,
     command_receiver: Receiver<Box<str>>,
     writer: HeapProd<f32>,
-    processing_buffer: Vec<f32>
+    processing_buffer: Vec<f32>,
+    master_volume: f32
 }
 
 impl InputProcessor {
@@ -67,6 +69,7 @@ impl InputProcessor {
         self.processing_buffer.extend_from_slice(data);
 
         self.pedalboard_set.process_audio(&mut self.processing_buffer);
+        self.processing_buffer.iter_mut().for_each(|sample| *sample *= self.master_volume);
 
         let written = self.writer.push_slice(&self.processing_buffer);
         if written != self.processing_buffer.len() {
@@ -74,11 +77,13 @@ impl InputProcessor {
         }
 
         while let Ok(command) = self.command_receiver.try_recv() {
-            self.handle_command(command);
+            if self.handle_command(command).is_none() {
+                log::error!("Failed to handle command");
+            }
         }
     }
 
-    /// setparameter <pedalboard index> <pedal index> <parameter name> <parameter value>
+    /// setparameter <pedalboard index> <pedal index> <parameter name> <parameter value stringified>
     /// movepedalboard <src index> <dest index>
     /// addpedalboard <pedalboard stringified>
     /// deletepedalboard <pedalboard index>
@@ -99,7 +104,7 @@ impl InputProcessor {
                 let parameter_name = words.next()?;
 
                 let pedalboard_ser_start_index = parameter_name.as_ptr() as usize + parameter_name.len() - command.as_ptr() as usize;
-                let parameter_value = serde_json::from_str(&command[pedalboard_ser_start_index..]).ok()?;
+                let parameter_value = serde_json::from_str(&command[pedalboard_ser_start_index + 1..]).ok()?;
                 self.pedalboard_set.pedalboards.get_mut(pedalboard_index)?
                     .pedals.get_mut(pedal_index)?
                     .set_parameter_value(parameter_name, parameter_value);
@@ -110,7 +115,56 @@ impl InputProcessor {
 
                 let pedalboard = self.pedalboard_set.pedalboards.remove(src_index);
                 self.pedalboard_set.pedalboards.insert(dest_index, pedalboard);
-            }
+            },
+            "addpedalboard" => {
+                let pedalboard_stringified = &command[command_name.len() + 1..];
+                let pedalboard = serde_json::from_str(&pedalboard_stringified).ok()?;
+                self.pedalboard_set.pedalboards.push(pedalboard);
+            },
+            "deletepedalboard" => {
+                let pedalboard_index = words.next()?.parse::<usize>().ok()?;
+                self.pedalboard_set.pedalboards.remove(pedalboard_index);
+            },
+            "addpedal" => {
+                let pedalboard_index = words.next()?.parse::<usize>().ok()?;
+                let pedal_index_str = words.next()?;
+                let pedal_index = pedal_index_str.parse::<usize>().ok()?;
+
+                let pedal_str_index = pedal_index_str.as_ptr() as usize + pedal_index_str.len() - command.as_ptr() as usize;
+                let pedal_stringified = &command[pedal_str_index + 1..];
+                let pedal = serde_json::from_str(&pedal_stringified).ok()?;
+                self.pedalboard_set.pedalboards.get_mut(pedalboard_index)?
+                    .pedals.insert(pedal_index, pedal);
+            },
+            "deletepedal" => {
+                let pedalboard_index = words.next()?.parse::<usize>().ok()?;
+                let pedal_index = words.next()?.parse::<usize>().ok()?;
+                self.pedalboard_set.pedalboards.get_mut(pedalboard_index)?
+                    .pedals.remove(pedal_index);
+            },
+            "movepedal" => {
+                let pedalboard_index = words.next()?.parse::<usize>().ok()?;
+                let src_index = words.next()?.parse::<usize>().ok()?;
+                let dest_index = words.next()?.parse::<usize>().ok()?;
+
+                let pedal = self.pedalboard_set.pedalboards.get_mut(pedalboard_index)?
+                    .pedals.remove(src_index);
+                self.pedalboard_set.pedalboards.get_mut(pedalboard_index)?
+                    .pedals.insert(dest_index, pedal);
+            },
+            "loadset" => {
+                let pedalboardset_stringified = &command[command_name.len() + 1..];
+                let pedalboardset = serde_json::from_str(&pedalboardset_stringified).ok()?;
+                self.pedalboard_set = pedalboardset;
+            },
+            "play" => {
+                let pedalboard_index = words.next()?.parse::<usize>().ok()?;
+                self.pedalboard_set.set_active_pedalboard(pedalboard_index);
+            },
+            "master" => {
+                let volume = words.next()?.parse::<f32>().ok()?;
+                self.master_volume = volume;
+            },
             _ => return None
         }
 

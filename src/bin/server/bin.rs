@@ -16,8 +16,8 @@ pub mod constants {
 }
 #[cfg(target_os = "windows")]
 pub mod constants {
-    pub const FRAMES_PER_PERIOD: usize = 256;
-    pub const RING_BUFFER_LATENCY_MS: f32 = 5.0;
+    pub const FRAMES_PER_PERIOD: usize = 1024;
+    pub const RING_BUFFER_LATENCY_MS: f32 = 20.0;
 }
 
 mod audio_io;
@@ -64,5 +64,5 @@ fn main() {
     after_setup();
 
     // Will loop infinitely (unless panic)
-    socket::TcpServer::new(5676, command_sender).start().expect("Failed to start server");
+    socket::ServerSocket::new(29475, command_sender).start().expect("Failed to start server");
 }
