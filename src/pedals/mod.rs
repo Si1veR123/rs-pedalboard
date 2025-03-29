@@ -8,9 +8,10 @@ mod fuzz;
 pub use fuzz::Fuzz;
 mod pitch_shift;
 pub use pitch_shift::PitchShift;
-
 mod modulation;
 pub use modulation::{Chorus, Flanger};
+mod delay;
+pub use delay::Delay;
 
 #[derive(Serialize, Deserialize)]
 pub struct PedalParameter {
@@ -129,5 +130,6 @@ pub enum Pedal {
     Fuzz(Fuzz),
     PitchShift(PitchShift),
     Chorus(Chorus),
-    Flanger(Flanger)
+    Flanger(Flanger),
+    Delay(Delay)
 }

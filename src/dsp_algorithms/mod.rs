@@ -1,6 +1,5 @@
 // pub mod psola;
 pub mod phase_vocoder;
-pub mod delay;
 pub mod variable_delay;
 pub mod oscillator;
 pub mod variable_delay_phaser;

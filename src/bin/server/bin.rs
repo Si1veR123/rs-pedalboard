@@ -41,10 +41,10 @@ fn main() {
 
     let (_host, input, output) = setup();
 
-    let chorus = pedals::Chorus::new();
+    let delay = pedals::Delay::new();
     let fuzz = pedals::Fuzz::new();
 
-    let pedalboard = Pedalboard::from_pedals(vec![Pedal::Chorus(chorus), Pedal::Fuzz(fuzz)]);
+    let pedalboard = Pedalboard::from_pedals(vec![Pedal::Delay(delay), Pedal::Fuzz(fuzz)]);
     let pedalboard_set = PedalboardSet::from_pedalboards(vec![pedalboard]);
 
     let (command_sender, command_receiver) = bounded(12);
