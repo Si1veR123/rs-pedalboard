@@ -2,7 +2,7 @@ mod audio_devices;
 mod jack_server;
 
 use cpal::{Host, Device};
-use crate::{FRAMES_PER_PERIOD, PERIODS_PER_BUFFER};
+use crate::constants::{FRAMES_PER_PERIOD, PERIODS_PER_BUFFER};
 
 pub fn setup() -> (Host, Device, Device) {
     let (in_device, out_device) = audio_devices::io_device_selector();

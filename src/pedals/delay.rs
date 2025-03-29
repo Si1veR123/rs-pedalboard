@@ -105,7 +105,7 @@ impl PedalTrait for Delay {
 
                     parameter.value = value;
 
-                    if delay_samples <= old_delay_samples {
+                    if delay_samples < old_delay_samples {
                         self.delay_buffer.truncate(old_delay_samples - delay_samples);
                     } else {
                         self.delay_buffer = VecDeque::from_iter(iter::repeat(0.0).take(delay_samples as usize));

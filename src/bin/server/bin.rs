@@ -25,7 +25,7 @@ mod socket;
 mod device_select;
 
 use cpal::traits::StreamTrait;
-use rs_pedalboard::{pedalboard::Pedalboard, pedalboard_set::PedalboardSet, pedals::{self, Pedal}};
+use rs_pedalboard::{pedalboard::Pedalboard, pedalboard_set::PedalboardSet, pedals::{self, Pedal, PedalTrait}};
 use crossbeam::channel::bounded;
 
 use simplelog::*;
@@ -41,7 +41,8 @@ fn main() {
 
     let (_host, input, output) = setup();
 
-    let delay = pedals::Delay::new();
+    let mut delay = pedals::Delay::new();
+    delay.set_parameter_value("delay", pedals::PedalParameterValue::Float(100.0));
     let fuzz = pedals::Fuzz::new();
 
     let pedalboard = Pedalboard::from_pedals(vec![Pedal::Delay(delay), Pedal::Fuzz(fuzz)]);
