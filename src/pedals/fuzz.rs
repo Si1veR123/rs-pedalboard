@@ -4,7 +4,7 @@ use super::PedalParameter;
 use super::PedalParameterValue;
 
 use serde::{Serialize, Deserialize};
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Fuzz {
     parameters: HashMap<String, PedalParameter>,
 }

@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-
+#[derive(Clone)]
 pub struct VariableDelay {
     pub buffer: VecDeque<f32>
 }

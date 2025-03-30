@@ -2,6 +2,7 @@ use realfft::{RealFftPlanner, RealToComplex, ComplexToReal};
 use realfft::num_complex::Complex;
 use std::sync::Arc;
 
+#[derive(Clone)]
 pub struct PhaseVocoder {
     fft_size: usize,
     hop_size: usize,

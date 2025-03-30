@@ -2,13 +2,14 @@ use crate::dsp_algorithms::variable_delay::VariableDelay;
 use crate::dsp_algorithms::oscillator::{Oscillator, self};
 use std::iter::Iterator;
 
-
+#[derive(Clone)]
 pub struct VariableDelayPhaser {
     pub mix: f32,
     delay: VariableDelay,
     min_delay_samples: usize,
     oscillator: Oscillator,
 }
+
 
 impl VariableDelayPhaser {
     fn oscillator_from_selection(selection: u8, sample_rate: f32, frequency: f32) -> Oscillator {

@@ -7,6 +7,7 @@ use serde::{Serialize, Deserialize};
 
 macro_rules! var_delay_phaser {
     ($name:ident, $serde_name:ident, ($default_rate:expr, $min_rate:expr, $max_rate:expr), ($default_min_depth:expr, $default_max_depth:expr, $min_depth: expr, $max_depth: expr), $default_mix: expr) => {
+        #[derive(Clone)]
         pub struct $name {
             variable_delay_phaser: VariableDelayPhaser,
             parameters: HashMap<String, PedalParameter>,

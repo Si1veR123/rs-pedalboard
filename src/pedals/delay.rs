@@ -4,6 +4,7 @@ use super::{PedalParameter, PedalParameterValue, PedalTrait};
 use serde::ser::SerializeMap;
 use serde::{Serialize, Deserialize};
 
+#[derive(Clone)]
 pub struct Delay {
     pub parameters: HashMap<String, PedalParameter>,
     delay_buffer: VecDeque<f32>

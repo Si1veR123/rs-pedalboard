@@ -1,5 +1,6 @@
 use std::iter::Iterator;
 
+#[derive(Clone)]
 pub enum Oscillator {
     Sine(Sine),
     Square(Square),
@@ -42,7 +43,7 @@ impl Iterator for Oscillator {
 
 
 use serde::{Serialize, Deserialize};
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Sine {
     sample_rate: f32,
     phase: f32,
@@ -73,7 +74,7 @@ impl Iterator for Sine {
     }
 }
 
-
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Square {
     sample_rate: f32,
     phase: f32,
@@ -108,6 +109,7 @@ impl Iterator for Square {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Sawtooth {
     sample_rate: f32,
     phase: f32,
@@ -138,6 +140,7 @@ impl Iterator for Sawtooth {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Triangle {
     sample_rate: f32,
     phase: f32,

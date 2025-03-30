@@ -45,7 +45,7 @@ fn main() {
     delay.set_parameter_value("delay", pedals::PedalParameterValue::Float(100.0));
     let fuzz = pedals::Fuzz::new();
 
-    let pedalboard = Pedalboard::from_pedals(vec![Pedal::Delay(delay), Pedal::Fuzz(fuzz)]);
+    let pedalboard = Pedalboard::from_pedals(String::from("pedalboard"), vec![Pedal::Delay(delay), Pedal::Fuzz(fuzz)]);
     let pedalboard_set = PedalboardSet::from_pedalboards(vec![pedalboard]);
 
     let (command_sender, command_receiver) = bounded(12);

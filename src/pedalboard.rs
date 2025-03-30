@@ -2,26 +2,31 @@ use serde::{Deserialize, Serialize};
 use crate::pedals::{Pedal, PedalTrait};
 
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Pedalboard {
+    pub name: String,
     pub pedals: Vec<Pedal>
 }
 
 impl Default for Pedalboard {
     fn default() -> Pedalboard {
         Pedalboard {
+            name: String::from("New Pedalboard"),
             pedals: Vec::new()
         }
     }
 }
 
 impl Pedalboard {
-    pub fn new() -> Pedalboard {
-        Self::default()
+    pub fn new(name: String) -> Pedalboard {
+        Self {
+            name,
+            pedals: Vec::new()
+        }
     }
 
-    pub fn from_pedals(pedals: Vec<Pedal>) -> Pedalboard {
-        Pedalboard { pedals }
+    pub fn from_pedals(name: String, pedals: Vec<Pedal>) -> Pedalboard {
+        Pedalboard { name, pedals }
     }
 
     pub fn process_audio(&mut self, buffer: &mut [f32]) {

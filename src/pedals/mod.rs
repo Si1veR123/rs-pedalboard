@@ -13,7 +13,7 @@ pub use modulation::{Chorus, Flanger};
 mod delay;
 pub use delay::Delay;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct PedalParameter {
     pub value: PedalParameterValue,
     // min and max are used for floats and selections
@@ -123,7 +123,7 @@ pub trait PedalTrait: Send {
 }
 
 /// Wrapper type for serialization
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 #[enum_dispatch(PedalTrait)]
 pub enum Pedal {
     Volume(Volume),

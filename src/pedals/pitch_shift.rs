@@ -6,6 +6,7 @@ use crate::dsp_algorithms::phase_vocoder::PhaseVocoder;
 
 use serde::{Serialize, Deserialize};
 
+#[derive(Clone)]
 pub struct PitchShift {
     parameters: HashMap<String, PedalParameter>,
     phase_vocoder: PhaseVocoder,
