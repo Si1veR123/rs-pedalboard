@@ -4,6 +4,11 @@ use eframe::egui::{self, Layout, TextEdit, Vec2, Widget};
 use rs_pedalboard::pedalboard::Pedalboard;
 use crate::{helpers::unique_pedalboard_name, State};
 
+pub enum RowAction {
+    Load,
+    Delete
+}
+
 pub struct PedalboardListScreen {
     // Store pedalboards by unique name
     state: &'static State,
@@ -16,6 +21,39 @@ impl PedalboardListScreen {
             state,
             search_term: String::new(),
         }
+    }
+
+    pub fn pedalboard_row(ui: &mut egui::Ui, pedalboard: &Pedalboard, row_size: Vec2) -> (Option<RowAction>, egui::Response) {
+        let mut action = None;
+
+        let row_height = row_size.y;
+        let response = ui.allocate_ui_with_layout(
+            row_size,
+            Layout::left_to_right(egui::Align::Center),
+            |ui| {
+                ui.set_min_size(row_size);
+                ui.columns(2, |columns| {
+                    columns[0].horizontal_centered(|ui| {
+                        ui.add_space(20.0);
+                        ui.label(&pedalboard.name);
+                    });
+
+                    columns[1].allocate_ui_with_layout(
+                        Vec2::new(0.0, row_height),
+                        Layout::right_to_left(egui::Align::Center),
+                        |ui| {
+                            if ui.add_sized([80.0, 30.0], egui::Button::new("Delete")).clicked() {
+                                action = Some(RowAction::Delete);
+                            }
+                            if ui.add_sized([80.0, 30.0], egui::Button::new("Load")).clicked() {
+                                action = Some(RowAction::Load);
+                            }
+                        }
+                    )
+                });
+        }).response;
+
+        (action, response)
     }
 }
 
@@ -44,14 +82,13 @@ impl Widget for &mut PedalboardListScreen {
         ui.add_space(10.0);
 
         let pedalboard_library = self.state.pedalboard_library.borrow();
-        let row_height = 30.0;
+        let row_height = 50.0;
         let row_size = Vec2::new(ui.available_width(), row_height);
 
         if pedalboard_library.is_empty() {
             ui.add_sized(row_size, egui::Label::new("No pedalboards found"))
         } else {
-            let mut action_pedalboard = None;
-            let mut action_is_delete = false;
+            let mut action = None;
 
             let response = egui::Grid::new("pedalboard_list_grid")
                 .striped(true)
@@ -59,44 +96,25 @@ impl Widget for &mut PedalboardListScreen {
                 .show(ui, |ui| {
                     for (i, pedalboard) in pedalboard_library.iter().enumerate() {
                         if self.search_term.is_empty() || pedalboard.name.contains(&self.search_term) {
-
-                            // EACH PEDALBOARD ROW
-                            ui.allocate_ui_with_layout(
-                                row_size,
-                                Layout::left_to_right(egui::Align::Center),
-                                |ui| {
-                                    ui.set_min_size(row_size);
-                                    ui.columns(2, |columns| {
-                                        columns[0].label(&pedalboard.name);
-                                        columns[1].allocate_ui_with_layout(
-                                            Vec2::new(0.0, row_height),
-                                            Layout::right_to_left(egui::Align::Center),
-                                            |ui| {
-                                                if ui.button("Delete").clicked() {
-                                                    action_pedalboard = Some(i);
-                                                    action_is_delete = true;
-                                                }
-                                                if ui.button("Load").clicked() {
-                                                    action_pedalboard = Some(i);
-                                                    action_is_delete = false;
-                                                }
-                                            }
-                                        )
-                                    });
+                            PedalboardListScreen::pedalboard_row(ui, pedalboard, row_size).0.map(|row_action| {
+                                action = Some((i, row_action));
                             });
                             ui.end_row();
                         }
                     }
             }).response;
 
-            if let Some(pedalboard_index) = action_pedalboard {
-                if action_is_delete {
-                    drop(pedalboard_library);
-                    let mut pedalboards_mut = self.state.pedalboard_library.borrow_mut();
-                    pedalboards_mut.remove(pedalboard_index);
-                } else {
-                    let pedalboard = pedalboard_library.get(pedalboard_index).unwrap();
-                    self.state.active_pedalboardset.borrow_mut().pedalboards.push(pedalboard.clone());
+            if let Some((pedalboard_index, action)) = action {
+                match action {
+                    RowAction::Load => {
+                        let pedalboard = pedalboard_library.get(pedalboard_index).unwrap();
+                        self.state.active_pedalboardset.borrow_mut().pedalboards.push(pedalboard.clone());
+                    },
+                    RowAction::Delete => {
+                        drop(pedalboard_library);
+                        let mut pedalboard_library = self.state.pedalboard_library.borrow_mut();
+                        pedalboard_library.remove(pedalboard_index);
+                    }
                 }
             };
 
