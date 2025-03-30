@@ -13,7 +13,7 @@ use utilities_screen::UtilitiesScreen;
 
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use rs_pedalboard::{pedalboard::Pedalboard, pedalboard_set::PedalboardSet, pedals::PedalParameterValue};
-use eframe::egui::{self, Id};
+use eframe::egui::{self, Id, RichText};
 
 const SERVER_PORT: u16 = 29475;
 const WINDOW_HEIGHT: f32 = 600.0;
@@ -87,22 +87,30 @@ impl eframe::App for PedalboardClientApp {
                 ui.columns(4, |columns| {
                     let button_size = [columns[0].available_width(), columns[0].available_height() - 10.0];
                     columns[0].horizontal_centered(|ui| {
-                        if ui.add_sized(button_size, egui::Button::new("Set View")).clicked() {
+                        if ui.add_sized(button_size, egui::Button::new(
+                            RichText::new("Set View").size(20.0)
+                        )).clicked() {
                             self.selected_screen = 0;
                         }
                     });
                     columns[1].horizontal_centered(|ui| {
-                        if ui.add_sized(button_size, egui::Button::new("Pedalboards")).clicked() {
+                        if ui.add_sized(button_size, egui::Button::new(
+                            RichText::new("Pedalboards").size(20.0)
+                        )).clicked() {
                             self.selected_screen = 1;
                         }
                     });
                     columns[2].horizontal_centered(|ui| {
-                        if ui.add_sized(button_size, egui::Button::new("Songs")).clicked() {
+                        if ui.add_sized(button_size, egui::Button::new(
+                            RichText::new("Songs").size(20.0)
+                        )).clicked() {
                             self.selected_screen = 2;
                         }
                     });
                     columns[3].horizontal_centered(|ui| {
-                        if ui.add_sized(button_size, egui::Button::new("Utilities")).clicked() {
+                        if ui.add_sized(button_size, egui::Button::new(
+                            RichText::new("Utilities").size(20.0)
+                        )).clicked() {
                             self.selected_screen = 3;
                         }
                     });

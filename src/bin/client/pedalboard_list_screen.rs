@@ -1,6 +1,6 @@
 use std::{cell::RefCell, rc::Rc};
 
-use eframe::egui::{self, Layout, TextEdit, Vec2, Widget};
+use eframe::egui::{self, Layout, RichText, TextEdit, Vec2, Widget};
 use rs_pedalboard::pedalboard::Pedalboard;
 use crate::{helpers::unique_pedalboard_name, State};
 
@@ -35,13 +35,14 @@ impl PedalboardListScreen {
                 ui.columns(2, |columns| {
                     columns[0].horizontal_centered(|ui| {
                         ui.add_space(20.0);
-                        ui.label(&pedalboard.name);
+                        ui.label(RichText::new(&pedalboard.name).size(20.0));   
                     });
 
                     columns[1].allocate_ui_with_layout(
                         Vec2::new(0.0, row_height),
                         Layout::right_to_left(egui::Align::Center),
                         |ui| {
+                            ui.add_space(20.0);
                             if ui.add_sized([80.0, 30.0], egui::Button::new("Delete")).clicked() {
                                 action = Some(RowAction::Delete);
                             }
@@ -62,7 +63,11 @@ impl Widget for &mut PedalboardListScreen {
         ui.add_space(10.0);
 
         ui.columns(3, |columns| {
-            columns[1].add_sized([0.0, 30.0], TextEdit::singleline(&mut self.search_term).hint_text("Search..."));
+            columns[1]
+                .add_sized(
+                    [0.0, 30.0],
+                    TextEdit::singleline(&mut self.search_term).hint_text(RichText::new("Search pedalboards...").size(20.0))
+                );
 
 
             columns[2].allocate_ui_with_layout(
@@ -70,8 +75,8 @@ impl Widget for &mut PedalboardListScreen {
                 Layout::top_down(egui::Align::Center),
                 |ui| {
                     if ui.add_sized([200.0, 30.0], egui::Button::new("New Pedalboard")).clicked() {
-                        let mut pedalboards_mut = self.state.pedalboard_library.borrow_mut();
-                        let unique_name = unique_pedalboard_name(String::from("New Pedalboard"), pedalboards_mut.as_ref());
+                        let unique_name = unique_pedalboard_name(String::from("New Pedalboard"), self.state);
+                        let pedalboards_mut = &mut self.state.pedalboard_library.borrow_mut();
                         pedalboards_mut.push(Pedalboard::new(unique_name));
                 }
             });
@@ -86,7 +91,7 @@ impl Widget for &mut PedalboardListScreen {
         let row_size = Vec2::new(ui.available_width(), row_height);
 
         if pedalboard_library.is_empty() {
-            ui.add_sized(row_size, egui::Label::new("No pedalboards found"))
+            ui.add_sized(row_size, egui::Label::new(RichText::new("No Pedalboards Found").size(30.0)))
         } else {
             let mut action = None;
 
