@@ -57,7 +57,7 @@ impl Widget for &mut PedalboardListScreen {
                 .striped(true)
                 .spacing(Vec2::new(10.0, 10.0))
                 .show(ui, |ui| {
-                    for pedalboard in pedalboard_library.iter() {
+                    for (i, pedalboard) in pedalboard_library.iter().enumerate() {
                         if self.search_term.is_empty() || pedalboard.name.contains(&self.search_term) {
 
                             // EACH PEDALBOARD ROW
@@ -73,11 +73,11 @@ impl Widget for &mut PedalboardListScreen {
                                             Layout::right_to_left(egui::Align::Center),
                                             |ui| {
                                                 if ui.button("Delete").clicked() {
-                                                    action_pedalboard = Some(pedalboard.name.clone());
+                                                    action_pedalboard = Some(i);
                                                     action_is_delete = true;
                                                 }
                                                 if ui.button("Load").clicked() {
-                                                    action_pedalboard = Some(pedalboard.name.clone());
+                                                    action_pedalboard = Some(i);
                                                     action_is_delete = false;
                                                 }
                                             }
@@ -89,14 +89,13 @@ impl Widget for &mut PedalboardListScreen {
                     }
             }).response;
 
-            drop(pedalboard_library);
-
-            if let Some(pedalboard_name) = action_pedalboard {
-                let mut pedalboards_mut = self.state.pedalboard_library.borrow_mut();
+            if let Some(pedalboard_index) = action_pedalboard {
                 if action_is_delete {
-                    pedalboards_mut.retain(|p| p.name != pedalboard_name);
+                    drop(pedalboard_library);
+                    let mut pedalboards_mut = self.state.pedalboard_library.borrow_mut();
+                    pedalboards_mut.remove(pedalboard_index);
                 } else {
-                    let pedalboard = pedalboards_mut.iter().find(|p| p.name == pedalboard_name).unwrap();
+                    let pedalboard = pedalboard_library.get(pedalboard_index).unwrap();
                     self.state.active_pedalboardset.borrow_mut().pedalboards.push(pedalboard.clone());
                 }
             };

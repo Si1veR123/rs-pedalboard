@@ -33,17 +33,17 @@ fn main() {
 }
 
 pub struct State {
-    pub active_pedalboardset: Rc<RefCell<PedalboardSet>>,
-    pub pedalboard_library: Rc<RefCell<Vec<Pedalboard>>>,
-    pub songs_library: Rc<RefCell<HashMap<String, Vec<String>>>>
+    pub active_pedalboardset: RefCell<PedalboardSet>,
+    pub pedalboard_library: RefCell<Vec<Pedalboard>>,
+    pub songs_library: RefCell<HashMap<String, Vec<String>>>
 }
 
 impl Default for State {
     fn default() -> Self {
         State {
-            active_pedalboardset: Rc::new(RefCell::new(PedalboardSet::default())),
-            pedalboard_library: Rc::new(RefCell::new(Vec::new())),
-            songs_library: Rc::new(RefCell::new(HashMap::new())),
+            active_pedalboardset: RefCell::new(PedalboardSet::default()),
+            pedalboard_library: RefCell::new(Vec::new()),
+            songs_library: RefCell::new(HashMap::new()),
         }
     }
 }
