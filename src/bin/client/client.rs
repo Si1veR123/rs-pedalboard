@@ -1,23 +1,23 @@
 mod socket;
-mod helpers;
+mod state;
+use state::State;
 
 mod pedalboard_set_screen;
 use pedalboard_set_screen::PedalboardSetScreen;
-mod pedalboard_list_screen;
-use pedalboard_list_screen::PedalboardListScreen;
+mod pedalboard_library_screen;
+use pedalboard_library_screen::PedalboardLibraryScreen;
 mod songs_screen;
 use songs_screen::SongsScreen;
 mod utilities_screen;
 use utilities_screen::UtilitiesScreen;
 
-
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
-use rs_pedalboard::{pedalboard::Pedalboard, pedalboard_set::PedalboardSet, pedals::PedalParameterValue};
 use eframe::egui::{self, Id, RichText};
 
 const SERVER_PORT: u16 = 29475;
 const WINDOW_HEIGHT: f32 = 600.0;
 const WINDOW_WIDTH: f32 = 1024.0;
+
+pub const THEME_COLOUR: egui::Color32 = egui::Color32::from_rgb(255, 105, 46);
 
 fn main() {
     //let mut socket = ClientSocket::new(29475);
@@ -32,21 +32,8 @@ fn main() {
     )).expect("Failed to run app");
 }
 
-pub struct State {
-    pub active_pedalboardset: RefCell<PedalboardSet>,
-    pub pedalboard_library: RefCell<Vec<Pedalboard>>,
-    pub songs_library: RefCell<HashMap<String, Vec<String>>>
-}
 
-impl Default for State {
-    fn default() -> Self {
-        State {
-            active_pedalboardset: RefCell::new(PedalboardSet::default()),
-            pedalboard_library: RefCell::new(Vec::new()),
-            songs_library: RefCell::new(HashMap::new()),
-        }
-    }
-}
+
 
 pub struct PedalboardClientApp {
     //socket: ClientSocket,
@@ -55,7 +42,7 @@ pub struct PedalboardClientApp {
 
     selected_screen: usize,
     pedalboard_set_screen: PedalboardSetScreen,
-    pedalboard_list_screen: PedalboardListScreen,
+    pedalboard_library_screen: PedalboardLibraryScreen,
     songs_screen: SongsScreen,
     utilities_screen: UtilitiesScreen,
 }
@@ -72,7 +59,7 @@ impl PedalboardClientApp {
 
             selected_screen: 0,
             pedalboard_set_screen: PedalboardSetScreen::new(state),
-            pedalboard_list_screen: PedalboardListScreen::new(state),
+            pedalboard_library_screen: PedalboardLibraryScreen::new(state),
             songs_screen: SongsScreen::new(state),
             utilities_screen: UtilitiesScreen::new(),
         }
@@ -80,7 +67,7 @@ impl PedalboardClientApp {
 }
 
 impl eframe::App for PedalboardClientApp {
-    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::TopBottomPanel::bottom(Id::new("bottom_window_select"))
             .min_height(WINDOW_HEIGHT / 10.0)
             .show(&ctx, |ui| {
@@ -95,7 +82,7 @@ impl eframe::App for PedalboardClientApp {
                     });
                     columns[1].horizontal_centered(|ui| {
                         if ui.add_sized(button_size, egui::Button::new(
-                            RichText::new("Pedalboards").size(20.0)
+                            RichText::new("Library").size(20.0)
                         )).clicked() {
                             self.selected_screen = 1;
                         }
@@ -123,7 +110,7 @@ impl eframe::App for PedalboardClientApp {
                     ui.add(&mut self.pedalboard_set_screen);
                 },
                 1 => {
-                    ui.add(&mut self.pedalboard_list_screen);
+                    ui.add(&mut self.pedalboard_library_screen);
                 },
                 2 => {
                     ui.add(&mut self.songs_screen);

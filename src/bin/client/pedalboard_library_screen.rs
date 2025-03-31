@@ -1,21 +1,19 @@
-use std::{cell::RefCell, rc::Rc};
-
 use eframe::egui::{self, Layout, RichText, TextEdit, Vec2, Widget};
 use rs_pedalboard::pedalboard::Pedalboard;
-use crate::{helpers::unique_pedalboard_name, State};
+use crate::state::State;
 
 pub enum RowAction {
     Load,
     Delete
 }
 
-pub struct PedalboardListScreen {
+pub struct PedalboardLibraryScreen {
     // Store pedalboards by unique name
     state: &'static State,
     search_term: String,
 }
 
-impl PedalboardListScreen {
+impl PedalboardLibraryScreen {
     pub fn new(state: &'static State) -> Self {
         Self {
             state,
@@ -43,10 +41,10 @@ impl PedalboardListScreen {
                         Layout::right_to_left(egui::Align::Center),
                         |ui| {
                             ui.add_space(20.0);
-                            if ui.add_sized([80.0, 30.0], egui::Button::new("Delete")).clicked() {
+                            if ui.add_sized([80.0, 30.0], egui::Button::new("Delete From Library/Songs")).clicked() {
                                 action = Some(RowAction::Delete);
                             }
-                            if ui.add_sized([80.0, 30.0], egui::Button::new("Load")).clicked() {
+                            if ui.add_sized([80.0, 30.0], egui::Button::new("Load to Set")).clicked() {
                                 action = Some(RowAction::Load);
                             }
                         }
@@ -58,10 +56,11 @@ impl PedalboardListScreen {
     }
 }
 
-impl Widget for &mut PedalboardListScreen {
+impl Widget for &mut PedalboardLibraryScreen {
     fn ui(self, ui: &mut egui::Ui) -> egui::Response {
         ui.add_space(10.0);
 
+        // === Search bar and new pedalboard button ===
         ui.columns(3, |columns| {
             columns[1]
                 .add_sized(
@@ -75,9 +74,8 @@ impl Widget for &mut PedalboardListScreen {
                 Layout::top_down(egui::Align::Center),
                 |ui| {
                     if ui.add_sized([200.0, 30.0], egui::Button::new("New Pedalboard")).clicked() {
-                        let unique_name = unique_pedalboard_name(String::from("New Pedalboard"), self.state);
-                        let pedalboards_mut = &mut self.state.pedalboard_library.borrow_mut();
-                        pedalboards_mut.push(Pedalboard::new(unique_name));
+                        let unique_name = self.state.unique_pedalboard_name(String::from("New Pedalboard"));
+                        self.state.pedalboard_library.borrow_mut().push(Pedalboard::new(unique_name));
                 }
             });
         });
@@ -86,22 +84,23 @@ impl Widget for &mut PedalboardListScreen {
         ui.separator();
         ui.add_space(10.0);
 
-        let pedalboard_library = self.state.pedalboard_library.borrow();
+        // === Pedalboard Grid ===
         let row_height = 50.0;
         let row_size = Vec2::new(ui.available_width(), row_height);
 
+        let pedalboard_library = self.state.pedalboard_library.borrow();
         if pedalboard_library.is_empty() {
             ui.add_sized(row_size, egui::Label::new(RichText::new("No Pedalboards Found").size(30.0)))
         } else {
             let mut action = None;
 
-            let response = egui::Grid::new("pedalboard_list_grid")
+            let response = egui::Grid::new("pedalboard_library_grid")
                 .striped(true)
                 .spacing(Vec2::new(10.0, 10.0))
                 .show(ui, |ui| {
                     for (i, pedalboard) in pedalboard_library.iter().enumerate() {
                         if self.search_term.is_empty() || pedalboard.name.contains(&self.search_term) {
-                            PedalboardListScreen::pedalboard_row(ui, pedalboard, row_size).0.map(|row_action| {
+                            PedalboardLibraryScreen::pedalboard_row(ui, pedalboard, row_size).0.map(|row_action| {
                                 action = Some((i, row_action));
                             });
                             ui.end_row();
@@ -109,6 +108,7 @@ impl Widget for &mut PedalboardListScreen {
                     }
             }).response;
 
+            // Perform any actions performed in this frame
             if let Some((pedalboard_index, action)) = action {
                 match action {
                     RowAction::Load => {
@@ -116,9 +116,9 @@ impl Widget for &mut PedalboardListScreen {
                         self.state.active_pedalboardset.borrow_mut().pedalboards.push(pedalboard.clone());
                     },
                     RowAction::Delete => {
+                        let pedalboard_name = &pedalboard_library.get(pedalboard_index).unwrap().name.clone();
                         drop(pedalboard_library);
-                        let mut pedalboard_library = self.state.pedalboard_library.borrow_mut();
-                        pedalboard_library.remove(pedalboard_index);
+                        self.state.delete_pedalboard(&pedalboard_name);
                     }
                 }
             };
