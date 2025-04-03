@@ -1,5 +1,9 @@
 mod socket;
 mod state;
+use std::{cell::RefCell, rc::Rc};
+
+use simplelog::*;
+use socket::ClientSocket;
 use state::State;
 
 mod pedalboard_stage_screen;
@@ -28,8 +32,13 @@ pub const WIDGET_HOVER_BACKGROUND_COLOUR: egui::Color32 = egui::Color32::from_gr
 pub const WIDGET_CLICK_BACKGROUND_COLOUR_THEME_ALPHA: f32 = 0.025;
 
 fn main() {
-    //let mut socket = ClientSocket::new(29475);
-    //socket.connect().expect("Failed to connect to server");
+    CombinedLogger::init(
+        vec![
+            TermLogger::new(LevelFilter::Info, Config::default(), TerminalMode::Mixed, ColorChoice::Auto),
+            WriteLogger::new(LevelFilter::Info, Config::default(), std::fs::File::create("pedalboard-server.log").expect("Failed to create log file")),
+        ]
+    ).expect("Failed to start logging");
+    log::info!("Started logging...");
 
     let mut native_options = eframe::NativeOptions::default();
     native_options.viewport = native_options.viewport.with_inner_size((WINDOW_WIDTH, WINDOW_HEIGHT));
@@ -57,12 +66,9 @@ fn main() {
 }
 
 
-
-
 pub struct PedalboardClientApp {
-    //socket: ClientSocket,
-
     state: &'static State,
+    socket: Rc<RefCell<ClientSocket>>,
 
     selected_screen: usize,
     pedalboard_stage_screen: PedalboardstageScreen,
@@ -73,19 +79,21 @@ pub struct PedalboardClientApp {
 
 impl PedalboardClientApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        //let mut socket = ClientSocket::new(SERVER_PORT);
-        //socket.connect().expect("Failed to connect to server");
         let state = Box::leak(Box::new(State::default()));
 
-        PedalboardClientApp {
-            //socket,
-            state,
+        let mut inner_socket = ClientSocket::new(SERVER_PORT);
+        let _ = inner_socket.connect();
+        inner_socket.load_set(&state.active_pedalboardstage.borrow()).expect("Failed to initialize pedalboard set");
+        let socket = Rc::new(RefCell::new(inner_socket));
 
+        PedalboardClientApp {
             selected_screen: 0,
-            pedalboard_stage_screen: PedalboardstageScreen::new(state),
-            pedalboard_library_screen: PedalboardLibraryScreen::new(state),
+            pedalboard_stage_screen: PedalboardstageScreen::new(state, socket.clone()),
+            pedalboard_library_screen: PedalboardLibraryScreen::new(state, socket.clone()),
             songs_screen: SongsScreen::new(state),
             utilities_screen: UtilitiesScreen::new(),
+            socket,
+            state,
         }
     }
 }
@@ -151,7 +159,40 @@ impl eframe::App for PedalboardClientApp {
                 _ => {
                     ui.label("Invalid screen selected");
                 }
-            }
+            };
+
+            let mut socket = self.socket.borrow_mut();
+            if !socket.is_connected() {
+                let reconnect_rect = egui::Rect {
+                    min: egui::Pos2::new(WINDOW_WIDTH - 100.0, 15.0),
+                    max: egui::Pos2::new(WINDOW_WIDTH, WINDOW_HEIGHT)
+                };
+                ui.allocate_new_ui(
+                    egui::UiBuilder::new().max_rect(reconnect_rect),
+                    |ui| {
+                        ui.style_mut().visuals.widgets.inactive.weak_bg_fill = egui::Color32::DARK_RED;
+                        let button = ui.button(RichText::new("Connect").size(20.0)).on_hover_text("Connect to audio server");
+                        if button.clicked() {
+                            log::info!("Connecting to server...");
+                            let _ = socket.connect();
+                            if socket.is_connected() {
+                                log::info!("Connected to server; Loading set...");
+                                let pedalboardset = self.state.active_pedalboardstage.borrow();
+                                if let Err(e) = socket.load_set(&pedalboardset) {
+                                    log::error!("Failed to load set: {}", e);
+                                } else {
+                                    log::info!("Set loaded successfully");
+                                }
+
+                                self.pedalboard_stage_screen.socket = self.socket.clone();
+                                self.pedalboard_library_screen.socket = self.socket.clone();
+                            } else {
+                                log::error!("Failed to connect to server");
+                            }
+                        }
+                    }
+                );
+            };
         });
     }
 }

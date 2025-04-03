@@ -10,7 +10,7 @@ pub struct PedalboardSet {
 impl Default for PedalboardSet {
     fn default() -> PedalboardSet {
         PedalboardSet {
-            pedalboards: Vec::new(),
+            pedalboards: vec![Pedalboard::default()],
             active_pedalboard: 0
         }
     }
@@ -21,6 +21,21 @@ impl PedalboardSet {
         PedalboardSet {
             pedalboards,
             active_pedalboard: 0
+        }
+    }
+
+    pub fn remove_pedalboard(&mut self, index: usize) {
+        if index < self.pedalboards.len() {
+            if self.pedalboards.len() > 1 {
+                self.pedalboards.remove(index);
+                if self.active_pedalboard >= self.pedalboards.len() {
+                    self.active_pedalboard = self.pedalboards.len() - 1;
+                }
+            } else {
+                log::error!("Cannot remove the last pedalboard");
+            }
+        } else {
+            log::error!("Pedalboard index out of bounds");
         }
     }
 

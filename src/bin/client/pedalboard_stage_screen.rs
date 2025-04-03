@@ -1,4 +1,9 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use eframe::egui::{self, Color32, Layout, Rgba, RichText, Vec2, Widget};
+use rs_pedalboard::pedalboard_set::PedalboardSet;
+use crate::socket::ClientSocket;
 use crate::state::State;
 use crate::THEME_COLOUR;
 
@@ -14,13 +19,15 @@ pub enum CurrentAction {
 
 pub struct PedalboardstageScreen {
     state: &'static State,
+    pub socket: Rc<RefCell<ClientSocket>>,
     current_action: Option<CurrentAction>,
 }
 
 impl PedalboardstageScreen {
-    pub fn new(state: &'static State) -> Self {
+    pub fn new(state: &'static State, socket: Rc<RefCell<ClientSocket>>) -> Self {
         Self {
             state,
+            socket,
             current_action: None
         }
     }
@@ -60,7 +67,8 @@ impl PedalboardstageScreen {
                 |ui| {
                     ui.add_space(10.0);
                     if ui.add_sized([100.0, buttons_row_height], egui::Button::new("Clear Stage")).clicked() {
-                        active_pedalboards.pedalboards.clear();
+                        *active_pedalboards = PedalboardSet::default();
+                        self.socket.borrow_mut().load_set(&active_pedalboards);
                     }
                 }
             );
@@ -179,14 +187,24 @@ impl PedalboardstageScreen {
         match self.current_action.take() {
             Some(CurrentAction::Duplicate(index)) => {
                 let mut pedalboard = active_pedalboards.pedalboards.get(index).unwrap().clone();
+                let pedalboardset_length = active_pedalboards.pedalboards.len();
                 drop(active_pedalboards);
                 drop(pedalboard_library);
                 let unique_name = self.state.unique_pedalboard_name(pedalboard.name.clone());
                 pedalboard.name = unique_name;
+
+                let mut socket = self.socket.borrow_mut();
+                socket.add_pedalboard(&pedalboard).expect("Failed to add pedalboard");
+                socket.move_pedalboard(pedalboardset_length-1, index+1).expect("Failed to move pedalboard");
+
                 self.state.active_pedalboardstage.borrow_mut().pedalboards.insert(index+1, pedalboard);
             },
             Some(CurrentAction::Remove(index)) => {
-                active_pedalboards.pedalboards.remove(index);
+                active_pedalboards.remove_pedalboard(index);
+
+                
+                let mut socket = self.socket.borrow_mut();
+                socket.delete_pedalboard(index).expect("Failed to remove pedalboard");
             },
             Some(CurrentAction::SaveToSong(mut song_name)) => {
                 let mut open = true;
@@ -233,6 +251,9 @@ impl PedalboardstageScreen {
             },
             Some(CurrentAction::ChangeActive(index)) => {
                 active_pedalboards.active_pedalboard = index;
+
+                let mut socket = self.socket.borrow_mut();
+                socket.play(index).expect("Failed to change active pedalboard");
             },
             None => {}
         }

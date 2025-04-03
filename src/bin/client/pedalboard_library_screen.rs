@@ -1,6 +1,8 @@
+use std::{cell::RefCell, rc::Rc};
+
 use eframe::egui::{self, Layout, RichText, TextEdit, Vec2, Widget};
 use rs_pedalboard::pedalboard::Pedalboard;
-use crate::state::State;
+use crate::{socket::ClientSocket, state::State};
 
 pub enum RowAction {
     Load,
@@ -10,13 +12,15 @@ pub enum RowAction {
 pub struct PedalboardLibraryScreen {
     // Store pedalboards by unique name
     state: &'static State,
+    pub socket: Rc<RefCell<ClientSocket>>,
     search_term: String,
 }
 
 impl PedalboardLibraryScreen {
-    pub fn new(state: &'static State) -> Self {
+    pub fn new(state: &'static State, socket: Rc<RefCell<ClientSocket>>) -> Self {
         Self {
             state,
+            socket,
             search_term: String::new(),
         }
     }
@@ -75,7 +79,7 @@ impl Widget for &mut PedalboardLibraryScreen {
                 );
 
 
-            columns[2].allocate_ui_with_layout(
+            columns[0].allocate_ui_with_layout(
                 Vec2::new(0.0, 40.0),
                 Layout::top_down(egui::Align::Center),
                 |ui| {
@@ -130,6 +134,9 @@ impl Widget for &mut PedalboardLibraryScreen {
                     match action {
                         RowAction::Load => {
                             let pedalboard = pedalboard_library.get(pedalboard_index).unwrap();
+
+                            self.socket.borrow_mut().add_pedalboard(pedalboard);
+
                             self.state.active_pedalboardstage.borrow_mut().pedalboards.push(pedalboard.clone());
                         },
                         RowAction::Delete => {

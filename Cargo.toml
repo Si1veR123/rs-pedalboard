@@ -9,7 +9,7 @@ path = "src/bin/server/bin.rs"
 
 [[bin]]
 name = "client"
-path = "src/bin/client/client.rs"
+path = "src/bin/client/bin.rs"
 
 [dependencies]
 log = "0.4.26"
