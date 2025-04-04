@@ -25,3 +25,4 @@ serde = { version = "1.0.219", features=["derive"]}
 serde_json = "1.0"
 enum_dispatch = "0.3.13"
 eframe = "0.31.1"
+signalsmith-stretch = "0.1.1"

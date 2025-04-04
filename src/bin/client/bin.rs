@@ -108,7 +108,7 @@ impl eframe::App for PedalboardClientApp {
 
                     let mut button_outline = [egui::Stroke::new(0.3, egui::Color32::BLACK); 4];
                     button_outline[self.selected_screen] = egui::Stroke::new(1.0, THEME_COLOUR);
-                    let mut button_bg = [egui::Color32::from_gray(23); 4];
+                    let mut button_bg = [egui::Color32::from_gray(18); 4];
                     button_bg[self.selected_screen] = egui::Color32::from_gray(33);
 
                     columns[0].horizontal_centered(|ui| {

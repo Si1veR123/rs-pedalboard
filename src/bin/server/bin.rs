@@ -41,12 +41,10 @@ fn main() {
 
     let (_host, input, output) = setup();
 
-    let mut delay = pedals::Delay::new();
-    delay.set_parameter_value("delay", pedals::PedalParameterValue::Float(100.0));
-    let fuzz = pedals::Fuzz::new();
+    let pitch_shift = pedals::PitchShift::new();
 
-    let pedalboard = Pedalboard::from_pedals(String::from("pedalboard"), vec![Pedal::Delay(delay), Pedal::Fuzz(fuzz)]);
-    let pedalboard_set = PedalboardSet::from_pedalboards(vec![pedalboard]);
+    let pedalboard = Pedalboard::from_pedals(String::from("pedalboard"), vec![Pedal::PitchShift(pitch_shift)]);
+    let pedalboard_set = PedalboardSet::from_pedalboards(vec![pedalboard]).unwrap();
 
     let (command_sender, command_receiver) = bounded(12);
 

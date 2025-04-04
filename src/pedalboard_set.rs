@@ -16,12 +16,24 @@ impl Default for PedalboardSet {
     }
 }
 
+#[derive(Debug)]
+pub struct EmptyPedalboardSetError;
+impl std::fmt::Display for EmptyPedalboardSetError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Pedalboard set is empty")
+    }
+}
+
 impl PedalboardSet {
-    pub fn from_pedalboards(pedalboards: Vec<Pedalboard>) -> PedalboardSet {
-        PedalboardSet {
+    pub fn from_pedalboards(pedalboards: Vec<Pedalboard>) -> Result<PedalboardSet, EmptyPedalboardSetError> {
+        if pedalboards.is_empty() {
+            return Err(EmptyPedalboardSetError);
+        }
+
+        Ok(PedalboardSet {
             pedalboards,
             active_pedalboard: 0
-        }
+        })
     }
 
     pub fn remove_pedalboard(&mut self, index: usize) {
