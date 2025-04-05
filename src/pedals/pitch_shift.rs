@@ -55,8 +55,8 @@ impl PitchShift {
     pub fn new() -> Self {
         let mut parameters = HashMap::new();
 
-        let init_block_size = 100;
-        let init_semitones = -12.0;
+        let init_block_size = 128;
+        let init_semitones = -1.0;
         let init_speed = 0;
         let init_tonality_limit = 10000.0;
 
