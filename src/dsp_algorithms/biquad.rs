@@ -1,4 +1,4 @@
-
+#[derive(Debug, Clone, Copy)]
 pub struct BiquadFilter {
     y: [f32; 2],
     x: [f32; 2],

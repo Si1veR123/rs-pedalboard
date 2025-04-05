@@ -29,15 +29,15 @@ impl DynamicEqualizerBuilder {
     }
 
     /// If multiple bands, upper shelf is applied to the last band
-    pub fn with_upper_shelf(mut self, upper_shelf: bool) -> Self {
-        self.upper_shelf = upper_shelf;
+    pub fn with_upper_shelf(mut self) -> Self {
+        self.upper_shelf = true;
         self
     }
 
     /// If single band, lower shelf takes precedence over upper shelf
     /// If multiple bands, lower shelf is applied to the first band
-    pub fn with_lower_shelf(mut self, lower_shelf: bool) -> Self {
-        self.lower_shelf = lower_shelf;
+    pub fn with_lower_shelf(mut self) -> Self {
+        self.lower_shelf = true;
         self
     }
 
@@ -106,14 +106,14 @@ impl<const N: usize> GraphicEqualizerBuilder<N> {
         self
     }
 
-    pub fn with_upper_shelf(mut self, upper_shelf: bool) -> Self {
-        self.upper_shelf = upper_shelf;
+    pub fn with_upper_shelf(mut self) -> Self {
+        self.upper_shelf = true;
         self
     }
 
     /// If single band, lower shelf takes precedence over upper shelf
-    pub fn with_lower_shelf(mut self, lower_shelf: bool) -> Self {
-        self.lower_shelf = lower_shelf;
+    pub fn with_lower_shelf(mut self) -> Self {
+        self.lower_shelf = true;
         self
     }
 
@@ -141,6 +141,7 @@ impl<const N: usize> GraphicEqualizerBuilder<N> {
     }
 }
 
+#[derive(Clone)]
 pub struct Equalizer {
     biquads: Vec<BiquadFilter>
 }

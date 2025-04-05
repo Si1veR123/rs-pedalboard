@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use super::PedalTrait;
 use super::PedalParameter;
 use super::PedalParameterValue;
+use super::ui::pedal_knob;
 
 use serde::{Serialize, Deserialize};
 use signalsmith_stretch::Stretch;
@@ -139,5 +140,30 @@ impl PedalTrait for PitchShift {
         &mut self.parameters
     }
 
-    /// TODO: Update the stretch object when parameters change
+    fn set_parameter_value(&mut self, name: &str, value: PedalParameterValue) {
+        let parameters = self.get_parameters_mut();
+        if let Some(parameter) = parameters.get_mut(name) {
+            if parameter.is_valid(&value) {
+                parameter.value = value;
+                self.signalsmith_stretch = Self::stretch_from_parameters(parameters);
+            }
+        }
+    }
+
+    fn ui(&mut self, ui: &mut eframe::egui::Ui) -> Option<String> {
+        let mut to_change = None;
+        let mut return_value = None;
+        for (parameter_name, parameter) in self.get_parameters().iter() {
+            if let Some(value) = pedal_knob(ui, parameter_name, parameter) {
+                to_change = Some((parameter_name.clone(), value));
+                return_value = Some(parameter_name.clone());
+            }
+        }
+
+        if let Some((parameter_name, value)) = to_change {
+            self.set_parameter_value(&parameter_name, value);
+        }
+
+        return_value
+    }
 }

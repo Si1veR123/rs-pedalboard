@@ -1,12 +1,49 @@
 use std::collections::HashMap;
+
+use serde::{Deserialize, Serialize};
+
 use super::{PedalParameter, PedalParameterValue, PedalTrait};
+use super::ui::pedal_knob;
 
-use crate::dsp_algorithms::eq;
+use crate::dsp_algorithms::eq::{self, Equalizer};
 
+#[derive(Clone)]
 pub struct GraphicEq7 {
     parameters: HashMap<String, PedalParameter>,
     eq: eq::Equalizer
 }
+
+impl Serialize for GraphicEq7 {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.collect_map(self.parameters.iter())
+    }
+}
+
+impl<'a> Deserialize<'a> for GraphicEq7 {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'a>,
+    {
+        let parameters: HashMap<String, PedalParameter> = HashMap::deserialize(deserializer)?;
+        
+        let eq = Equalizer::new(vec![]);
+
+        let pedal = GraphicEq7 {
+            parameters,
+            eq
+        };
+
+        let actual_eq = Self::build_eq(pedal.get_bandwidths(), pedal.get_gains());
+        Ok(GraphicEq7 {
+            parameters: pedal.parameters,
+            eq: actual_eq
+        })
+    }
+}
+
 
 impl GraphicEq7 {
     pub fn new() -> Self {
@@ -45,14 +82,42 @@ impl GraphicEq7 {
             },
         );
 
-        let eq = eq::GraphicEqualizerBuilder::new(48000.0)
-            .with_bands([100.0, 200.0, 400.0, 800.0, 1600.0, 3200.0, 6400.0])
-            .with_upper_shelf(true)
-            .with_bandwidths(init_bandwidths)
-            .with_gains(init_gains)
-            .build();
+        let eq = Self::build_eq(init_bandwidths, init_gains);
 
         GraphicEq7 { parameters, eq }
+    }
+
+    pub fn get_gains(&self) -> [f32; 7] {
+        [
+            self.parameters.get("gain1").unwrap().value.as_float().unwrap(),
+            self.parameters.get("gain2").unwrap().value.as_float().unwrap(),
+            self.parameters.get("gain3").unwrap().value.as_float().unwrap(),
+            self.parameters.get("gain4").unwrap().value.as_float().unwrap(),
+            self.parameters.get("gain5").unwrap().value.as_float().unwrap(),
+            self.parameters.get("gain6").unwrap().value.as_float().unwrap(),
+            self.parameters.get("gain7").unwrap().value.as_float().unwrap(),
+        ]
+    }
+
+    pub fn get_bandwidths(&self) -> [f32; 7] {
+        [
+            self.parameters.get("bandwidth1").unwrap().value.as_float().unwrap(),
+            self.parameters.get("bandwidth2").unwrap().value.as_float().unwrap(),
+            self.parameters.get("bandwidth3").unwrap().value.as_float().unwrap(),
+            self.parameters.get("bandwidth4").unwrap().value.as_float().unwrap(),
+            self.parameters.get("bandwidth5").unwrap().value.as_float().unwrap(),
+            self.parameters.get("bandwidth6").unwrap().value.as_float().unwrap(),
+            self.parameters.get("bandwidth7").unwrap().value.as_float().unwrap(),
+        ]
+    }
+
+    fn build_eq(bandwidths: [f32; 7], gains: [f32; 7]) -> eq::Equalizer {
+        eq::GraphicEqualizerBuilder::new(48000.0)
+            .with_bands([100.0, 200.0, 400.0, 800.0, 1600.0, 3200.0, 6400.0])
+            .with_upper_shelf()
+            .with_bandwidths(bandwidths)
+            .with_gains(gains)
+            .build()
     }
 }
 
@@ -74,12 +139,34 @@ impl PedalTrait for GraphicEq7 {
         &mut self.parameters
     }
 
-    /// TODO: Update eq with parameter changes
     fn set_parameter_value(&mut self, name: &str, value: PedalParameterValue) {
         if let Some(param) = self.parameters.get_mut(name) {
             if param.is_valid(&value) {
                 param.value = value;
+
+                if name.starts_with("gain") || name.starts_with("bandwidth") {
+                    let gains = self.get_gains();
+                    let bandwidths = self.get_bandwidths();
+                    self.eq = Self::build_eq(bandwidths, gains);
+                }
             }
         }
+    }
+
+    fn ui(&mut self, ui: &mut eframe::egui::Ui) -> Option<String> {
+        let mut to_change = None;
+        let mut return_value = None;
+        for (parameter_name, parameter) in self.get_parameters().iter() {
+            if let Some(value) = pedal_knob(ui, parameter_name, parameter) {
+                to_change = Some((parameter_name.clone(), value));
+                return_value = Some(parameter_name.clone());
+            }
+        }
+
+        if let Some((parameter_name, value)) = to_change {
+            self.set_parameter_value(&parameter_name, value);
+        }
+
+        return_value
     }
 }

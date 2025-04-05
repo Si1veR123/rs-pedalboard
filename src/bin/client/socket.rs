@@ -43,8 +43,8 @@ impl ClientSocket {
         Ok(())
     }
 
-    pub fn set_parameter(&mut self, pedalboard_index: usize, pedal_index: usize, parameter_value: &PedalParameterValue) -> std::io::Result<()> {
-        let message = format!("setparameter {} {} {}\n", pedalboard_index, pedal_index, serde_json::to_string(parameter_value).unwrap());
+    pub fn set_parameter(&mut self, pedalboard_index: usize, pedal_index: usize, name: &str, parameter_value: &PedalParameterValue) -> std::io::Result<()> {
+        let message = format!("setparameter {} {} {} {}\n", pedalboard_index, pedal_index, name, serde_json::to_string(parameter_value).unwrap());
         self.send(&message)
     }
 

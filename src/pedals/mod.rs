@@ -1,6 +1,8 @@
 use std::collections::HashMap;
+
 use enum_dispatch::enum_dispatch;
 use serde::{ Deserialize, Serialize};
+use eframe::egui;
 
 mod volume;
 pub use volume::Volume;
@@ -14,6 +16,7 @@ mod delay;
 pub use delay::Delay;
 mod eq;
 pub use eq::GraphicEq7;
+mod ui;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct PedalParameter {
@@ -105,8 +108,6 @@ impl PedalParameterValue {
 
 #[enum_dispatch]
 pub trait PedalTrait: Send {
-    fn init(&mut self) {}
-
     fn process_audio(&mut self, buffer: &mut [f32]);
 
     fn get_parameters(&self) -> &HashMap<String, PedalParameter>;
@@ -122,9 +123,13 @@ pub trait PedalTrait: Send {
             }
         }
     }
+
+    // Returns the name of the parameter that was changed, if any
+    fn ui(&mut self, ui: &mut egui::Ui) -> Option<String>;
 }
 
-/// Wrapper type for serialization
+
+/// Wrapper enum type for serialization in Vec
 #[derive(Serialize, Deserialize, Clone)]
 #[enum_dispatch(PedalTrait)]
 pub enum Pedal {
@@ -133,5 +138,6 @@ pub enum Pedal {
     PitchShift(PitchShift),
     Chorus(Chorus),
     Flanger(Flanger),
-    Delay(Delay)
+    Delay(Delay),
+    GraphicEq7(GraphicEq7),
 }

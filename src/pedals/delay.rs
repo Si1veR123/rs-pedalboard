@@ -1,6 +1,6 @@
 use std::collections::{HashMap, VecDeque};
 use std::iter;
-use super::{PedalParameter, PedalParameterValue, PedalTrait};
+use super::{PedalParameter, PedalParameterValue, PedalTrait, ui::pedal_knob};
 use serde::ser::SerializeMap;
 use serde::{Serialize, Deserialize};
 
@@ -116,5 +116,22 @@ impl PedalTrait for Delay {
                 }
             }
         }
+    }
+
+    fn ui(&mut self, ui: &mut eframe::egui::Ui) -> Option<String> {
+        let mut to_change = None;
+        let mut return_value = None;
+        for (parameter_name, parameter) in self.get_parameters().iter() {
+            if let Some(value) = pedal_knob(ui, parameter_name, parameter) {
+                to_change = Some((parameter_name.clone(), value));
+                return_value = Some(parameter_name.clone());
+            }
+        }
+
+        if let Some((parameter_name, value)) = to_change {
+            self.set_parameter_value(&parameter_name, value);
+        }
+
+        return_value
     }
 }

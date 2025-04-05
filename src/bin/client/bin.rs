@@ -6,14 +6,14 @@ use simplelog::*;
 use socket::ClientSocket;
 use state::State;
 
-mod pedalboard_stage_screen;
-use pedalboard_stage_screen::PedalboardstageScreen;
-mod pedalboard_library_screen;
-use pedalboard_library_screen::PedalboardLibraryScreen;
-mod songs_screen;
-use songs_screen::SongsScreen;
-mod utilities_screen;
-use utilities_screen::UtilitiesScreen;
+mod stage;
+use stage::PedalboardStageScreen;
+mod library;
+use library::PedalboardLibraryScreen;
+mod songs;
+use songs::SongsScreen;
+mod utilities;
+use utilities::UtilitiesScreen;
 
 use eframe::egui::{self, Id, RichText};
 
@@ -71,7 +71,7 @@ pub struct PedalboardClientApp {
     socket: Rc<RefCell<ClientSocket>>,
 
     selected_screen: usize,
-    pedalboard_stage_screen: PedalboardstageScreen,
+    pedalboard_stage_screen: PedalboardStageScreen,
     pedalboard_library_screen: PedalboardLibraryScreen,
     songs_screen: SongsScreen,
     utilities_screen: UtilitiesScreen,
@@ -88,7 +88,7 @@ impl PedalboardClientApp {
 
         PedalboardClientApp {
             selected_screen: 0,
-            pedalboard_stage_screen: PedalboardstageScreen::new(state, socket.clone()),
+            pedalboard_stage_screen: PedalboardStageScreen::new(state, socket.clone()),
             pedalboard_library_screen: PedalboardLibraryScreen::new(state, socket.clone()),
             songs_screen: SongsScreen::new(state),
             utilities_screen: UtilitiesScreen::new(),
