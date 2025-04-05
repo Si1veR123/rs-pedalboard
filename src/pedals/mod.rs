@@ -12,6 +12,8 @@ mod modulation;
 pub use modulation::{Chorus, Flanger};
 mod delay;
 pub use delay::Delay;
+mod eq;
+pub use eq::GraphicEq7;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct PedalParameter {

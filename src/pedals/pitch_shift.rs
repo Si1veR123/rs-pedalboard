@@ -138,4 +138,6 @@ impl PedalTrait for PitchShift {
     fn get_parameters_mut(&mut self) -> &mut HashMap<String, PedalParameter> {
         &mut self.parameters
     }
+
+    /// TODO: Update the stretch object when parameters change
 }
