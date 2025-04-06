@@ -52,7 +52,7 @@ impl DynamicEqualizerBuilder {
             } else if self.upper_shelf && i == last_index {
                 bq = BiquadFilter::high_shelf(f, self.sample_rate, 1.0/bandwidth, gain);
             } else {
-                bq = BiquadFilter::peaking_eq(f, self.sample_rate, 1.0/bandwidth, gain);
+                bq = BiquadFilter::peaking(f, self.sample_rate, 1.0/bandwidth, gain);
             }
 
             biquads.push(bq);
@@ -132,7 +132,7 @@ impl<const N: usize> GraphicEqualizerBuilder<N> {
             } else if self.upper_shelf && i == N-1 {
                 bq = BiquadFilter::high_shelf(f, self.sample_rate, q, gain);
             } else {
-                bq = BiquadFilter::peaking_eq(f, self.sample_rate, q, gain);
+                bq = BiquadFilter::peaking(f, self.sample_rate, q, gain);
             }
 
             biquads.push(bq);

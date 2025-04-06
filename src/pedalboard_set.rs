@@ -36,18 +36,22 @@ impl PedalboardSet {
         })
     }
 
-    pub fn remove_pedalboard(&mut self, index: usize) {
+    /// Return true if it was removed
+    pub fn remove_pedalboard(&mut self, index: usize) -> bool {
         if index < self.pedalboards.len() {
             if self.pedalboards.len() > 1 {
                 self.pedalboards.remove(index);
                 if self.active_pedalboard >= self.pedalboards.len() {
                     self.active_pedalboard = self.pedalboards.len() - 1;
                 }
+                true
             } else {
                 log::error!("Cannot remove the last pedalboard");
+                false
             }
         } else {
             log::error!("Pedalboard index out of bounds");
+            false
         }
     }
 

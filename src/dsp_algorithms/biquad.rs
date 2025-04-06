@@ -23,10 +23,6 @@ impl BiquadFilter {
         (w0, alpha)
     }
 
-    fn q_from_shelf_slope(s: f32, a: f32) -> f32 {
-        1.0/((a + 1.0/a) * (1.0/s - 1.0) + 2.0).sqrt()
-    }
-
     pub fn low_pass(f: f32, sample_rate: f32, q: f32) -> Self {
         let (w0, alpha) = Self::compute(f, sample_rate, q);
         let b0 = (1.0 - (w0.cos())) / 2.0;
@@ -75,9 +71,9 @@ impl BiquadFilter {
         BiquadFilter::new([a1 / a0, a2 / a0], [b0 / a0, b1 / a0, b2 / a0])
     }
 
-    pub fn peaking_eq(f: f32, sample_rate: f32, q: f32, gain: f32) -> Self {
+    pub fn peaking(f: f32, sample_rate: f32, q: f32, gain: f32) -> Self {
         let (w0, alpha) = Self::compute(f, sample_rate, q);
-        let a = 10f32.powf(gain / 40.0);
+        let a = (10f32.powf(gain / 20.0)).sqrt();
         let b0 = 1.0 + (alpha * a);
         let b1 = -2.0 * w0.cos();
         let b2 = 1.0 - (alpha * a);
@@ -88,9 +84,10 @@ impl BiquadFilter {
         BiquadFilter::new([a1 / a0, a2 / a0], [b0 / a0, b1 / a0, b2 / a0])
     }
 
-    pub fn low_shelf(f: f32, sample_rate: f32, s: f32, gain: f32) -> Self {
+    pub fn low_shelf(f: f32, sample_rate: f32, q: f32, gain: f32) -> Self {
         let a = 10f32.powf(gain / 40.0);
-        let (w0, alpha) = Self::compute(f, sample_rate, Self::q_from_shelf_slope(s, a));
+
+        let (w0, alpha) = Self::compute(f, sample_rate, q);
 
         let b0 = a * ((a + 1.0) - (a - 1.0) * w0.cos() + (2.0 * a.sqrt() * alpha));
         let b1 = -2.0 * a * ((a - 1.0) + (a + 1.0) * w0.cos());
@@ -102,9 +99,9 @@ impl BiquadFilter {
         BiquadFilter::new([a1 / a0, a2 / a0], [b0 / a0, b1 / a0, b2 / a0])
     }
 
-    pub fn high_shelf(f: f32, sample_rate: f32, s: f32, gain: f32) -> Self {
+    pub fn high_shelf(f: f32, sample_rate: f32, q: f32, gain: f32) -> Self {
         let a = 10f32.powf(gain / 40.0);
-        let (w0, alpha) = Self::compute(f, sample_rate, Self::q_from_shelf_slope(s, a));
+        let (w0, alpha) = Self::compute(f, sample_rate, q);
 
         let b0 = a * ((a + 1.0) + (a - 1.0) * w0.cos() + (2.0 * a.sqrt() * alpha));
         let b1 = -2.0 * a * ((a - 1.0) + (a + 1.0) * w0.cos());

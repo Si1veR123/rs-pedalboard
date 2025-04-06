@@ -60,6 +60,7 @@ fn main() {
                 style.visuals.widgets.inactive.weak_bg_fill = WIDGET_BACKGROUND_COLOUR.into();
                 style.visuals.widgets.active.bg_stroke = (1.0, THEME_COLOUR).into();
             });
+            egui_extras::install_image_loaders(&cc.egui_ctx);
             Ok(Box::new(PedalboardClientApp::new(cc)))
         }
     )).expect("Failed to run app");

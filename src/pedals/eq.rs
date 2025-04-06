@@ -49,7 +49,7 @@ impl GraphicEq7 {
     pub fn new() -> Self {
         let mut parameters = HashMap::new();
         let init_gains = [0.0; 7];
-        let init_bandwidths = [0.0; 7];
+        let init_bandwidths = [0.5; 7];
 
         for i in 0..7 {
             parameters.insert(
@@ -77,7 +77,7 @@ impl GraphicEq7 {
             PedalParameter {
                 value: PedalParameterValue::Float(1.0),
                 min: Some(PedalParameterValue::Float(0.0)),
-                max: Some(PedalParameterValue::Float(2.0)),
+                max: Some(PedalParameterValue::Float(4.0)),
                 step: None
             },
         );

@@ -4,6 +4,10 @@ use eframe::egui::{self, Color32, Layout, Rgba, RichText, Vec2};
 use rs_pedalboard::pedalboard_set::PedalboardSet;
 use crate::THEME_COLOUR;
 
+struct PedalboardDragPayload {
+    pedalboard_origin_index: usize
+} 
+
 // Big ugly function to display the pedalboard stage panel
 // Effectively a method on PedalboardStageScreen
 pub fn pedalboard_stage_panel(screen: &mut PedalboardStageScreen, ui: &mut egui::Ui) -> egui::Response {
@@ -80,12 +84,30 @@ pub fn pedalboard_stage_panel(screen: &mut PedalboardStageScreen, ui: &mut egui:
                             // TODO: Fix pedalboard name column can't take up more than 50% of the row
                             ui.columns(2, |columns| {
                                 columns[0].horizontal_centered(|ui| {
-                                    ui.add_space(20.0);
-                                    let text_color = if active_pedalboards.active_pedalboard == i {
-                                        Rgba::from_white_alpha(0.9)
+                                    let (text_color, drag_icon_color) = if active_pedalboards.active_pedalboard == i {
+                                        (Rgba::from_white_alpha(0.9), Color32::from_gray(15).linear_multiply(0.7))
                                     } else {
-                                        Rgba::from_white_alpha(0.4)
+                                        (Rgba::from_white_alpha(0.4), Color32::from_gray(50).linear_multiply(0.7))
                                     };
+
+                                    let drag_response = ui.allocate_ui_with_layout(
+                                        Vec2::new(row_width, row_height),
+                                        Layout::left_to_right(egui::Align::Center),
+                                        |ui| {
+                                            ui.add_space(15.0);
+                                            ui.add(
+                                                egui::Image::new(egui::include_image!("../images/drag.png"))
+                                                .tint(drag_icon_color)
+                                                .max_width(15.0)
+                                            );
+                                            ui.add_space(2.0);
+                                        }
+                                    ).response;
+                                    if drag_response.dragged() {
+                                        let payload = PedalboardDragPayload { pedalboard_origin_index: i };
+                                        dbg!(i);
+                                    }
+
                                     if ui.label(RichText::new(pedalboard.name.clone()).color(text_color).size(20.0)).clicked() {
                                         screen.current_action = Some(CurrentAction::ChangeActive(i));
                                     }
@@ -154,11 +176,10 @@ pub fn pedalboard_stage_panel(screen: &mut PedalboardStageScreen, ui: &mut egui:
             screen.state.active_pedalboardstage.borrow_mut().pedalboards.insert(index+1, pedalboard);
         },
         Some(CurrentAction::Remove(index)) => {
-            active_pedalboards.remove_pedalboard(index);
-
-            
-            let mut socket = screen.socket.borrow_mut();
-            socket.delete_pedalboard(index).expect("Failed to remove pedalboard");
+            if active_pedalboards.remove_pedalboard(index) {
+                let mut socket = screen.socket.borrow_mut();
+                socket.delete_pedalboard(index).expect("Failed to remove pedalboard");
+            }
         },
         Some(CurrentAction::SaveToSong(mut song_name)) => {
             let mut open = true;

@@ -23,3 +23,5 @@ serde_json = "1.0"
 enum_dispatch = "0.3.13"
 eframe = "0.31.1"
 signalsmith-stretch = "0.1.1"
+egui_extras = { version = "0.31.1", features=["image"] }
+image = { version = "0.25.6", features = ["png"] }

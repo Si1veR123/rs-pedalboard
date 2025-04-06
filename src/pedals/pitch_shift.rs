@@ -56,7 +56,7 @@ impl PitchShift {
     pub fn new() -> Self {
         let mut parameters = HashMap::new();
 
-        let init_block_size = 1024;
+        let init_block_size = 2048;
         let init_semitones = -1.0;
         let init_speed = 0;
         let init_tonality_limit = 0.5;
@@ -76,7 +76,7 @@ impl PitchShift {
             PedalParameter {
                 value: PedalParameterValue::Int(init_block_size),
                 min: Some(PedalParameterValue::Int(128)),
-                max: Some(PedalParameterValue::Int(2048)),
+                max: Some(PedalParameterValue::Int(4096)),
                 step: None,
             }
         );
