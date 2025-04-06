@@ -40,7 +40,7 @@ macro_rules! var_delay_phaser {
             min_depth: f32,
             max_depth: f32,
             mix: f32,
-            oscillator: u8
+            oscillator: u16
         }
 
         impl From<&$name> for $serde_name {
@@ -49,7 +49,7 @@ macro_rules! var_delay_phaser {
                 let min_depth = pedal.parameters.get("min_depth").unwrap().value.as_float().unwrap();
                 let max_depth = pedal.parameters.get("max_depth").unwrap().value.as_float().unwrap();
                 let mix = pedal.parameters.get("mix").unwrap().value.as_float().unwrap();
-                let oscillator = pedal.parameters.get("oscillator").unwrap().value.as_selection().unwrap();
+                let oscillator = pedal.parameters.get("oscillator").unwrap().value.as_int().unwrap();
 
                 Self {
                     rate,
@@ -68,7 +68,7 @@ macro_rules! var_delay_phaser {
                 pedal.set_parameter_value("min_depth", PedalParameterValue::Float(serde.min_depth));
                 pedal.set_parameter_value("max_depth", PedalParameterValue::Float(serde.max_depth));
                 pedal.set_parameter_value("mix", PedalParameterValue::Float(serde.mix));
-                pedal.set_parameter_value("oscillator", PedalParameterValue::Selection(serde.oscillator as u8));
+                pedal.set_parameter_value("oscillator", PedalParameterValue::Int(serde.oscillator as u16));
                 pedal
             }
         }
@@ -122,9 +122,9 @@ macro_rules! var_delay_phaser {
                 parameters.insert(
                     "oscillator".to_string(),
                     PedalParameter {
-                        value: PedalParameterValue::Selection(init_oscillator),
-                        min: Some(PedalParameterValue::Selection(0)),
-                        max: Some(PedalParameterValue::Selection(3)),
+                        value: PedalParameterValue::Int(init_oscillator),
+                        min: Some(PedalParameterValue::Int(0)),
+                        max: Some(PedalParameterValue::Int(3)),
                         step: None
                     },
                 );
@@ -184,9 +184,9 @@ macro_rules! var_delay_phaser {
                         }
                     },
                     "oscillator" => {
-                        if let PedalParameterValue::Selection(oscillator) = value {
+                        if let PedalParameterValue::Int(oscillator) = value {
                             self.variable_delay_phaser.set_oscillator(oscillator);
-                            self.parameters.get_mut(name).unwrap().value = PedalParameterValue::Selection(oscillator);
+                            self.parameters.get_mut(name).unwrap().value = PedalParameterValue::Int(oscillator);
                         }
                     },
                     _ => {}

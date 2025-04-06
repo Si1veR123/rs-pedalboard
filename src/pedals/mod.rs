@@ -42,20 +42,18 @@ impl PedalParameter {
                         return false;
                     }
                 }
-                if let Some(PedalParameterValue::Float(step)) = self.step {
-                    if (*value % step) != 0.0 {
-                        return false;
-                    }
-                }
+                
+                // Don't validate float step, but it can be used for hinting to UI
+
                 true
             }
-            PedalParameterValue::Selection(value) => {
-                if let Some(PedalParameterValue::Selection(min)) = self.min {
+            PedalParameterValue::Int(value) => {
+                if let Some(PedalParameterValue::Int(min)) = self.min {
                     if *value < min {
                         return false;
                     }
                 }
-                if let Some(PedalParameterValue::Selection(max)) = self.max {
+                if let Some(PedalParameterValue::Int(max)) = self.max {
                     if *value > max {
                         return false;
                     }
@@ -73,7 +71,7 @@ pub enum PedalParameterValue {
     Float(f32),
     String(String),
     Bool(bool),
-    Selection(u8)
+    Int(u16)
 }
 
 impl PedalParameterValue {
@@ -98,9 +96,9 @@ impl PedalParameterValue {
         }
     }
 
-    pub fn as_selection(&self) -> Option<u8> {
+    pub fn as_int(&self) -> Option<u16> {
         match self {
-            PedalParameterValue::Selection(value) => Some(*value),
+            PedalParameterValue::Int(value) => Some(*value),
             _ => None
         }
     }

@@ -56,10 +56,10 @@ impl PitchShift {
     pub fn new() -> Self {
         let mut parameters = HashMap::new();
 
-        let init_block_size = 128;
+        let init_block_size = 1024;
         let init_semitones = -1.0;
         let init_speed = 0;
-        let init_tonality_limit = 10000.0;
+        let init_tonality_limit = 0.5;
 
         parameters.insert(
             "semitones".to_string(),
@@ -74,20 +74,20 @@ impl PitchShift {
         parameters.insert(
             "block_size".to_string(),
             PedalParameter {
-                value: PedalParameterValue::Selection(init_block_size),
-                min: Some(PedalParameterValue::Selection(10)),
-                max: Some(PedalParameterValue::Selection(180)),
+                value: PedalParameterValue::Int(init_block_size),
+                min: Some(PedalParameterValue::Int(128)),
+                max: Some(PedalParameterValue::Int(2048)),
                 step: None,
             }
         );
 
-        // Whether to use 1/4 (slow,0) or 1/2 (faster,1) hop size
+        // Whether to use 1/8 (slow,0) or 1/4 (faster,1) hop size
         parameters.insert(
             "speed".to_string(),
             PedalParameter {
-                value: PedalParameterValue::Selection(init_speed),
-                min: Some(PedalParameterValue::Selection(0)),
-                max: Some(PedalParameterValue::Selection(1)),
+                value: PedalParameterValue::Int(init_speed),
+                min: Some(PedalParameterValue::Int(0)),
+                max: Some(PedalParameterValue::Int(1)),
                 step: None
             }
         );
@@ -96,9 +96,9 @@ impl PitchShift {
             "tonality_limit".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Float(init_tonality_limit),
-                min: Some(PedalParameterValue::Float(1000.0)),
-                max: Some(PedalParameterValue::Float(20000.0)),
-                step: Some(PedalParameterValue::Float(100.0)),
+                min: Some(PedalParameterValue::Float(0.001)),
+                max: Some(PedalParameterValue::Float(1.0)),
+                step: Some(PedalParameterValue::Float(0.001)),
             }
         );
 
@@ -107,12 +107,12 @@ impl PitchShift {
     }
 
     pub fn stretch_from_parameters(parameters: &HashMap<String, PedalParameter>) -> Stretch {
-        let block_size = parameters.get("block_size").unwrap().value.as_selection().unwrap();
+        let block_size = parameters.get("block_size").unwrap().value.as_int().unwrap();
         let semitones = parameters.get("semitones").unwrap().value.as_float().unwrap();
-        let speed = parameters.get("speed").unwrap().value.as_selection().unwrap();
+        let speed = parameters.get("speed").unwrap().value.as_int().unwrap();
         let tonality_limit = parameters.get("tonality_limit").unwrap().value.as_float().unwrap();
 
-        let interval = block_size / if speed == 0 { 4 } else { 2 };
+        let interval = block_size / if speed == 0 { 8 } else { 4 };
         let mut stretch = Stretch::new(1, block_size as usize, interval as usize);
         stretch.set_transpose_factor_semitones(semitones as f32, Some(tonality_limit));
 

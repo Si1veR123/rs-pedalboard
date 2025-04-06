@@ -12,7 +12,7 @@ pub struct VariableDelayPhaser {
 
 
 impl VariableDelayPhaser {
-    fn oscillator_from_selection(selection: u8, sample_rate: f32, frequency: f32) -> Oscillator {
+    fn oscillator_from_selection(selection: u16, sample_rate: f32, frequency: f32) -> Oscillator {
         match selection {
             0 => Oscillator::Sine(oscillator::Sine::new(sample_rate, frequency)),
             1 => Oscillator::Square(oscillator::Square::new(sample_rate, frequency)),
@@ -28,7 +28,7 @@ impl VariableDelayPhaser {
             mix,
             min_delay_samples: ((depth_min_ms / 1000.0) * 48000.0) as usize,
             delay: VariableDelay::new(depth_samples),
-            oscillator: Self::oscillator_from_selection(oscillator_selection as u8, 48000.0, rate_hz)
+            oscillator: Self::oscillator_from_selection(oscillator_selection as u16, 48000.0, rate_hz)
         }
     }
 
@@ -57,7 +57,7 @@ impl VariableDelayPhaser {
         self.delay = VariableDelay::new(depth_samples);
     }
 
-    pub fn set_oscillator(&mut self, selection: u8) {
+    pub fn set_oscillator(&mut self, selection: u16) {
         self.oscillator = Self::oscillator_from_selection(selection, 48000.0, self.oscillator.get_frequency());
     }
 }
