@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use crate::pedals::{Pedal, PedalTrait};
+use std::hash::Hash;
 
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -11,9 +12,15 @@ pub struct Pedalboard {
 impl Default for Pedalboard {
     fn default() -> Pedalboard {
         Pedalboard {
-            name: String::from("New Pedalboard"),
+            name: String::from("Default Pedalboard"),
             pedals: vec![Pedal::PitchShift(crate::pedals::PitchShift::new())]
         }
+    }
+}
+
+impl Hash for &Pedalboard {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
     }
 }
 

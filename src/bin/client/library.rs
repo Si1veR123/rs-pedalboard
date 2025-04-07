@@ -88,7 +88,7 @@ impl Widget for &mut PedalboardLibraryScreen {
                         egui::Button::new(
                             RichText::new("New Pedalboard").size(20.0)
                         ).stroke((0.7, crate::THEME_COLOUR))).clicked() {
-                        let unique_name = self.state.unique_pedalboard_name(String::from("New Pedalboard"));
+                        let unique_name = self.state.unique_library_pedalboard_name(String::from("New Pedalboard"));
                         self.state.pedalboard_library.borrow_mut().push(Pedalboard::new(unique_name));
                 }
             });
@@ -135,9 +135,13 @@ impl Widget for &mut PedalboardLibraryScreen {
                         RowAction::Load => {
                             let pedalboard = pedalboard_library.get(pedalboard_index).unwrap();
 
-                            self.socket.borrow_mut().add_pedalboard(pedalboard);
+                            let new_name = self.state.unique_stage_pedalboard_name(pedalboard.name.clone());
+                            let mut pedalboard = pedalboard.clone();
+                            pedalboard.name = new_name;
 
-                            self.state.active_pedalboardstage.borrow_mut().pedalboards.push(pedalboard.clone());
+                            self.socket.borrow_mut().add_pedalboard(&pedalboard);
+
+                            self.state.active_pedalboardstage.borrow_mut().pedalboards.push(pedalboard);
                         },
                         RowAction::Delete => {
                             let pedalboard_name = &pedalboard_library.get(pedalboard_index).unwrap().name.clone();

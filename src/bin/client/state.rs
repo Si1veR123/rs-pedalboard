@@ -8,16 +8,8 @@ pub struct State {
 }
 
 impl State {
-    pub fn rename_pedalboard(&self, to_rename: &str, new_name: &str) {
-        // First rename any matching names in active pedalboardstage
-        let mut active_pedalboardstage = self.active_pedalboardstage.borrow_mut();
-        for pedalboard in active_pedalboardstage.pedalboards.iter_mut() {
-            if pedalboard.name == to_rename {
-                pedalboard.name = new_name.to_string();
-            }
-        }
-    
-        // Then rename any matching names in pedalboard library
+    pub fn rename_library_pedalboard(&self, to_rename: &str, new_name: &str) {
+        // First rename any matching names in pedalboard library
         let mut pedalboard_library = self.pedalboard_library.borrow_mut();
         for pedalboard in pedalboard_library.iter_mut() {
             if pedalboard.name == to_rename {
@@ -35,15 +27,19 @@ impl State {
             }
         }
     }
+
+    pub fn rename_stage_pedalboard(&self, to_rename: &str, new_name: &str) {
+        let mut pedalboard_set = self.active_pedalboardstage.borrow_mut();
+        if let Some(pedalboard) = pedalboard_set.pedalboards.iter_mut().find(|pb| pb.name == to_rename) {
+            pedalboard.name = new_name.to_string();
+        }
+    }
     
-    pub fn unique_pedalboard_name(&self, mut name: String) -> String {
+    fn unique_name(mut name: String, pedalboards: &[Pedalboard]) -> String {
         name.truncate(25);
 
         let mut i = 1;
-        while self.active_pedalboardstage.borrow().pedalboards.iter()
-            .chain(self.pedalboard_library.borrow().iter())
-            .any(|pedalboard| pedalboard.name == name)
-        {
+        while pedalboards.iter().any(|pedalboard| pedalboard.name == name) {
             if i == 1 {
                 name.push_str("_1");
             } else {
@@ -54,6 +50,14 @@ impl State {
             i += 1;
         }
         name
+    }
+
+    pub fn unique_stage_pedalboard_name(&self, name: String) -> String {
+        Self::unique_name(name, &self.active_pedalboardstage.borrow().pedalboards)
+    }
+
+    pub fn unique_library_pedalboard_name(&self, name: String) -> String {
+        Self::unique_name(name, &self.pedalboard_library.borrow())
     }
 
     /// Delete a pedalboard from the pedalboard library

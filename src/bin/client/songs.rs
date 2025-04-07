@@ -106,11 +106,14 @@ impl Widget for &mut SongsScreen {
                     match action {
                         RowAction::Load => {
                             let song = songs_library.get(song).unwrap();
-                            let mut active_pedalboard_stage = self.state.active_pedalboardstage.borrow_mut();
                             let pedalboard_library = self.state.pedalboard_library.borrow();
                             for pedalboard_name in song {
                                 if let Some(pedalboard) = pedalboard_library.iter().find(|pedalboard| &pedalboard.name == pedalboard_name) {
-                                    active_pedalboard_stage.pedalboards.push(pedalboard.clone());
+                                    // Add to the pedalboard stage with unique name
+                                    let new_name = self.state.unique_stage_pedalboard_name(pedalboard.name.clone());
+                                    let mut pedalboard = pedalboard.clone();
+                                    pedalboard.name = new_name;
+                                    self.state.active_pedalboardstage.borrow_mut().pedalboards.push(pedalboard.clone());
                                 }
                             }
                         },

@@ -14,9 +14,9 @@ use crate::state::State;
 pub enum CurrentAction {
     Duplicate(usize),
     Remove(usize),
-    SaveToSong(String),
+    SaveToSong((String, bool)),
     Rename((usize, String)),
-    SaveToLibrary(usize),
+    SaveToLibrary((usize, bool)),
     ChangeActive(usize)
 }
 
@@ -35,6 +35,25 @@ impl PedalboardStageScreen {
         }
     }
 
+    fn save_song_input_window(&mut self, ui: &mut egui::Ui, title: &str, input: &mut String, checked: &mut bool, open: &mut bool) -> bool {
+        let mut saved = false;
+        egui::Window::new(title)
+            .open(open)
+            .show(ui.ctx(), |ui| {
+                ui.add(egui::TextEdit::singleline(input));
+                ui.add(egui::Checkbox::new(checked, "Overwrite existing pedalboards in library(s)"));
+                if ui.button("Save Song").clicked() {
+                    saved = true;
+                }
+            });
+
+        if saved {
+            *open = false;
+        }
+
+        saved
+    }
+
     fn input_string_window(&mut self, ui: &mut egui::Ui, title: &str, input: &mut String, open: &mut bool) -> bool {
         let mut saved = false;
         egui::Window::new(title)
@@ -49,6 +68,25 @@ impl PedalboardStageScreen {
         if saved {
             *open = false;
         }
+
+        saved
+    }
+
+    // Returns yes or no, or None if cancelled/not selected this frame
+    fn save_overwrite_window(&mut self, ui: &mut egui::Ui, open: &mut bool) -> Option<bool> {
+        let mut saved = None;
+        egui::Window::new("Overwrite")
+            .show(ui.ctx(), |ui| {
+                ui.label("Overwrite existing pedalboard(s) or save with unique name?");
+                if ui.button("Overwrite").clicked() {
+                    *open = false;
+                    saved = Some(true);
+                }
+                if ui.button("Unique Name").clicked() {
+                    *open = true;
+                    saved = Some(false);
+                }
+            });
 
         saved
     }
