@@ -17,6 +17,8 @@ pub use delay::Delay;
 mod eq;
 pub use eq::GraphicEq7;
 mod ui;
+mod tuner;
+pub use tuner::Tuner;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct PedalParameter {
@@ -123,7 +125,7 @@ pub trait PedalTrait: Send {
     }
 
     // Returns the name of the parameter that was changed, if any
-    fn ui(&mut self, ui: &mut egui::Ui) -> Option<String>;
+    fn ui(&mut self, ui: &mut egui::Ui) -> Option<String> { None }
 }
 
 
@@ -138,4 +140,5 @@ pub enum Pedal {
     Flanger(Flanger),
     Delay(Delay),
     GraphicEq7(GraphicEq7),
+    Tuner(Tuner)
 }

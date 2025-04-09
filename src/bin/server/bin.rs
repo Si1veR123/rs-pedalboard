@@ -33,7 +33,7 @@ use simplelog::*;
 fn main() {
     CombinedLogger::init(
         vec![
-            TermLogger::new(LevelFilter::Info, Config::default(), TerminalMode::Mixed, ColorChoice::Auto),
+            TermLogger::new(LevelFilter::Debug, Config::default(), TerminalMode::Mixed, ColorChoice::Auto),
             WriteLogger::new(LevelFilter::Info, Config::default(), std::fs::File::create("pedalboard-server.log").expect("Failed to create log file")),
         ]
     ).expect("Failed to start logging");
@@ -41,10 +41,7 @@ fn main() {
 
     let (_host, input, output) = setup();
 
-    let pitch_shift = pedals::PitchShift::new();
-
-    let pedalboard = Pedalboard::from_pedals(String::from("pedalboard"), vec![Pedal::PitchShift(pitch_shift)]);
-    let pedalboard_set = PedalboardSet::from_pedalboards(vec![pedalboard]).unwrap();
+    let pedalboard_set = PedalboardSet::default();
 
     let (command_sender, command_receiver) = bounded(12);
 
