@@ -1,9 +1,7 @@
 mod socket;
 mod state;
-use std::{cell::RefCell, rc::Rc};
 
 use simplelog::*;
-use socket::ClientSocket;
 use state::State;
 
 mod stage;
@@ -69,7 +67,6 @@ fn main() {
 
 pub struct PedalboardClientApp {
     state: &'static State,
-    socket: Rc<RefCell<ClientSocket>>,
 
     selected_screen: usize,
     pedalboard_stage_screen: PedalboardStageScreen,
@@ -79,21 +76,16 @@ pub struct PedalboardClientApp {
 }
 
 impl PedalboardClientApp {
-    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+    pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
         let state = Box::leak(Box::new(State::default()));
-
-        let mut inner_socket = ClientSocket::new(SERVER_PORT);
-        let _ = inner_socket.connect();
-        inner_socket.load_set(&state.active_pedalboardstage.borrow()).expect("Failed to initialize pedalboard set");
-        let socket = Rc::new(RefCell::new(inner_socket));
+        state.socket.borrow_mut().load_set(&state.active_pedalboardstage.borrow()).expect("Failed to initialize pedalboard set");
 
         PedalboardClientApp {
             selected_screen: 0,
-            pedalboard_stage_screen: PedalboardStageScreen::new(state, socket.clone()),
-            pedalboard_library_screen: PedalboardLibraryScreen::new(state, socket.clone()),
+            pedalboard_stage_screen: PedalboardStageScreen::new(state),
+            pedalboard_library_screen: PedalboardLibraryScreen::new(state),
             songs_screen: SongsScreen::new(state),
             utilities_screen: UtilitiesScreen::new(),
-            socket,
             state,
         }
     }
@@ -162,7 +154,7 @@ impl eframe::App for PedalboardClientApp {
                 }
             };
 
-            let mut socket = self.socket.borrow_mut();
+            let mut socket = self.state.socket.borrow_mut();
             if !socket.is_connected() {
                 let reconnect_rect = egui::Rect {
                     min: egui::Pos2::new(WINDOW_WIDTH - 100.0, 15.0),
@@ -184,9 +176,6 @@ impl eframe::App for PedalboardClientApp {
                                 } else {
                                     log::info!("Set loaded successfully");
                                 }
-
-                                self.pedalboard_stage_screen.socket = self.socket.clone();
-                                self.pedalboard_library_screen.socket = self.socket.clone();
                             } else {
                                 log::error!("Failed to connect to server");
                             }

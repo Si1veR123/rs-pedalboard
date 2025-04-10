@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::hash::Hash;
 
 use serde::{Deserialize, Serialize};
 
@@ -11,6 +12,12 @@ use crate::dsp_algorithms::eq::{self, Equalizer};
 pub struct GraphicEq7 {
     parameters: HashMap<String, PedalParameter>,
     eq: eq::Equalizer
+}
+
+impl Hash for GraphicEq7 {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.parameters.values().map(|p| &p.value).for_each(|v| v.hash(state));
+    }
 }
 
 impl Serialize for GraphicEq7 {
@@ -153,20 +160,14 @@ impl PedalTrait for GraphicEq7 {
         }
     }
 
-    fn ui(&mut self, ui: &mut eframe::egui::Ui) -> Option<String> {
+    fn ui(&mut self, ui: &mut eframe::egui::Ui) -> Option<(String, PedalParameterValue)> {
         let mut to_change = None;
-        let mut return_value = None;
         for (parameter_name, parameter) in self.get_parameters().iter() {
             if let Some(value) = pedal_knob(ui, parameter_name, parameter) {
                 to_change = Some((parameter_name.clone(), value));
-                return_value = Some(parameter_name.clone());
             }
         }
 
-        if let Some((parameter_name, value)) = to_change {
-            self.set_parameter_value(&parameter_name, value);
-        }
-
-        return_value
+        to_change
     }
 }

@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::hash::Hash;
 
 use enum_dispatch::enum_dispatch;
 use serde::{ Deserialize, Serialize};
@@ -17,8 +18,6 @@ pub use delay::Delay;
 mod eq;
 pub use eq::GraphicEq7;
 mod ui;
-mod tuner;
-pub use tuner::Tuner;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct PedalParameter {
@@ -76,6 +75,17 @@ pub enum PedalParameterValue {
     Int(u16)
 }
 
+impl Hash for PedalParameterValue {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            PedalParameterValue::Float(value) => value.to_bits().hash(state),
+            PedalParameterValue::String(value) => value.hash(state),
+            PedalParameterValue::Bool(value) => value.hash(state),
+            PedalParameterValue::Int(value) => value.hash(state)
+        }
+    }
+}
+
 impl PedalParameterValue {
     pub fn as_float(&self) -> Option<f32> {
         match self {
@@ -107,7 +117,7 @@ impl PedalParameterValue {
 }
 
 #[enum_dispatch]
-pub trait PedalTrait: Send {
+pub trait PedalTrait: Send + Hash {
     fn process_audio(&mut self, buffer: &mut [f32]);
 
     fn get_parameters(&self) -> &HashMap<String, PedalParameter>;
@@ -124,13 +134,13 @@ pub trait PedalTrait: Send {
         }
     }
 
-    // Returns the name of the parameter that was changed, if any
-    fn ui(&mut self, ui: &mut egui::Ui) -> Option<String> { None }
+    /// Returns the name of the parameter that needs to be changed, and its value
+    fn ui(&mut self, _ui: &mut egui::Ui) -> Option<(String, PedalParameterValue)> { None }
 }
 
 
 /// Wrapper enum type for serialization in Vec
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Hash)]
 #[enum_dispatch(PedalTrait)]
 pub enum Pedal {
     Volume(Volume),
@@ -139,6 +149,5 @@ pub enum Pedal {
     Chorus(Chorus),
     Flanger(Flanger),
     Delay(Delay),
-    GraphicEq7(GraphicEq7),
-    Tuner(Tuner)
+    GraphicEq7(GraphicEq7)
 }

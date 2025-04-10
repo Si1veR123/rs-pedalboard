@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::hash::Hash;
 
 use super::PedalTrait;
 use super::PedalParameter;
@@ -9,6 +10,12 @@ use serde::{Serialize, Deserialize};
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Volume {
     parameters: HashMap<String, PedalParameter>,
+}
+
+impl Hash for Volume {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.parameters.values().map(|p| &p.value).for_each(|v| v.hash(state));
+    }
 }
 
 impl Volume {
@@ -44,20 +51,14 @@ impl PedalTrait for Volume {
         &mut self.parameters
     }
 
-    fn ui(&mut self, ui: &mut eframe::egui::Ui) -> Option<String> {
+    fn ui(&mut self, ui: &mut eframe::egui::Ui) -> Option<(String, PedalParameterValue)> {
         let mut to_change = None;
-        let mut return_value = None;
         for (parameter_name, parameter) in self.get_parameters().iter() {
             if let Some(value) = pedal_knob(ui, parameter_name, parameter) {
                 to_change = Some((parameter_name.clone(), value));
-                return_value = Some(parameter_name.clone());
             }
         }
 
-        if let Some((parameter_name, value)) = to_change {
-            self.set_parameter_value(&parameter_name, value);
-        }
-
-        return_value
+        to_change
     }
 }

@@ -1,8 +1,6 @@
-use std::{cell::RefCell, rc::Rc};
-
 use eframe::egui::{self, Layout, RichText, TextEdit, Vec2, Widget};
 use rs_pedalboard::pedalboard::Pedalboard;
-use crate::{socket::ClientSocket, state::State};
+use crate::state::State;
 
 pub enum RowAction {
     Load,
@@ -12,15 +10,13 @@ pub enum RowAction {
 pub struct PedalboardLibraryScreen {
     // Store pedalboards by unique name
     state: &'static State,
-    pub socket: Rc<RefCell<ClientSocket>>,
     search_term: String,
 }
 
 impl PedalboardLibraryScreen {
-    pub fn new(state: &'static State, socket: Rc<RefCell<ClientSocket>>) -> Self {
+    pub fn new(state: &'static State) -> Self {
         Self {
             state,
-            socket,
             search_term: String::new(),
         }
     }
@@ -134,14 +130,8 @@ impl Widget for &mut PedalboardLibraryScreen {
                     match action {
                         RowAction::Load => {
                             let pedalboard = pedalboard_library.get(pedalboard_index).unwrap();
-
-                            let new_name = self.state.unique_stage_pedalboard_name(pedalboard.name.clone());
-                            let mut pedalboard = pedalboard.clone();
-                            pedalboard.name = new_name;
-
-                            self.socket.borrow_mut().add_pedalboard(&pedalboard);
-
-                            self.state.active_pedalboardstage.borrow_mut().pedalboards.push(pedalboard);
+                            self.state.socket.borrow_mut().add_pedalboard(pedalboard).expect("Failed to add pedalboard to socket");
+                            self.state.active_pedalboardstage.borrow_mut().pedalboards.push(pedalboard.clone());
                         },
                         RowAction::Delete => {
                             let pedalboard_name = &pedalboard_library.get(pedalboard_index).unwrap().name.clone();

@@ -1,10 +1,8 @@
-use std::hash::Hash;
-
 use super::{CurrentAction, PedalboardStageScreen};
 
-use eframe::egui::{self, Color32, Id, Layout, Rgba, RichText, Vec2};
-use egui_dnd::{dnd, DragDropItem};
-use rs_pedalboard::{pedalboard::{self, Pedalboard}, pedalboard_set::PedalboardSet};
+use eframe::egui::{self, Color32, Layout, Rgba, RichText, Vec2};
+use egui_dnd::dnd;
+use rs_pedalboard::pedalboard_set::PedalboardSet;
 use crate::THEME_COLOUR;
 
 // Big ugly function to display the pedalboard stage panel
@@ -25,7 +23,7 @@ pub fn pedalboard_stage_panel(screen: &mut PedalboardStageScreen, ui: &mut egui:
                 ui.add_space(10.0);
                 if ui.add_sized([100.0, buttons_row_height], egui::Button::new("Clear Stage")).clicked() {
                     *active_pedalboards = PedalboardSet::default();
-                    screen.socket.borrow_mut().load_set(&active_pedalboards);
+                    screen.state.socket.borrow_mut().load_set(&active_pedalboards).expect("Failed to clear pedalboard set");
                 }
             }
         );
@@ -36,7 +34,7 @@ pub fn pedalboard_stage_panel(screen: &mut PedalboardStageScreen, ui: &mut egui:
             |ui| {
                 ui.add_space(10.0);
                 if ui.add_sized([100.0, buttons_row_height], egui::Button::new("Save to Song")).clicked() {
-                    screen.current_action = Some(CurrentAction::SaveToSong((String::new(), false)));
+                    screen.current_action = Some(CurrentAction::SaveToSong(String::new()));
                 }
             }
         );
@@ -54,7 +52,7 @@ pub fn pedalboard_stage_panel(screen: &mut PedalboardStageScreen, ui: &mut egui:
         let dnd_response = dnd(ui, "pedalboard_dnd").show_sized(
             active_pedalboards.pedalboards.iter().enumerate(),
             Vec2::new(row_width, row_height),
-            |ui, (i, pedalboard), handle, state| {
+            |ui, (i, pedalboard), handle, _state| {
                 ui.allocate_ui_with_layout(
                     Vec2::new(row_width, row_height),
                     Layout::left_to_right(egui::Align::Center),
@@ -117,15 +115,20 @@ pub fn pedalboard_stage_panel(screen: &mut PedalboardStageScreen, ui: &mut egui:
                                         ui.separator();
                                         ui.add_space(2.0);
                                         if ui.add(egui::Button::new(RichText::new("Duplicate").size(25.0))).clicked() {
-                                            screen.current_action = Some(CurrentAction::Duplicate(i));
+                                            screen.current_action = Some(CurrentAction::DuplicateLinked(i));
                                         }
                                         ui.add_space(5.0);
                                     });
 
                                     ui.add_space(5.0);
 
-                                    if ui.add(egui::Button::new("Save")).clicked() {
-                                        screen.current_action = Some(CurrentAction::SaveToLibrary((i, false)));
+                                    let in_library = pedalboard_library.iter().any(|library_pedalboard| library_pedalboard.name == pedalboard.name);
+                                    if in_library {
+                                        ui.add(egui::Button::new("Saved"));
+                                    } else {
+                                        if ui.add(egui::Button::new("Save")).clicked() {
+                                            screen.current_action = Some(CurrentAction::SaveToLibrary(i));
+                                        }
                                     }
                                 }
                             )
@@ -152,20 +155,20 @@ pub fn pedalboard_stage_panel(screen: &mut PedalboardStageScreen, ui: &mut egui:
                     drag_update.to
                 };
 
-                let mut socket = screen.socket.borrow_mut();
+                let mut socket = screen.state.socket.borrow_mut();
                 let active_index = active_pedalboards.active_pedalboard;
 
                 if drag_update.from == active_index {
                     active_pedalboards.active_pedalboard = new_pedalboard_index;
-                    socket.play(active_pedalboards.active_pedalboard);
+                    socket.play(active_pedalboards.active_pedalboard).expect("Socket failed to play pedalboard");
                 }
                 else if drag_update.from < active_index && drag_update.to > active_index {
                     active_pedalboards.active_pedalboard -= 1;
-                    socket.play(active_pedalboards.active_pedalboard);
+                    socket.play(active_pedalboards.active_pedalboard).expect("Socket failed to play pedalboard");
                 }
                 else if drag_update.from > active_index && drag_update.to <= active_index {
                     active_pedalboards.active_pedalboard += 1;
-                    socket.play(active_pedalboards.active_pedalboard);
+                    socket.play(active_pedalboards.active_pedalboard).expect("Socket failed to play pedalboard");
                 }
 
                 socket.move_pedalboard(drag_update.from, new_pedalboard_index).expect("Socket failed to move pedalboard");
@@ -176,70 +179,24 @@ pub fn pedalboard_stage_panel(screen: &mut PedalboardStageScreen, ui: &mut egui:
 
     // === Perform actions ===
     match screen.current_action.take() {
-        Some(CurrentAction::Duplicate(index)) => {
-            let mut pedalboard = active_pedalboards.pedalboards.get(index).unwrap().clone();
-            let pedalboardset_length = active_pedalboards.pedalboards.len();
+        Some(CurrentAction::DuplicateLinked(index)) => {
             drop(active_pedalboards);
-            drop(pedalboard_library);
-            let unique_name = screen.state.unique_stage_pedalboard_name(pedalboard.name.clone());
-            pedalboard.name = unique_name;
-
-            let mut socket = screen.socket.borrow_mut();
-            socket.add_pedalboard(&pedalboard).expect("Failed to add pedalboard");
-            socket.move_pedalboard(pedalboardset_length-1, index+1).expect("Failed to move pedalboard");
-
-            screen.state.active_pedalboardstage.borrow_mut().pedalboards.insert(index+1, pedalboard);
+            screen.state.duplicate_linked(index);
         },
         Some(CurrentAction::Remove(index)) => {
-            if active_pedalboards.remove_pedalboard(index) {
-                let mut socket = screen.socket.borrow_mut();
-                socket.delete_pedalboard(index).expect("Failed to remove pedalboard");
-            }
+            drop(active_pedalboards);
+            screen.state.remove_pedalboard_from_stage(index);
         },
-        Some(CurrentAction::SaveToSong((mut song_name, mut checked))) => {
+        Some(CurrentAction::SaveToSong(mut song_name)) => {
             let mut open = true;
             drop(active_pedalboards);
-            let saved= screen.save_song_input_window(ui, "Save to Song", &mut song_name, &mut checked, &mut open);
+            let saved= screen.save_song_input_window(ui, "Save to Song", &mut song_name, &mut open);
 
             if saved {
-                let active_pedalboards = &screen.state.active_pedalboardstage.borrow().pedalboards;
-                
-                // The actual names of the pedalboards that are saved in the song, as some may be renamed
-                // due to them existing in the library already
-                let mut actual_song_pedalboard_names = Vec::with_capacity(active_pedalboards.len());
-
                 drop(pedalboard_library);
-
-                for pedalboard in active_pedalboards.iter() {
-                    let mut pedalboard_library = screen.state.pedalboard_library.borrow_mut();
-                    let pedalboard_in_library = pedalboard_library.iter_mut().find(|library_pedalboard| library_pedalboard.name == pedalboard.name);
-                    if pedalboard_in_library.is_some() {
-                        if checked {
-                            // Overwrite existing pedalboard in library
-                            *pedalboard_in_library.unwrap() = pedalboard.clone();
-                            actual_song_pedalboard_names.push(pedalboard.name.clone());
-                        } else {
-                            // Unique library name function needs to borrow the library
-                            // so we need to drop the mutable borrow first
-                            drop(pedalboard_library);
-                            // Create pedalboard with new unique name in library
-                            let new_pedalboard_name = screen.state.unique_library_pedalboard_name(pedalboard.name.clone());
-
-                            let mut pedalboard = pedalboard.clone();
-                            pedalboard.name = new_pedalboard_name.clone();
-                            screen.state.pedalboard_library.borrow_mut().push(pedalboard);
-                            actual_song_pedalboard_names.push(new_pedalboard_name);
-                        }
-                    } else {
-                        // Save pedalboard to library with existing name
-                        pedalboard_library.push(pedalboard.clone());
-                        actual_song_pedalboard_names.push(pedalboard.name.clone());
-                    }
-                }
-
-                screen.state.songs_library.borrow_mut().insert(song_name.clone(), actual_song_pedalboard_names);
+                screen.state.save_to_song(song_name.clone());
             } else if open {
-                screen.current_action = Some(CurrentAction::SaveToSong((song_name, checked)));
+                screen.current_action = Some(CurrentAction::SaveToSong(song_name));
             }
         },
         Some(CurrentAction::Rename((index, mut new_name))) => {
@@ -250,49 +207,19 @@ pub fn pedalboard_stage_panel(screen: &mut PedalboardStageScreen, ui: &mut egui:
                 let old_name = active_pedalboards.pedalboards.get(index).unwrap().name.clone();
                 drop(active_pedalboards);
                 drop(pedalboard_library);
-                let unique_name = screen.state.unique_stage_pedalboard_name(new_name.clone());
-                screen.state.rename_stage_pedalboard(&old_name, &unique_name);
-            }
-
-            if open {
+                screen.state.rename_pedalboard(&old_name, &new_name);
+            } else if open {
                 screen.current_action = Some(CurrentAction::Rename((index, new_name)));
             }
         },
-        Some(CurrentAction::SaveToLibrary((index, mut window_open))) => {
-            let pedalboard = active_pedalboards.pedalboards.get(index).unwrap();
-
-            if window_open {
-                let selected = screen.save_overwrite_window(ui, &mut window_open);
-                if let Some(overwrite) = selected {
-                    if overwrite {
-                        // Overwrite existing pedalboard in library
-                        let pedalboard_in_library = pedalboard_library.iter_mut().find(|library_pedalboard| library_pedalboard.name == pedalboard.name).unwrap();
-                        *pedalboard_in_library = pedalboard.clone();
-                    } else {
-                        // Create pedalboard with new unique name in library
-
-                        drop(pedalboard_library);
-                        let new_pedalboard_name = screen.state.unique_library_pedalboard_name(pedalboard.name.clone());
-                        let mut pedalboard = pedalboard.clone();
-                        pedalboard.name = new_pedalboard_name;
-                        screen.state.pedalboard_library.borrow_mut().push(pedalboard);
-                    }
-                } else {
-                    screen.current_action = Some(CurrentAction::SaveToLibrary((index, window_open)));
-                }
-            } else {
-                let pedalboard_exists = pedalboard_library.iter().any(|library_pedalboard| library_pedalboard.name == pedalboard.name);
-                if pedalboard_exists {
-                    screen.current_action = Some(CurrentAction::SaveToLibrary((index, true)));
-                } else {
-                    pedalboard_library.push(pedalboard.clone());
-                }
-            }
+        Some(CurrentAction::SaveToLibrary(index)) => {
+            let pedalboard = active_pedalboards.pedalboards.get(index).unwrap().clone();
+            pedalboard_library.push(pedalboard);
         },
         Some(CurrentAction::ChangeActive(index)) => {
             active_pedalboards.active_pedalboard = index;
 
-            let mut socket = screen.socket.borrow_mut();
+            let mut socket = screen.state.socket.borrow_mut();
             socket.play(index).expect("Failed to change active pedalboard");
         },
         None => {}

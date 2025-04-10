@@ -25,7 +25,7 @@ mod socket;
 mod device_select;
 
 use cpal::traits::StreamTrait;
-use rs_pedalboard::{pedalboard::Pedalboard, pedalboard_set::PedalboardSet, pedals::{self, Pedal, PedalTrait}};
+use rs_pedalboard::pedalboard_set::PedalboardSet;
 use crossbeam::channel::bounded;
 
 use simplelog::*;

@@ -1,5 +1,6 @@
 use std::collections::{HashMap, VecDeque};
 use std::iter;
+use std::hash::Hash;
 use super::{PedalParameter, PedalParameterValue, PedalTrait, ui::pedal_knob};
 use serde::ser::SerializeMap;
 use serde::{Serialize, Deserialize};
@@ -8,6 +9,13 @@ use serde::{Serialize, Deserialize};
 pub struct Delay {
     pub parameters: HashMap<String, PedalParameter>,
     delay_buffer: VecDeque<f32>
+}
+
+impl Hash for Delay {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        // Probably not technically correct since values may change order but good enough for now
+        self.parameters.values().map(|p| &p.value).for_each(|v| v.hash(state));
+    }
 }
 
 impl Serialize for Delay {
@@ -118,20 +126,13 @@ impl PedalTrait for Delay {
         }
     }
 
-    fn ui(&mut self, ui: &mut eframe::egui::Ui) -> Option<String> {
+    fn ui(&mut self, ui: &mut eframe::egui::Ui) -> Option<(String, PedalParameterValue)> {
         let mut to_change = None;
-        let mut return_value = None;
         for (parameter_name, parameter) in self.get_parameters().iter() {
             if let Some(value) = pedal_knob(ui, parameter_name, parameter) {
                 to_change = Some((parameter_name.clone(), value));
-                return_value = Some(parameter_name.clone());
             }
         }
-
-        if let Some((parameter_name, value)) = to_change {
-            self.set_parameter_value(&parameter_name, value);
-        }
-
-        return_value
+        to_change
     }
 }
