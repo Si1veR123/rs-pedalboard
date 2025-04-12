@@ -46,7 +46,7 @@ macro_rules! var_delay_phaser {
             min_depth: f32,
             max_depth: f32,
             mix: f32,
-            oscillator: u16
+            oscillator: i16
         }
 
         impl From<&$name> for $serde_name {
@@ -74,7 +74,7 @@ macro_rules! var_delay_phaser {
                 pedal.set_parameter_value("min_depth", PedalParameterValue::Float(serde.min_depth));
                 pedal.set_parameter_value("max_depth", PedalParameterValue::Float(serde.max_depth));
                 pedal.set_parameter_value("mix", PedalParameterValue::Float(serde.mix));
-                pedal.set_parameter_value("oscillator", PedalParameterValue::Int(serde.oscillator as u16));
+                pedal.set_parameter_value("oscillator", PedalParameterValue::Int(serde.oscillator));
                 pedal
             }
         }
@@ -191,7 +191,7 @@ macro_rules! var_delay_phaser {
                     },
                     "oscillator" => {
                         if let PedalParameterValue::Int(oscillator) = value {
-                            self.variable_delay_phaser.set_oscillator(oscillator);
+                            self.variable_delay_phaser.set_oscillator(oscillator as u16);
                             self.parameters.get_mut(name).unwrap().value = PedalParameterValue::Int(oscillator);
                         }
                     },
@@ -200,14 +200,15 @@ macro_rules! var_delay_phaser {
             }
 
             fn ui(&mut self, ui: &mut eframe::egui::Ui) -> Option<(String, PedalParameterValue)> {
-                let mut to_change = None;
-                for (parameter_name, parameter) in self.get_parameters().iter() {
-                    if let Some(value) = pedal_knob(ui, parameter_name, parameter) {
-                        to_change = Some((parameter_name.clone(), value));
-                    }
-                }
+                //let mut to_change = None;
+                //for (parameter_name, parameter) in self.get_parameters().iter() {
+                //    if let Some(value) = pedal_knob(ui, parameter_name, parameter) {
+                //        to_change = Some((parameter_name.clone(), value));
+                //    }
+                //}
         
-                to_change
+                //to_change
+                None
             }
         }
     };

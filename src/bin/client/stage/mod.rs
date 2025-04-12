@@ -5,6 +5,8 @@ mod pedalboard_designer;
 use pedalboard_designer::pedalboard_designer;
 
 use eframe::egui::{self, Layout, Vec2, Widget};
+use rs_pedalboard::pedals::{Pedal, PedalDiscriminants};
+use strum::IntoEnumIterator;
 use crate::state::State;
 
 pub enum CurrentAction {
@@ -18,6 +20,7 @@ pub enum CurrentAction {
 
 pub struct PedalboardStageScreen {
     state: &'static State,
+    show_pedal_menu: bool,
     current_action: Option<CurrentAction>,
 }
 
@@ -25,6 +28,7 @@ impl PedalboardStageScreen {
     pub fn new(state: &'static State) -> Self {
         Self {
             state,
+            show_pedal_menu: false,
             current_action: None
         }
     }

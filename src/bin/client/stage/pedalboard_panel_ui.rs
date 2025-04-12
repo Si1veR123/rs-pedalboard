@@ -8,6 +8,8 @@ use crate::THEME_COLOUR;
 // Big ugly function to display the pedalboard stage panel
 // Effectively a method on PedalboardStageScreen
 pub fn pedalboard_stage_panel(screen: &mut PedalboardStageScreen, ui: &mut egui::Ui) {
+    ui.painter().rect_filled(ui.available_rect_before_wrap(), 5.0, Color32::WHITE.linear_multiply(0.002));
+
     let mut active_pedalboards = screen.state.active_pedalboardstage.borrow_mut();
     let mut pedalboard_library = screen.state.pedalboard_library.borrow_mut();
 

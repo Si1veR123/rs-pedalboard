@@ -1,10 +1,12 @@
 use std::collections::HashMap;
 use std::hash::Hash;
+use super::ui::fill_ui_with_image_width;
 use super::PedalTrait;
 use super::PedalParameter;
 use super::PedalParameterValue;
 use super::ui::pedal_knob;
 
+use eframe::egui::include_image;
 use serde::{Serialize, Deserialize};
 use signalsmith_stretch::Stretch;
 
@@ -64,17 +66,17 @@ impl PitchShift {
         let mut parameters = HashMap::new();
 
         let init_block_size = 2048;
-        let init_semitones = -1.0;
+        let init_semitones = -1;
         let init_speed = 0;
         let init_tonality_limit = 0.5;
 
         parameters.insert(
             "semitones".to_string(),
             PedalParameter {
-                value: PedalParameterValue::Float(init_semitones),
-                min: Some(PedalParameterValue::Float(-24.0)),
-                max: Some(PedalParameterValue::Float(24.0)),
-                step: Some(PedalParameterValue::Float(1.0)),
+                value: PedalParameterValue::Int(init_semitones),
+                min: Some(PedalParameterValue::Int(-24)),
+                max: Some(PedalParameterValue::Int(24)),
+                step: None,
             }
         );
 
@@ -115,7 +117,7 @@ impl PitchShift {
 
     pub fn stretch_from_parameters(parameters: &HashMap<String, PedalParameter>) -> Stretch {
         let block_size = parameters.get("block_size").unwrap().value.as_int().unwrap();
-        let semitones = parameters.get("semitones").unwrap().value.as_float().unwrap();
+        let semitones = parameters.get("semitones").unwrap().value.as_int().unwrap();
         let speed = parameters.get("speed").unwrap().value.as_int().unwrap();
         let tonality_limit = parameters.get("tonality_limit").unwrap().value.as_float().unwrap();
 
@@ -158,13 +160,28 @@ impl PedalTrait for PitchShift {
     }
 
     fn ui(&mut self, ui: &mut eframe::egui::Ui) -> Option<(String, PedalParameterValue)> {
-        let mut to_change = None;
-        for (parameter_name, parameter) in self.get_parameters().iter() {
-            if let Some(value) = pedal_knob(ui, parameter_name, parameter) {
-                to_change = Some((parameter_name.clone(), value));
-            }
+        fill_ui_with_image_width(ui, include_image!("images/pedal_base.png"));
+
+        let semitones_param = self.get_parameters().get("semitones").unwrap();
+        if let Some(value) = pedal_knob(ui, "Semitones", semitones_param, eframe::egui::Vec2::new(0.05, 0.1), 0.3) {
+            return Some(("semitones".to_string(), value));
         }
 
-        to_change
+        let block_size_param = self.get_parameters().get("block_size").unwrap();
+        if let Some(value) = pedal_knob(ui, "Block Size", block_size_param, eframe::egui::Vec2::new(0.45, 0.1), 0.3) {
+            return Some(("block_size".to_string(), value));
+        }
+
+        let speed_param = self.get_parameters().get("speed").unwrap();
+        if let Some(value) = pedal_knob(ui, "Speed", speed_param, eframe::egui::Vec2::new(0.05, 0.42), 0.3) {
+            return Some(("speed".to_string(), value));
+        }
+
+        let tonality_limit_param = self.get_parameters().get("tonality_limit").unwrap();
+        if let Some(value) = pedal_knob(ui, "Tonality Limit", tonality_limit_param, eframe::egui::Vec2::new(0.45, 0.42), 0.3) {
+            return Some(("tonality_limit".to_string(), value));
+        }
+
+        None
     }
 }

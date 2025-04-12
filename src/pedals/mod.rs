@@ -4,6 +4,7 @@ use std::hash::Hash;
 use enum_dispatch::enum_dispatch;
 use serde::{ Deserialize, Serialize};
 use eframe::egui;
+use strum_macros::{EnumDiscriminants, EnumIter};
 
 mod volume;
 pub use volume::Volume;
@@ -64,6 +65,34 @@ impl PedalParameter {
             _ => true
         }
     }
+
+    pub fn int_to_float(&self) -> Self {
+        if let PedalParameterValue::Int(value) = self.value {
+            let new_parameter = PedalParameter {
+                value: PedalParameterValue::Float(value as f32),
+                min: Some(PedalParameterValue::Float(self.min.clone().unwrap().as_int().unwrap() as f32)),
+                max: Some(PedalParameterValue::Float(self.max.clone().unwrap().as_int().unwrap() as f32)),
+                step: None
+            };
+            new_parameter
+        } else {
+            panic!("PedalParameter::int_to_float called on non-int parameter");
+        }
+    }
+
+    pub fn float_to_int(&self) -> Self {
+        if let PedalParameterValue::Float(value) = self.value {
+            let new_parameter = PedalParameter {
+                value: PedalParameterValue::Int(value as i16),
+                min: Some(PedalParameterValue::Int(self.min.clone().unwrap().as_float().unwrap() as i16)),
+                max: Some(PedalParameterValue::Int(self.max.clone().unwrap().as_float().unwrap() as i16)),
+                step: None
+            };
+            new_parameter
+        } else {
+            panic!("PedalParameter::float_to_int called on non-float parameter");
+        }
+    }
 }
 
 
@@ -72,7 +101,7 @@ pub enum PedalParameterValue {
     Float(f32),
     String(String),
     Bool(bool),
-    Int(u16)
+    Int(i16)
 }
 
 impl Hash for PedalParameterValue {
@@ -108,7 +137,7 @@ impl PedalParameterValue {
         }
     }
 
-    pub fn as_int(&self) -> Option<u16> {
+    pub fn as_int(&self) -> Option<i16> {
         match self {
             PedalParameterValue::Int(value) => Some(*value),
             _ => None
@@ -140,7 +169,8 @@ pub trait PedalTrait: Send + Hash {
 
 
 /// Wrapper enum type for serialization in Vec
-#[derive(Serialize, Deserialize, Clone, Hash)]
+#[derive(Serialize, Deserialize, Clone, Hash, EnumDiscriminants)]
+#[strum_discriminants(derive(EnumIter))]
 #[enum_dispatch(PedalTrait)]
 pub enum Pedal {
     Volume(Volume),
@@ -150,4 +180,18 @@ pub enum Pedal {
     Flanger(Flanger),
     Delay(Delay),
     GraphicEq7(GraphicEq7)
+}
+
+impl PedalDiscriminants {
+    pub fn new_pedal(&self) -> Pedal {
+        match self {
+            PedalDiscriminants::Volume => Pedal::Volume(Volume::new()),
+            PedalDiscriminants::Fuzz => Pedal::Fuzz(Fuzz::new()),
+            PedalDiscriminants::PitchShift => Pedal::PitchShift(PitchShift::new()),
+            PedalDiscriminants::Chorus => Pedal::Chorus(Chorus::new()),
+            PedalDiscriminants::Flanger => Pedal::Flanger(Flanger::new()),
+            PedalDiscriminants::Delay => Pedal::Delay(Delay::new()),
+            PedalDiscriminants::GraphicEq7 => Pedal::GraphicEq7(GraphicEq7::new())
+        }
+    }
 }

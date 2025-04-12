@@ -161,13 +161,14 @@ impl PedalTrait for GraphicEq7 {
     }
 
     fn ui(&mut self, ui: &mut eframe::egui::Ui) -> Option<(String, PedalParameterValue)> {
-        let mut to_change = None;
-        for (parameter_name, parameter) in self.get_parameters().iter() {
-            if let Some(value) = pedal_knob(ui, parameter_name, parameter) {
-                to_change = Some((parameter_name.clone(), value));
-            }
-        }
-
-        to_change
+        //let mut to_change = None;
+        //for (parameter_name, parameter) in self.get_parameters().iter() {
+        //    if let Some(value) = pedal_knob(ui, parameter_name, parameter) {
+        //        to_change = Some((parameter_name.clone(), value));
+        //    }
+        //}
+//
+        //to_change
+        None
     }
 }
