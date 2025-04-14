@@ -130,12 +130,12 @@ mod tests {
 
     fn sine_wave(frequency: f32, sample_rate: f32, duration: f32) -> Vec<f32> {
         let num_samples = (sample_rate * duration) as usize;
-        let mut wave = Vec::with_capacity(num_samples);
-        for i in 0..num_samples {
-            let t = i as f32 / sample_rate;
-            wave.push((2.0 * std::f32::consts::PI * frequency * t).sin());
-        }
-        wave
+        (0..num_samples)
+            .map(|i| {
+                let t = i as f32 / sample_rate;
+                (2.0 * std::f32::consts::PI * frequency * t).sin()
+            })
+            .collect()
     }
 
     fn rms_energy(signal: &[f32]) -> f32 {

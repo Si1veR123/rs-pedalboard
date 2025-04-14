@@ -63,8 +63,8 @@ impl ClientSocket {
         self.send(&message)
     }
 
-    pub fn add_pedal(&mut self, pedalboard_index: usize, pedal_index: usize, pedal: &Pedal) -> std::io::Result<()> {
-        let message = format!("addpedal {} {} {}\n", pedalboard_index, pedal_index, serde_json::to_string(pedal).unwrap());
+    pub fn add_pedal(&mut self, pedal: &Pedal) -> std::io::Result<()> {
+        let message = format!("addpedal {}\n", serde_json::to_string(pedal).unwrap());
         self.send(&message)
     }
 

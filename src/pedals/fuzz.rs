@@ -1,10 +1,13 @@
 use std::collections::HashMap;
 use std::hash::Hash;
+use super::ui::fill_ui_with_image_width;
 use super::PedalTrait;
 use super::PedalParameter;
 use super::PedalParameterValue;
 use super::ui::pedal_knob;
 
+use eframe::egui::include_image;
+use eframe::egui::Vec2;
 use serde::{Serialize, Deserialize};
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Fuzz {
@@ -65,14 +68,20 @@ impl PedalTrait for Fuzz {
     }
 
     fn ui(&mut self, ui: &mut eframe::egui::Ui) -> Option<(String, PedalParameterValue)> {
-        //let mut to_change = None;
-        //for (parameter_name, parameter) in self.get_parameters().iter() {
-        //    if let Some(value) = pedal_knob(ui, parameter_name, parameter) {
-        //        to_change = Some((parameter_name.clone(), value));
-        //    }
-        //}
+        // Fill the UI with the pedal base image
+        fill_ui_with_image_width(ui, include_image!("images/pedal_base.png"));
 
-        //to_change
-        None
+        let mut to_change = None;
+        let gain_param = self.get_parameters().get("gain").unwrap();
+        if let Some(value) = pedal_knob(ui, "Gain", gain_param, Vec2::new(0.15, 0.1), 0.3) {
+            to_change = Some(("gain".to_string(), value));
+        }
+
+        let level_param = self.get_parameters().get("level").unwrap();
+        if let Some(value) = pedal_knob(ui, "Level", level_param, Vec2::new(0.55, 0.1), 0.3) {
+            to_change = Some(("level".to_string(), value));
+        }
+
+        to_change
     }
 }

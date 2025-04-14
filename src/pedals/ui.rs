@@ -71,8 +71,14 @@ pub fn pedal_knob(ui: &mut egui::Ui, name: &str, parameter: &PedalParameter, at:
     );
 
     if new_value_float != value {
-        if parameter.value.as_int().is_some() {
-            let new_value_int = new_value_float.round() as i16;
+        if let Some(old_value_int) = parameter.value.as_int() {
+            let new_value_int;
+            if new_value_float > value {
+                new_value_int = old_value_int + 1;
+            } else {
+                new_value_int = old_value_int - 1;
+            }
+
             Some(PedalParameterValue::Int(new_value_int))
         } else {
             // TODO: Clamp to step

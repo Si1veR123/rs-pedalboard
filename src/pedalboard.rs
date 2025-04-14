@@ -13,7 +13,7 @@ impl Default for Pedalboard {
     fn default() -> Pedalboard {
         Pedalboard {
             name: String::from("Default Pedalboard"),
-            pedals: vec![Pedal::Delay(crate::pedals::Delay::new())]
+            pedals: vec![Pedal::PitchShift(crate::pedals::PitchShift::new())]
         }
     }
 }

@@ -126,15 +126,10 @@ impl InputProcessor {
                 self.pedalboard_set.pedalboards.remove(pedalboard_index);
             },
             "addpedal" => {
-                let pedalboard_index = words.next()?.parse::<usize>().ok()?;
-                let pedal_index_str = words.next()?;
-                let pedal_index = pedal_index_str.parse::<usize>().ok()?;
-
-                let pedal_str_index = pedal_index_str.as_ptr() as usize + pedal_index_str.len() - command.as_ptr() as usize;
-                let pedal_stringified = &command[pedal_str_index + 1..];
+                let pedal_stringified = &command[command_name.len() + 1..];
                 let pedal = serde_json::from_str(&pedal_stringified).ok()?;
-                self.pedalboard_set.pedalboards.get_mut(pedalboard_index)?
-                    .pedals.insert(pedal_index, pedal);
+                self.pedalboard_set.pedalboards.get_mut(self.pedalboard_set.active_pedalboard)?
+                    .pedals.push(pedal);
             },
             "deletepedal" => {
                 let pedalboard_index = words.next()?.parse::<usize>().ok()?;

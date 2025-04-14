@@ -4,7 +4,7 @@ use pedalboard_panel_ui::pedalboard_stage_panel;
 mod pedalboard_designer;
 use pedalboard_designer::pedalboard_designer;
 
-use eframe::egui::{self, Layout, Vec2, Widget};
+use eframe::egui::{self, Layout, Rect, Vec2, Widget};
 use rs_pedalboard::pedals::{Pedal, PedalDiscriminants};
 use strum::IntoEnumIterator;
 use crate::state::State;
@@ -22,6 +22,8 @@ pub struct PedalboardStageScreen {
     state: &'static State,
     show_pedal_menu: bool,
     current_action: Option<CurrentAction>,
+    // For the Scene in pedalboard designer
+    pedalboard_rect: Rect,
 }
 
 impl PedalboardStageScreen {
@@ -29,7 +31,8 @@ impl PedalboardStageScreen {
         Self {
             state,
             show_pedal_menu: false,
-            current_action: None
+            current_action: None,
+            pedalboard_rect: Rect::ZERO
         }
     }
 

@@ -1,5 +1,5 @@
 use std::{cell::RefCell, collections::HashMap};
-use rs_pedalboard::{pedalboard::Pedalboard, pedalboard_set::PedalboardSet, pedals::{PedalParameterValue, PedalTrait}};
+use rs_pedalboard::{pedalboard::Pedalboard, pedalboard_set::PedalboardSet, pedals::{Pedal, PedalParameterValue, PedalTrait}};
 
 use crate::socket::ClientSocket;
 

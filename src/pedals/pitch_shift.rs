@@ -1,5 +1,8 @@
 use std::collections::HashMap;
 use std::hash::Hash;
+use crate::dsp_algorithms::biquad::BiquadFilter;
+use crate::dsp_algorithms::eq::Equalizer;
+
 use super::ui::fill_ui_with_image_width;
 use super::PedalTrait;
 use super::PedalParameter;
@@ -14,6 +17,7 @@ use signalsmith_stretch::Stretch;
 pub struct PitchShift {
     parameters: HashMap<String, PedalParameter>,
     signalsmith_stretch: Stretch,
+    eq: Equalizer,
     output_buffer: Vec<f32>,
 }
 
@@ -30,6 +34,7 @@ impl Clone for PitchShift {
         PitchShift {
             parameters: self.parameters.clone(),
             signalsmith_stretch: cloned_signalsmith,
+            eq: self.eq.clone(),
             output_buffer: self.output_buffer.clone(),
         }
     }
@@ -52,10 +57,12 @@ impl<'a> Deserialize<'a> for PitchShift {
         let parameters: HashMap<String, PedalParameter> = HashMap::deserialize(deserializer)?;
         
         let stretch = Self::stretch_from_parameters(&parameters);
+        let eq = PitchShift::eq_from_presence(parameters.get("presence").unwrap().value.as_float().unwrap());
 
         Ok(PitchShift {
             parameters,
             signalsmith_stretch: stretch,
+            eq,
             output_buffer: Vec::new(),
         })
     }
@@ -65,7 +72,7 @@ impl PitchShift {
     pub fn new() -> Self {
         let mut parameters = HashMap::new();
 
-        let init_block_size = 2048;
+        let init_block_size = 2048 / 128;
         let init_semitones = -1;
         let init_speed = 0;
         let init_tonality_limit = 0.5;
@@ -74,18 +81,19 @@ impl PitchShift {
             "semitones".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Int(init_semitones),
-                min: Some(PedalParameterValue::Int(-24)),
-                max: Some(PedalParameterValue::Int(24)),
+                min: Some(PedalParameterValue::Int(-12)),
+                max: Some(PedalParameterValue::Int(12)),
                 step: None,
             }
         );
 
+        // Multiples of 128
         parameters.insert(
             "block_size".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Int(init_block_size),
-                min: Some(PedalParameterValue::Int(128)),
-                max: Some(PedalParameterValue::Int(4096)),
+                min: Some(PedalParameterValue::Int(1)),
+                max: Some(PedalParameterValue::Int(4096 / 128)),
                 step: None,
             }
         );
@@ -111,12 +119,28 @@ impl PitchShift {
             }
         );
 
+        parameters.insert(
+            "presence".to_string(),
+            PedalParameter {
+                value: PedalParameterValue::Float(0.0),
+                min: Some(PedalParameterValue::Float(0.0)),
+                max: Some(PedalParameterValue::Float(10.0)),
+                step: None,
+            }
+        );
+
         let stretch = Self::stretch_from_parameters(&parameters);
-        PitchShift { parameters, signalsmith_stretch: stretch, output_buffer: Vec::new() }
+        let eq = Self::eq_from_presence(0.0);
+        PitchShift { parameters, signalsmith_stretch: stretch, eq, output_buffer: Vec::new() }
+    }
+
+    pub fn eq_from_presence(presence: f32) -> Equalizer {
+        let biquad = BiquadFilter::high_shelf(3500.0, 48000.0, 0.707, presence);
+        Equalizer::new(vec![biquad])
     }
 
     pub fn stretch_from_parameters(parameters: &HashMap<String, PedalParameter>) -> Stretch {
-        let block_size = parameters.get("block_size").unwrap().value.as_int().unwrap();
+        let block_size = parameters.get("block_size").unwrap().value.as_int().unwrap() * 128;
         let semitones = parameters.get("semitones").unwrap().value.as_int().unwrap();
         let speed = parameters.get("speed").unwrap().value.as_int().unwrap();
         let tonality_limit = parameters.get("tonality_limit").unwrap().value.as_float().unwrap();
@@ -138,6 +162,10 @@ impl PedalTrait for PitchShift {
 
         self.signalsmith_stretch.process(buffer.as_ref(), &mut self.output_buffer);
 
+        for sample in self.output_buffer.iter_mut() {
+            *sample = self.eq.process(*sample);
+        }
+
         buffer.copy_from_slice(&self.output_buffer);
     }
 
@@ -153,8 +181,14 @@ impl PedalTrait for PitchShift {
         let parameters = self.get_parameters_mut();
         if let Some(parameter) = parameters.get_mut(name) {
             if parameter.is_valid(&value) {
-                parameter.value = value;
-                self.signalsmith_stretch = Self::stretch_from_parameters(parameters);
+                if name == "presence" {
+                    let presence = value.as_float().unwrap();
+                    parameter.value = value;
+                    self.eq = Self::eq_from_presence(presence);
+                } else {
+                    parameter.value = value;
+                    self.signalsmith_stretch = Self::stretch_from_parameters(parameters);
+                }
             }
         }
     }
@@ -162,26 +196,32 @@ impl PedalTrait for PitchShift {
     fn ui(&mut self, ui: &mut eframe::egui::Ui) -> Option<(String, PedalParameterValue)> {
         fill_ui_with_image_width(ui, include_image!("images/pedal_base.png"));
 
+        let mut to_change = None;
         let semitones_param = self.get_parameters().get("semitones").unwrap();
-        if let Some(value) = pedal_knob(ui, "Semitones", semitones_param, eframe::egui::Vec2::new(0.05, 0.1), 0.3) {
-            return Some(("semitones".to_string(), value));
+        if let Some(value) = pedal_knob(ui, "Semitones", semitones_param, eframe::egui::Vec2::new(0.1, 0.02), 0.25) {
+            to_change = Some(("semitones".to_string(), value));
         }
 
         let block_size_param = self.get_parameters().get("block_size").unwrap();
-        if let Some(value) = pedal_knob(ui, "Block Size", block_size_param, eframe::egui::Vec2::new(0.45, 0.1), 0.3) {
-            return Some(("block_size".to_string(), value));
+        if let Some(value) = pedal_knob(ui, "Block Size", block_size_param, eframe::egui::Vec2::new(0.38, 0.02), 0.25) {
+            to_change =  Some(("block_size".to_string(), value));
         }
 
         let speed_param = self.get_parameters().get("speed").unwrap();
-        if let Some(value) = pedal_knob(ui, "Speed", speed_param, eframe::egui::Vec2::new(0.05, 0.42), 0.3) {
-            return Some(("speed".to_string(), value));
+        if let Some(value) = pedal_knob(ui, "Speed", speed_param, eframe::egui::Vec2::new(0.67, 0.02), 0.25) {
+            to_change =  Some(("speed".to_string(), value));
         }
 
         let tonality_limit_param = self.get_parameters().get("tonality_limit").unwrap();
-        if let Some(value) = pedal_knob(ui, "Tonality Limit", tonality_limit_param, eframe::egui::Vec2::new(0.45, 0.42), 0.3) {
-            return Some(("tonality_limit".to_string(), value));
+        if let Some(value) = pedal_knob(ui, "Tonality Limit", tonality_limit_param, eframe::egui::Vec2::new(0.2, 0.22), 0.25) {
+            to_change =  Some(("tonality_limit".to_string(), value));
         }
 
-        None
+        let presence_param = self.get_parameters().get("presence").unwrap();
+        if let Some(value) = pedal_knob(ui, "Presence", presence_param, eframe::egui::Vec2::new(0.55, 0.22), 0.25) {
+            to_change =  Some(("presence".to_string(), value));
+        }
+
+        to_change
     }
 }

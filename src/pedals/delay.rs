@@ -3,8 +3,10 @@ use std::iter;
 use std::hash::Hash;
 
 use crate::dsp_algorithms::{biquad, eq};
+use super::ui::fill_ui_with_image_width;
 use super::{PedalParameter, PedalParameterValue, PedalTrait, ui::pedal_knob};
 
+use eframe::egui::include_image;
 use serde::ser::SerializeMap;
 use serde::{Serialize, Deserialize};
 
@@ -54,16 +56,17 @@ impl Delay {
     pub fn new() -> Self {
         let mut parameters = HashMap::new();
 
-        let init_delay_ms = 430.0;
-        let init_delay_samples = ((init_delay_ms / 1000.0) * 48000.0) as usize;
+        // Units of 10ms for faster pedal knobs
+        let init_delay_ten_ms = 430.0 / 10.0;
+        let init_delay_samples = ((init_delay_ten_ms / 100.0) * 48000.0) as usize;
         let init_warmth = 0.0;
 
         parameters.insert(
             "delay".to_string(),
             PedalParameter {
-                value: PedalParameterValue::Float(init_delay_ms),
-                min: Some(PedalParameterValue::Float(10.0)),
-                max: Some(PedalParameterValue::Float(1000.0)),
+                value: PedalParameterValue::Float(init_delay_ten_ms),
+                min: Some(PedalParameterValue::Float(1.0)),
+                max: Some(PedalParameterValue::Float(100.0)),
                 step: None
             },
         );
@@ -135,8 +138,8 @@ impl PedalTrait for Delay {
         if let Some(parameter) = parameters.get_mut(name) {
             if parameter.is_valid(&value) {
                 if name == "delay" {
-                    let delay = value.as_float().unwrap();
-                    let delay_samples = ((delay / 1000.0) * 48000.0) as usize;
+                    let delay_ten_ms = value.as_float().unwrap();
+                    let delay_samples = ((delay_ten_ms / 100.0) * 48000.0) as usize;
                     let old_delay = parameter.value.as_float().unwrap();
                     let old_delay_samples = ((old_delay / 1000.0) * 48000.0) as usize;
 
@@ -159,26 +162,27 @@ impl PedalTrait for Delay {
     }
 
     fn ui(&mut self, ui: &mut eframe::egui::Ui) -> Option<(String, PedalParameterValue)> {
+        fill_ui_with_image_width(ui, include_image!("images/pedal_base.png"));
+
         let mut to_change = None;
-        
         let delay_param = self.get_parameters().get("delay").unwrap();
-        if let Some(value) = pedal_knob(ui, "Delay", delay_param, eframe::egui::Vec2::new(0.2, 0.2), 0.2) {
-            to_change = Some(("Delay".to_string(), value));
+        if let Some(value) = pedal_knob(ui, "Delay", delay_param, eframe::egui::Vec2::new(0.1, 0.02), 0.3) {
+            to_change = Some(("delay".to_string(), value));
         }
 
         let decay_param = self.get_parameters().get("decay").unwrap();
-        if let Some(value) = pedal_knob(ui, "Decay", decay_param, eframe::egui::Vec2::new(0.6, 0.2), 0.2) {
-            to_change = Some(("Decay".to_string(), value));
-        }
-
-        let mix_param = self.get_parameters().get("mix").unwrap();
-        if let Some(value) = pedal_knob(ui, "Mix", mix_param, eframe::egui::Vec2::new(0.4, 0.3), 0.45) {
-            to_change = Some(("Mix".to_string(), value));
+        if let Some(value) = pedal_knob(ui, "Decay", decay_param, eframe::egui::Vec2::new(0.5, 0.02), 0.3) {
+            to_change = Some(("decay".to_string(), value));
         }
 
         let warmth_param = self.get_parameters().get("warmth").unwrap();
-        if let Some(value) = pedal_knob(ui, "Warmth", warmth_param, eframe::egui::Vec2::new(0.8, 0.45), 0.2) {
-            to_change = Some(("Warmth".to_string(), value));
+        if let Some(value) = pedal_knob(ui, "Warmth", warmth_param, eframe::egui::Vec2::new(0.2, 0.22), 0.3) {
+            to_change = Some(("warmth".to_string(), value));
+        }
+
+        let mix_param = self.get_parameters().get("mix").unwrap();
+        if let Some(value) = pedal_knob(ui, "Mix", mix_param, eframe::egui::Vec2::new(0.6, 0.22), 0.3) {
+            to_change = Some(("mix".to_string(), value));
         }
 
         to_change
