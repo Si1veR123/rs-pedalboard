@@ -1,48 +1,78 @@
+use core::f32;
+
 use super::PedalboardStageScreen;
 
-use eframe::egui::{self, Color32, Layout, Pos2, Rect, RichText, Sense, UiBuilder, Vec2};
-use rs_pedalboard::pedals::{PedalTrait, PedalDiscriminants};
+use eframe::egui::{self, Button, Color32, Layout, Pos2, Rect, RichText, Sense, UiBuilder, Vec2};
+use rs_pedalboard::pedals::{PedalDiscriminants, PedalParameterValue, PedalTrait};
 use egui_dnd;
 use strum::IntoEnumIterator;
 
-/// Assumes scene rect is smaller than available rect
-pub fn bound_scene_rect(scene_rect: &mut Rect, available_rect: &Rect) {
-    let delta_min_x = scene_rect.min.x - available_rect.min.x;
-    let delta_min_y = scene_rect.min.y - available_rect.min.y;
+const PEDAL_ROW_COUNT: usize = 5;
+// Must be high enough to fit any pedal
+// TODO: Make this dynamic
+// PEDAL_HEIGHT_RATIO * width = height
+const PEDAL_HEIGHT_RATIO: f32 = 2.1;
 
-    let delta_max_x = available_rect.max.x - scene_rect.max.x;
-    let delta_max_y = available_rect.max.y - scene_rect.max.y;
+/// Assumes scene rect is smaller than available size
+pub fn bound_scene_rect(scene_rect: &mut Rect, available_size: &Vec2) {
+    let delta_max_x = available_size.x - scene_rect.max.x;
+    let delta_max_y = available_size.y - scene_rect.max.y;
 
-    dbg!(delta_min_x, delta_min_y, delta_max_x, delta_max_y);
+    scene_rect.min.x = scene_rect.min.x.max(0.0);
+    scene_rect.min.y = scene_rect.min.y.max(0.0);
 
-    //if delta_min_x < 0.0 {
-    //    scene_rect.min.x += -delta_min_x;
-    //    scene_rect.max.x += -delta_min_x;
-    //}
-//
-    //if delta_min_y < 0.0 {
-    //    scene_rect.min.y += -delta_min_y;
-    //    scene_rect.max.y += -delta_min_y;
-    //}
-//
-    //if delta_max_x < 0.0 {
-    //    scene_rect.min.x += -delta_max_x;
-    //    scene_rect.max.x += -delta_max_x;
-    //}
-//
-    //if delta_max_y < 0.0 {
-    //    scene_rect.min.y += -delta_max_y;
-    //    scene_rect.max.y += -delta_max_y;
-    //}
+    if delta_max_x < 0.0 {
+        scene_rect.min.x += delta_max_x;
+        scene_rect.max.x += delta_max_x;
+    }
+
+    if delta_max_y < 0.0 {
+        scene_rect.min.y += delta_max_y;
+        scene_rect.max.y += delta_max_y;
+    }
 }
 
-pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut egui::Ui) -> egui::Response {
-    let available_rect = ui.available_rect_before_wrap();
+pub fn add_pedal_menu(screen: &mut PedalboardStageScreen, ui: &mut egui::Ui, rect: Rect) {
+    let mut pedalboard_set = screen.state.active_pedalboardstage.borrow_mut();
+    let active_index = pedalboard_set.active_pedalboard;
 
-    ui.add_space(15.0);
+    let pedalboard = pedalboard_set.pedalboards.get_mut(active_index).unwrap();
+
+    let menu_layer_id = egui::LayerId::new(egui::Order::Foreground, ui.id().with("pedal_menu"));
+    let mut menu_ui = ui.new_child(
+        UiBuilder::new()
+            .layer_id(menu_layer_id)
+            .max_rect(rect)
+            .sense(Sense::hover()),
+    );
+
+    menu_ui.painter().rect_filled(
+        menu_ui.available_rect_before_wrap(),
+        5.0,
+        Color32::from_gray(30),
+    );
+
+    egui::ScrollArea::vertical()
+        .max_height(menu_ui.available_height())
+        .show(&mut menu_ui, |ui| {
+            ui.add_space(5.0);
+            for pedal in PedalDiscriminants::iter() {
+                if ui.add_sized(Vec2::new(ui.available_width()*0.95, 35.0), egui::Button::new(format!("{:?}", pedal))).clicked() {
+                    let new_pedal = pedal.new_pedal();
+                    screen.state.socket.borrow_mut().add_pedal(&new_pedal);
+                    pedalboard.pedals.push(new_pedal);
+                    screen.show_pedal_menu = false
+                }
+                ui.separator();
+            }
+        });
+}
+
+pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut egui::Ui) {
+    ui.add_space(5.0);
 
     ui.allocate_ui_with_layout(
-        Vec2::new(available_rect.width(), available_rect.height()*0.1),
+        ui.available_size() * Vec2::new(1.0, 0.1),
         Layout::top_down(egui::Align::Center),
         |ui| {
         if ui.button(RichText::new("Add Pedal").size(30.0).strong()).clicked() {
@@ -50,55 +80,67 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut egui::Ui
         }
     });
 
+    ui.add_space(5.0);
+
+    // Available rect for the pedalboard itself
+    let available_rect = ui.available_rect_before_wrap();
+
     let mut pedalboard_set = screen.state.active_pedalboardstage.borrow_mut();
     let active_index = pedalboard_set.active_pedalboard;
     let pedalboard = pedalboard_set.pedalboards.get_mut(active_index).unwrap();
     let pedalboard_name = pedalboard.name.clone();
 
-    let pedal_width = 0.15 * available_rect.width();
+    let pedal_width = 0.85 * (available_rect.width() / PEDAL_ROW_COUNT as f32);
+    let pedal_spacing = 0.15 * (available_rect.width() / PEDAL_ROW_COUNT as f32);
 
-    let num_pedals = pedalboard.pedals.len();
-    // 5 per row
-    let top_row_num_pedals = num_pedals.min(5) as f32;
-    // Not sure why but subtracting top_row_num_pedals fixes the spacing
-    let top_row_space_around = (available_rect.width() - pedal_width * top_row_num_pedals) / (top_row_num_pedals + 1.0) - top_row_num_pedals;
+    // Initially set to ZERO, so fill in with available pedalboard rect
+    if screen.pedalboard_rect == Rect::ZERO {
+        screen.pedalboard_rect = Rect::from_min_size(Pos2::ZERO, available_rect.size());
+    }
 
-    // Vertical space after add pedal button
-    ui.add_space(available_rect.height()*0.05);
-
-    let inner_r = egui::Scene::new().zoom_range(1.0..=3.0).show(ui, &mut screen.pedalboard_rect, |ui| {
-        ui.allocate_ui_with_layout(
-            available_rect.size(),
-            Layout::left_to_right(egui::Align::Min).with_main_wrap(true),
+    let changed: Option<(usize, (String, PedalParameterValue))> = egui::Scene::new().zoom_range(1.0..=3.0).show(ui, &mut screen.pedalboard_rect, |ui| {
+        ui.allocate_new_ui(
+            UiBuilder::new()
+                .max_rect(Rect { min: Pos2::ZERO, max: available_rect.size().to_pos2() })
+                .layout(Layout::left_to_right(egui::Align::Min)),
             |ui| {
-            ui.painter().rect_filled(
-                ui.available_rect_before_wrap(),
-                20.0,
-                Color32::WHITE.linear_multiply(0.03),
-            );
-            let mut to_change = None;
+                ui.painter().rect_filled(ui.available_rect_before_wrap(), 5.0, Color32::from_gray(20));
+                ui.add_space(pedal_spacing/2.0);
+                ui.horizontal_wrapped(|ui| {
+                    ui.spacing_mut().item_spacing = Vec2::new(pedal_spacing, 0.0);
 
-            egui_dnd::dnd(ui, "pedal_dnd").show(
-                pedalboard.pedals.iter_mut().enumerate(),
-                |ui, (i, item), handle, _state| {
-                    ui.add_space(top_row_space_around);
-                    ui.allocate_ui(Vec2::new(pedal_width, 0.0), |ui| {
-                        if let Some(to_change_opt) = item.ui(ui) {
-                            to_change = Some((i, to_change_opt));
+                    let mut changed = None;
+
+                    egui_dnd::dnd(ui, "pedalboard_designer_dnd").show_sized(
+                        pedalboard.pedals.iter_mut().enumerate(),
+                        Vec2::new(pedal_width, PEDAL_HEIGHT_RATIO * pedal_width),
+                        |ui, (i, item), handle, state| {
+
+                            if let Some(v) = item.ui(ui) {
+                                changed = Some((i, v));
+                            }
+
+                            handle.ui_sized(
+                                ui,
+                                Vec2::new(pedal_width, PEDAL_HEIGHT_RATIO * pedal_width * 0.05),
+                                |ui| {
+                                    ui.add_sized(ui.available_size(), Button::new("Drag"));
+                                }
+                            );
                         }
-                    });
-                }
-            );
-            
-            to_change
-        })
+                    );
+
+                    changed
+                }).inner
+            }
+        ).inner
     }).inner;
 
-    bound_scene_rect(&mut screen.pedalboard_rect, &available_rect);
+    bound_scene_rect(&mut screen.pedalboard_rect, &available_rect.size());
 
     drop(pedalboard_set);
 
-    if let Some((pedal_index, (name, value))) = inner_r.inner {
+    if let Some((pedal_index, (name, value))) = changed {
         screen.state.set_parameter(
             &pedalboard_name,
             pedal_index,
@@ -108,29 +150,6 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut egui::Ui
     }
 
     if screen.show_pedal_menu {
-        let mut pedalboard_set = screen.state.active_pedalboardstage.borrow_mut();
-        let pedalboard = pedalboard_set.pedalboards.get_mut(active_index).unwrap();
-        ui.allocate_new_ui(UiBuilder::new().max_rect(available_rect.scale_from_center2(Vec2 { x: 0.5, y: 0.9 })), |ui| {
-            ui.painter().rect_filled(
-                ui.available_rect_before_wrap(),
-                20.0,
-                Color32::WHITE.linear_multiply(0.03),
-            );
-
-            egui::ScrollArea::vertical()
-                .max_height(ui.available_height())
-                .show(ui, |ui| {
-                    for pedal in PedalDiscriminants::iter() {
-                        if ui.label(format!("{:?}", pedal)).clicked() {
-                            let new_pedal = pedal.new_pedal();
-                            screen.state.socket.borrow_mut().add_pedal(&new_pedal);
-                            pedalboard.pedals.push(new_pedal);
-                            screen.show_pedal_menu = false
-                        }
-                    }
-                });
-        });
+        add_pedal_menu(screen, ui, available_rect.scale_from_center2(Vec2::new(0.6, 0.9)));
     }
-
-    inner_r.response
 }

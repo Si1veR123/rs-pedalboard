@@ -132,10 +132,16 @@ impl State {
     /// 
     /// Requires a lock on active_pedalboardstage and socket
     pub fn duplicate_new(&self, index: usize) {
+        let pedalboard_set = self.active_pedalboardstage.borrow_mut();
+        let pedalboard = &pedalboard_set.pedalboards[index];
+
+        let mut new_pedalboard = pedalboard.clone();
+        // Have to drop as the unique stage name requires a lock on active pedalboard stage
+        drop(pedalboard_set);
+        new_pedalboard.name = self.unique_stage_pedalboard_name(new_pedalboard.name.clone());
+        // Reborrow
         let mut pedalboard_set = self.active_pedalboardstage.borrow_mut();
         let pedalboard = &pedalboard_set.pedalboards[index];
-        let mut new_pedalboard = pedalboard.clone();
-        new_pedalboard.name = self.unique_stage_pedalboard_name(pedalboard.name.clone());
 
         let mut socket = self.socket.borrow_mut();
         socket.add_pedalboard(&pedalboard).expect("Failed to add pedalboard");

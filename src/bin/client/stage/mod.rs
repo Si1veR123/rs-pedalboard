@@ -11,6 +11,7 @@ use crate::state::State;
 
 pub enum CurrentAction {
     DuplicateLinked(usize),
+    DuplicateNew(usize),
     Remove(usize),
     SaveToSong(String),
     Rename((usize, String)),
@@ -79,12 +80,12 @@ impl Widget for &mut PedalboardStageScreen {
         let height = ui.available_height();
         ui.horizontal(|ui| {
             ui.allocate_ui_with_layout(
-                Vec2::new(width * 0.4, height),
+                Vec2::new(width * 0.35, height),
                     Layout::top_down(egui::Align::Center),
                     |ui| pedalboard_stage_panel(self, ui)
             );
             ui.allocate_ui_with_layout(
-                Vec2::new(width * 0.6, height),
+                Vec2::new(width * 0.65, height),
                 Layout::top_down(egui::Align::Center),
                 |ui| pedalboard_designer(self, ui)
             );

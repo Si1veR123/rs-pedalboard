@@ -8,7 +8,7 @@ use crate::THEME_COLOUR;
 // Big ugly function to display the pedalboard stage panel
 // Effectively a method on PedalboardStageScreen
 pub fn pedalboard_stage_panel(screen: &mut PedalboardStageScreen, ui: &mut egui::Ui) {
-    ui.painter().rect_filled(ui.available_rect_before_wrap(), 5.0, Color32::WHITE.linear_multiply(0.002));
+    ui.painter().rect_filled(ui.available_rect_before_wrap(), 5.0, Color32::from_gray(20));
 
     let mut active_pedalboards = screen.state.active_pedalboardstage.borrow_mut();
     let mut pedalboard_library = screen.state.pedalboard_library.borrow_mut();
@@ -119,6 +119,12 @@ pub fn pedalboard_stage_panel(screen: &mut PedalboardStageScreen, ui: &mut egui:
                                         if ui.add(egui::Button::new(RichText::new("Duplicate").size(25.0))).clicked() {
                                             screen.current_action = Some(CurrentAction::DuplicateLinked(i));
                                         }
+                                        ui.add_space(2.0);
+                                        ui.separator();
+                                        ui.add_space(2.0);
+                                        if ui.add(egui::Button::new(RichText::new("Duplicate New").size(25.0))).clicked() {
+                                            screen.current_action = Some(CurrentAction::DuplicateNew(i));
+                                        }
                                         ui.add_space(5.0);
                                     });
 
@@ -184,6 +190,10 @@ pub fn pedalboard_stage_panel(screen: &mut PedalboardStageScreen, ui: &mut egui:
         Some(CurrentAction::DuplicateLinked(index)) => {
             drop(active_pedalboards);
             screen.state.duplicate_linked(index);
+        },
+        Some(CurrentAction::DuplicateNew(index)) => {
+            drop(active_pedalboards);
+            screen.state.duplicate_new(index);
         },
         Some(CurrentAction::Remove(index)) => {
             drop(active_pedalboards);
