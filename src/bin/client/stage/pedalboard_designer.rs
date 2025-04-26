@@ -98,6 +98,8 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut egui::Ui
         screen.pedalboard_rect = Rect::from_min_size(Pos2::ZERO, available_rect.size());
     }
 
+
+    let scene_rect = ui.available_rect_before_wrap();
     let changed: Option<(usize, (String, PedalParameterValue))> = egui::Scene::new().zoom_range(1.0..=3.0).show(ui, &mut screen.pedalboard_rect, |ui| {
         ui.allocate_new_ui(
             UiBuilder::new()
@@ -115,6 +117,10 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut egui::Ui
                         pedalboard.pedals.iter_mut().enumerate(),
                         Vec2::new(pedal_width, PEDAL_HEIGHT_RATIO * pedal_width),
                         |ui, (i, item), handle, state| {
+                            if state.dragged {
+                                dbg!(format!("{scene_rect}"));
+                                //ui.add_space(scene_rect.min.y);
+                            }
 
                             if let Some(v) = item.ui(ui) {
                                 changed = Some((i, v));

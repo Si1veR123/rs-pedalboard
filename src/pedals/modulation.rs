@@ -9,7 +9,7 @@ use serde::{Serialize, Deserialize};
 
 
 macro_rules! var_delay_phaser {
-    ($name:ident, $serde_name:ident, ($default_rate:expr, $min_rate:expr, $max_rate:expr), ($default_min_depth:expr, $default_max_depth:expr, $min_depth: expr, $max_depth: expr), $default_mix: expr) => {
+    ($name:ident, $serde_name:ident, ($default_rate:expr, $min_rate:expr, $max_rate:expr), ($default_min_depth:expr, $default_max_depth:expr, $min_depth: expr, $max_depth: expr), ($incl_feedback: expr, $default_feedback:expr, $max_feedback:expr), $default_mix: expr) => {
         #[derive(Clone)]
         pub struct $name {
             variable_delay_phaser: VariableDelayPhaser,
@@ -136,9 +136,21 @@ macro_rules! var_delay_phaser {
                         step: None
                     },
                 );
+
+                if $incl_feedback {
+                    parameters.insert(
+                        "feedback".to_string(),
+                        PedalParameter {
+                            value: PedalParameterValue::Float($default_feedback),
+                            min: Some(PedalParameterValue::Float(0.0)),
+                            max: Some(PedalParameterValue::Float($max_feedback)),
+                            step: None
+                        },
+                    );
+                }
         
                 Self {
-                    variable_delay_phaser: VariableDelayPhaser::new(init_min_depth, init_max_depth, init_rate, init_mix, init_oscillator as usize),
+                    variable_delay_phaser: VariableDelayPhaser::new(init_min_depth, init_max_depth, init_rate, init_mix, init_oscillator as usize, $default_feedback),
                     parameters
                 }
             }
@@ -197,6 +209,12 @@ macro_rules! var_delay_phaser {
                             self.parameters.get_mut(name).unwrap().value = PedalParameterValue::Int(oscillator);
                         }
                     },
+                    "feedback" => {
+                        if let PedalParameterValue::Float(feedback) = value {
+                            self.variable_delay_phaser.feedback = feedback;
+                            self.parameters.get_mut(name).unwrap().value = PedalParameterValue::Float(feedback);
+                        }
+                    },
                     _ => {}
                 }
             }
@@ -230,12 +248,19 @@ macro_rules! var_delay_phaser {
                     to_change =  Some(("oscillator".to_string(), value));
                 }
 
+                if $incl_feedback {
+                    let feedback_param = self.get_parameters().get("feedback").unwrap();
+                    if let Some(value) = pedal_knob(ui, "Feedback", feedback_param, eframe::egui::Vec2::new(0.8, 0.22), 0.25) {
+                        to_change =  Some(("feedback".to_string(), value));
+                    }
+                }
+
                 to_change
             }
         }
     };
 }
 
-var_delay_phaser!(Chorus, ChorusSerde, (0.8, 0.05, 6.0), (8.0, 25.0, 5.0, 50.0), 0.5);
+var_delay_phaser!(Chorus, ChorusSerde, (0.2, 0.05, 2.0), (8.0, 25.0, 5.0, 40.0), (false, 0.0, 0.0), 0.5);
 // TODO: Flanger feedback?
-var_delay_phaser!(Flanger, FlangerSerde, (3.0, 0.05, 15.0), (0.5, 5.0, 0.0, 10.0), 0.5);
+var_delay_phaser!(Flanger, FlangerSerde, (1.0, 0.05, 10.0), (0.5, 5.0, 0.0, 8.0), (true, 0.0, 0.95), 0.5);
