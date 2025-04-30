@@ -2,12 +2,12 @@ use core::f32;
 
 use super::PedalboardStageScreen;
 
-use eframe::egui::{self, Button, Color32, Layout, Pos2, Rect, RichText, Sense, UiBuilder, Vec2};
+use eframe::egui::{self, Button, Color32, Layout, Pos2, Rect, RichText, Sense, Ui, UiBuilder, Vec2};
 use rs_pedalboard::pedals::{PedalDiscriminants, PedalParameterValue, PedalTrait};
 use egui_dnd::{self, DragDropItem};
 use strum::IntoEnumIterator;
 
-const PEDAL_ROW_COUNT: usize = 5;
+const PEDAL_ROW_COUNT: usize = 6;
 // Must be high enough to fit any pedal
 // TODO: Make this dynamic
 // PEDAL_HEIGHT_RATIO * width = height
@@ -98,6 +98,16 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut egui::Ui
         screen.pedalboard_rect = Rect::from_min_size(Pos2::ZERO, available_rect.size());
     }
 
+    // Delete pedal hover button
+    let size = 150.0;
+    let delete_button_rect = Rect::from_min_size(
+        available_rect.max - Vec2::splat(size + 5.0),
+        Vec2::splat(size),
+    );
+    let mut child = ui.new_child(UiBuilder::new()
+        .layer_id(egui::LayerId::new(egui::Order::Foreground, ui.id().with("delete_button")))
+        .max_rect(delete_button_rect));
+    
 
     let changed: Option<(usize, (String, PedalParameterValue))> = egui::Scene::new().zoom_range(1.0..=3.0).show(ui, &mut screen.pedalboard_rect, |ui| {
         ui.allocate_new_ui(
@@ -112,8 +122,7 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut egui::Ui
 
                     let mut changed = None;
 
-
-                    egui_dnd::dnd(ui, "pedalboard_designer_dnd").show_sized(pedalboard.pedals.iter_mut().enumerate(), Vec2::new(pedal_width, pedal_width*PEDAL_HEIGHT_RATIO), |ui, (i, item), handle, _state| {
+                    let dnd_response = egui_dnd::dnd(ui, "pedalboard_designer_dnd").show_sized(pedalboard.pedals.iter_mut().enumerate(), Vec2::new(pedal_width, pedal_width*PEDAL_HEIGHT_RATIO), |ui, (i, item), handle, _state| {
                         if let Some(v) = item.ui(ui) {
                             changed = Some((i, v));
                         }
@@ -126,6 +135,36 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut egui::Ui
                             }
                         );
                     });
+
+                    let mouse_over_delete = delete_button_rect.contains(ui.ctx().input(|i| i.pointer.hover_pos()).unwrap_or(Pos2::ZERO));
+
+                    if dnd_response.is_dragging() {
+                        let button = if mouse_over_delete {
+                            Button::new("Delete").fill(Color32::RED.gamma_multiply(0.3))
+                        } else {
+                            Button::new("Delete")
+                        };
+
+                        child.put(child.available_rect_before_wrap(), button);
+                    }
+
+                    if dnd_response.is_drag_finished() {
+                        if let Some(update) = &dnd_response.update {
+                            if mouse_over_delete {
+                                if ui.ctx().input(|i| i.pointer.any_released()) && pedalboard.pedals.len() > 1 {
+                                    pedalboard.pedals.remove(update.from);
+                                    screen.state.socket.borrow_mut().delete_pedal(active_index, update.from);
+                                }
+                            } else {
+                                screen.state.socket.borrow_mut().move_pedal(
+                                    active_index,
+                                    update.from,
+                                    update.to
+                                );
+                                egui_dnd::utils::shift_vec(update.from, update.to, &mut pedalboard.pedals);
+                            }
+                        }
+                    }
 
                     changed
                 }).inner

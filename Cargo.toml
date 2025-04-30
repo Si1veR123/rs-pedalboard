@@ -28,3 +28,5 @@ image = { version = "0.25.6", features = ["png"] }
 egui_dnd = { path = "custom_egui_dnd" }
 strum = "0.27"
 strum_macros = "0.27"
+neural-amp-modeler-core-bindgen = { git = "https://github.com/Si1veR123/rs-neural-amp-modeler-core.git" }
+homedir = "0.3.4"

@@ -1,7 +1,9 @@
 use cpal::{traits::DeviceTrait, Device, Stream, StreamConfig};
 use crossbeam::channel::Receiver;
 use ringbuf::{traits::{Consumer, Producer, Split}, HeapProd, HeapRb};
-use rs_pedalboard::{pedalboard_set::PedalboardSet, pedals::PedalTrait};
+use rs_pedalboard::{pedalboard_set::PedalboardSet, pedals::{Pedal, PedalTrait}};
+
+use crate::constants;
 
 pub fn ring_buffer_size(buffer_size: usize, latency: f32, sample_rate: f32) -> usize {
     let latency_frames = (latency / 1000.0) * sample_rate;
@@ -68,7 +70,15 @@ impl InputProcessor {
         self.processing_buffer.clear();
         self.processing_buffer.extend_from_slice(data);
 
-        self.pedalboard_set.process_audio(&mut self.processing_buffer);
+        // In case data is larger than buffer_size and pedals may only expect buffer_size or less
+        for i in 0..(data.len() as f32 / constants::FRAMES_PER_PERIOD as f32).ceil() as usize {
+            let start = i * constants::FRAMES_PER_PERIOD;
+            let mut end = start + constants::FRAMES_PER_PERIOD;
+            end = end.min(self.processing_buffer.len());
+            let frame = &mut self.processing_buffer[start..end];
+            self.pedalboard_set.process_audio(frame);
+        }
+
         self.processing_buffer.iter_mut().for_each(|sample| *sample *= self.master_volume);
 
         let written = self.writer.push_slice(&self.processing_buffer);
@@ -127,7 +137,8 @@ impl InputProcessor {
             },
             "addpedal" => {
                 let pedal_stringified = &command[command_name.len() + 1..];
-                let pedal = serde_json::from_str(&pedal_stringified).ok()?;
+                let mut pedal: Pedal = serde_json::from_str(&pedal_stringified).ok()?;
+                pedal.set_config(super::constants::FRAMES_PER_PERIOD, 48000);
                 self.pedalboard_set.pedalboards.get_mut(self.pedalboard_set.active_pedalboard)?
                     .pedals.push(pedal);
             },
@@ -144,8 +155,15 @@ impl InputProcessor {
 
                 let pedal = self.pedalboard_set.pedalboards.get_mut(pedalboard_index)?
                     .pedals.remove(src_index);
+
+                let shifted_dest_index = if dest_index > src_index {
+                    dest_index - 1
+                } else {
+                    dest_index
+                };
+
                 self.pedalboard_set.pedalboards.get_mut(pedalboard_index)?
-                    .pedals.insert(dest_index, pedal);
+                    .pedals.insert(shifted_dest_index, pedal);
             },
             "loadset" => {
                 let pedalboardset_stringified = &command[command_name.len() + 1..];

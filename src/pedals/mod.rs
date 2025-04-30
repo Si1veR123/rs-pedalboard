@@ -18,6 +18,9 @@ mod delay;
 pub use delay::Delay;
 mod eq;
 pub use eq::GraphicEq7;
+mod nam;
+pub use nam::Nam;
+
 mod ui;
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -165,6 +168,8 @@ pub trait PedalTrait: Send + Hash {
 
     /// Returns the name of the parameter that needs to be changed, and its value
     fn ui(&mut self, _ui: &mut egui::Ui) -> Option<(String, PedalParameterValue)> { None }
+
+    fn set_config(&mut self, buffer_size: usize, sample_rate: usize) {}
 }
 
 
@@ -179,7 +184,8 @@ pub enum Pedal {
     Chorus(Chorus),
     Flanger(Flanger),
     Delay(Delay),
-    GraphicEq7(GraphicEq7)
+    GraphicEq7(GraphicEq7),
+    Nam(Nam)
 }
 
 impl PedalDiscriminants {
@@ -191,7 +197,8 @@ impl PedalDiscriminants {
             PedalDiscriminants::Chorus => Pedal::Chorus(Chorus::new()),
             PedalDiscriminants::Flanger => Pedal::Flanger(Flanger::new()),
             PedalDiscriminants::Delay => Pedal::Delay(Delay::new()),
-            PedalDiscriminants::GraphicEq7 => Pedal::GraphicEq7(GraphicEq7::new())
+            PedalDiscriminants::GraphicEq7 => Pedal::GraphicEq7(GraphicEq7::new()),
+            PedalDiscriminants::Nam => Pedal::Nam(Nam::new())
         }
     }
 }

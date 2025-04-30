@@ -16,7 +16,7 @@ pub mod constants {
 }
 #[cfg(target_os = "windows")]
 pub mod constants {
-    pub const FRAMES_PER_PERIOD: usize = 1024;
+    pub const FRAMES_PER_PERIOD: usize = 512;
     pub const RING_BUFFER_LATENCY_MS: f32 = 10.0;
 }
 
