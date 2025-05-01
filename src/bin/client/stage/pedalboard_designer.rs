@@ -123,17 +123,23 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut egui::Ui
                     let mut changed = None;
 
                     let dnd_response = egui_dnd::dnd(ui, "pedalboard_designer_dnd").show_sized(pedalboard.pedals.iter_mut().enumerate(), Vec2::new(pedal_width, pedal_width*PEDAL_HEIGHT_RATIO), |ui, (i, item), handle, _state| {
-                        if let Some(v) = item.ui(ui) {
-                            changed = Some((i, v));
-                        }
-
-                        handle.ui_sized(
-                            ui,
-                            Vec2::new(pedal_width, pedal_width*PEDAL_HEIGHT_RATIO*0.05),
-                            |ui| {
-                                ui.add_sized(ui.available_size(), Button::new("Drag"));
+                        let whole_pedal_rect = ui.available_rect_before_wrap();
+                        ui.allocate_ui_with_layout(Vec2::new(pedal_width, pedal_width*PEDAL_HEIGHT_RATIO*0.95), Layout::top_down(egui::Align::Center), |ui| {
+                            if let Some(v) = item.ui(ui) {
+                                changed = Some((i, v));
                             }
-                        );
+                        });
+
+                        let button_rect = whole_pedal_rect.with_min_y(whole_pedal_rect.max.y - 0.05 * whole_pedal_rect.height());
+                        ui.allocate_new_ui(UiBuilder::new().max_rect(button_rect), |ui| {
+                            handle.ui_sized(
+                                ui,
+                                ui.available_size(),
+                                |ui| {
+                                    ui.add_sized(ui.available_size(), Button::new("Drag"));
+                                }
+                            );
+                        });
                     });
 
                     let mouse_over_delete = delete_button_rect.contains(ui.ctx().input(|i| i.pointer.hover_pos()).unwrap_or(Pos2::ZERO));

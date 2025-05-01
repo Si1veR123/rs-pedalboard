@@ -8,7 +8,6 @@ use super::PedalParameterValue;
 use super::ui::pedal_knob;
 
 use eframe::egui::include_image;
-use eframe::egui::Vec2;
 use serde::{Serialize, Deserialize};
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Volume {
@@ -55,7 +54,7 @@ impl PedalTrait for Volume {
     }
 
     fn ui(&mut self, ui: &mut eframe::egui::Ui) -> Option<(String, PedalParameterValue)> {
-        fill_ui_with_image_width(ui, include_image!("images/pedal_base.png"));
+        ui.add(eframe::egui::Image::new(include_image!("images/pedal_base.png")).max_height(ui.available_height()));
 
         let volume_param = self.get_parameters().get("volume").unwrap();
         if let Some(value) = pedal_knob(ui, "Volume", volume_param, eframe::egui::Vec2::new(0.35, 0.1), 0.3) {

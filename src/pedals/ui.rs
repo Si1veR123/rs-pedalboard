@@ -9,11 +9,12 @@ const KNOB_MIN_ANGLE: f32 = -2.094;
 const KNOB_MAX_ANGLE: f32 = 2.094;
 
 /// Fills the UI with an image, scaling it to fit the available width
+#[deprecated]
 pub fn fill_ui_with_image_width(ui: &mut Ui, source: ImageSource) {
     let pedal_im = eframe::egui::Image::new(source);
-    let im_size = pedal_im.load_for_size(ui.ctx(), Vec2::new(f32::INFINITY, f32::INFINITY)).unwrap().size().unwrap();
-    let scaled_im_size = im_size * (ui.available_width() / im_size.x);
-    ui.set_max_height(scaled_im_size.y);
+    // let im_size = pedal_im.load_for_size(ui.ctx(), Vec2::new(f32::INFINITY, f32::INFINITY)).unwrap().size().unwrap();
+    // let scaled_im_size = im_size * (ui.available_width() / im_size.x);
+    //ui.set_max_height(scaled_im_size.y);
     ui.add(pedal_im);
 }
 
@@ -65,6 +66,9 @@ pub fn pedal_knob(ui: &mut egui::Ui, name: &str, parameter: &PedalParameter, at:
                 new_value_float = (value + scaled).clamp(min, max);
             }
 
+            if knob_im.hovered() {
+                ui.ctx().output_mut(|o| o.cursor_icon = egui::CursorIcon::ResizeVertical);
+            }
 
             ui.label(RichText::new(name).size(8.0).color(Color32::BLACK));
         },
