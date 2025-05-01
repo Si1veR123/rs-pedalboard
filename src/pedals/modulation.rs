@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 use std::hash::Hash;
 use crate::dsp_algorithms::variable_delay_phaser::VariableDelayPhaser;
-use crate::pedals::ui::fill_ui_with_image_width;
 use crate::pedals::egui::include_image;
 use super::{PedalTrait, PedalParameter, PedalParameterValue};
-use super::ui::pedal_knob;
+use super::ui::{pedal_knob, pedal_label_rect};
+use eframe::egui;
 use serde::{Serialize, Deserialize};
 
 
@@ -220,7 +220,7 @@ macro_rules! var_delay_phaser {
             }
 
             fn ui(&mut self, ui: &mut eframe::egui::Ui) -> Option<(String, PedalParameterValue)> {
-                fill_ui_with_image_width(ui, include_image!("images/pedal_base.png"));
+                ui.add(egui::Image::new(include_image!("images/pedal_base.png")));
 
                 let mut to_change = None;
                 let rate_param = self.get_parameters().get("rate").unwrap();
@@ -254,6 +254,12 @@ macro_rules! var_delay_phaser {
                         to_change =  Some(("feedback".to_string(), value));
                     }
                 }
+
+                let pedal_rect = ui.max_rect();
+                ui.put(pedal_label_rect(pedal_rect), egui::Label::new(
+                    egui::RichText::new(stringify!($name))
+                        .color(egui::Color32::from_black_alpha(200))
+                ));
 
                 to_change
             }

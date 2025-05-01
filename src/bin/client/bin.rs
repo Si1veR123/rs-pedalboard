@@ -1,6 +1,8 @@
 mod socket;
 mod state;
 
+use std::sync::Arc;
+
 use simplelog::*;
 use state::State;
 
@@ -28,6 +30,46 @@ pub const BACKGROUND_COLOUR: egui::Color32 = egui::Color32::from_gray(15);
 pub const WIDGET_BACKGROUND_COLOUR: egui::Color32 = egui::Color32::from_gray(34);
 pub const WIDGET_HOVER_BACKGROUND_COLOUR: egui::Color32 = egui::Color32::from_gray(40);
 pub const WIDGET_CLICK_BACKGROUND_COLOUR_THEME_ALPHA: f32 = 0.025;
+
+/// Get a FontId for the egui default proportional font
+pub fn default_proportional(size: f32) -> egui::FontId {
+    egui::FontId::new(size, egui::FontFamily::Name("default-proportional".into()))
+}
+
+fn setup_custom_fonts(ctx: &egui::Context) {
+    // Start with the default fonts (we will be adding to them rather than replacing them).
+    let mut fonts = egui::FontDefinitions::default();
+
+    fonts.font_data.insert(
+        "pedalboard_font".to_owned(),
+        Arc::new(egui::FontData::from_static(include_bytes!("files/TangoSans.ttf"))),
+    );
+
+    // Put the default proporional font in another font family so it can be used
+    if let Some(font) = fonts.families.get(&egui::FontFamily::Proportional).and_then(|f| f.get(0)) {
+        fonts.families.insert(
+            egui::FontFamily::Name("default-proportional".into()),
+            vec![font.clone()],
+        );
+    }
+
+    // Put my font first (highest priority) for proportional text:
+    fonts
+        .families
+        .entry(egui::FontFamily::Proportional)
+        .or_default()
+        .insert(0, "pedalboard_font".to_owned());
+
+    // Put my font as last fallback for monospace:
+    fonts
+        .families
+        .entry(egui::FontFamily::Monospace)
+        .or_default()
+        .push("pedalboard_font".to_owned());
+
+    // Tell egui to use these fonts:
+    ctx.set_fonts(fonts);
+}
 
 fn main() {
     CombinedLogger::init(
@@ -59,6 +101,7 @@ fn main() {
                 style.visuals.widgets.active.bg_stroke = (1.0, THEME_COLOUR).into();
             });
             egui_extras::install_image_loaders(&cc.egui_ctx);
+            setup_custom_fonts(&cc.egui_ctx);
             Ok(Box::new(PedalboardClientApp::new(cc)))
         }
     )).expect("Failed to run app");

@@ -1,6 +1,6 @@
 use super::{CurrentAction, PedalboardStageScreen};
 
-use eframe::egui::{self, Color32, Layout, Rgba, RichText, Vec2};
+use eframe::egui::{self, Color32, FontId, Layout, Rgba, RichText, Vec2};
 use egui_dnd::dnd;
 use rs_pedalboard::pedalboard_set::PedalboardSet;
 use crate::THEME_COLOUR;
@@ -84,14 +84,19 @@ pub fn pedalboard_stage_panel(screen: &mut PedalboardStageScreen, ui: &mut egui:
                                 handle.ui(ui, |ui| {
                                     ui.add_space(15.0);
                                     ui.add(
-                                        egui::Image::new(egui::include_image!("../images/drag.png"))
+                                        egui::Image::new(egui::include_image!("../files/drag.png"))
                                         .tint(drag_icon_color)
                                         .max_width(15.0)
                                     );
                                     ui.add_space(2.0);
                                 });
 
-                                if ui.label(RichText::new(pedalboard.name.clone()).color(text_color).size(20.0)).clicked() {
+                                if ui.label(RichText::new(pedalboard.name.clone()).color(text_color)
+                                    .size(20.0)
+                                    .font(
+                                        crate::default_proportional(20.0)
+                                    )).clicked()
+                                {
                                     screen.current_action = Some(CurrentAction::ChangeActive(i));
                                 }
                             });

@@ -3,10 +3,10 @@ use std::iter;
 use std::hash::Hash;
 
 use crate::dsp_algorithms::{biquad, eq};
-use super::ui::fill_ui_with_image_width;
+use super::ui::{fill_ui_with_image_width, pedal_label_rect};
 use super::{PedalParameter, PedalParameterValue, PedalTrait, ui::pedal_knob};
 
-use eframe::egui::include_image;
+use eframe::egui::{self, include_image, Pos2, Rect};
 use serde::ser::SerializeMap;
 use serde::{Serialize, Deserialize};
 
@@ -161,29 +161,35 @@ impl PedalTrait for Delay {
         }
     }
 
-    fn ui(&mut self, ui: &mut eframe::egui::Ui) -> Option<(String, PedalParameterValue)> {
-        fill_ui_with_image_width(ui, include_image!("images/pedal_base.png"));
+    fn ui(&mut self, ui: &mut egui::Ui) -> Option<(String, PedalParameterValue)> {
+        ui.add(egui::Image::new(include_image!("images/pedal_base.png")));
 
         let mut to_change = None;
         let delay_param = self.get_parameters().get("delay").unwrap();
-        if let Some(value) = pedal_knob(ui, "Delay", delay_param, eframe::egui::Vec2::new(0.1, 0.02), 0.3) {
+        if let Some(value) = pedal_knob(ui, "Delay", delay_param, egui::Vec2::new(0.12, 0.01), 0.25) {
             to_change = Some(("delay".to_string(), value));
         }
 
         let decay_param = self.get_parameters().get("decay").unwrap();
-        if let Some(value) = pedal_knob(ui, "Decay", decay_param, eframe::egui::Vec2::new(0.5, 0.02), 0.3) {
+        if let Some(value) = pedal_knob(ui, "Decay", decay_param, egui::Vec2::new(0.47, 0.01), 0.25) {
             to_change = Some(("decay".to_string(), value));
         }
 
         let warmth_param = self.get_parameters().get("warmth").unwrap();
-        if let Some(value) = pedal_knob(ui, "Warmth", warmth_param, eframe::egui::Vec2::new(0.2, 0.22), 0.3) {
+        if let Some(value) = pedal_knob(ui, "Warmth", warmth_param, egui::Vec2::new(0.3, 0.17), 0.25) {
             to_change = Some(("warmth".to_string(), value));
         }
 
         let mix_param = self.get_parameters().get("mix").unwrap();
-        if let Some(value) = pedal_knob(ui, "Mix", mix_param, eframe::egui::Vec2::new(0.6, 0.22), 0.3) {
+        if let Some(value) = pedal_knob(ui, "Mix", mix_param, egui::Vec2::new(0.64, 0.17), 0.25) {
             to_change = Some(("mix".to_string(), value));
         }
+
+        let pedal_rect = ui.max_rect();
+        ui.put(pedal_label_rect(pedal_rect), egui::Label::new(
+            egui::RichText::new("Delay")
+                .color(egui::Color32::from_black_alpha(200))
+        ));
 
         to_change
     }

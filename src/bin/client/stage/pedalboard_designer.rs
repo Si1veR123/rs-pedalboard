@@ -75,7 +75,7 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut egui::Ui
         ui.available_size() * Vec2::new(1.0, 0.1),
         Layout::top_down(egui::Align::Center),
         |ui| {
-        if ui.button(RichText::new("Add Pedal").size(30.0).strong()).clicked() {
+        if ui.button(RichText::new("Add Pedal").size(30.0).font(crate::default_proportional(30.0))).clicked() {
             screen.show_pedal_menu = !screen.show_pedal_menu;
         }
     });

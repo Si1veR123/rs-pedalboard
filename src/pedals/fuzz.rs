@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 use std::hash::Hash;
-use super::ui::fill_ui_with_image_width;
 use super::PedalTrait;
 use super::PedalParameter;
 use super::PedalParameterValue;
-use super::ui::pedal_knob;
+use super::ui::{pedal_knob, pedal_label_rect};
 
+use eframe::egui;
 use eframe::egui::include_image;
 use eframe::egui::Vec2;
 use serde::{Serialize, Deserialize};
@@ -68,8 +68,7 @@ impl PedalTrait for Fuzz {
     }
 
     fn ui(&mut self, ui: &mut eframe::egui::Ui) -> Option<(String, PedalParameterValue)> {
-        // Fill the UI with the pedal base image
-        fill_ui_with_image_width(ui, include_image!("images/pedal_base.png"));
+        ui.add(egui::Image::new(include_image!("images/pedal_base.png")));
 
         let mut to_change = None;
         let gain_param = self.get_parameters().get("gain").unwrap();
@@ -81,6 +80,12 @@ impl PedalTrait for Fuzz {
         if let Some(value) = pedal_knob(ui, "Level", level_param, Vec2::new(0.55, 0.1), 0.3) {
             to_change = Some(("level".to_string(), value));
         }
+
+        let pedal_rect = ui.max_rect();
+        ui.put(pedal_label_rect(pedal_rect), egui::Label::new(
+            egui::RichText::new("Fuzz")
+                .color(egui::Color32::from_black_alpha(200))
+        ));
 
         to_change
     }

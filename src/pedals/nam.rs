@@ -280,7 +280,7 @@ impl PedalTrait for Nam {
                 }
             });
 
-            ui.label(egui::RichText::new("Neural\nAmp\nModeler").size(24.0));
+            ui.label(egui::RichText::new("Neural\nAmp\nModeler").size(22.0));
         });
 
         if selected_str != old {

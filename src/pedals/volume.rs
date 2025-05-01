@@ -1,14 +1,14 @@
 use std::collections::HashMap;
 use std::hash::Hash;
 
-use super::ui::fill_ui_with_image_width;
 use super::PedalTrait;
 use super::PedalParameter;
 use super::PedalParameterValue;
-use super::ui::pedal_knob;
+use super::ui::{pedal_knob, pedal_label_rect};
 
-use eframe::egui::include_image;
+use eframe::egui::{include_image, self};
 use serde::{Serialize, Deserialize};
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Volume {
     parameters: HashMap<String, PedalParameter>,
@@ -60,6 +60,13 @@ impl PedalTrait for Volume {
         if let Some(value) = pedal_knob(ui, "Volume", volume_param, eframe::egui::Vec2::new(0.35, 0.1), 0.3) {
             return Some(("volume".to_string(), value));
         }
+
+        let pedal_rect = ui.max_rect();
+        ui.put(pedal_label_rect(pedal_rect), egui::Label::new(
+            egui::RichText::new("Volume")
+                .color(egui::Color32::from_black_alpha(200))
+        ));
+        
         None
     }
 }

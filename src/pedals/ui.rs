@@ -1,4 +1,4 @@
-use eframe::egui::{self, include_image, Color32, Image, ImageSource, RichText, Ui};
+use eframe::egui::{self, Color32, ImageSource, RichText, Ui};
 use eframe::egui::Vec2;
 
 use super::{PedalParameter, PedalParameterValue};
@@ -12,10 +12,14 @@ const KNOB_MAX_ANGLE: f32 = 2.094;
 #[deprecated]
 pub fn fill_ui_with_image_width(ui: &mut Ui, source: ImageSource) {
     let pedal_im = eframe::egui::Image::new(source);
-    // let im_size = pedal_im.load_for_size(ui.ctx(), Vec2::new(f32::INFINITY, f32::INFINITY)).unwrap().size().unwrap();
-    // let scaled_im_size = im_size * (ui.available_width() / im_size.x);
-    //ui.set_max_height(scaled_im_size.y);
     ui.add(pedal_im);
+}
+
+pub fn pedal_label_rect(pedal_rect: egui::Rect) -> egui::Rect {
+    egui::Rect {
+        min: egui::Pos2::new(pedal_rect.min.x + 0.1 * pedal_rect.width(), pedal_rect.min.y + 0.43 * pedal_rect.height()),
+        max: egui::Pos2::new(pedal_rect.max.x - 0.1 * pedal_rect.width(), pedal_rect.min.y + 0.53 * pedal_rect.height()),
+    }
 }
 
 pub fn pedal_knob(ui: &mut egui::Ui, name: &str, parameter: &PedalParameter, at: egui::Vec2, size: f32) -> Option<PedalParameterValue> {

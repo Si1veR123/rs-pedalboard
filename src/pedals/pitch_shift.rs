@@ -3,13 +3,12 @@ use std::hash::Hash;
 use crate::dsp_algorithms::biquad::BiquadFilter;
 use crate::dsp_algorithms::eq::Equalizer;
 
-use super::ui::fill_ui_with_image_width;
 use super::PedalTrait;
 use super::PedalParameter;
 use super::PedalParameterValue;
-use super::ui::pedal_knob;
+use super::ui::{pedal_knob, pedal_label_rect};
 
-use eframe::egui::include_image;
+use eframe::egui::{include_image, self};
 use serde::{Serialize, Deserialize};
 use signalsmith_stretch::Stretch;
 
@@ -74,7 +73,7 @@ impl PitchShift {
 
         let init_block_size = 2048 / 128;
         let init_semitones = -1;
-        let init_speed = 0;
+        let init_hop = 0;
         let init_tonality_limit = 0.5;
 
         parameters.insert(
@@ -98,11 +97,11 @@ impl PitchShift {
             }
         );
 
-        // Whether to use 1/8 (slow,0) or 1/4 (faster,1) hop size
+        // Whether to use 1/4 (slow,0) or 1/2 (faster,1) hop size
         parameters.insert(
-            "speed".to_string(),
+            "hop".to_string(),
             PedalParameter {
-                value: PedalParameterValue::Int(init_speed),
+                value: PedalParameterValue::Int(init_hop),
                 min: Some(PedalParameterValue::Int(0)),
                 max: Some(PedalParameterValue::Int(1)),
                 step: None
@@ -135,17 +134,17 @@ impl PitchShift {
     }
 
     pub fn eq_from_presence(presence: f32) -> Equalizer {
-        let biquad = BiquadFilter::high_shelf(3500.0, 48000.0, 0.707, presence);
+        let biquad = BiquadFilter::high_shelf(3100.0, 48000.0, 0.707, presence);
         Equalizer::new(vec![biquad])
     }
 
     pub fn stretch_from_parameters(parameters: &HashMap<String, PedalParameter>) -> Stretch {
         let block_size = parameters.get("block_size").unwrap().value.as_int().unwrap() * 128;
         let semitones = parameters.get("semitones").unwrap().value.as_int().unwrap();
-        let speed = parameters.get("speed").unwrap().value.as_int().unwrap();
+        let speed = parameters.get("hop").unwrap().value.as_int().unwrap();
         let tonality_limit = parameters.get("tonality_limit").unwrap().value.as_float().unwrap();
 
-        let interval = block_size / if speed == 0 { 8 } else { 4 };
+        let interval = block_size / if speed == 0 { 4 } else { 2 };
         let mut stretch = Stretch::new(1, block_size as usize, interval as usize);
         stretch.set_transpose_factor_semitones(semitones as f32, Some(tonality_limit));
 
@@ -194,7 +193,7 @@ impl PedalTrait for PitchShift {
     }
 
     fn ui(&mut self, ui: &mut eframe::egui::Ui) -> Option<(String, PedalParameterValue)> {
-        fill_ui_with_image_width(ui, include_image!("images/pedal_base.png"));
+        ui.add(egui::Image::new(include_image!("images/pedal_base.png")));
 
         let mut to_change = None;
         let semitones_param = self.get_parameters().get("semitones").unwrap();
@@ -207,9 +206,9 @@ impl PedalTrait for PitchShift {
             to_change =  Some(("block_size".to_string(), value));
         }
 
-        let speed_param = self.get_parameters().get("speed").unwrap();
-        if let Some(value) = pedal_knob(ui, "Speed", speed_param, eframe::egui::Vec2::new(0.67, 0.02), 0.25) {
-            to_change =  Some(("speed".to_string(), value));
+        let speed_param = self.get_parameters().get("hop").unwrap();
+        if let Some(value) = pedal_knob(ui, "Hop", speed_param, eframe::egui::Vec2::new(0.67, 0.02), 0.25) {
+            to_change =  Some(("hop".to_string(), value));
         }
 
         let tonality_limit_param = self.get_parameters().get("tonality_limit").unwrap();
@@ -221,6 +220,12 @@ impl PedalTrait for PitchShift {
         if let Some(value) = pedal_knob(ui, "Presence", presence_param, eframe::egui::Vec2::new(0.55, 0.22), 0.25) {
             to_change =  Some(("presence".to_string(), value));
         }
+
+        let pedal_rect = ui.max_rect();
+        ui.put(pedal_label_rect(pedal_rect), egui::Label::new(
+            egui::RichText::new("Pitch Shift")
+                .color(egui::Color32::from_black_alpha(200))
+        ));
 
         to_change
     }
