@@ -120,16 +120,23 @@ pub struct PedalboardClientApp {
 
 impl PedalboardClientApp {
     pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
-        let state = Box::leak(Box::new(State::default()));
-        state.socket.borrow_mut().load_set(&state.active_pedalboardstage.borrow()).expect("Failed to initialize pedalboard set");
+        let loaded_state = State::load();
+        let leaked_state = if let Err(e) = loaded_state {
+            log::error!("Failed to load state. Using default state. Error: {}", e);
+            Box::leak(Box::new(State::default()))
+        } else {
+            Box::leak(Box::new(loaded_state.unwrap()))
+        };
+
+        leaked_state.socket.borrow_mut().load_set(&leaked_state.active_pedalboardstage.borrow()).expect("Failed to initialize pedalboard set");
 
         PedalboardClientApp {
             selected_screen: 0,
-            pedalboard_stage_screen: PedalboardStageScreen::new(state),
-            pedalboard_library_screen: PedalboardLibraryScreen::new(state),
-            songs_screen: SongsScreen::new(state),
+            pedalboard_stage_screen: PedalboardStageScreen::new(leaked_state),
+            pedalboard_library_screen: PedalboardLibraryScreen::new(leaked_state),
+            songs_screen: SongsScreen::new(leaked_state),
             utilities_screen: UtilitiesScreen::new(),
-            state,
+            state: leaked_state,
         }
     }
 }
@@ -227,5 +234,13 @@ impl eframe::App for PedalboardClientApp {
                 );
             };
         });
+    }
+    
+    fn save(&mut self, _storage: &mut dyn eframe::Storage) {
+        if let Err(e) = self.state.save() {
+            log::error!("Failed to save state: {}", e);
+        } else {
+            log::info!("State saved successfully");
+        }
     }
 }

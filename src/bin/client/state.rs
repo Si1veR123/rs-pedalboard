@@ -1,7 +1,9 @@
 use std::{cell::RefCell, collections::HashMap};
 use rs_pedalboard::{pedalboard::Pedalboard, pedalboard_set::PedalboardSet, pedals::{PedalParameterValue, PedalTrait}};
-
+use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
 use crate::socket::ClientSocket;
+
+const SAVE_NAME: &str = "state.json";
 
 // TODO: all socket calls should be a method of the state, rather than directly calling the socket
 pub struct State {
@@ -9,6 +11,35 @@ pub struct State {
     pub pedalboard_library: RefCell<Vec<Pedalboard>>,
     pub songs_library: RefCell<HashMap<String, Vec<String>>>,
     pub socket: RefCell<ClientSocket>
+}
+
+impl Serialize for State {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+        let mut state = serializer.serialize_struct("State", 3)?;
+        state.serialize_field("active_pedalboardstage", &*self.active_pedalboardstage.borrow())?;
+        state.serialize_field("pedalboard_library", &*self.pedalboard_library.borrow())?;
+        state.serialize_field("songs_library", &*self.songs_library.borrow())?;
+        state.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for State {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: serde::Deserializer<'de> {
+        #[derive(Deserialize)]
+        struct StateData {
+            active_pedalboardstage: PedalboardSet,
+            pedalboard_library: Vec<Pedalboard>,
+            songs_library: HashMap<String, Vec<String>>,
+        }
+
+        let data = StateData::deserialize(deserializer)?;
+        Ok(State {
+            active_pedalboardstage: RefCell::new(data.active_pedalboardstage),
+            pedalboard_library: RefCell::new(data.pedalboard_library),
+            songs_library: RefCell::new(data.songs_library),
+            socket: RefCell::new(ClientSocket::new(crate::SERVER_PORT))
+        })
+    }
 }
 
 impl State {
@@ -171,6 +202,29 @@ impl State {
                 pedalboard.pedals[pedal_index].set_parameter_value(name, parameter_value.clone());
             }
         }
+    }
+
+    pub fn save(&self) -> Result<(), std::io::Error> {
+        let stringified = serde_json::to_string(self).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        let file_path = homedir::my_home().map_err(
+            |e| std::io::Error::new(std::io::ErrorKind::Other, e)
+        )?.unwrap().join(SAVE_NAME);
+
+        std::fs::write(file_path, stringified)
+    }
+
+    pub fn load() -> Result<State, std::io::Error> {
+        let file_path = homedir::my_home().map_err(
+            |e| std::io::Error::new(std::io::ErrorKind::Other, e)
+        )?.unwrap().join(SAVE_NAME);
+
+        if !file_path.exists() {
+            return Ok(State::default());
+        }
+
+        let stringified = std::fs::read_to_string(file_path)?;
+        let state: State = serde_json::from_str(&stringified).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        Ok(state)
     }
 }
 

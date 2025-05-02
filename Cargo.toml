@@ -16,12 +16,12 @@ log = "0.4.26"
 cpal = {version = "0.15.3", features=["jack"]}
 simplelog = "0.12.2"
 ringbuf = "0.4.7"
-regex = "1.11.1"
+regex = "^1.11.1"
 crossbeam = "0.8.4"
-serde = { version = "1.0.219", features=["derive"]}
-serde_json = "1.0"
+serde = { version = "^1.0.219", features=["derive"]}
+serde_json = "^1.0"
 enum_dispatch = "0.3.13"
-eframe = "0.31.1"
+eframe = { version="0.31.1", features=["persistence"] }
 signalsmith-stretch = "0.1.1"
 egui_extras = { version = "0.31.1", features=["image"] }
 image = { version = "0.25.6", features = ["png"] }
