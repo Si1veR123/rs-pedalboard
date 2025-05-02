@@ -3,10 +3,10 @@ use std::iter;
 use std::hash::Hash;
 
 use crate::dsp_algorithms::{biquad, eq};
-use super::ui::{fill_ui_with_image_width, pedal_label_rect};
-use super::{PedalParameter, PedalParameterValue, PedalTrait, ui::pedal_knob};
+use super::ui::{pedal_label_rect, pedal_knob};
+use super::{PedalParameter, PedalParameterValue, PedalTrait};
 
-use eframe::egui::{self, include_image, Pos2, Rect};
+use eframe::egui::{self, include_image};
 use serde::ser::SerializeMap;
 use serde::{Serialize, Deserialize};
 

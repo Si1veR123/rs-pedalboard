@@ -1,5 +1,4 @@
 #![forbid(unsafe_code)]
-#![warn(missing_docs)]
 
 use egui::{Id, Ui};
 pub use state::{DragDropConfig, DragDropItem, DragDropResponse, DragUpdate, Handle};

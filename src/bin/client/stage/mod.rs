@@ -5,8 +5,6 @@ mod pedalboard_designer;
 use pedalboard_designer::pedalboard_designer;
 
 use eframe::egui::{self, Layout, Rect, Vec2, Widget};
-use rs_pedalboard::pedals::{Pedal, PedalDiscriminants};
-use strum::IntoEnumIterator;
 use crate::state::State;
 
 pub enum CurrentAction {

@@ -4,7 +4,7 @@ use super::PedalboardStageScreen;
 
 use eframe::egui::{self, Button, Color32, Layout, Pos2, Rect, RichText, Sense, Ui, UiBuilder, Vec2};
 use rs_pedalboard::pedals::{PedalDiscriminants, PedalParameterValue, PedalTrait};
-use egui_dnd::{self, DragDropItem};
+use egui_dnd;
 use strum::IntoEnumIterator;
 
 const PEDAL_ROW_COUNT: usize = 6;
@@ -32,7 +32,7 @@ pub fn bound_scene_rect(scene_rect: &mut Rect, available_size: &Vec2) {
     }
 }
 
-pub fn add_pedal_menu(screen: &mut PedalboardStageScreen, ui: &mut egui::Ui, rect: Rect) {
+pub fn add_pedal_menu(screen: &mut PedalboardStageScreen, ui: &mut Ui, rect: Rect) {
     let mut pedalboard_set = screen.state.active_pedalboardstage.borrow_mut();
     let active_index = pedalboard_set.active_pedalboard;
 
@@ -68,7 +68,7 @@ pub fn add_pedal_menu(screen: &mut PedalboardStageScreen, ui: &mut egui::Ui, rec
         });
 }
 
-pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut egui::Ui) {
+pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
     ui.add_space(5.0);
 
     ui.allocate_ui_with_layout(

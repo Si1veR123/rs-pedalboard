@@ -169,7 +169,8 @@ pub trait PedalTrait: Send + Hash {
     /// Returns the name of the parameter that needs to be changed, and its value
     fn ui(&mut self, _ui: &mut egui::Ui) -> Option<(String, PedalParameterValue)> { None }
 
-    fn set_config(&mut self, buffer_size: usize, sample_rate: usize) {}
+    /// Call after creating a pedal so that it can set up its internal state
+    fn set_config(&mut self, _buffer_size: usize, _sample_rate: usize) {}
 }
 
 

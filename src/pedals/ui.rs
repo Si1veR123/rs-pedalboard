@@ -1,4 +1,4 @@
-use eframe::egui::{self, Color32, ImageSource, RichText, Ui};
+use eframe::egui::{self, Color32, Id, ImageSource, RichText, Ui};
 use eframe::egui::Vec2;
 
 use super::{PedalParameter, PedalParameterValue};
@@ -8,11 +8,9 @@ const KNOB_MIN_ANGLE: f32 = -2.094;
 // 120 deg
 const KNOB_MAX_ANGLE: f32 = 2.094;
 
-/// Fills the UI with an image, scaling it to fit the available width
-#[deprecated]
-pub fn fill_ui_with_image_width(ui: &mut Ui, source: ImageSource) {
-    let pedal_im = eframe::egui::Image::new(source);
-    ui.add(pedal_im);
+pub fn float_round(value: f32, step: f32) -> f32 {
+    let rounded = (value / step).round() * step;
+    rounded
 }
 
 pub fn pedal_label_rect(pedal_rect: egui::Rect) -> egui::Rect {
@@ -65,9 +63,27 @@ pub fn pedal_knob(ui: &mut egui::Ui, name: &str, parameter: &PedalParameter, at:
             );
 
             if knob_im.dragged() {
-                let delta = -knob_im.drag_motion().y;
-                let scaled = delta * 0.05;
-                new_value_float = (value + scaled).clamp(min, max);
+                let current_y = ui.input(|i| i.pointer.interact_pos().expect("Failed to get cursor location")).y;
+
+                let (init_y, init_value) = if knob_im.drag_started() {
+                    // Store the initial y position and value of the drag
+                    ui.ctx().memory_mut(|m| {
+                        m.data.insert_temp(Id::new("knob_drag_init_y"), (current_y, value));
+                        (current_y, value)
+                    })
+                } else {
+                    ui.ctx().memory(|m| m.data.get_temp::<(f32, f32)>(Id::new("knob_drag_init_y")).unwrap_or((0.0, 0.0)).clone())
+                };
+
+                // Convert delta y to a change in value
+                let delta = init_y - current_y;
+                let scaled_delta = delta * 0.008; // Sensitivity factor
+                let scaled = scaled_delta * (max - min);
+                new_value_float = (init_value + scaled).clamp(min, max);
+
+                if let Some(step) = &parameter.step {
+                    new_value_float = float_round(new_value_float, step.as_float().unwrap());
+                }
             }
 
             if knob_im.hovered() {
@@ -79,17 +95,9 @@ pub fn pedal_knob(ui: &mut egui::Ui, name: &str, parameter: &PedalParameter, at:
     );
 
     if new_value_float != value {
-        if let Some(old_value_int) = parameter.value.as_int() {
-            let new_value_int;
-            if new_value_float > value {
-                new_value_int = old_value_int + 1;
-            } else {
-                new_value_int = old_value_int - 1;
-            }
-
-            Some(PedalParameterValue::Int(new_value_int))
+        if matches!(parameter.value, PedalParameterValue::Int(_)) {
+            Some(PedalParameterValue::Int(new_value_float as i16))
         } else {
-            // TODO: Clamp to step
             Some(PedalParameterValue::Float(new_value_float))
         }
     } else {

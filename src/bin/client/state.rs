@@ -1,8 +1,9 @@
 use std::{cell::RefCell, collections::HashMap};
-use rs_pedalboard::{pedalboard::Pedalboard, pedalboard_set::PedalboardSet, pedals::{Pedal, PedalParameterValue, PedalTrait}};
+use rs_pedalboard::{pedalboard::Pedalboard, pedalboard_set::PedalboardSet, pedals::{PedalParameterValue, PedalTrait}};
 
 use crate::socket::ClientSocket;
 
+// TODO: all socket calls should be a method of the state, rather than directly calling the socket
 pub struct State {
     pub active_pedalboardstage: RefCell<PedalboardSet>,
     pub pedalboard_library: RefCell<Vec<Pedalboard>>,

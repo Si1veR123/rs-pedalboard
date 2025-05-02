@@ -1,6 +1,6 @@
 use super::{CurrentAction, PedalboardStageScreen};
 
-use eframe::egui::{self, Color32, FontId, Layout, Rgba, RichText, Vec2};
+use eframe::egui::{self, Color32, Layout, Rgba, RichText, Vec2};
 use egui_dnd::dnd;
 use rs_pedalboard::pedalboard_set::PedalboardSet;
 use crate::THEME_COLOUR;
