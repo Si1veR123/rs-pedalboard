@@ -33,11 +33,6 @@ pub fn bound_scene_rect(scene_rect: &mut Rect, available_size: &Vec2) {
 }
 
 pub fn add_pedal_menu(screen: &mut PedalboardStageScreen, ui: &mut Ui, rect: Rect) {
-    let mut pedalboard_set = screen.state.active_pedalboardstage.borrow_mut();
-    let active_index = pedalboard_set.active_pedalboard;
-
-    let pedalboard = pedalboard_set.pedalboards.get_mut(active_index).unwrap();
-
     let menu_layer_id = egui::LayerId::new(egui::Order::Foreground, ui.id().with("pedal_menu"));
     let mut menu_ui = ui.new_child(
         UiBuilder::new()
@@ -59,8 +54,7 @@ pub fn add_pedal_menu(screen: &mut PedalboardStageScreen, ui: &mut Ui, rect: Rec
             for pedal in PedalDiscriminants::iter() {
                 if ui.add_sized(Vec2::new(ui.available_width()*0.95, 35.0), egui::Button::new(format!("{:?}", pedal))).clicked() {
                     let new_pedal = pedal.new_pedal();
-                    screen.state.socket.borrow_mut().add_pedal(&new_pedal);
-                    pedalboard.pedals.push(new_pedal);
+                    screen.state.add_pedal(&new_pedal);
                     screen.show_pedal_menu = false
                 }
                 ui.separator();
@@ -156,6 +150,7 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
 
                     if dnd_response.is_drag_finished() {
                         if let Some(update) = &dnd_response.update {
+                            // TODO: move state operations to a state method
                             if mouse_over_delete {
                                 if ui.ctx().input(|i| i.pointer.any_released()) && pedalboard.pedals.len() > 1 {
                                     pedalboard.pedals.remove(update.from);

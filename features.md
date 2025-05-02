@@ -27,7 +27,7 @@ setparameter <pedalboard index> <pedal index> <parameter value>
 movepedalboard <src index> <dest index>
 addpedalboard <pedalboard stringified>
 deletepedalboard <pedalboard index>
-addpedal <pedal stringified>
+addpedal <pedalboard index> <pedal stringified>
 deletepedal <pedalboard index> <pedal index>
 movepedal <pedalboard index> <src index> <dest index>
 loadset <pedalboardset stringified>

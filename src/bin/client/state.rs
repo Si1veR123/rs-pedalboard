@@ -1,5 +1,5 @@
 use std::{cell::RefCell, collections::HashMap};
-use rs_pedalboard::{pedalboard::Pedalboard, pedalboard_set::PedalboardSet, pedals::{PedalParameterValue, PedalTrait}};
+use rs_pedalboard::{pedalboard::Pedalboard, pedalboard_set::PedalboardSet, pedals::{Pedal, PedalParameterValue, PedalTrait}};
 use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
 use crate::socket::ClientSocket;
 
@@ -182,6 +182,32 @@ impl State {
         pedalboard_set.pedalboards.insert(index+1, new_pedalboard);
     }
 
+    /// Add a pedal to the active pedalboard and matching pedalboard in library
+    /// 
+    /// Requires a lock on active_pedalboardstage, pedalboard_library, and socket
+    pub fn add_pedal(&self, pedal: &Pedal) {
+        let mut socket = self.socket.borrow_mut();
+
+        let mut active_pedalboardstage = self.active_pedalboardstage.borrow_mut();
+        let active_pedalboard_name = active_pedalboardstage.pedalboards[active_pedalboardstage.active_pedalboard].name.clone();
+        
+        // Add in pedalboard library
+        let mut pedalboard_library = self.pedalboard_library.borrow_mut();
+        for pedalboard in pedalboard_library.iter_mut() {
+            if pedalboard.name == *active_pedalboard_name {
+                pedalboard.pedals.push(pedal.clone());
+            }
+        }
+
+        // Add in all matching pedalboards in active pedalboard stage
+        for (i, pedalboard) in active_pedalboardstage.pedalboards.iter_mut().enumerate() {
+            if pedalboard.name == *active_pedalboard_name {
+                pedalboard.pedals.push(pedal.clone());
+                socket.add_pedal(i, &pedal).expect("Failed to add pedal to socket");
+            }
+        }
+    }
+
     /// Set a parameter on all pedalboards, on stage and in library, with the same name
     /// 
     /// Requires a lock on active_pedalboardstage, pedalboard_library and socket
@@ -204,11 +230,17 @@ impl State {
         }
     }
 
+    /// Requires a lock on active_pedalboardstage, pedalboard_library, and songs_library
     pub fn save(&self) -> Result<(), std::io::Error> {
         let stringified = serde_json::to_string(self).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
-        let file_path = homedir::my_home().map_err(
+        let dir_path = homedir::my_home().map_err(
             |e| std::io::Error::new(std::io::ErrorKind::Other, e)
-        )?.unwrap().join(SAVE_NAME);
+        )?.unwrap().join("rs_pedalboard");
+
+        if !dir_path.exists() {
+            std::fs::create_dir_all(&dir_path)?;
+        }
+        let file_path = dir_path.join(SAVE_NAME);
 
         std::fs::write(file_path, stringified)
     }
@@ -216,7 +248,7 @@ impl State {
     pub fn load() -> Result<State, std::io::Error> {
         let file_path = homedir::my_home().map_err(
             |e| std::io::Error::new(std::io::ErrorKind::Other, e)
-        )?.unwrap().join(SAVE_NAME);
+        )?.unwrap().join("rs_pedalboard").join(SAVE_NAME);
 
         if !file_path.exists() {
             return Ok(State::default());

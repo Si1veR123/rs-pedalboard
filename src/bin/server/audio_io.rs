@@ -1,7 +1,7 @@
 use cpal::{traits::DeviceTrait, Device, Stream, StreamConfig};
 use crossbeam::channel::Receiver;
 use ringbuf::{traits::{Consumer, Producer, Split}, HeapProd, HeapRb};
-use rs_pedalboard::{pedalboard_set::PedalboardSet, pedals::{Pedal, PedalTrait}};
+use rs_pedalboard::{pedalboard, pedalboard_set::PedalboardSet, pedals::{Pedal, PedalTrait}};
 
 use crate::constants;
 
@@ -93,16 +93,6 @@ impl InputProcessor {
         }
     }
 
-    /// setparameter <pedalboard index> <pedal index> <parameter name> <parameter value stringified>
-    /// movepedalboard <src index> <dest index>
-    /// addpedalboard <pedalboard stringified>
-    /// deletepedalboard <pedalboard index>
-    /// addpedal <pedalboard index> <pedal index> <pedal stringified>
-    /// deletepedal <pedalboard index> <pedal index>
-    /// movepedal <pedalboard index> <src index> <dest index>
-    /// loadset <pedalboardset stringified>
-    /// play <pedalboard index>
-    /// master <volume 0-1>
     fn handle_command(&mut self, command: Box<str>) -> Option<()> {
         let mut words = command.split_whitespace();
         let command_name = words.next()?;
@@ -136,10 +126,15 @@ impl InputProcessor {
                 self.pedalboard_set.pedalboards.remove(pedalboard_index);
             },
             "addpedal" => {
-                let pedal_stringified = &command[command_name.len() + 1..];
+                let pedalboard_index_str = words.next()?;
+                let pedalboard_index = pedalboard_index_str.parse::<usize>().ok()?;
+
+                let pedalboard_ser_start_index = pedalboard_index_str.as_ptr() as usize + pedalboard_index_str.len() - command.as_ptr() as usize;
+                let pedal_stringified = &command[pedalboard_ser_start_index + 1..];
+                
                 let mut pedal: Pedal = serde_json::from_str(&pedal_stringified).ok()?;
                 pedal.set_config(super::constants::FRAMES_PER_PERIOD, 48000);
-                self.pedalboard_set.pedalboards.get_mut(self.pedalboard_set.active_pedalboard)?
+                self.pedalboard_set.pedalboards.get_mut(pedalboard_index)?
                     .pedals.push(pedal);
             },
             "deletepedal" => {
