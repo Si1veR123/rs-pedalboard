@@ -123,7 +123,7 @@ impl PitchShift {
             PedalParameter {
                 value: PedalParameterValue::Float(0.0),
                 min: Some(PedalParameterValue::Float(0.0)),
-                max: Some(PedalParameterValue::Float(10.0)),
+                max: Some(PedalParameterValue::Float(30.0)),
                 step: None,
             }
         );

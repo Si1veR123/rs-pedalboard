@@ -20,6 +20,8 @@ mod eq;
 pub use eq::GraphicEq7;
 mod nam;
 pub use nam::Nam;
+mod impulse_response;
+pub use impulse_response::ImpulseResponse;
 
 mod ui;
 
@@ -186,7 +188,8 @@ pub enum Pedal {
     Flanger(Flanger),
     Delay(Delay),
     GraphicEq7(GraphicEq7),
-    Nam(Nam)
+    Nam(Nam),
+    ImpulseResponse(ImpulseResponse)
 }
 
 impl PedalDiscriminants {
@@ -199,7 +202,8 @@ impl PedalDiscriminants {
             PedalDiscriminants::Flanger => Pedal::Flanger(Flanger::new()),
             PedalDiscriminants::Delay => Pedal::Delay(Delay::new()),
             PedalDiscriminants::GraphicEq7 => Pedal::GraphicEq7(GraphicEq7::new()),
-            PedalDiscriminants::Nam => Pedal::Nam(Nam::new())
+            PedalDiscriminants::Nam => Pedal::Nam(Nam::new()),
+            PedalDiscriminants::ImpulseResponse => Pedal::ImpulseResponse(ImpulseResponse::new())
         }
     }
 }

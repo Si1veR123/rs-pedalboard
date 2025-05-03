@@ -3,6 +3,34 @@ use realfft::{RealFftPlanner, RealToComplex, ComplexToReal};
 use rustfft::num_complex::Complex;
 use std::sync::Arc;
 
+pub fn load_ir(ir_path: &str) -> Result<Vec<f32>, String> {
+    let mut reader = hound::WavReader::open(ir_path).unwrap();
+    
+    let spec = reader.spec();
+    if spec.bits_per_sample > 32 {
+        return Err("WAV file has more than 32 bits per sample. This is not supported.".into());
+    }
+
+    if spec.channels != 1 {
+        return Err("Expected mono channel".into());
+    }
+
+    match spec.sample_format {
+        hound::SampleFormat::Float => {
+            let ir_samples: Result<Vec<f32>, _> = reader.into_samples().collect();
+            ir_samples.map_err(|e| e.to_string())
+        },
+        hound::SampleFormat::Int => {
+            let max_amplitude = (1i64 << (spec.bits_per_sample - 1)) as f32;
+            let ir_samples: Result<Vec<f32>, _> = reader.samples::<i32>()
+                .map(|s| s.and_then(|s| Ok(s as f32 / max_amplitude)))
+                .collect();
+            ir_samples.map_err(|e| e.to_string())
+        }
+    }
+}
+
+#[derive(Clone)]
 pub struct IRConvolver {
     fft_size: usize,
     block_size: usize,
@@ -17,8 +45,8 @@ pub struct IRConvolver {
 }
 
 impl IRConvolver {
-    pub fn new(ir: &[f32], block_size: usize) -> Self {
-        let fft_size = (block_size + ir.len() - 1).next_power_of_two();
+    pub fn new(ir: &[f32], max_block_size: usize) -> Self {
+        let fft_size = (max_block_size + ir.len() - 1).next_power_of_two();
 
         let mut planner = RealFftPlanner::<f32>::new();
         let fft = planner.plan_fft_forward(fft_size);
@@ -32,7 +60,7 @@ impl IRConvolver {
 
         IRConvolver {
             fft_size,
-            block_size,
+            block_size: max_block_size,
             ir_freq,
             ifft_out: ifft.make_output_vec(),
             input_freq: fft.make_output_vec(),
@@ -44,12 +72,15 @@ impl IRConvolver {
         }
     }
 
-    pub fn process(&mut self, buffer: &mut [f32]) {
-        assert_eq!(buffer.len(), self.block_size, "Buffer size must match block size.");
+    pub fn process(&mut self, mut buffer: &mut [f32]) {
+        if buffer.len() > self.block_size {
+            log::warn!("IRConvolver: buffer size exceeds maximum block size.");
+            buffer = &mut buffer[..self.block_size];
+        }
 
         // Shift in new input
         self.input_buffer.fill(0.0);
-        self.input_buffer[..self.block_size].copy_from_slice(buffer);
+        self.input_buffer[..buffer.len()].copy_from_slice(buffer);
 
         self.fft.process_with_scratch(&mut self.input_buffer, &mut self.input_freq, &mut self.scratch).unwrap();
 
@@ -73,14 +104,12 @@ impl IRConvolver {
         }
 
         // Write block to output
-        for i in 0..self.block_size {
-            buffer[i] = self.ifft_out[i];
-        }
+        buffer.copy_from_slice(&self.ifft_out[..buffer.len()]);
 
         // Copy any remaining samples to overlap buffer
         self.overlap.fill(0.0);
-        for i in self.block_size..self.fft_size {
-            self.overlap[i-self.block_size] = self.ifft_out[i];
+        for i in buffer.len()..self.fft_size {
+            self.overlap[i-buffer.len()] = self.ifft_out[i];
         }
     }
 }
