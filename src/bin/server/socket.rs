@@ -35,13 +35,34 @@ impl ServerSocket {
         Ok(())
     }
 
-    fn handle_client(&mut self, mut stream: TcpStream) {
-        let mut buffer = [0; 2048];
+    /// Returns true if closed
+    fn read_to_newline(&mut self, stream: &mut TcpStream, buffer: &mut Vec<u8>) -> std::io::Result<bool> {
+        let mut chunk_buffer = [0; 256];
+        buffer.clear();
         loop {
-            match stream.read(&mut buffer) {
-                Ok(0) => break, // Connection closed
+            match stream.read(&mut chunk_buffer) {
+                Ok(0) => return Ok(true), // Connection closed
                 Ok(n) => {
-                    if let Ok(received_str) = std::str::from_utf8(&buffer[..n]) {
+                    buffer.extend_from_slice(&chunk_buffer[..n]);
+                    if let Some(pos) = buffer.iter().position(|&b| b == b'\n') {
+                        buffer.truncate(pos + 1); // Keep the newline character
+                        break;
+                    }
+                }
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(false) // Connection still open
+    }
+
+    fn handle_client(&mut self, mut stream: TcpStream) {
+        let mut buffer = Vec::new();
+
+        loop {
+            match self.read_to_newline(&mut stream, &mut buffer) {
+                Ok(true) => break, // Connection closed
+                Ok(false) => {
+                    if let Ok(received_str) = std::str::from_utf8(buffer.as_slice()) {
                         log::info!("Received: {:?}", received_str);
                         
                         if self.command_sender.send(received_str.into()).is_err() {
