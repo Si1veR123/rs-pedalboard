@@ -71,8 +71,8 @@ impl PitchShift {
     pub fn new() -> Self {
         let mut parameters = HashMap::new();
 
-        let init_block_size = 2048 / 128;
-        let init_semitones = -1;
+        let init_block_size = 3074 / 128;
+        let init_semitones = 0;
         let init_hop = 0;
         let init_tonality_limit = 0.5;
 
@@ -97,7 +97,7 @@ impl PitchShift {
             }
         );
 
-        // Whether to use 1/4 (slow,0) or 1/2 (faster,1) hop size
+        // Whether to use 1/8 (slow,0) or 1/4 (faster,1) hop size
         parameters.insert(
             "hop".to_string(),
             PedalParameter {
@@ -134,7 +134,7 @@ impl PitchShift {
     }
 
     pub fn eq_from_presence(presence: f32) -> Equalizer {
-        let biquad = BiquadFilter::high_shelf(3100.0, 48000.0, 0.707, presence);
+        let biquad = BiquadFilter::high_shelf(2900.0, 48000.0, 0.707, presence);
         Equalizer::new(vec![biquad])
     }
 
@@ -144,7 +144,7 @@ impl PitchShift {
         let speed = parameters.get("hop").unwrap().value.as_int().unwrap();
         let tonality_limit = parameters.get("tonality_limit").unwrap().value.as_float().unwrap();
 
-        let interval = block_size / if speed == 0 { 4 } else { 2 };
+        let interval = block_size / if speed == 0 { 8 } else { 4 };
         let mut stretch = Stretch::new(1, block_size as usize, interval as usize);
         stretch.set_transpose_factor_semitones(semitones as f32, Some(tonality_limit));
 

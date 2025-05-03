@@ -125,9 +125,15 @@ impl State {
     /// Requires a lock on active_pedalboardstage and socket
     pub fn remove_pedalboard_from_stage(&self, index: usize) {
         let mut pedalboard_set = self.active_pedalboardstage.borrow_mut();
+
+        if pedalboard_set.pedalboards.len() <= 1 {
+            log::error!("Cannot remove the last pedalboard from the stage");
+            return;
+        }
+
         pedalboard_set.pedalboards.remove(index);
 
-        if pedalboard_set.active_pedalboard >= index {
+        if pedalboard_set.active_pedalboard > index || pedalboard_set.active_pedalboard == pedalboard_set.pedalboards.len() {
             pedalboard_set.active_pedalboard -= 1;
         }
 
