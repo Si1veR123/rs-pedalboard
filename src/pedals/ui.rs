@@ -96,7 +96,11 @@ pub fn pedal_knob(ui: &mut egui::Ui, name: &str, parameter: &PedalParameter, at:
 
     if new_value_float != value {
         if matches!(parameter.value, PedalParameterValue::Int(_)) {
-            Some(PedalParameterValue::Int(new_value_float as i16))
+            if new_value_float as i16 != value as i16 {
+                Some(PedalParameterValue::Int(new_value_float as i16))
+            } else {
+                None
+            }
         } else {
             Some(PedalParameterValue::Float(new_value_float))
         }
