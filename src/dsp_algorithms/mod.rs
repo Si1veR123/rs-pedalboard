@@ -4,6 +4,7 @@ pub mod variable_delay_phaser;
 pub mod biquad;
 pub mod eq;
 pub mod yin;
+pub mod impluse_response;
 
 pub fn hann_window(size: usize) -> Vec<f32> {
     let mut window = vec![0.0; size];
