@@ -128,7 +128,7 @@ impl PedalboardClientApp {
             Box::leak(Box::new(loaded_state.unwrap()))
         };
 
-        leaked_state.socket.borrow_mut().load_set(&leaked_state.active_pedalboardstage.borrow()).expect("Failed to initialize pedalboard set");
+        leaked_state.server_synchronise();
 
         PedalboardClientApp {
             selected_screen: 0,
@@ -235,7 +235,7 @@ impl eframe::App for PedalboardClientApp {
             };
         });
     }
-    
+
     fn save(&mut self, _storage: &mut dyn eframe::Storage) {
         if let Err(e) = self.state.save() {
             log::error!("Failed to save state: {}", e);

@@ -25,10 +25,11 @@ impl Hash for &Pedalboard {
 }
 
 impl Pedalboard {
+    /// Has a volume pedal by default
     pub fn new(name: String) -> Pedalboard {
         Self {
             name,
-            pedals: Vec::new()
+            pedals: vec![Pedal::Volume(crate::pedals::Volume::new())]
         }
     }
 

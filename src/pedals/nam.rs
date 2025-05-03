@@ -40,7 +40,9 @@ impl Clone for Nam {
             id: unique_time_id()
         };
 
-        new_nam.set_model(self.modeler.get_model_path().unwrap());
+        if let Some(model_path) = self.modeler.get_model_path() {
+            new_nam.set_model(model_path);
+        }
         new_nam
     }
 }

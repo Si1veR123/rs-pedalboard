@@ -5,7 +5,6 @@ use crate::socket::ClientSocket;
 
 const SAVE_NAME: &str = "state.json";
 
-// TODO: all socket calls should be a method of the state, rather than directly calling the socket
 pub struct State {
     pub active_pedalboardstage: RefCell<PedalboardSet>,
     pub pedalboard_library: RefCell<Vec<Pedalboard>>,
@@ -33,11 +32,14 @@ impl<'de> Deserialize<'de> for State {
         }
 
         let data = StateData::deserialize(deserializer)?;
+        let mut socket = ClientSocket::new(crate::SERVER_PORT);
+        let _ = socket.connect();
+
         Ok(State {
             active_pedalboardstage: RefCell::new(data.active_pedalboardstage),
             pedalboard_library: RefCell::new(data.pedalboard_library),
             songs_library: RefCell::new(data.songs_library),
-            socket: RefCell::new(ClientSocket::new(crate::SERVER_PORT))
+            socket: RefCell::new(socket)
         })
     }
 }
@@ -125,7 +127,32 @@ impl State {
         let mut pedalboard_set = self.active_pedalboardstage.borrow_mut();
         pedalboard_set.pedalboards.remove(index);
 
+        if pedalboard_set.active_pedalboard >= index {
+            pedalboard_set.active_pedalboard -= 1;
+        }
+
         self.socket.borrow_mut().delete_pedalboard(index).expect("Failed to delete pedalboard from socket");
+    }
+
+    /// Move a pedalboard in the active pedalboard stage
+    /// 
+    /// Requires a lock on active_pedalboardstage and socket
+    pub fn move_pedalboard(&self, src_index: usize, dest_index: usize) {
+        let mut pedalboard_set = self.active_pedalboardstage.borrow_mut();
+        egui_dnd::utils::shift_vec(src_index, dest_index, &mut pedalboard_set.pedalboards);
+
+        self.socket.borrow_mut().move_pedalboard(src_index, dest_index).expect("Failed to move pedalboard in socket");
+    }
+
+    /// Add a pedalboard to the active pedalboard stage
+    /// 
+    /// Requires a lock on active_pedalboardstage and socket
+    pub fn add_pedalboard(&self, pedalboard: Pedalboard) {
+        let mut pedalboard_set = self.active_pedalboardstage.borrow_mut();
+        let mut socket = self.socket.borrow_mut();
+
+        socket.add_pedalboard(&pedalboard).expect("Failed to add pedalboard to socket");
+        pedalboard_set.pedalboards.push(pedalboard);
     }
 
     /// Save the current pedalboard stage to a song
@@ -196,6 +223,7 @@ impl State {
         for pedalboard in pedalboard_library.iter_mut() {
             if pedalboard.name == *active_pedalboard_name {
                 pedalboard.pedals.push(pedal.clone());
+                break;
             }
         }
 
@@ -204,6 +232,54 @@ impl State {
             if pedalboard.name == *active_pedalboard_name {
                 pedalboard.pedals.push(pedal.clone());
                 socket.add_pedal(i, &pedal).expect("Failed to add pedal to socket");
+            }
+        }
+    }
+
+    /// Move a pedal in the pedalboard stage and in library
+    /// 
+    /// Requires a lock on active_pedalboardstage, pedalboard_library, and socket
+    pub fn move_pedal(&self, pedalboard_index: usize, src_index: usize, dest_index: usize) {
+        let mut active_pedalboardstage = self.active_pedalboardstage.borrow_mut();
+        let active_pedalboard_name = active_pedalboardstage.pedalboards[pedalboard_index].name.clone();
+        let mut pedalboard_library = self.pedalboard_library.borrow_mut();
+
+        for pedalboard in pedalboard_library.iter_mut() {
+            if pedalboard.name == *active_pedalboard_name {
+                egui_dnd::utils::shift_vec(src_index, dest_index, &mut pedalboard.pedals);
+                break;
+            }
+        }
+
+        // Move in all matching pedalboards in active pedalboard stage
+        for (i, pedalboard) in active_pedalboardstage.pedalboards.iter_mut().enumerate() {
+            if pedalboard.name == *active_pedalboard_name {
+                egui_dnd::utils::shift_vec(src_index, dest_index, &mut pedalboard.pedals);
+                self.socket.borrow_mut().move_pedal(i, src_index, dest_index).expect("Failed to move pedal in socket");
+            }
+        }
+    }
+
+    /// Delete a pedal from the pedalboard stage and in library
+    /// 
+    /// Requires a lock on active_pedalboardstage, pedalboard_library, and socket
+    pub fn delete_pedal(&self, pedalboard_index: usize, pedal_index: usize) {
+        let mut active_pedalboardstage = self.active_pedalboardstage.borrow_mut();
+        let active_pedalboard_name = active_pedalboardstage.pedalboards[pedalboard_index].name.clone();
+        let mut pedalboard_library = self.pedalboard_library.borrow_mut();
+
+        for pedalboard in pedalboard_library.iter_mut() {
+            if pedalboard.name == *active_pedalboard_name {
+                pedalboard.pedals.remove(pedal_index);
+                break;
+            }
+        }
+
+        // Remove in all matching pedalboards in active pedalboard stage
+        for (i, pedalboard) in active_pedalboardstage.pedalboards.iter_mut().enumerate() {
+            if pedalboard.name == *active_pedalboard_name {
+                pedalboard.pedals.remove(pedal_index);
+                self.socket.borrow_mut().delete_pedal(i, pedal_index).expect("Failed to delete pedal from socket");
             }
         }
     }
@@ -230,6 +306,34 @@ impl State {
         }
     }
 
+    /// Load a given pedalboard set to active stage
+    /// 
+    /// Requires a lock on active_pedalboardstage and socket
+    pub fn load_set(&self, pedalboard_set: PedalboardSet) {
+        let mut socket = self.socket.borrow_mut();
+        socket.load_set(&pedalboard_set).expect("Failed to load pedalboard set");
+
+        *self.active_pedalboardstage.borrow_mut() = pedalboard_set;
+    }
+
+    /// Tell the server to load the client's active pedalboard stage
+    pub fn server_synchronise(&self) {
+        let mut socket = self.socket.borrow_mut();
+        let active_pedalboardstage = self.active_pedalboardstage.borrow();
+        socket.load_set(&active_pedalboardstage).expect("Failed to load pedalboard set");
+    }
+
+    /// Play a pedalboard from the active stage
+    /// 
+    /// Requires a lock on active_pedalboardstage and socket
+    pub fn play(&self, pedalboard_index: usize) {
+        let mut socket = self.socket.borrow_mut();
+        socket.play(pedalboard_index).expect("Failed to play pedalboard");
+        self.active_pedalboardstage.borrow_mut().set_active_pedalboard(pedalboard_index);
+    }
+
+    /// Save the entire state into the save file
+    /// 
     /// Requires a lock on active_pedalboardstage, pedalboard_library, and songs_library
     pub fn save(&self) -> Result<(), std::io::Error> {
         let stringified = serde_json::to_string(self).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
@@ -245,6 +349,7 @@ impl State {
         std::fs::write(file_path, stringified)
     }
 
+    /// Load the state from the save file
     pub fn load() -> Result<State, std::io::Error> {
         let file_path = homedir::my_home().map_err(
             |e| std::io::Error::new(std::io::ErrorKind::Other, e)
@@ -256,6 +361,9 @@ impl State {
 
         let stringified = std::fs::read_to_string(file_path)?;
         let state: State = serde_json::from_str(&stringified).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+
+        // Attempt to load set if it is connected to server, or ignore and continue
+        let _ = state.socket.borrow_mut().load_set(&state.active_pedalboardstage.borrow());
         Ok(state)
     }
 }

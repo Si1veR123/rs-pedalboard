@@ -11,7 +11,8 @@ const PEDAL_ROW_COUNT: usize = 6;
 // Must be high enough to fit any pedal
 // TODO: Make this dynamic
 // PEDAL_HEIGHT_RATIO * width = height
-const PEDAL_HEIGHT_RATIO: f32 = 2.1;
+const PEDAL_HEIGHT_RATIO: f32 = 2.2;
+const MAX_PEDAL_COUNT: usize = 12;
 
 /// Assumes scene rect is smaller than available size
 pub fn bound_scene_rect(scene_rect: &mut Rect, available_size: &Vec2) {
@@ -69,20 +70,25 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
         ui.available_size() * Vec2::new(1.0, 0.1),
         Layout::top_down(egui::Align::Center),
         |ui| {
-        if ui.button(RichText::new("Add Pedal").size(30.0).font(crate::default_proportional(30.0))).clicked() {
-            screen.show_pedal_menu = !screen.show_pedal_menu;
-        }
+            let can_show = {
+                let mut pedalboard_set = screen.state.active_pedalboardstage.borrow_mut();
+                let active_index = pedalboard_set.active_pedalboard;
+                let pedalboard = pedalboard_set.pedalboards.get_mut(active_index).unwrap();
+                pedalboard.pedals.len() < MAX_PEDAL_COUNT
+            };
+            
+            if ui.add_enabled(
+                can_show,
+                egui::Button::new(RichText::new("Add Pedal").size(30.0).font(crate::default_proportional(30.0)))
+            ).clicked() {
+                screen.show_pedal_menu = !screen.show_pedal_menu;
+            }
     });
 
     ui.add_space(5.0);
 
     // Available rect for the pedalboard itself
     let available_rect = ui.available_rect_before_wrap();
-
-    let mut pedalboard_set = screen.state.active_pedalboardstage.borrow_mut();
-    let active_index = pedalboard_set.active_pedalboard;
-    let pedalboard = pedalboard_set.pedalboards.get_mut(active_index).unwrap();
-    let pedalboard_name = pedalboard.name.clone();
 
     let pedal_width = 0.85 * (available_rect.width() / PEDAL_ROW_COUNT as f32);
     let pedal_spacing = 0.15 * (available_rect.width() / PEDAL_ROW_COUNT as f32);
@@ -104,6 +110,7 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
     
 
     let changed: Option<(usize, (String, PedalParameterValue))> = egui::Scene::new().zoom_range(1.0..=3.0).show(ui, &mut screen.pedalboard_rect, |ui| {
+    
         ui.allocate_new_ui(
             UiBuilder::new()
                 .max_rect(Rect { min: Pos2::ZERO, max: available_rect.size().to_pos2() })
@@ -112,13 +119,19 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
                 ui.painter().rect_filled(ui.available_rect_before_wrap(), 5.0, Color32::from_gray(20));
                 ui.add_space(pedal_spacing/2.0);
                 ui.horizontal_wrapped(|ui| {
-                    ui.spacing_mut().item_spacing = Vec2::new(pedal_spacing, 0.0);
-
+                    ui.spacing_mut().item_spacing = Vec2::new(pedal_spacing, 20.0);
                     let mut changed = None;
 
+                    let mut pedalboard_set = screen.state.active_pedalboardstage.borrow_mut();
+                    let active_index = pedalboard_set.active_pedalboard;
+                    let pedalboard = pedalboard_set.pedalboards.get_mut(active_index).unwrap();
+
                     let dnd_response = egui_dnd::dnd(ui, "pedalboard_designer_dnd").show_sized(pedalboard.pedals.iter_mut().enumerate(), Vec2::new(pedal_width, pedal_width*PEDAL_HEIGHT_RATIO), |ui, (i, item), handle, _state| {
+                        
+
                         let whole_pedal_rect = ui.available_rect_before_wrap();
                         ui.allocate_ui_with_layout(Vec2::new(pedal_width, pedal_width*PEDAL_HEIGHT_RATIO*0.95), Layout::top_down(egui::Align::Center), |ui| {
+                            ui.spacing_mut().item_spacing = Vec2::ZERO;
                             if let Some(v) = item.ui(ui) {
                                 changed = Some((i, v));
                             }
@@ -134,6 +147,8 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
                                 }
                             );
                         });
+
+                        
                     });
 
                     let mouse_over_delete = delete_button_rect.contains(ui.ctx().input(|i| i.pointer.hover_pos()).unwrap_or(Pos2::ZERO));
@@ -150,19 +165,14 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
 
                     if dnd_response.is_drag_finished() {
                         if let Some(update) = &dnd_response.update {
-                            // TODO: move state operations to a state method
                             if mouse_over_delete {
                                 if ui.ctx().input(|i| i.pointer.any_released()) && pedalboard.pedals.len() > 1 {
-                                    pedalboard.pedals.remove(update.from);
-                                    screen.state.socket.borrow_mut().delete_pedal(active_index, update.from);
+                                    drop(pedalboard_set);
+                                    screen.state.delete_pedal(active_index, update.from);
                                 }
                             } else {
-                                screen.state.socket.borrow_mut().move_pedal(
-                                    active_index,
-                                    update.from,
-                                    update.to
-                                );
-                                egui_dnd::utils::shift_vec(update.from, update.to, &mut pedalboard.pedals);
+                                drop(pedalboard_set);
+                                screen.state.move_pedal(active_index, update.from, update.to);
                             }
                         }
                     }
@@ -175,7 +185,13 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
 
     bound_scene_rect(&mut screen.pedalboard_rect, &available_rect.size());
 
-    drop(pedalboard_set);
+    
+    let pedalboard_name = {
+        let mut pedalboard_set = screen.state.active_pedalboardstage.borrow_mut();
+        let active_index = pedalboard_set.active_pedalboard;
+        let pedalboard = pedalboard_set.pedalboards.get_mut(active_index).unwrap();
+        pedalboard.name.clone()
+    };
 
     if let Some((pedal_index, (name, value))) = changed {
         screen.state.set_parameter(

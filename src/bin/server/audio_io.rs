@@ -1,7 +1,7 @@
 use cpal::{traits::DeviceTrait, Device, Stream, StreamConfig};
 use crossbeam::channel::Receiver;
 use ringbuf::{traits::{Consumer, Producer, Split}, HeapProd, HeapRb};
-use rs_pedalboard::{pedalboard, pedalboard_set::PedalboardSet, pedals::{Pedal, PedalTrait}};
+use rs_pedalboard::{pedalboard_set::PedalboardSet, pedals::{Pedal, PedalTrait}};
 
 use crate::constants;
 
@@ -114,7 +114,14 @@ impl InputProcessor {
                 let dest_index = words.next()?.parse::<usize>().ok()?;
 
                 let pedalboard = self.pedalboard_set.pedalboards.remove(src_index);
-                self.pedalboard_set.pedalboards.insert(dest_index, pedalboard);
+
+                let shifted_dest_index = if dest_index > src_index {
+                    dest_index - 1
+                } else {
+                    dest_index
+                };
+
+                self.pedalboard_set.pedalboards.insert(shifted_dest_index, pedalboard);
             },
             "addpedalboard" => {
                 let pedalboard_stringified = &command[command_name.len() + 1..];

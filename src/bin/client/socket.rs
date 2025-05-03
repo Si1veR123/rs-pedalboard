@@ -14,7 +14,6 @@ pub struct ClientSocket {
 
 impl ClientSocket {
     pub fn new(port: u16) -> Self {
-    
         ClientSocket {
             port,
             stream: None

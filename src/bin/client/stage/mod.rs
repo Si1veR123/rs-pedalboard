@@ -78,12 +78,12 @@ impl Widget for &mut PedalboardStageScreen {
         let height = ui.available_height();
         ui.horizontal(|ui| {
             ui.allocate_ui_with_layout(
-                Vec2::new(width * 0.3, height),
+                Vec2::new(width * 0.33, height),
                     Layout::top_down(egui::Align::Center),
                     |ui| pedalboard_stage_panel(self, ui)
             );
             ui.allocate_ui_with_layout(
-                Vec2::new(width * 0.7, height),
+                Vec2::new(width * 0.67, height),
                 Layout::top_down(egui::Align::Center),
                 |ui| pedalboard_designer(self, ui)
             );

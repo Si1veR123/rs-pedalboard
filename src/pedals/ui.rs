@@ -1,4 +1,4 @@
-use eframe::egui::{self, Color32, Id, ImageSource, RichText, Ui};
+use eframe::egui::{self, Color32, Id, RichText};
 use eframe::egui::Vec2;
 
 use super::{PedalParameter, PedalParameterValue};

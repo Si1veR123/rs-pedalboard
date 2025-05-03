@@ -10,7 +10,6 @@ use crate::THEME_COLOUR;
 pub fn pedalboard_stage_panel(screen: &mut PedalboardStageScreen, ui: &mut egui::Ui) {
     ui.painter().rect_filled(ui.available_rect_before_wrap(), 5.0, Color32::from_gray(20));
 
-    let mut active_pedalboards = screen.state.active_pedalboardstage.borrow_mut();
     let mut pedalboard_library = screen.state.pedalboard_library.borrow_mut();
 
     ui.add_space(5.0);
@@ -24,8 +23,7 @@ pub fn pedalboard_stage_panel(screen: &mut PedalboardStageScreen, ui: &mut egui:
             |ui| {
                 ui.add_space(10.0);
                 if ui.add_sized([100.0, buttons_row_height], egui::Button::new("Clear Stage")).clicked() {
-                    *active_pedalboards = PedalboardSet::default();
-                    screen.state.socket.borrow_mut().load_set(&active_pedalboards).expect("Failed to clear pedalboard set");
+                    screen.state.load_set(PedalboardSet::default());
                 }
             }
         );
@@ -51,6 +49,8 @@ pub fn pedalboard_stage_panel(screen: &mut PedalboardStageScreen, ui: &mut egui:
     let row_height = 50.0;
 
     egui::ScrollArea::vertical().show(ui, |ui| {
+        let active_pedalboards = screen.state.active_pedalboardstage.borrow_mut();
+
         let dnd_response = dnd(ui, "pedalboard_dnd").show_sized(
             active_pedalboards.pedalboards.iter().enumerate(),
             Vec2::new(row_width, row_height),
@@ -168,29 +168,26 @@ pub fn pedalboard_stage_panel(screen: &mut PedalboardStageScreen, ui: &mut egui:
                     drag_update.to
                 };
 
-                let mut socket = screen.state.socket.borrow_mut();
-                let active_index = active_pedalboards.active_pedalboard;
 
+                let active_index = active_pedalboards.active_pedalboard;
+                drop(active_pedalboards);
                 if drag_update.from == active_index {
-                    active_pedalboards.active_pedalboard = new_pedalboard_index;
-                    socket.play(active_pedalboards.active_pedalboard).expect("Socket failed to play pedalboard");
+                    screen.state.play(new_pedalboard_index);
                 }
                 else if drag_update.from < active_index && drag_update.to > active_index {
-                    active_pedalboards.active_pedalboard -= 1;
-                    socket.play(active_pedalboards.active_pedalboard).expect("Socket failed to play pedalboard");
+                    screen.state.play(active_index-1);
                 }
                 else if drag_update.from > active_index && drag_update.to <= active_index {
-                    active_pedalboards.active_pedalboard += 1;
-                    socket.play(active_pedalboards.active_pedalboard).expect("Socket failed to play pedalboard");
+                    screen.state.play(active_index+1);
                 }
 
-                socket.move_pedalboard(drag_update.from, new_pedalboard_index).expect("Socket failed to move pedalboard");
-                dnd_response.update_vec(&mut active_pedalboards.pedalboards);
+                screen.state.move_pedalboard(drag_update.from, new_pedalboard_index);
             }
         }
     }).inner;
 
     // === Perform actions ===
+    let active_pedalboards = screen.state.active_pedalboardstage.borrow_mut();
     match screen.current_action.take() {
         Some(CurrentAction::DuplicateLinked(index)) => {
             drop(active_pedalboards);
@@ -234,10 +231,8 @@ pub fn pedalboard_stage_panel(screen: &mut PedalboardStageScreen, ui: &mut egui:
             pedalboard_library.push(pedalboard);
         },
         Some(CurrentAction::ChangeActive(index)) => {
-            active_pedalboards.active_pedalboard = index;
-
-            let mut socket = screen.state.socket.borrow_mut();
-            socket.play(index).expect("Failed to change active pedalboard");
+            drop(active_pedalboards);
+            screen.state.play(index);
         },
         None => {}
     }
