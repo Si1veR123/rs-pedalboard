@@ -32,4 +32,4 @@ neural-amp-modeler-core-bindgen = { git = "https://github.com/Si1veR123/rs-neura
 homedir = "0.3.4"
 realfft = "3.4.0"
 rustfft = "6.3.0"
-hound = "3.5.1"
+hound = "^3.5.1"

@@ -22,6 +22,8 @@ mod nam;
 pub use nam::Nam;
 mod impulse_response;
 pub use impulse_response::ImpulseResponse;
+mod noise_gate;
+pub use noise_gate::NoiseGate;
 
 mod ui;
 
@@ -189,7 +191,8 @@ pub enum Pedal {
     Delay(Delay),
     GraphicEq7(GraphicEq7),
     Nam(Nam),
-    ImpulseResponse(ImpulseResponse)
+    ImpulseResponse(ImpulseResponse),
+    NoiseGate(NoiseGate)
 }
 
 impl PedalDiscriminants {
@@ -203,7 +206,8 @@ impl PedalDiscriminants {
             PedalDiscriminants::Delay => Pedal::Delay(Delay::new()),
             PedalDiscriminants::GraphicEq7 => Pedal::GraphicEq7(GraphicEq7::new()),
             PedalDiscriminants::Nam => Pedal::Nam(Nam::new()),
-            PedalDiscriminants::ImpulseResponse => Pedal::ImpulseResponse(ImpulseResponse::new())
+            PedalDiscriminants::ImpulseResponse => Pedal::ImpulseResponse(ImpulseResponse::new()),
+            PedalDiscriminants::NoiseGate => Pedal::NoiseGate(NoiseGate::new())
         }
     }
 }
