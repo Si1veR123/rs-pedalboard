@@ -338,6 +338,27 @@ impl State {
         self.active_pedalboardstage.borrow_mut().set_active_pedalboard(pedalboard_index);
     }
 
+    /// Get a received command from the server, beginning with the given prefix
+    /// 
+    /// Requires a lock on socket
+    pub fn get_command(&self, prefix: &str) -> Option<String> {
+        let mut socket = self.socket.borrow_mut();
+        socket.update_recv().ok()?;
+        if let Some(pos) = socket.received_commands.iter().position(|cmd| cmd.starts_with(prefix)) {
+            Some(socket.received_commands.remove(pos))
+        } else {
+            None
+        }
+    }
+
+    /// Set whether the tuner is active
+    /// 
+    /// Requires a lock on socket
+    pub fn set_tuner_active(&self, active: bool) {
+        let mut socket = self.socket.borrow_mut();
+        socket.set_tuner(active).expect("Failed to set tuner active");
+    }
+
     /// Save the entire state into the save file
     /// 
     /// Requires a lock on active_pedalboardstage, pedalboard_library, and songs_library

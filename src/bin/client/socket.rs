@@ -1,3 +1,4 @@
+use std::io::Read;
 use std::io::Write;
 use std::net::TcpStream;
 use std::net::Ipv4Addr;
@@ -10,19 +11,24 @@ use rs_pedalboard::pedals::PedalParameterValue;
 pub struct ClientSocket {
     port: u16,
     stream: Option<TcpStream>,
+    // Commands that have been received but not yet processed
+    pub received_commands: Vec<String>,
 }
 
 impl ClientSocket {
     pub fn new(port: u16) -> Self {
         ClientSocket {
             port,
-            stream: None
+            stream: None,
+            received_commands: Vec::new(),
         }
     }
 
     pub fn connect(&mut self) -> std::io::Result<()> {
         log::info!("Connecting to server on port {}", self.port);
-        self.stream = Some(TcpStream::connect((Ipv4Addr::LOCALHOST, self.port))?);
+        let stream = TcpStream::connect((Ipv4Addr::LOCALHOST, self.port))?;
+        stream.set_nonblocking(true)?;
+        self.stream = Some(stream);
         log::info!("Connected to server on port {}", self.port);
         Ok(())
     }
@@ -40,6 +46,33 @@ impl ClientSocket {
         }
         
         Ok(())
+    }
+
+    pub fn update_recv(&mut self) -> std::io::Result<()> {
+        if let Some(stream) = &mut self.stream {
+            let mut buffer = [0u8; 1024];
+            loop {
+                // Stream is non-blocking
+                match stream.read(&mut buffer) {
+                    Ok(0) => break, // No more data
+                    Ok(n) => {
+                        let data = String::from_utf8_lossy(&buffer[..n]);
+                        for line in data.lines() {
+                            log::info!("Received: {:?}", line);
+                            self.received_commands.push(line.to_string());
+                        }
+                    }
+                    Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => break,
+                    Err(e) => return Err(e),
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub fn set_tuner(&mut self, active: bool) -> std::io::Result<()> {
+        let message = format!("tuner {}\n", if active { "on" } else { "off" });
+        self.send(&message)
     }
 
     pub fn set_parameter(&mut self, pedalboard_index: usize, pedal_index: usize, name: &str, parameter_value: &PedalParameterValue) -> std::io::Result<()> {

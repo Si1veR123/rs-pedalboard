@@ -33,3 +33,4 @@ movepedal <pedalboard index> <src index> <dest index>
 loadset <pedalboardset stringified>
 play <pedalboard index>
 master <volume 0-1>
+tuner on/off

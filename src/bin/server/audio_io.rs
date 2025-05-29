@@ -1,7 +1,9 @@
+use std::time::Instant;
+
 use cpal::{traits::DeviceTrait, Device, Stream, StreamConfig};
-use crossbeam::channel::Receiver;
+use crossbeam::channel::{Receiver, Sender};
 use ringbuf::{traits::{Consumer, Producer, Split}, HeapProd, HeapRb};
-use rs_pedalboard::{pedalboard_set::PedalboardSet, pedals::{Pedal, PedalTrait}};
+use rs_pedalboard::{pedalboard_set::PedalboardSet, pedals::{Pedal, PedalTrait}, dsp_algorithms::yin::Yin};
 
 use crate::constants;
 
@@ -16,7 +18,8 @@ pub fn create_linked_streams(
     pedalboard_set: PedalboardSet,
     latency: f32,
     buffer_size: usize,
-    command_receiver: Receiver<Box<str>>
+    command_receiver: Receiver<Box<str>>,
+    command_sender: Sender<Box<str>>
 ) -> (Stream, Stream) {
     let ring_buffer_size = ring_buffer_size(buffer_size, latency, 48000.0);
     log::info!("Ring buffer size: {}", ring_buffer_size);
@@ -26,9 +29,13 @@ pub fn create_linked_streams(
     let mut input_processor = InputProcessor {
         pedalboard_set,
         command_receiver,
+        command_sender,
         writer: audio_buffer_writer,
         processing_buffer: Vec::with_capacity(buffer_size as usize),
-        master_volume: 1.0
+        master_volume: 1.0,
+        tuner_enabled: false,
+        tuner_last_sent: Instant::now(),
+        tuner: Yin::new(0.1, 40, 1300, 48000)
     };
 
     let config = StreamConfig {
@@ -60,13 +67,34 @@ pub fn create_linked_streams(
 struct InputProcessor {
     pedalboard_set: PedalboardSet,
     command_receiver: Receiver<Box<str>>,
+    command_sender: Sender<Box<str>>,
     writer: HeapProd<f32>,
     processing_buffer: Vec<f32>,
-    master_volume: f32
+    master_volume: f32,
+
+    tuner_enabled: bool,
+    tuner_last_sent: Instant, 
+    tuner: Yin
 }
 
 impl InputProcessor {
     fn process_audio(&mut self, data: &[f32]) {
+        
+        if self.tuner_enabled {
+            self.tuner.push_to_buffer(data);
+            if Instant::now().duration_since(self.tuner_last_sent).as_millis() >= 200 {
+                let frequency = self.tuner.process_buffer();
+                self.tuner_last_sent = Instant::now();
+                log::debug!("Tuner frequency: {:.2} Hz", frequency);
+                if frequency > 0.0 {
+                    let command = format!("tuner {:.2}\n", frequency);
+                    if self.command_sender.send(command.into()).is_err() {
+                        log::error!("Failed to send tuner command");
+                    }
+                }
+            }
+        }
+
         self.processing_buffer.clear();
         self.processing_buffer.extend_from_slice(data);
 
@@ -86,6 +114,7 @@ impl InputProcessor {
             log::error!("Failed to write all processed data. Output is behind.")
         }
 
+        // Handle commands that have been received
         while let Ok(command) = self.command_receiver.try_recv() {
             if self.handle_command(command).is_none() {
                 log::error!("Failed to handle command");
@@ -179,6 +208,23 @@ impl InputProcessor {
             "master" => {
                 let volume = words.next()?.parse::<f32>().ok()?;
                 self.master_volume = volume;
+            },
+            "tuner" => {
+                let enable_str = words.next()?;
+                match enable_str {
+                    "on" => {
+                        self.tuner_enabled = true;
+                        log::info!("Tuner enabled");
+                    },
+                    "off" => {
+                        self.tuner_enabled = false;
+                        log::info!("Tuner disabled");
+                    },
+                    _ => {
+                        log::error!("Invalid value for tuner command: expected 'on' or 'off'");
+                        return None;
+                    }
+                }
             },
             _ => return None
         }

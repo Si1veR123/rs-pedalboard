@@ -43,7 +43,8 @@ fn main() {
 
     let pedalboard_set = PedalboardSet::default();
 
-    let (command_sender, command_receiver) = bounded(12);
+    let (socket_command_sender, audio_command_receiver) = bounded(12);
+    let (audio_command_sender, socket_command_receiver) = bounded(12);
 
     let (in_stream, out_stream) = audio_io::create_linked_streams(
         input,
@@ -51,7 +52,8 @@ fn main() {
         pedalboard_set,
         constants::RING_BUFFER_LATENCY_MS,
         constants::FRAMES_PER_PERIOD,
-        command_receiver
+        audio_command_receiver,
+        audio_command_sender
     );
 
     in_stream.play().expect("Failed to play input stream");
@@ -60,5 +62,5 @@ fn main() {
     after_setup();
 
     // Will loop infinitely (unless panic)
-    socket::ServerSocket::new(29475, command_sender).start().expect("Failed to start server");
+    socket::ServerSocket::new(29475, socket_command_sender, socket_command_receiver).start().expect("Failed to start server");
 }

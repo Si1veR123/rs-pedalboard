@@ -1,19 +1,21 @@
-use std::io::Read;
+use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::net::Ipv4Addr;
 
-use crossbeam::channel::Sender;
+use crossbeam::channel::{Sender, Receiver};
 
 pub struct ServerSocket {
     port: u16,
     command_sender: Sender<Box<str>>,
+    command_receiver: Receiver<Box<str>>,
 }
 
 impl ServerSocket {
-    pub fn new(port: u16, command_sender: Sender<Box<str>>) -> Self {
+    pub fn new(port: u16, command_sender: Sender<Box<str>>, command_receiver: Receiver<Box<str>>) -> Self {
         ServerSocket {
             port,
             command_sender,
+            command_receiver,
         }
     }
 
@@ -57,6 +59,7 @@ impl ServerSocket {
 
     fn handle_client(&mut self, mut stream: TcpStream) {
         let mut buffer = Vec::new();
+        stream.set_nonblocking(true).expect("Failed to set non-blocking");
 
         loop {
             match self.read_to_newline(&mut stream, &mut buffer) {
@@ -71,14 +74,25 @@ impl ServerSocket {
                         }
                     } else {
                         log::error!("Received invalid UTF-8 string");
-                        continue;
                     }
                 },
+                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
                 Err(e) => {
                     log::error!("Failed to read from socket: {}", e);
                     break;
                 }
             }
+
+            // Send any commands that have been received
+            while let Ok(command) = self.command_receiver.try_recv() {
+                if let Err(e) = stream.write_all(command.as_bytes()) {
+                    log::error!("Failed to send command to client: {}", e);
+                    break;
+                }
+                log::info!("Sent command: {:?}", command);
+            }
         }
+
+        stream.set_nonblocking(false).expect("Failed to restore blocking");
     }
 }

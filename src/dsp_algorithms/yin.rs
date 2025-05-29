@@ -1,3 +1,4 @@
+use image::buffer;
 /// Credit to https://github.com/saresend/yin/ for some functions
 use ringbuf::{traits::{Consumer, Observer, Producer, Split}, HeapCons, HeapProd, HeapRb};
 
@@ -17,32 +18,37 @@ pub enum Note {
     GSharp,
 }
 
-// Get note and offset in cents
-pub fn freq_to_note(freq: f32) -> (Note, isize) {
+// Get note, octave, and offset in cents
+pub fn freq_to_note(freq: f32) -> (Note, isize, isize) {
     // Offset from A4 in cents
     let cents_offset = 1200.0 * (freq / 440.0).log2();
     // Offset from A4 in semitones
     let semitone_offset = (cents_offset / 100.0).round() as isize;
-    // Normalize to 0-11
-    let note_index = ((semitone_offset % 12 + 12) % 12) as u8;
+    // MIDI note number for A4 is 69
+    let midi_note = 69 + semitone_offset;
+    // Note index (0 = A, 1 = A#, ..., 11 = G#)
+    let note_index = ((midi_note % 12 + 12) % 12) as u8;
     let note = match note_index {
-        0 => Note::A,
-        1 => Note::ASharp,
-        2 => Note::B,
-        3 => Note::C,
-        4 => Note::CSharp,
-        5 => Note::D,
-        6 => Note::DSharp,
-        7 => Note::E,
-        8 => Note::F,
-        9 => Note::FSharp,
-        10 => Note::G,
-        11 => Note::GSharp,
+        0 => Note::C,
+        1 => Note::CSharp,
+        2 => Note::D,
+        3 => Note::DSharp,
+        4 => Note::E,
+        5 => Note::F,
+        6 => Note::FSharp,
+        7 => Note::G,
+        8 => Note::GSharp,
+        9 => Note::A,
+        10 => Note::ASharp,
+        11 => Note::B,
         _ => unreachable!(),
     };
+
+    // Octave calculation: MIDI note 69 is A4, so octave = (midi_note / 12) - 1
+    let octave = (midi_note / 12) - 1;
     // Offset from nearest semitone in cents
     let semitone_cents_offset = cents_offset - (semitone_offset as f32 * 100.0);
-    (note, semitone_cents_offset as isize)
+    (note, octave, semitone_cents_offset as isize)
 }
 
 pub struct Yin {
@@ -85,12 +91,11 @@ impl Yin {
         }
     }
 
-    pub fn process_buffer(&mut self, buffer: &[f32]) -> f32 {
-        let n = self.sample_buffer_prod.push_slice(buffer);
-        if n != buffer.len() {
-            log::warn!("YIN can't process full buffer. Reduce size.")
-        }
+    pub fn push_to_buffer(&mut self, buffer: &[f32]) -> usize {
+        self.sample_buffer_prod.push_slice(buffer)
+    }
 
+    pub fn process_buffer(&mut self) -> f32 {
         let occupied_samples = self.sample_buffer_cons.occupied_len();
         if occupied_samples >= self.tau_max {
             self.sample_frame_buffer.clear();
@@ -186,7 +191,8 @@ mod tests {
                 example.push(prev_value);
             }
         }
-        let freq = estimator.process_buffer(&example);
+        estimator.push_to_buffer(&example);
+        let freq = estimator.process_buffer();
         assert!(freq - 20.0 < 0.5, "Yin frequency estimation failed: {} != 20.0", freq);
     }
 }

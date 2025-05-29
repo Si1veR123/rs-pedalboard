@@ -135,7 +135,7 @@ impl PedalboardClientApp {
             pedalboard_stage_screen: PedalboardStageScreen::new(leaked_state),
             pedalboard_library_screen: PedalboardLibraryScreen::new(leaked_state),
             songs_screen: SongsScreen::new(leaked_state),
-            utilities_screen: UtilitiesScreen::new(),
+            utilities_screen: UtilitiesScreen::new(leaked_state),
             state: leaked_state,
         }
     }
@@ -158,6 +158,7 @@ impl eframe::App for PedalboardClientApp {
                         if ui.add_sized(button_size, egui::Button::new(
                             RichText::new("Stage View").size(20.0)
                         ).stroke(button_outline[0]).fill(button_bg[0])).clicked() {
+                            self.state.set_tuner_active(false);
                             self.selected_screen = 0;
                         }
                     });
@@ -165,6 +166,7 @@ impl eframe::App for PedalboardClientApp {
                         if ui.add_sized(button_size, egui::Button::new(
                             RichText::new("Library").size(20.0)
                         ).stroke(button_outline[1]).fill(button_bg[1])).clicked() {
+                            self.state.set_tuner_active(false);
                             self.selected_screen = 1;
                         }
                     });
@@ -172,6 +174,7 @@ impl eframe::App for PedalboardClientApp {
                         if ui.add_sized(button_size, egui::Button::new(
                             RichText::new("Songs").size(20.0)
                         ).stroke(button_outline[2]).fill(button_bg[2])).clicked() {
+                            self.state.set_tuner_active(false);
                             self.selected_screen = 2;
                         }
                     });
