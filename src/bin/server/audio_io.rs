@@ -82,15 +82,13 @@ impl InputProcessor {
         
         if self.tuner_enabled {
             self.tuner.push_to_buffer(data);
-            if Instant::now().duration_since(self.tuner_last_sent).as_millis() >= 200 {
+            if Instant::now().duration_since(self.tuner_last_sent).as_millis() >= 50 {
                 let frequency = self.tuner.process_buffer();
                 self.tuner_last_sent = Instant::now();
                 log::debug!("Tuner frequency: {:.2} Hz", frequency);
-                if frequency > 0.0 {
-                    let command = format!("tuner {:.2}\n", frequency);
-                    if self.command_sender.send(command.into()).is_err() {
-                        log::error!("Failed to send tuner command");
-                    }
+                let command = format!("tuner {:.2}\n", frequency);
+                if self.command_sender.send(command.into()).is_err() {
+                    log::error!("Failed to send tuner command");
                 }
             }
         }

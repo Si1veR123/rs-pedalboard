@@ -81,8 +81,8 @@ fn main() {
     log::info!("Started logging...");
 
     let mut native_options = eframe::NativeOptions::default();
-    native_options.viewport = native_options.viewport.with_inner_size((WINDOW_WIDTH, WINDOW_HEIGHT));
-    native_options.viewport.resizable = Some(false);
+    native_options.persist_window = false;
+    native_options.viewport = native_options.viewport.with_inner_size((WINDOW_WIDTH, WINDOW_HEIGHT)).with_resizable(false).with_maximized(false).with_maximize_button(false);
 
     eframe::run_native("Pedalboard", native_options, Box::new(
         |cc| {
@@ -182,6 +182,7 @@ impl eframe::App for PedalboardClientApp {
                         if ui.add_sized(button_size, egui::Button::new(
                             RichText::new("Utilities").size(20.0)
                         ).stroke(button_outline[3]).fill(button_bg[3])).clicked() {
+                            self.state.set_tuner_active(true);
                             self.selected_screen = 3;
                         }
                     });

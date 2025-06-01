@@ -1,4 +1,4 @@
-use eframe::egui::{self, Widget};
+use eframe::egui::{self, RichText, Vec2, Widget};
 
 use crate::state::State;
 use rs_pedalboard::dsp_algorithms::yin::freq_to_note;
@@ -6,29 +6,29 @@ use rs_pedalboard::dsp_algorithms::yin::freq_to_note;
 pub struct TunerWidget {
     pub state: &'static State,
     recent_freq: f32,
+    recent_freq_smooth: f32,
     pub active: bool,
 }
 
 impl TunerWidget {
     pub fn new(state: &'static State) -> Self {
-        Self { state, recent_freq: 0.0, active: false }
-    }
-
-    fn smooth_update(&mut self, new_freq: f32) {
-        // Smooth the frequency update to avoid abrupt changes
-        // If the change is large, assume a note change
-        if (new_freq - self.recent_freq).abs() / self.recent_freq > 0.1 {
-            self.recent_freq = new_freq;
-        } else {
-            self.recent_freq = 0.4 * new_freq + 0.6 * self.recent_freq;
-        }
+        Self { state, recent_freq: 0.0, recent_freq_smooth: 0.0, active: false }
     }
 
     pub fn update_frequency(&mut self) {
+        // Smooth the recent_freq_smooth towards recent_freq
+        if self.recent_freq_smooth != self.recent_freq {
+            self.recent_freq_smooth += (self.recent_freq - self.recent_freq_smooth) * 0.02;
+        }
+
         if let Some(cmd) = self.state.get_command("tuner") {
             if let Some(freq) = cmd.get(6..) {
                 if let Ok(freq) = freq.parse::<f32>() {
-                    self.smooth_update(freq);
+                    self.recent_freq = freq;
+                    if (self.recent_freq - self.recent_freq_smooth).abs() > 5.0 {
+                        self.recent_freq_smooth = self.recent_freq;
+                    }
+
                     log::debug!("Tuner frequency updated: {:?}", self.recent_freq);
                 } else {
                     log::warn!("Failed to parse frequency from command: {}", cmd);
@@ -40,28 +40,66 @@ impl TunerWidget {
     }
 }
 
+
 impl Widget for &mut TunerWidget {
     fn ui(self, ui: &mut egui::Ui) -> egui::Response {
         if self.active {
+            self.update_frequency();
             ui.ctx().request_repaint();
         }
 
-        self.update_frequency();
-        let changed = ui.horizontal(|ui| {
-            ui.label("Tuner:");
-            let mut changed = false;
-            changed |= ui.radio_value(&mut self.active, true, "On").changed();
-            changed |= ui.radio_value(&mut self.active, false, "Off").changed();
-            changed
-        }).inner;
+        let (note_name, octave, cents_offset) = if self.recent_freq_smooth == 0.0 {
+            let question = String::from("?");
+            (question.clone(), question.clone(), 0)
+        } else {
+            let recent_note = freq_to_note(self.recent_freq_smooth);
+            (recent_note.0.to_string(), recent_note.1.to_string(), recent_note.2)
+        };
+        
 
-        if changed {
-            self.state.set_tuner_active(self.active);
-        }
-        let recent_note = freq_to_note(self.recent_freq);
-        ui.label(format!(
-            "Note: {:?}, Octave: {}, Semitone Cents Offset: {}",
-            recent_note.0, recent_note.1, recent_note.2
-        ))
+        let r = ui.vertical_centered(|ui| {
+            // Note name
+            ui.label(RichText::new(format!("{}", note_name)).size(50.0));
+            // Octave
+            ui.label(RichText::new(octave).size(25.0));
+
+            // Cents offset
+            let bar_height = 50.0;
+            let bg_im = egui::Image::new(egui::include_image!("../files/tuner_bar.png")).max_height(bar_height);
+            let bg_response = ui.add(bg_im);
+            let needle_im = egui::Image::new(egui::include_image!("../files/tuner_needle.png"))
+                .max_height(bar_height-10.0)
+                .tint(crate::BACKGROUND_COLOUR);
+            let needle_size = match needle_im.load_for_size(ui.ctx(), Vec2::splat(50.0)).expect("Failed to load needle image size").size() {
+                Some(size) => size,
+                None => {
+                    log::warn!("Failed to load needle image size");
+                    return;
+                }
+            };
+
+            let bar_width = bg_response.rect.width();
+            let needle_x_frac = (cents_offset as f32+50.0) / 100.0;
+            let needle_x = (bar_width * needle_x_frac).clamp(0.0, bar_width - needle_size.x);
+
+            let min = bg_response.rect.min + Vec2::new(needle_x - needle_size.x / 2.0, bar_height - needle_size.y);
+
+            needle_im.paint_at(ui, egui::Rect{
+                min,
+                max: min + Vec2::new(needle_size.x, needle_size.y),
+            });
+
+            // Cents offset label
+            let cents_label = if cents_offset == 0 {
+                String::from("0")
+            } else if cents_offset > 0 {
+                format!("+{}", cents_offset)
+            } else {
+                format!("-{}", cents_offset)
+            };
+            ui.label(RichText::new(cents_label).size(20.0));
+        }).response;
+
+        r
     }
 }

@@ -95,10 +95,7 @@ impl Hash for NoiseGate {
 
 impl PedalTrait for NoiseGate {
     fn process_audio(&mut self, buffer: &mut [f32]) {
-        let rms = buffer.iter().map(|x| x * x).sum::<f32>().sqrt() / buffer.len() as f32;
-        let peak = buffer.iter().copied().fold(0.0_f32, |a, b| a.max(b.abs()));
-        println!("Peak: {:.6}, RMS: {:.6}", peak, rms);
-        
+    
         let threshold_open = self.parameters.get("threshold_open").unwrap().value.as_float().unwrap();
         let threshold_close = self.parameters.get("threshold_close").unwrap().value.as_float().unwrap();
         let release = self.parameters.get("release").unwrap().value.as_float().unwrap();

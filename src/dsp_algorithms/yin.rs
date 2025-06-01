@@ -1,4 +1,5 @@
-use image::buffer;
+use std::fmt::Display;
+
 /// Credit to https://github.com/saresend/yin/ for some functions
 use ringbuf::{traits::{Consumer, Observer, Producer, Split}, HeapCons, HeapProd, HeapRb};
 
@@ -16,6 +17,25 @@ pub enum Note {
     FSharp,
     G,
     GSharp,
+}
+
+impl Display for Note {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Note::A => write!(f, "A"),
+            Note::ASharp => write!(f, "A#"),
+            Note::B => write!(f, "B"),
+            Note::C => write!(f, "C"),
+            Note::CSharp => write!(f, "C#"),
+            Note::D => write!(f, "D"),
+            Note::DSharp => write!(f, "D#"),
+            Note::E => write!(f, "E"),
+            Note::F => write!(f, "F"),
+            Note::FSharp => write!(f, "F#"),
+            Note::G => write!(f, "G"),
+            Note::GSharp => write!(f, "G#"),
+        }
+    }
 }
 
 // Get note, octave, and offset in cents
