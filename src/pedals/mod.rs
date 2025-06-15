@@ -1,3 +1,7 @@
+/// TODO: Make a distinciton between client and server pedals.
+/// Currently, for example, parameters are set on both client and server,
+/// even though client doesnt process audio.
+
 use std::collections::HashMap;
 use std::hash::Hash;
 
@@ -24,6 +28,8 @@ mod impulse_response;
 pub use impulse_response::ImpulseResponse;
 mod noise_gate;
 pub use noise_gate::NoiseGate;
+mod vst2;
+pub use vst2::Vst2;
 
 mod ui;
 
@@ -153,7 +159,7 @@ impl PedalParameterValue {
 }
 
 #[enum_dispatch]
-pub trait PedalTrait: Send + Hash {
+pub trait PedalTrait: Hash {
     fn process_audio(&mut self, buffer: &mut [f32]);
 
     fn get_parameters(&self) -> &HashMap<String, PedalParameter>;
@@ -192,7 +198,8 @@ pub enum Pedal {
     GraphicEq7(GraphicEq7),
     Nam(Nam),
     ImpulseResponse(ImpulseResponse),
-    NoiseGate(NoiseGate)
+    NoiseGate(NoiseGate),
+    Vst2(Vst2),
 }
 
 impl PedalDiscriminants {
@@ -207,7 +214,8 @@ impl PedalDiscriminants {
             PedalDiscriminants::GraphicEq7 => Pedal::GraphicEq7(GraphicEq7::new()),
             PedalDiscriminants::Nam => Pedal::Nam(Nam::new()),
             PedalDiscriminants::ImpulseResponse => Pedal::ImpulseResponse(ImpulseResponse::new()),
-            PedalDiscriminants::NoiseGate => Pedal::NoiseGate(NoiseGate::new())
+            PedalDiscriminants::NoiseGate => Pedal::NoiseGate(NoiseGate::new()),
+            PedalDiscriminants::Vst2 => Pedal::Vst2(Vst2::new()),
         }
     }
 }

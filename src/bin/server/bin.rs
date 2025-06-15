@@ -41,15 +41,12 @@ fn main() {
 
     let (_host, input, output) = setup();
 
-    let pedalboard_set = PedalboardSet::default();
-
     let (socket_command_sender, audio_command_receiver) = bounded(12);
     let (audio_command_sender, socket_command_receiver) = bounded(12);
 
     let (in_stream, out_stream) = audio_io::create_linked_streams(
         input,
         output,
-        pedalboard_set,
         constants::RING_BUFFER_LATENCY_MS,
         constants::FRAMES_PER_PERIOD,
         audio_command_receiver,

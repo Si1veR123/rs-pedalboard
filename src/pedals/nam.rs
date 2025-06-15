@@ -7,15 +7,9 @@ use serde::{ser::SerializeMap, Deserialize, Serialize};
 use eframe::egui::{self, Layout, Vec2};
 
 use super::{ui::pedal_knob, PedalParameter, PedalParameterValue, PedalTrait};
+use crate::unique_time_id;
 
 const NAM_SAVE_PATH: &str = r"rs_pedalboard/NAM";
-
-fn unique_time_id() -> usize {
-    let now = std::time::SystemTime::now();
-    let duration = now.duration_since(std::time::UNIX_EPOCH).unwrap();
-    let nanoseconds = duration.subsec_nanos() as usize;
-    nanoseconds
-}
 
 pub struct Nam {
     modeler: NeuralAmpModeler,

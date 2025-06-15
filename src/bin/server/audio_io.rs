@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::{cell::UnsafeCell, time::Instant};
 
 use cpal::{traits::DeviceTrait, Device, Stream, StreamConfig};
 use crossbeam::channel::{Receiver, Sender};
@@ -15,7 +15,6 @@ pub fn ring_buffer_size(buffer_size: usize, latency: f32, sample_rate: f32) -> u
 pub fn create_linked_streams(
     in_device: Device,
     out_device: Device,
-    pedalboard_set: PedalboardSet,
     latency: f32,
     buffer_size: usize,
     command_receiver: Receiver<Box<str>>,
@@ -24,19 +23,9 @@ pub fn create_linked_streams(
     let ring_buffer_size = ring_buffer_size(buffer_size, latency, 48000.0);
     log::info!("Ring buffer size: {}", ring_buffer_size);
     let ring_buffer: HeapRb<f32> = HeapRb::new(ring_buffer_size);
-    let (audio_buffer_writer, mut audio_buffer_reader) = ring_buffer.split();
 
-    let mut input_processor = InputProcessor {
-        pedalboard_set,
-        command_receiver,
-        command_sender,
-        writer: audio_buffer_writer,
-        processing_buffer: Vec::with_capacity(buffer_size as usize),
-        master_volume: 1.0,
-        tuner_enabled: false,
-        tuner_last_sent: Instant::now(),
-        tuner: Yin::new(0.1, 40, 1300, 48000)
-    };
+    let (audio_buffer_writer, mut audio_buffer_reader) = ring_buffer.split();
+    let mut maybe_writer = Some(audio_buffer_writer);
 
     let config = StreamConfig {
         channels: 1,
@@ -44,12 +33,40 @@ pub fn create_linked_streams(
         buffer_size: cpal::BufferSize::Fixed(buffer_size as u32)
     };
 
-    let stream_in = in_device.build_input_stream(&config, move |data: &[f32], _| {
-        input_processor.process_audio(data);
-    }, move |err| {
-        log::error!("An error occurred on the input stream: {}", err);
-    },
-    None).expect("Failed to build input stream");
+    let stream_in = in_device.build_input_stream(
+        &config,
+        {
+            move |data: &[f32], _| {
+                thread_local! {
+                    static INPUT_PROCESSOR: UnsafeCell<Option<InputProcessor>> = UnsafeCell::new(None);
+                }
+
+                INPUT_PROCESSOR.with(|ip| {
+                    let input_processor = unsafe { &mut *ip.get() };
+
+                    if input_processor.is_none() {
+                        *input_processor = Some(InputProcessor {
+                            pedalboard_set: PedalboardSet::default(),
+                            command_receiver: command_receiver.clone(),
+                            command_sender: command_sender.clone(),
+                            writer: maybe_writer.take().expect("Writer moved more than once"),
+                            processing_buffer: Vec::with_capacity(buffer_size),
+                            master_volume: 1.0,
+                            tuner_enabled: false,
+                            tuner_last_sent: Instant::now(),
+                            tuner: Yin::new(0.1, 40, 1300, 48000),
+                        });
+                    }
+
+                    input_processor.as_mut().unwrap().process_audio(data);
+                });
+            }
+        },
+        move |err| {
+            log::error!("An error occurred on the input stream: {}", err);
+        },
+        None,
+    ).expect("Failed to build input stream");
 
     let stream_out = out_device.build_output_stream(&config, move |data: &mut [f32], _| {
         let read = audio_buffer_reader.pop_slice(data);

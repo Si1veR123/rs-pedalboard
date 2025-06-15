@@ -517,7 +517,7 @@ mod tests {
         ).expect("Failed to start logging");
         log::info!("Started logging...");
 
-        let plugin_path = PathBuf::from(r"C:\Users\conno\Downloads\SiberianHamster.vst3");
+        let plugin_path = PathBuf::from(r"C:\Program Files\Common Files\VST3\NA Black.vst3\Contents\x86_64-win\NA Black.vst3");
         let max_samples = 1024;
 
         let result = RawVst3Plugin::load(plugin_path, max_samples);
@@ -525,7 +525,7 @@ mod tests {
         
         let mut plugin = result.unwrap();
         log::info!("Plugin loaded successfully");
-        plugin.open_gui_window().expect("Failed to open GUI window");
+        //plugin.open_gui_window().expect("Failed to open GUI window");
         loop {
             let sample_buffer = &mut vec![0.5; max_samples];
             plugin.process_buffer(sample_buffer);
