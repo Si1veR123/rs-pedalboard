@@ -72,7 +72,6 @@ pub fn pedalboard_stage_panel(screen: &mut PedalboardStageScreen, ui: &mut egui:
                             );
                         }
                         
-                        // TODO: Fix pedalboard name column can't take up more than 50% of the row
                         ui.columns(2, |columns| {
                             columns[0].horizontal_centered(|ui| {
                                 let (text_color, drag_icon_color) = if active_pedalboards.active_pedalboard == i {

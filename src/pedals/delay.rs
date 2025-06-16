@@ -6,7 +6,7 @@ use crate::dsp_algorithms::{biquad, eq};
 use super::ui::{pedal_label_rect, pedal_knob};
 use super::{PedalParameter, PedalParameterValue, PedalTrait};
 
-use eframe::egui::{self, include_image};
+use eframe::egui::{self, include_image, Color32};
 use serde::ser::SerializeMap;
 use serde::{Serialize, Deserialize};
 
@@ -166,22 +166,22 @@ impl PedalTrait for Delay {
 
         let mut to_change = None;
         let delay_param = self.get_parameters().get("delay").unwrap();
-        if let Some(value) = pedal_knob(ui, "Delay", delay_param, egui::Vec2::new(0.12, 0.01), 0.25) {
+        if let Some(value) = pedal_knob(ui, "Delay", delay_param, egui::Vec2::new(0.12, 0.01), 0.25, Color32::BLACK) {
             to_change = Some(("delay".to_string(), value));
         }
 
         let decay_param = self.get_parameters().get("decay").unwrap();
-        if let Some(value) = pedal_knob(ui, "Decay", decay_param, egui::Vec2::new(0.47, 0.01), 0.25) {
+        if let Some(value) = pedal_knob(ui, "Decay", decay_param, egui::Vec2::new(0.47, 0.01), 0.25, Color32::BLACK) {
             to_change = Some(("decay".to_string(), value));
         }
 
         let warmth_param = self.get_parameters().get("warmth").unwrap();
-        if let Some(value) = pedal_knob(ui, "Warmth", warmth_param, egui::Vec2::new(0.3, 0.17), 0.25) {
+        if let Some(value) = pedal_knob(ui, "Warmth", warmth_param, egui::Vec2::new(0.3, 0.17), 0.25, Color32::BLACK) {
             to_change = Some(("warmth".to_string(), value));
         }
 
         let mix_param = self.get_parameters().get("mix").unwrap();
-        if let Some(value) = pedal_knob(ui, "Mix", mix_param, egui::Vec2::new(0.64, 0.17), 0.25) {
+        if let Some(value) = pedal_knob(ui, "Mix", mix_param, egui::Vec2::new(0.64, 0.17), 0.25, Color32::BLACK) {
             to_change = Some(("mix".to_string(), value));
         }
 

@@ -4,7 +4,7 @@ use std::hash::Hash;
 
 use neural_amp_modeler::NeuralAmpModeler;
 use serde::{ser::SerializeMap, Deserialize, Serialize};
-use eframe::egui::{self, Layout, Vec2};
+use eframe::egui::{self, include_image, Color32, Layout, UiBuilder, Vec2};
 
 use super::{ui::pedal_knob, PedalParameter, PedalParameterValue, PedalTrait};
 use crate::unique_time_id;
@@ -236,8 +236,12 @@ impl PedalTrait for Nam {
     }
 
     fn ui(&mut self, ui: &mut eframe::egui::Ui) -> Option<(String,PedalParameterValue)> {
-        let available_rect = ui.available_rect_before_wrap();
-        ui.painter().rect_filled(available_rect.with_max_y(available_rect.max.y-20.0), 10.0, eframe::egui::Color32::from_rgb(70, 70, 95));
+        let mut img_ui = ui.new_child(
+            UiBuilder::new()
+                .max_rect(ui.available_rect_before_wrap())
+        );
+
+        img_ui.add(egui::Image::new(include_image!("images/pedal_gradient.png")).tint(Color32::from_rgb(115, 18, 50)));
 
         // ew, TODO: make NeuralAmpModeler::get_model_path() return a PathBuf instead of a String
         let selected = PathBuf::from(self.modeler.get_model_path().unwrap_or_default());
@@ -247,8 +251,13 @@ impl PedalTrait for Nam {
         
         let mut knob_to_change = None;
 
-        ui.allocate_ui_with_layout(Vec2::new(ui.available_width(), ui.available_height()), Layout::top_down(egui::Align::Center), |ui| {
-            ui.add_space(20.0);
+        ui.allocate_ui_with_layout(Vec2::new(ui.available_width()*0.95, ui.available_height()), Layout::top_down(egui::Align::Center), |ui| {
+            ui.add_space(24.0);
+
+            ui.label(egui::RichText::new("Neural\nAmp\nModeler").size(20.0));
+
+            ui.add_space(2.0);
+
             egui::ComboBox::from_id_salt(self.id)
                 .selected_text(selected_file_name)
                 .width(ui.available_width())
@@ -258,25 +267,23 @@ impl PedalTrait for Nam {
                     for file in &self.saved_nam_files {
                         let name = file.file_name().unwrap().to_string_lossy();
 
-                        ui.selectable_value(&mut selected_str, file.to_string_lossy().to_string(), name);
+                        ui.selectable_value(&mut selected_str, file.to_string_lossy().to_string(), &name[..name.len()-4]); // remove the .nam extension
                     }
                 });
 
             ui.add_space(5.0);
 
             ui.allocate_ui_with_layout(Vec2::new(ui.available_width(), ui.available_width()*0.25), Layout::left_to_right(egui::Align::Center), |ui| {
-                if let Some(value) = pedal_knob(ui, "Gain", self.parameters.get("gain").unwrap(), Vec2::new(0.05, 0.0), 0.25) {
+                if let Some(value) = pedal_knob(ui, "Gain", self.parameters.get("gain").unwrap(), Vec2::new(0.05, 0.0), 0.25, Color32::WHITE) {
                     knob_to_change = Some(("gain".to_string(), value));
                 }
-                if let Some(value) = pedal_knob(ui, "Dry/Wet", self.parameters.get("dry_wet").unwrap(), Vec2::new(0.375, 0.0), 0.25) {
+                if let Some(value) = pedal_knob(ui, "Dry/Wet", self.parameters.get("dry_wet").unwrap(), Vec2::new(0.375, 0.0), 0.25, Color32::WHITE) {
                     knob_to_change = Some(("dry_wet".to_string(), value));
                 }
-                if let Some(value) = pedal_knob(ui, "Level", self.parameters.get("level").unwrap(), Vec2::new(0.7, 0.0), 0.25) {
+                if let Some(value) = pedal_knob(ui, "Level", self.parameters.get("level").unwrap(), Vec2::new(0.7, 0.0), 0.25, Color32::WHITE) {
                     knob_to_change = Some(("level".to_string(), value));
                 }
             });
-
-            ui.label(egui::RichText::new("Neural\nAmp\nModeler").size(22.0));
         });
 
         if selected_str != old {

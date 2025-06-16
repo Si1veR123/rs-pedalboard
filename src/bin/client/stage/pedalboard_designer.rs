@@ -9,7 +9,6 @@ use strum::IntoEnumIterator;
 
 const PEDAL_ROW_COUNT: usize = 6;
 // Must be high enough to fit any pedal
-// TODO: Make this dynamic
 // PEDAL_HEIGHT_RATIO * width = height
 const PEDAL_HEIGHT_RATIO: f32 = 2.2;
 const MAX_PEDAL_COUNT: usize = 12;

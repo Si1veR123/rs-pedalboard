@@ -42,6 +42,8 @@ pub fn create_linked_streams(
                 }
 
                 INPUT_PROCESSOR.with(|ip| {
+                    // Safety: This only exists on the current thread (no other threads have a reference to it),
+                    // and this is the only place where a reference is acquired. This is a unique reference.
                     let input_processor = unsafe { &mut *ip.get() };
 
                     if input_processor.is_none() {
@@ -213,7 +215,15 @@ impl InputProcessor {
             },
             "loadset" => {
                 let pedalboardset_stringified = &command[command_name.len() + 1..];
-                let pedalboardset = serde_json::from_str(&pedalboardset_stringified).ok()?;
+                let mut pedalboardset: PedalboardSet = serde_json::from_str(&pedalboardset_stringified).ok()?;
+
+                // Call set_config on every pedal
+                for pedalboard in &mut pedalboardset.pedalboards {
+                    for pedal in &mut pedalboard.pedals {
+                        pedal.set_config(super::constants::FRAMES_PER_PERIOD, 48000);
+                    }
+                }
+
                 self.pedalboard_set = pedalboardset;
             },
             "play" => {

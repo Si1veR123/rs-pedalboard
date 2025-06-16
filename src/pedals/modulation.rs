@@ -1,10 +1,9 @@
 use std::collections::HashMap;
 use std::hash::Hash;
 use crate::dsp_algorithms::variable_delay_phaser::VariableDelayPhaser;
-use crate::pedals::egui::include_image;
 use super::{PedalTrait, PedalParameter, PedalParameterValue};
 use super::ui::{pedal_knob, pedal_label_rect};
-use eframe::egui;
+use eframe::egui::{self, Color32, include_image};
 use serde::{Serialize, Deserialize};
 
 
@@ -224,33 +223,33 @@ macro_rules! var_delay_phaser {
 
                 let mut to_change = None;
                 let rate_param = self.get_parameters().get("rate").unwrap();
-                if let Some(value) = pedal_knob(ui, "Rate", rate_param, eframe::egui::Vec2::new(0.1, 0.02), 0.25) {
+                if let Some(value) = pedal_knob(ui, "Rate", rate_param, eframe::egui::Vec2::new(0.1, 0.02), 0.25, Color32::BLACK) {
                     to_change = Some(("rate".to_string(), value));
                 }
 
                 let min_depth_param = self.get_parameters().get("min_depth").unwrap();
-                if let Some(value) = pedal_knob(ui, "Min Depth", min_depth_param, eframe::egui::Vec2::new(0.38, 0.02), 0.25) {
+                if let Some(value) = pedal_knob(ui, "Min Depth", min_depth_param, eframe::egui::Vec2::new(0.38, 0.02), 0.25, Color32::BLACK) {
                     to_change =  Some(("min_depth".to_string(), value));
                 }
 
                 let max_depth_param = self.get_parameters().get("max_depth").unwrap();
-                if let Some(value) = pedal_knob(ui, "Max Depth", max_depth_param, eframe::egui::Vec2::new(0.67, 0.02), 0.25) {
+                if let Some(value) = pedal_knob(ui, "Max Depth", max_depth_param, eframe::egui::Vec2::new(0.67, 0.02), 0.25, Color32::BLACK) {
                     to_change =  Some(("max_depth".to_string(), value));
                 }
 
                 let mix_param = self.get_parameters().get("mix").unwrap();
-                if let Some(value) = pedal_knob(ui, "Mix", mix_param, eframe::egui::Vec2::new(0.2, 0.22), 0.25) {
+                if let Some(value) = pedal_knob(ui, "Mix", mix_param, eframe::egui::Vec2::new(0.2, 0.22), 0.25, Color32::BLACK) {
                     to_change =  Some(("mix".to_string(), value));
                 }
 
                 let oscillator_param = self.get_parameters().get("oscillator").unwrap();
-                if let Some(value) = pedal_knob(ui, "Oscillator", oscillator_param, eframe::egui::Vec2::new(0.55, 0.22), 0.25) {
+                if let Some(value) = pedal_knob(ui, "Oscillator", oscillator_param, eframe::egui::Vec2::new(0.55, 0.22), 0.25, Color32::BLACK) {
                     to_change =  Some(("oscillator".to_string(), value));
                 }
 
                 if $incl_feedback {
                     let feedback_param = self.get_parameters().get("feedback").unwrap();
-                    if let Some(value) = pedal_knob(ui, "Feedback", feedback_param, eframe::egui::Vec2::new(0.8, 0.22), 0.25) {
+                    if let Some(value) = pedal_knob(ui, "Feedback", feedback_param, eframe::egui::Vec2::new(0.8, 0.22), 0.25, Color32::BLACK) {
                         to_change =  Some(("feedback".to_string(), value));
                     }
                 }
@@ -268,5 +267,4 @@ macro_rules! var_delay_phaser {
 }
 
 var_delay_phaser!(Chorus, ChorusSerde, (0.2, 0.05, 2.0), (8.0, 25.0, 5.0, 40.0), (false, 0.0, 0.0), 0.5);
-// TODO: Flanger feedback?
 var_delay_phaser!(Flanger, FlangerSerde, (1.0, 0.05, 10.0), (0.5, 5.0, 0.0, 8.0), (true, 0.0, 0.95), 0.5);

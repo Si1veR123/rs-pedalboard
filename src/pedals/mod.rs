@@ -1,4 +1,3 @@
-/// TODO: Make a distinciton between client and server pedals.
 /// Currently, for example, parameters are set on both client and server,
 /// even though client doesnt process audio.
 

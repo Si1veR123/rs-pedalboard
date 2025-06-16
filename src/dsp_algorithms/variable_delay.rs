@@ -12,7 +12,6 @@ impl VariableDelayLine {
         }
     }
 
-    // TODO: subsample delay with interpolation?
     pub fn get_sample(&mut self, delay: usize) -> f32 {
         let index = (self.buffer.len() - delay).max(0).min(self.buffer.len() - 1);
 

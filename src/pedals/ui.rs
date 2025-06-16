@@ -20,7 +20,7 @@ pub fn pedal_label_rect(pedal_rect: egui::Rect) -> egui::Rect {
     }
 }
 
-pub fn pedal_knob(ui: &mut egui::Ui, name: &str, parameter: &PedalParameter, at: egui::Vec2, size: f32) -> Option<PedalParameterValue> {
+pub fn pedal_knob(ui: &mut egui::Ui, name: &str, parameter: &PedalParameter, at: egui::Vec2, size: f32, color: impl Into<Color32>) -> Option<PedalParameterValue> {
     let pedal_parameter_float;
 
     match parameter.value {
@@ -90,7 +90,7 @@ pub fn pedal_knob(ui: &mut egui::Ui, name: &str, parameter: &PedalParameter, at:
                 ui.ctx().output_mut(|o| o.cursor_icon = egui::CursorIcon::ResizeVertical);
             }
 
-            ui.label(RichText::new(name).size(8.0).color(Color32::BLACK));
+            ui.label(RichText::new(name).size(8.0).color(color));
         },
     );
 

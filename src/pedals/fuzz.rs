@@ -7,6 +7,7 @@ use super::ui::{pedal_knob, pedal_label_rect};
 
 use eframe::egui;
 use eframe::egui::include_image;
+use eframe::egui::Color32;
 use eframe::egui::Vec2;
 use serde::{Serialize, Deserialize};
 #[derive(Serialize, Deserialize, Clone)]
@@ -72,12 +73,12 @@ impl PedalTrait for Fuzz {
 
         let mut to_change = None;
         let gain_param = self.get_parameters().get("gain").unwrap();
-        if let Some(value) = pedal_knob(ui, "Gain", gain_param, Vec2::new(0.15, 0.1), 0.3) {
+        if let Some(value) = pedal_knob(ui, "Gain", gain_param, Vec2::new(0.15, 0.1), 0.3, Color32::BLACK) {
             to_change = Some(("gain".to_string(), value));
         }
 
         let level_param = self.get_parameters().get("level").unwrap();
-        if let Some(value) = pedal_knob(ui, "Level", level_param, Vec2::new(0.55, 0.1), 0.3) {
+        if let Some(value) = pedal_knob(ui, "Level", level_param, Vec2::new(0.55, 0.1), 0.3, Color32::BLACK) {
             to_change = Some(("level".to_string(), value));
         }
 

@@ -5,7 +5,7 @@ use std::hash::Hash;
 use crate::dsp_algorithms::impluse_response::{IRConvolver, load_ir};
 use crate::unique_time_id;
 use serde::{ser::SerializeMap, Deserialize, Serialize};
-use eframe::egui::{self, Layout, Vec2};
+use eframe::egui::{self, include_image, Color32, Layout, UiBuilder, Vec2};
 
 use super::{ui::pedal_knob, PedalParameter, PedalParameterValue, PedalTrait};
 
@@ -210,8 +210,12 @@ impl PedalTrait for ImpulseResponse {
     }
 
     fn ui(&mut self, ui: &mut eframe::egui::Ui) -> Option<(String,PedalParameterValue)> {
-        let available_rect = ui.available_rect_before_wrap();
-        ui.painter().rect_filled(available_rect.with_max_y(available_rect.max.y-20.0), 10.0, eframe::egui::Color32::from_rgb(70, 95, 70));
+        let mut img_ui = ui.new_child(
+            UiBuilder::new()
+                .max_rect(ui.available_rect_before_wrap())
+        );
+
+        img_ui.add(egui::Image::new(include_image!("images/ir_pedal_gradient.png")).tint(Color32::from_rgb(70, 70, 70)));
 
         let selected = PathBuf::from(self.parameters.get("ir").unwrap().value.as_str().unwrap());
 
@@ -221,8 +225,13 @@ impl PedalTrait for ImpulseResponse {
         
         let mut knob_to_change = None;
 
-        ui.allocate_ui_with_layout(Vec2::new(ui.available_width(), ui.available_height()), Layout::top_down(egui::Align::Center), |ui| {
-            ui.add_space(20.0);
+        ui.allocate_ui_with_layout(Vec2::new(ui.available_width()*0.95, ui.available_height()), Layout::top_down(egui::Align::Center), |ui| {
+            ui.add_space(33.0);
+            
+            ui.label(egui::RichText::new("Impulse\nResponse").size(19.0));
+
+            ui.add_space(5.0);
+
             egui::ComboBox::from_id_salt(self.id)
                 .selected_text(selected_file_name)
                 .width(ui.available_width())
@@ -232,19 +241,17 @@ impl PedalTrait for ImpulseResponse {
                     for file in &self.saved_ir_files {
                         let name = file.file_name().unwrap().to_string_lossy();
 
-                        ui.selectable_value(&mut selected_str, file.to_string_lossy().to_string(), name);
+                        ui.selectable_value(&mut selected_str, file.to_string_lossy().to_string(), &name[..name.len()-4]); // remove .wav extension
                     }
                 });
 
             ui.add_space(5.0);
 
             ui.allocate_ui_with_layout(Vec2::new(ui.available_width(), ui.available_width()*0.25), Layout::left_to_right(egui::Align::Center), |ui| {
-                if let Some(value) = pedal_knob(ui, "Dry/Wet", self.parameters.get("dry_wet").unwrap(), Vec2::new(0.375, 0.0), 0.25) {
+                if let Some(value) = pedal_knob(ui, "Dry/Wet", self.parameters.get("dry_wet").unwrap(), Vec2::new(0.325, 0.0), 0.35, Color32::WHITE) {
                     knob_to_change = Some(("dry_wet".to_string(), value));
                 }
             });
-
-            ui.label(egui::RichText::new("Impulse\nResponse").size(21.0));
         });
 
         if selected_str != old {

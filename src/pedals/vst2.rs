@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::hash::Hash;
-use std::io::empty;
 
 use super::PedalTrait;
 use super::PedalParameter;
@@ -12,6 +11,10 @@ use crate::plugin::PluginHost;
 use crate::unique_time_id;
 
 use eframe::egui::Button;
+use eframe::egui::Color32;
+use eframe::egui::Layout;
+use eframe::egui::UiBuilder;
+use eframe::egui::Vec2;
 use eframe::egui::{include_image, self};
 use serde::ser::SerializeMap;
 use serde::{Serialize, Deserialize};
@@ -22,6 +25,7 @@ pub struct Vst2 {
     // buffer size, sample rate
     config: Option<(usize, usize)>,
     parameters: HashMap<String, PedalParameter>,
+    // Map of parameter names to their index in the plugin instance
     param_index_map: HashMap<String, usize>,
     output_buffer: Vec<f32>,
     available_plugins: Vec<String>,
@@ -48,23 +52,30 @@ impl<'a> Deserialize<'a> for Vst2 {
         D: serde::Deserializer<'a>,
     {
         let parameters_with_idx: HashMap<String, (Option<usize>, PedalParameter)> = HashMap::deserialize(deserializer)?;
-        let name = parameters_with_idx.get("Plugin").unwrap().1.value.as_str().unwrap().to_string();
+        let name = parameters_with_idx.get("plugin").unwrap().1.value.as_str().unwrap().to_string();
+        let dry_wet = parameters_with_idx.get("dry_wet").unwrap().1.value.as_float().unwrap_or(1.0);
 
         let mut parameters = HashMap::new();
-        parameters.insert(String::from("Plugin"), PedalParameter {
+        parameters.insert(String::from("plugin"), PedalParameter {
             value: PedalParameterValue::String(name.clone()),
             min: None,
             max: None,
             step: None
         });
+        parameters.insert(String::from("dry_wet"), PedalParameter {
+            value: PedalParameterValue::Float(dry_wet),
+            min: Some(PedalParameterValue::Float(0.0)),
+            max: Some(PedalParameterValue::Float(1.0)),
+            step: None
+        });
 
-        let mut parameters_idx_map = HashMap::new();
+        let mut param_index_map = HashMap::new();
         if !name.is_empty() {
             for (key, (idx, param)) in parameters_with_idx {
                 if let Some(index) = idx {
                     // If index is Some(..), then the parameter is a plugin parameter
                     parameters.insert(key.clone(), param);
-                    parameters_idx_map.insert(key, index);
+                    param_index_map.insert(key, index);
                 }
             }
         }
@@ -73,8 +84,8 @@ impl<'a> Deserialize<'a> for Vst2 {
         let empty_vst = Vst2 {
             instance: None,
             config: None,
-            parameters: parameters.clone(),
-            param_index_map: HashMap::new(),
+            parameters,
+            param_index_map,
             output_buffer: Vec::new(),
             available_plugins,
             id: unique_time_id()
@@ -101,7 +112,7 @@ impl<'a> Deserialize<'a> for Vst2 {
             }?;
 
             // Set the saved parameters on the new instance
-            deserialized_vst.synchronise_instance();
+            deserialized_vst.sync_parameters_to_instance();
 
             Ok(deserialized_vst)
         }        
@@ -118,11 +129,20 @@ impl Vst2 {
     pub fn new() -> Self {
         let mut parameters = HashMap::new();
         parameters.insert(
-            "Plugin".to_string(),
+            "plugin".to_string(),
             PedalParameter {
                 value: PedalParameterValue::String("".to_string()),
                 min: None,
                 max: None,
+                step: None
+            },
+        );
+        parameters.insert(
+            "dry_wet".to_string(),
+            PedalParameter {
+                value: PedalParameterValue::Float(1.0),
+                min: Some(PedalParameterValue::Float(0.0)),
+                max: Some(PedalParameterValue::Float(1.0)),
                 step: None
             },
         );
@@ -139,13 +159,15 @@ impl Vst2 {
     }
 
     /// Update the pedal's parameters to the parameters of the current plugin instance
-    pub fn set_parameters_from_instance(&mut self) {
+    pub fn sync_instance_to_parameters(&mut self) {
         if let Some(instance) = self.instance.as_mut() {
-            self.parameters.clear();
+            self.parameters.retain(|k, _| k == "dry_wet");
+
+            let plugin_file_name = instance.dll_path().file_name().expect("Instance dll path should have file name").to_string_lossy().to_string();
             self.parameters.insert(
-                "Plugin".to_string(),
+                "plugin".to_string(),
                 PedalParameter {
-                    value: PedalParameterValue::String(instance.info.name.clone()),
+                    value: PedalParameterValue::String(plugin_file_name),
                     min: None,
                     max: None,
                     step: None
@@ -168,9 +190,9 @@ impl Vst2 {
                 self.param_index_map.insert(name, i);
             }
         } else {
-            self.parameters.clear();
+            self.parameters.retain(|k, _| k == "dry_wet");
             self.parameters.insert(
-                "Plugin".to_string(),
+                "plugin".to_string(),
                 PedalParameter {
                     value: PedalParameterValue::String("".to_string()),
                     min: None,
@@ -183,10 +205,10 @@ impl Vst2 {
     }
 
     /// Set the instance's parameters to the values stored in `self.parameters`.
-    pub fn synchronise_instance(&mut self) {
+    pub fn sync_parameters_to_instance(&mut self) {
         if let Some(instance) = self.instance.as_mut() {
             for (name, param) in &self.parameters {
-                if name == "Plugin" {
+                if name == "plugin" || name == "dry_wet" {
                     continue; // Skip the plugin name parameter
                 }
                 if let Some(&index) = self.param_index_map.get(name) {
@@ -200,10 +222,11 @@ impl Vst2 {
         }
     }
 
+    /// `plugin_name` should be the file name of the plugin including '.dll' extension
     pub fn set_plugin(&mut self, plugin_name: &str) {
         if plugin_name.is_empty() {
             self.instance = None;
-            self.set_parameters_from_instance();
+            self.sync_instance_to_parameters();
             return;
         }
 
@@ -220,12 +243,12 @@ impl Vst2 {
                     instance.set_config(bs, sr);
                 }
                 self.instance = Some(instance);
-                self.set_parameters_from_instance();
+                self.sync_instance_to_parameters();
             },
             Err(_) => {
                 log::error!("Failed to load plugin: {}", plugin_name);
                 self.instance = None;
-                self.set_parameters_from_instance();
+                self.sync_instance_to_parameters();
             }
         }
     }
@@ -234,7 +257,6 @@ impl Vst2 {
 impl PedalTrait for Vst2 {
     fn set_config(&mut self, buffer_size: usize, sample_rate: usize) {
         if let Some(instance) = self.instance.as_mut() {
-            // The instance will not have been configured before this is called, so call set_config
             instance.set_config(buffer_size, sample_rate);
         }
 
@@ -264,7 +286,7 @@ impl PedalTrait for Vst2 {
     }
 
     fn set_parameter_value(&mut self, name: &str, value: PedalParameterValue) {
-        if name == "Plugin" {
+        if name == "plugin" {
             if let PedalParameterValue::String(plugin_name) = value {
                 self.set_plugin(&plugin_name);
             }
@@ -274,14 +296,12 @@ impl PedalTrait for Vst2 {
         if let Some(parameter) = self.parameters.get_mut(name) {
             if parameter.is_valid(&value) {
                 parameter.value = value;
-                if let Some(instance) = self.instance.as_mut() {
-                    if let Some(&index) = self.param_index_map.get(name) {
+
+                // If the parameter is a parameter on the plugin, then set it on the plugin instance
+                if let Some(&index) = self.param_index_map.get(name) {
+                    if let Some(instance) = self.instance.as_mut() {
                         instance.set_parameter_value(index, parameter.value.as_float().unwrap());
-                    } else {
-                        log::warn!("Parameter {} not found in plugin instance", name);
                     }
-                } else {
-                    log::warn!("No plugin instance available to set parameter {}", name);
                 }
             }
         }
@@ -293,41 +313,72 @@ impl PedalTrait for Vst2 {
             plugin_param_change = i.ui_frame(ui);
         }
 
-        let available_rect = ui.available_rect_before_wrap();
-        ui.painter().rect_filled(available_rect.with_max_y(available_rect.max.y-20.0), 10.0, eframe::egui::Color32::from_rgb(70, 95, 70));
-
-        ui.label("VST2");
-
-        let mut selected = self.parameters.get("Plugin").unwrap().value.as_str().unwrap().to_string();
+        let mut selected = self.parameters.get("plugin").unwrap().value.as_str().unwrap().to_string();
         let old = selected.clone();
+        let mut knob_to_change = None;
 
-        egui::ComboBox::from_id_salt(self.id)
-            .selected_text(&selected)
-            .width(ui.available_width())
-            .wrap_mode(egui::TextWrapMode::Truncate)
-            .show_ui(ui, |ui| {
-                ui.selectable_value(&mut selected, String::new(), "Empty");
-                for plugin in &self.available_plugins {
-                    ui.selectable_value(&mut selected, plugin.clone(), plugin);
+        let mut img_ui = ui.new_child(
+            UiBuilder::new()
+                .max_rect(ui.available_rect_before_wrap())
+        );
+
+        img_ui.add(egui::Image::new(include_image!("images/pedal_gradient.png")).tint(Color32::from_rgb(18, 105, 50)));
+
+        ui.allocate_ui_with_layout(
+            ui.available_size() * Vec2::new(0.9, 1.0),
+            Layout::top_down(egui::Align::Center),
+
+            |ui| {
+                ui.add_space(31.0);
+                
+                ui.label(egui::RichText::new("VST2").size(23.0));
+
+                ui.add_space(5.0);
+
+                egui::ComboBox::from_id_salt(self.id)
+                    .selected_text(&selected)
+                    .width(ui.available_width())
+                    .wrap_mode(egui::TextWrapMode::Truncate)
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut selected, String::new(), "Empty");
+                        for plugin in &self.available_plugins {
+                            ui.selectable_value(&mut selected, plugin.clone(), &plugin[..plugin.len()-4]); // Remove the ".dll" extension
+                        }
+                    });
+                
+                ui.add_space(5.0);
+
+                if ui.add_enabled(
+                    self.instance.as_ref().map(|i| !i.ui_open).unwrap_or(false),
+                    Button::new("Parameters")
+                ).clicked() {
+                    if let Some(instance) = self.instance.as_mut() {
+                        if instance.ui_open {
+                            instance.close_ui();
+                        } else {
+                            instance.open_ui();
+                        }
+                    }
                 }
-            });
-            
-        if ui.add_enabled(self.instance.as_ref().map(|i| !i.ui_open).unwrap_or(false), Button::new("Window")).clicked() {
-            if let Some(instance) = self.instance.as_mut() {
-                if instance.ui_open {
-                    instance.close_ui();
-                } else {
-                    instance.open_ui();
+
+                ui.add_space(5.0);
+                    
+                if let Some(value) = pedal_knob(ui, "Dry/Wet", self.parameters.get("dry_wet").unwrap(), Vec2::new(0.325, 0.55), 0.35, Color32::WHITE) {
+                    knob_to_change = Some(("dry_wet".to_string(), value));
                 }
             }
-        }
+        );
 
         if plugin_param_change.is_some() {
             return plugin_param_change;
         }
+
+        if knob_to_change.is_some() {
+            return knob_to_change;
+        }
             
         if selected != old {
-            Some(("Plugin".to_string(), PedalParameterValue::String(selected)))
+            Some(("plugin".to_string(), PedalParameterValue::String(selected)))
         } else {
             None
         }
