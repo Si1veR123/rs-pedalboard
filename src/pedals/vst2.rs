@@ -4,7 +4,7 @@ use std::hash::Hash;
 use super::PedalTrait;
 use super::PedalParameter;
 use super::PedalParameterValue;
-use super::ui::{pedal_knob, pedal_label_rect};
+use super::ui::pedal_knob;
 
 use crate::plugin::vst2::{Vst2Instance, path_from_name, available_plugins};
 use crate::plugin::PluginHost;

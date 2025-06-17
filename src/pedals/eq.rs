@@ -4,7 +4,6 @@ use std::hash::Hash;
 use serde::{Deserialize, Serialize};
 
 use super::{PedalParameter, PedalParameterValue, PedalTrait};
-use super::ui::pedal_knob;
 
 use crate::dsp_algorithms::eq::{self, Equalizer};
 

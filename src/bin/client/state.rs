@@ -351,10 +351,10 @@ impl State {
         }
     }
 
-    /// Set whether the tuner is active
+    /// Set whether the tuner is active on the server.
     /// 
-    /// Requires a lock on socket
-    pub fn set_tuner_active(&self, active: bool) {
+    /// Requires a lock on socket.
+    pub fn set_tuner_active_server(&self, active: bool) {
         let mut socket = self.socket.borrow_mut();
         socket.set_tuner(active).expect("Failed to set tuner active");
     }

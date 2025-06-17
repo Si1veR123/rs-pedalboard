@@ -5,7 +5,7 @@ use eframe::egui::{self, Widget};
 use crate::state::State;
 
 pub struct UtilitiesScreen {
-    tuner: tuner::TunerWidget,
+    pub tuner: tuner::TunerWidget,
 }
 
 impl UtilitiesScreen {
