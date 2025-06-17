@@ -56,16 +56,27 @@ pub fn pedal_knob(ui: &mut egui::Ui, name: &str, parameter: &PedalParameter, at:
         .layout(egui::Layout::top_down(egui::Align::Center))
         .sense(egui::Sense::click_and_drag()),
     |ui| {
-            let knob_im = ui.add(egui::Image::new(egui::include_image!("images/pedal_knob.png"))
-                .rotate(knob_rotate, Vec2::splat(0.5))
-                .max_width(size_px)
-                .sense(egui::Sense::click_and_drag())
+            let mut main_knob_im_ui = ui.new_child(
+                egui::UiBuilder::new()
+                    .max_rect(ui.available_rect_before_wrap())
+                    .layout(egui::Layout::top_down(egui::Align::Center))
             );
 
-            if knob_im.dragged() {
+            main_knob_im_ui.add(egui::Image::new(egui::include_image!("images/pedal_knob_blender_base.png"))
+                .rotate(knob_rotate, Vec2::splat(0.5))
+                .max_width(size_px)
+            );
+
+            let knob_im_shine_overlay = ui.add(egui::Image::new(egui::include_image!("images/pedal_knob_blender_shine.png"))
+                .max_width(size_px)
+                .sense(egui::Sense::click_and_drag())
+                .tint(Color32::from_white_alpha(100))
+            );
+
+            if knob_im_shine_overlay.dragged() {
                 let current_y = ui.input(|i| i.pointer.interact_pos().expect("Failed to get cursor location")).y;
 
-                let (init_y, init_value) = if knob_im.drag_started() {
+                let (init_y, init_value) = if knob_im_shine_overlay.drag_started() {
                     // Store the initial y position and value of the drag
                     ui.ctx().memory_mut(|m| {
                         m.data.insert_temp(Id::new("knob_drag_init_y"), (current_y, value));
@@ -86,7 +97,7 @@ pub fn pedal_knob(ui: &mut egui::Ui, name: &str, parameter: &PedalParameter, at:
                 }
             }
 
-            if knob_im.hovered() {
+            if knob_im_shine_overlay.hovered() {
                 ui.ctx().output_mut(|o| o.cursor_icon = egui::CursorIcon::ResizeVertical);
             }
 
