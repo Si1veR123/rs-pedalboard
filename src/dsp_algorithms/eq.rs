@@ -1,3 +1,6 @@
+use egui_plot::PlotPoint;
+use rustfft::num_complex::Complex64;
+
 use super::biquad::BiquadFilter;
 
 
@@ -157,5 +160,36 @@ impl Equalizer {
             y = bq.process(y);
         }
         y
+    }
+
+    pub fn response_at_freq(&self, f: f64, sample_rate: f64) -> Complex64 {
+        let mut response = Complex64::new(1.0, 0.0);
+        for bq in &self.biquads {
+            response *= bq.response_at_freq(f, sample_rate);
+        }
+        response
+    }
+
+    /// log2 frequency response from start_freq to end_freq with num_points points
+    pub fn amplitude_response_plot(&self, sample_rate: f64, mut start_freq: f64, end_freq: f64, num_points: usize) -> Vec<PlotPoint> {
+        if start_freq == 0.0 {
+            start_freq += 1.0; // Avoid log2(0)
+        }
+
+        let mut response = Vec::with_capacity(num_points);
+        let log2_start = start_freq.log2();
+        let log2_end = end_freq.log2();
+        let step = (log2_end - log2_start) / num_points as f64;
+    
+        for i in 0..num_points {
+            let log2_f = log2_start + i as f64 * step;
+            let f = 2f64.powf(log2_f);
+            let complex_response = self.response_at_freq(f, sample_rate);
+            let amplitude = complex_response.norm();
+            let amplitude_db = 20.0 * amplitude.log10();
+            response.push(PlotPoint::new(log2_f, amplitude_db));
+        }
+    
+        response
     }
 }

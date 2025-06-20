@@ -1,6 +1,6 @@
 use std::{collections::HashMap, hash::Hash};
 
-use eframe::egui::{self, include_image, Color32};
+use eframe::egui::{self, include_image, Color32, RichText};
 use serde::{ser::SerializeMap, Deserialize, Serialize};
 
 use super::{ui::{pedal_knob, pedal_label_rect}, PedalParameter, PedalParameterValue, PedalTrait};
@@ -172,17 +172,17 @@ impl PedalTrait for NoiseGate {
         let mut to_change = None;
 
         let threshold_open_param = self.get_parameters().get("threshold_open").unwrap();
-        if let Some(value) = pedal_knob(ui, "Threshold Open", threshold_open_param, egui::Vec2::new(0.025, 0.06), 0.3, Color32::BLACK) {
+        if let Some(value) = pedal_knob(ui, RichText::new("Threshold Open").color(Color32::BLACK).size(8.0), threshold_open_param, egui::Vec2::new(0.025, 0.06), 0.3) {
             to_change = Some(("threshold_open".to_string(), value));
         }
 
         let threshold_close_param = self.get_parameters().get("threshold_close").unwrap();
-        if let Some(value) = pedal_knob(ui, "Threshold Close", threshold_close_param, egui::Vec2::new(0.35, 0.06), 0.3, Color32::BLACK) {
+        if let Some(value) = pedal_knob(ui, RichText::new("Threshold Close").color(Color32::BLACK).size(8.0), threshold_close_param, egui::Vec2::new(0.35, 0.06), 0.3) {
             to_change = Some(("threshold_close".to_string(), value));
         }
 
         let release_param = self.get_parameters().get("release").unwrap();
-        if let Some(value) = pedal_knob(ui, "Release", release_param, egui::Vec2::new(0.675, 0.06), 0.3, Color32::BLACK) {
+        if let Some(value) = pedal_knob(ui, RichText::new("Release").color(Color32::BLACK).size(8.0), release_param, egui::Vec2::new(0.675, 0.06), 0.3) {
             to_change = Some(("release".to_string(), value));
         }
 

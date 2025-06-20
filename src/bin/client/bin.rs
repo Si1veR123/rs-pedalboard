@@ -82,6 +82,7 @@ fn main() {
 
     let mut native_options = eframe::NativeOptions::default();
     native_options.persist_window = false;
+    native_options.persistence_path = homedir::my_home().map(|d| d.unwrap().join("rs_pedalboard").join("egui_persistence")).ok();
     native_options.viewport = native_options.viewport.with_inner_size((WINDOW_WIDTH, WINDOW_HEIGHT)).with_resizable(false).with_maximized(false).with_maximize_button(false);
 
     eframe::run_native("Pedalboard", native_options, Box::new(

@@ -5,7 +5,7 @@ use std::hash::Hash;
 use crate::dsp_algorithms::impluse_response::{IRConvolver, load_ir};
 use crate::unique_time_id;
 use serde::{ser::SerializeMap, Deserialize, Serialize};
-use eframe::egui::{self, include_image, Color32, Layout, UiBuilder, Vec2};
+use eframe::egui::{self, include_image, Color32, Layout, RichText, UiBuilder, Vec2};
 
 use super::{ui::pedal_knob, PedalParameter, PedalParameterValue, PedalTrait};
 
@@ -248,7 +248,7 @@ impl PedalTrait for ImpulseResponse {
             ui.add_space(5.0);
 
             ui.allocate_ui_with_layout(Vec2::new(ui.available_width(), ui.available_width()*0.25), Layout::left_to_right(egui::Align::Center), |ui| {
-                if let Some(value) = pedal_knob(ui, "Dry/Wet", self.parameters.get("dry_wet").unwrap(), Vec2::new(0.325, 0.0), 0.35, Color32::WHITE) {
+                if let Some(value) = pedal_knob(ui, RichText::new("Dry/Wet").color(Color32::WHITE).size(8.0), self.parameters.get("dry_wet").unwrap(), Vec2::new(0.325, 0.0), 0.35) {
                     knob_to_change = Some(("dry_wet".to_string(), value));
                 }
             });

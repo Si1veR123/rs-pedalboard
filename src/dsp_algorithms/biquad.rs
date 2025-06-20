@@ -1,3 +1,5 @@
+use rustfft::num_complex::Complex64;
+
 #[derive(Debug, Clone, Copy)]
 pub struct BiquadFilter {
     y: [f32; 2],
@@ -121,6 +123,16 @@ impl BiquadFilter {
         self.y[1] = self.y[0];
         self.y[0] = y;
         y
+    }
+
+    pub fn response_at_freq(&self, f: f64, sample_rate: f64) -> Complex64 {
+        let omega = 2.0 * std::f64::consts::PI * f / sample_rate;
+        let z1 = Complex64::from_polar(1.0, -omega);
+        let z2 = Complex64::from_polar(1.0, -2.0 * omega);
+
+        let num = self.b[0] as f64 + self.b[1] as f64 * z1 + self.b[2] as f64 * z2;
+        let den = 1.0 + self.a[0] as f64 * z1 + self.a[1] as f64 * z2;
+        num / den
     }
 }
 

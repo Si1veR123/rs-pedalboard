@@ -10,12 +10,8 @@ use crate::plugin::vst2::{Vst2Instance, path_from_name, available_plugins};
 use crate::plugin::PluginHost;
 use crate::unique_time_id;
 
-use eframe::egui::Button;
-use eframe::egui::Color32;
-use eframe::egui::Layout;
-use eframe::egui::UiBuilder;
-use eframe::egui::Vec2;
-use eframe::egui::{include_image, self};
+use eframe::egui::RichText;
+use eframe::egui::{self, Button, Color32, Layout, UiBuilder, Vec2, include_image};
 use serde::ser::SerializeMap;
 use serde::{Serialize, Deserialize};
 
@@ -81,7 +77,7 @@ impl<'a> Deserialize<'a> for Vst2 {
         }
 
         let available_plugins = available_plugins();
-        let empty_vst = Vst2 {
+        let mut empty_vst = Vst2 {
             instance: None,
             config: None,
             parameters,
@@ -96,6 +92,7 @@ impl<'a> Deserialize<'a> for Vst2 {
             let path = path_from_name(&name);
             if path.is_none() {
                 log::error!("Plugin {} not found", name);
+                empty_vst.sync_instance_to_parameters();
                 return Ok(empty_vst);
             }
 
@@ -107,6 +104,7 @@ impl<'a> Deserialize<'a> for Vst2 {
                 }),
                 Err(_) => {
                     log::error!("Failed to load plugin: {}", name);
+                    empty_vst.sync_instance_to_parameters();
                     Ok(empty_vst)
                 }
             }?;
@@ -363,7 +361,7 @@ impl PedalTrait for Vst2 {
 
                 ui.add_space(5.0);
                     
-                if let Some(value) = pedal_knob(ui, "Dry/Wet", self.parameters.get("dry_wet").unwrap(), Vec2::new(0.325, 0.55), 0.35, Color32::WHITE) {
+                if let Some(value) = pedal_knob(ui, RichText::new("Dry/Wet").color(Color32::WHITE).size(8.0), self.parameters.get("dry_wet").unwrap(), Vec2::new(0.325, 0.55), 0.35) {
                     knob_to_change = Some(("dry_wet".to_string(), value));
                 }
             }

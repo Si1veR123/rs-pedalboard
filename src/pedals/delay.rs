@@ -6,7 +6,7 @@ use crate::dsp_algorithms::{biquad, eq};
 use super::ui::{pedal_label_rect, pedal_knob};
 use super::{PedalParameter, PedalParameterValue, PedalTrait};
 
-use eframe::egui::{self, include_image, Color32};
+use eframe::egui::{self, include_image, Color32, RichText};
 use serde::ser::SerializeMap;
 use serde::{Serialize, Deserialize};
 
@@ -166,22 +166,22 @@ impl PedalTrait for Delay {
 
         let mut to_change = None;
         let delay_param = self.get_parameters().get("delay").unwrap();
-        if let Some(value) = pedal_knob(ui, "Delay", delay_param, egui::Vec2::new(0.12, 0.01), 0.25, Color32::BLACK) {
+        if let Some(value) = pedal_knob(ui, RichText::new("Delay").color(Color32::BLACK).size(8.0), delay_param, egui::Vec2::new(0.12, 0.01), 0.25) {
             to_change = Some(("delay".to_string(), value));
         }
 
         let decay_param = self.get_parameters().get("decay").unwrap();
-        if let Some(value) = pedal_knob(ui, "Decay", decay_param, egui::Vec2::new(0.47, 0.01), 0.25, Color32::BLACK) {
+        if let Some(value) = pedal_knob(ui, RichText::new("Decay").color(Color32::BLACK).size(8.0), decay_param, egui::Vec2::new(0.47, 0.01), 0.25) {
             to_change = Some(("decay".to_string(), value));
         }
 
         let warmth_param = self.get_parameters().get("warmth").unwrap();
-        if let Some(value) = pedal_knob(ui, "Warmth", warmth_param, egui::Vec2::new(0.3, 0.17), 0.25, Color32::BLACK) {
+        if let Some(value) = pedal_knob(ui, RichText::new("Warmth").color(Color32::BLACK).size(8.0), warmth_param, egui::Vec2::new(0.3, 0.17), 0.25) {
             to_change = Some(("warmth".to_string(), value));
         }
 
         let mix_param = self.get_parameters().get("mix").unwrap();
-        if let Some(value) = pedal_knob(ui, "Mix", mix_param, egui::Vec2::new(0.64, 0.17), 0.25, Color32::BLACK) {
+        if let Some(value) = pedal_knob(ui, RichText::new("Mix").color(Color32::BLACK).size(8.0), mix_param, egui::Vec2::new(0.64, 0.17), 0.25) {
             to_change = Some(("mix".to_string(), value));
         }
 

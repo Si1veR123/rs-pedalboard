@@ -9,6 +9,7 @@ use super::PedalParameterValue;
 use super::ui::{pedal_knob, pedal_label_rect};
 
 use eframe::egui::Color32;
+use eframe::egui::RichText;
 use eframe::egui::{include_image, self};
 use serde::{Serialize, Deserialize};
 use signalsmith_stretch::Stretch;
@@ -81,8 +82,8 @@ impl PitchShift {
             "semitones".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Int(init_semitones),
-                min: Some(PedalParameterValue::Int(-12)),
-                max: Some(PedalParameterValue::Int(12)),
+                min: Some(PedalParameterValue::Int(-8)),
+                max: Some(PedalParameterValue::Int(8)),
                 step: None,
             }
         );
@@ -124,7 +125,7 @@ impl PitchShift {
             PedalParameter {
                 value: PedalParameterValue::Float(0.0),
                 min: Some(PedalParameterValue::Float(0.0)),
-                max: Some(PedalParameterValue::Float(30.0)),
+                max: Some(PedalParameterValue::Float(10.0)),
                 step: None,
             }
         );
@@ -135,7 +136,7 @@ impl PitchShift {
     }
 
     pub fn eq_from_presence(presence: f32) -> Equalizer {
-        let biquad = BiquadFilter::high_shelf(2900.0, 48000.0, 0.707, presence);
+        let biquad = BiquadFilter::high_shelf(3000.0, 48000.0, 0.707, presence);
         Equalizer::new(vec![biquad])
     }
 
@@ -198,27 +199,27 @@ impl PedalTrait for PitchShift {
 
         let mut to_change = None;
         let semitones_param = self.get_parameters().get("semitones").unwrap();
-        if let Some(value) = pedal_knob(ui, "Semitones", semitones_param, eframe::egui::Vec2::new(0.1, 0.02), 0.25, Color32::BLACK) {
+        if let Some(value) = pedal_knob(ui, RichText::new("Semitones").color(Color32::BLACK).size(8.0), semitones_param, eframe::egui::Vec2::new(0.1, 0.02), 0.25) {
             to_change = Some(("semitones".to_string(), value));
         }
 
         let block_size_param = self.get_parameters().get("block_size").unwrap();
-        if let Some(value) = pedal_knob(ui, "Block Size", block_size_param, eframe::egui::Vec2::new(0.38, 0.02), 0.25, Color32::BLACK) {
+        if let Some(value) = pedal_knob(ui, RichText::new("Block Size").color(Color32::BLACK).size(8.0), block_size_param, eframe::egui::Vec2::new(0.38, 0.02), 0.25) {
             to_change =  Some(("block_size".to_string(), value));
         }
 
         let speed_param = self.get_parameters().get("hop").unwrap();
-        if let Some(value) = pedal_knob(ui, "Hop", speed_param, eframe::egui::Vec2::new(0.67, 0.02), 0.25, Color32::BLACK) {
+        if let Some(value) = pedal_knob(ui, RichText::new("Hop").color(Color32::BLACK).size(8.0), speed_param, eframe::egui::Vec2::new(0.67, 0.02), 0.25) {
             to_change =  Some(("hop".to_string(), value));
         }
 
         let tonality_limit_param = self.get_parameters().get("tonality_limit").unwrap();
-        if let Some(value) = pedal_knob(ui, "Tonality Limit", tonality_limit_param, eframe::egui::Vec2::new(0.2, 0.22), 0.25, Color32::BLACK) {
+        if let Some(value) = pedal_knob(ui, RichText::new("Tonality Limit").color(Color32::BLACK).size(8.0), tonality_limit_param, eframe::egui::Vec2::new(0.2, 0.22), 0.25) {
             to_change =  Some(("tonality_limit".to_string(), value));
         }
 
         let presence_param = self.get_parameters().get("presence").unwrap();
-        if let Some(value) = pedal_knob(ui, "Presence", presence_param, eframe::egui::Vec2::new(0.55, 0.22), 0.25, Color32::BLACK) {
+        if let Some(value) = pedal_knob(ui, RichText::new("Presence").color(Color32::BLACK).size(8.0), presence_param, eframe::egui::Vec2::new(0.55, 0.22), 0.25) {
             to_change =  Some(("presence".to_string(), value));
         }
 

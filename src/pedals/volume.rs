@@ -7,6 +7,7 @@ use super::PedalParameterValue;
 use super::ui::{pedal_knob, pedal_label_rect};
 
 use eframe::egui::Color32;
+use eframe::egui::RichText;
 use eframe::egui::{include_image, self};
 use serde::{Serialize, Deserialize};
 
@@ -58,8 +59,9 @@ impl PedalTrait for Volume {
         ui.add(eframe::egui::Image::new(include_image!("images/pedal_base.png")).max_height(ui.available_height()));
 
         let volume_param = self.get_parameters().get("volume").unwrap();
-        if let Some(value) = pedal_knob(ui, "Volume", volume_param, eframe::egui::Vec2::new(0.35, 0.1), 0.3, Color32::BLACK) {
-            return Some(("volume".to_string(), value));
+        let mut changed = None;
+        if let Some(value) = pedal_knob(ui, RichText::new(&format!("{:.2}", volume_param.value.as_float().unwrap())).color(Color32::BLACK).size(10.0), volume_param, eframe::egui::Vec2::new(0.325, 0.07), 0.35) {
+            changed = Some(("volume".to_string(), value));
         }
 
         let pedal_rect = ui.max_rect();
@@ -68,6 +70,6 @@ impl PedalTrait for Volume {
                 .color(egui::Color32::from_black_alpha(200))
         ));
         
-        None
+        changed
     }
 }

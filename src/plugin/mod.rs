@@ -3,7 +3,7 @@ use eframe::egui;
 
 use crate::pedals::PedalParameterValue;
 
-pub mod vst3;
+//pub mod vst3;
 pub mod vst2;
 
 pub trait PluginHost: Sized {

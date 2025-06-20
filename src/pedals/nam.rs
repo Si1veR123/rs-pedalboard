@@ -4,7 +4,7 @@ use std::hash::Hash;
 
 use neural_amp_modeler::NeuralAmpModeler;
 use serde::{ser::SerializeMap, Deserialize, Serialize};
-use eframe::egui::{self, include_image, Color32, Layout, UiBuilder, Vec2};
+use eframe::egui::{self, include_image, Color32, Layout, RichText, UiBuilder, Vec2};
 
 use super::{ui::pedal_knob, PedalParameter, PedalParameterValue, PedalTrait};
 use crate::unique_time_id;
@@ -274,13 +274,13 @@ impl PedalTrait for Nam {
             ui.add_space(5.0);
 
             ui.allocate_ui_with_layout(Vec2::new(ui.available_width(), ui.available_width()*0.25), Layout::left_to_right(egui::Align::Center), |ui| {
-                if let Some(value) = pedal_knob(ui, "Gain", self.parameters.get("gain").unwrap(), Vec2::new(0.05, 0.0), 0.25, Color32::WHITE) {
+                if let Some(value) = pedal_knob(ui, RichText::new("Gain").color(Color32::WHITE).size(8.0), self.parameters.get("gain").unwrap(), Vec2::new(0.05, 0.0), 0.25) {
                     knob_to_change = Some(("gain".to_string(), value));
                 }
-                if let Some(value) = pedal_knob(ui, "Dry/Wet", self.parameters.get("dry_wet").unwrap(), Vec2::new(0.375, 0.0), 0.25, Color32::WHITE) {
+                if let Some(value) = pedal_knob(ui, RichText::new("Dry/Wet").color(Color32::WHITE).size(8.0), self.parameters.get("dry_wet").unwrap(), Vec2::new(0.375, 0.0), 0.25) {
                     knob_to_change = Some(("dry_wet".to_string(), value));
                 }
-                if let Some(value) = pedal_knob(ui, "Level", self.parameters.get("level").unwrap(), Vec2::new(0.7, 0.0), 0.25, Color32::WHITE) {
+                if let Some(value) = pedal_knob(ui, RichText::new("Level").color(Color32::WHITE).size(8.0), self.parameters.get("level").unwrap(), Vec2::new(0.7, 0.0), 0.25) {
                     knob_to_change = Some(("level".to_string(), value));
                 }
             });
