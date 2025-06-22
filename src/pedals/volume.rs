@@ -39,7 +39,7 @@ impl Volume {
 }
 
 impl PedalTrait for Volume {
-    fn process_audio(&mut self, buffer: &mut [f32]) {
+    fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
         let volume = self.parameters.get("volume").unwrap().value.as_float().unwrap();
         
         for sample in buffer.iter_mut() {
@@ -55,7 +55,7 @@ impl PedalTrait for Volume {
         &mut self.parameters
     }
 
-    fn ui(&mut self, ui: &mut eframe::egui::Ui) -> Option<(String, PedalParameterValue)> {
+    fn ui(&mut self, ui: &mut egui::Ui, _message_buffer: &[String]) -> Option<(String, PedalParameterValue)> {
         ui.add(eframe::egui::Image::new(include_image!("images/pedal_base.png")).max_height(ui.available_height()));
 
         let volume_param = self.get_parameters().get("volume").unwrap();

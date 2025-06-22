@@ -262,7 +262,7 @@ impl PedalTrait for Vst2 {
         self.config = Some((buffer_size, sample_rate));
     }
 
-    fn process_audio(&mut self, buffer: &mut [f32]) {
+    fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
         // Config will be set on the server. If it is not set, we cannot process audio.
         match self.config {
             Some((b, _)) => assert!(buffer.len() <= b, "Buffer size exceeds configured max buffer size"),
@@ -305,7 +305,7 @@ impl PedalTrait for Vst2 {
         }
     }
 
-    fn ui(&mut self, ui: &mut eframe::egui::Ui) -> Option<(String, PedalParameterValue)> {
+    fn ui(&mut self, ui: &mut egui::Ui, _message_buffer: &[String]) -> Option<(String, PedalParameterValue)> {
         let mut plugin_param_change = None;
         if let Some(i) = self.instance.as_mut() {
             plugin_param_change = i.ui_frame(ui);

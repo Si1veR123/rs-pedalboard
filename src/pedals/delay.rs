@@ -111,7 +111,7 @@ impl Delay {
 }
 
 impl PedalTrait for Delay {
-    fn process_audio(&mut self, buffer: &mut [f32]) {
+    fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
         let decay = self.parameters.get("decay").unwrap().value.as_float().unwrap();
         let mix = self.parameters.get("mix").unwrap().value.as_float().unwrap();
         for sample in buffer.iter_mut() {
@@ -161,7 +161,7 @@ impl PedalTrait for Delay {
         }
     }
 
-    fn ui(&mut self, ui: &mut egui::Ui) -> Option<(String, PedalParameterValue)> {
+    fn ui(&mut self, ui: &mut egui::Ui, _message_buffer: &[String]) -> Option<(String, PedalParameterValue)> {
         ui.add(egui::Image::new(include_image!("images/pedal_base.png")));
 
         let mut to_change = None;

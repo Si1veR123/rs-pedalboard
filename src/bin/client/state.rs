@@ -338,17 +338,23 @@ impl State {
         self.active_pedalboardstage.borrow_mut().set_active_pedalboard(pedalboard_index);
     }
 
-    /// Get a received command from the server, beginning with the given prefix
+    /// Get a received command from the server, beginning with the given prefix.
     /// 
     /// Requires a lock on socket
-    pub fn get_command(&self, prefix: &str) -> Option<String> {
+    pub fn get_commands(&self, prefix: &str, into: &mut Vec<String>) {
         let mut socket = self.socket.borrow_mut();
-        socket.update_recv().ok()?;
-        if let Some(pos) = socket.received_commands.iter().position(|cmd| cmd.starts_with(prefix)) {
-            Some(socket.received_commands.remove(pos))
-        } else {
-            None
-        }
+
+        // TODO: remove cloning with nightly `drain_filter`? 
+        socket.received_commands.retain(|cmd| {
+            if cmd.starts_with(prefix) {
+                // Remove the prefix and push the command into the vector
+                let cmd_trim = cmd.trim_start_matches(prefix).trim().to_string();
+                into.push(cmd_trim);
+                false
+            } else {
+                true
+            }
+        });
     }
 
     /// Set whether the tuner is active on the server.

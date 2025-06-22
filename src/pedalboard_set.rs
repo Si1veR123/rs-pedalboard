@@ -63,13 +63,13 @@ impl PedalboardSet {
         }
     }
 
-    pub fn process_audio(&mut self, buffer: &mut [f32]) {
+    pub fn process_audio(&mut self, buffer: &mut [f32], message_buffer: &mut Vec<String>) {
         if self.pedalboards.is_empty() {
             return;
         }
 
         if self.active_pedalboard < self.pedalboards.len() {
-            self.pedalboards[self.active_pedalboard].process_audio(buffer);
+            self.pedalboards[self.active_pedalboard].process_audio(buffer, message_buffer);
         } else {
             log::error!("Pedalboard index out of bounds");
             self.active_pedalboard = 0;

@@ -166,7 +166,7 @@ impl PedalTrait for ImpulseResponse {
         }
     }
 
-    fn process_audio(&mut self, buffer: &mut [f32]) {
+    fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
         let ir = match self.ir {
             Some(ref mut ir) => ir,
             None => return,
@@ -209,7 +209,7 @@ impl PedalTrait for ImpulseResponse {
         }
     }
 
-    fn ui(&mut self, ui: &mut eframe::egui::Ui) -> Option<(String,PedalParameterValue)> {
+    fn ui(&mut self, ui: &mut egui::Ui, _message_buffer: &[String]) -> Option<(String,PedalParameterValue)> {
         let mut img_ui = ui.new_child(
             UiBuilder::new()
                 .max_rect(ui.available_rect_before_wrap())

@@ -126,12 +126,13 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
                     let pedalboard = pedalboard_set.pedalboards.get_mut(active_index).unwrap();
 
                     let dnd_response = egui_dnd::dnd(ui, "pedalboard_designer_dnd").show_sized(pedalboard.pedals.iter_mut().enumerate(), Vec2::new(pedal_width, pedal_width*PEDAL_HEIGHT_RATIO), |ui, (i, item), handle, _state| {
-                        
-
                         let whole_pedal_rect = ui.available_rect_before_wrap();
                         ui.allocate_ui_with_layout(Vec2::new(pedal_width, pedal_width*PEDAL_HEIGHT_RATIO*0.95), Layout::top_down(egui::Align::Center), |ui| {
                             ui.spacing_mut().item_spacing = Vec2::ZERO;
-                            if let Some(v) = item.ui(ui) {
+                            
+                            let mut command_buffer = Vec::new();
+                            screen.state.get_commands(&format!("pedalmsg{i}"), &mut command_buffer);
+                            if let Some(v) = item.ui(ui, &command_buffer) {
                                 changed = Some((i, v));
                             }
                         });
@@ -146,8 +147,6 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
                                 }
                             );
                         });
-
-                        
                     });
 
                     let mouse_over_delete = delete_button_rect.contains(ui.ctx().input(|i| i.pointer.hover_pos()).unwrap_or(Pos2::ZERO));

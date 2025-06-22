@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Instant};
 use std::hash::Hash;
 
 use eframe::egui::{self, include_image, Color32, Image, ImageButton, RichText, UiBuilder, Vec2};
@@ -7,14 +7,49 @@ use serde::{Deserialize, Serialize};
 
 use super::{PedalParameter, PedalParameterValue, PedalTrait};
 
-use crate::{dsp_algorithms::eq::{self, Equalizer}, pedals::ui::pedal_knob, unique_time_id};
+use crate::{dsp_algorithms::{eq::{self, Equalizer}, frequency_analysis::FrequencyAnalyser}, pedals::ui::pedal_knob, unique_time_id};
+
+const PLOT_POINTS: usize = 80;
+const LIVE_FREQUENCY_UPDATE_MS: usize = 100;
+const EQ_DB_GAIN: f32 = 15.0;
+
+pub fn serialize_plot_points(plot_points: &mut [PlotPoint]) -> String {
+    // First round the points to 2 decimal places to reduce size
+    for point in plot_points.iter_mut() {
+        point.x = (point.x * 100.0).round() / 100.0;
+        point.y = (point.y * 100.0).round() / 100.0;
+    }
+
+    // Hoping the compiler will optimise this
+    let plot_points_floats: Vec<[f64; 2]> = plot_points.iter()
+        .map(|p| [p.x, p.y])
+        .collect();
+
+    serde_json::to_string(&plot_points_floats).expect("Failed to serialize plot points")
+}
+
+pub fn deserialize_plot_points(data: &str) -> serde_json::Result<Vec<PlotPoint>> {
+    let plot_points_floats: Vec<[f64; 2]> = serde_json::from_str(data)?;
+
+    // Hoping the compiler will optimise this
+    let plot_points = plot_points_floats.into_iter()
+        .map(|p| PlotPoint::new(p[0], p[1]))
+        .collect::<Vec<PlotPoint>>();
+
+    Ok(plot_points)
+}
 
 #[derive(Clone)]
 pub struct GraphicEq7 {
     parameters: HashMap<String, PedalParameter>,
     eq: eq::Equalizer,
     id: usize,
-    response_plot: Vec<PlotPoint>
+    response_plot: Vec<PlotPoint>,
+
+    // Only exists on server
+    frequency_analyser: Option<FrequencyAnalyser>,
+    live_frequency_plot: Vec<PlotPoint>,
+    last_update: Instant
 }
 
 impl Hash for GraphicEq7 {
@@ -38,7 +73,17 @@ impl<'a> Deserialize<'a> for GraphicEq7 {
     where
         D: serde::Deserializer<'a>,
     {
-        let parameters: HashMap<String, PedalParameter> = HashMap::deserialize(deserializer)?;
+        let mut parameters: HashMap<String, PedalParameter> = HashMap::deserialize(deserializer)?;
+
+        // Set live_frequency_plot to 0 when loading the pedal as it is intensive
+        parameters.entry("live_frequency_plot".to_string())
+            .and_modify(|p| p.value = PedalParameterValue::Float(0.0))
+            .or_insert_with(|| PedalParameter {
+                value: PedalParameterValue::Float(0.0),
+                min: Some(PedalParameterValue::Float(0.0)),
+                max: Some(PedalParameterValue::Float(1.0)),
+                step: Some(PedalParameterValue::Float(1.0))
+            });
 
         let high_shelf_enabled = parameters.get("high_shelf")
             .and_then(|p| p.value.as_float())
@@ -58,6 +103,9 @@ impl<'a> Deserialize<'a> for GraphicEq7 {
             response_plot: Self::amplitude_response_plot(&eq),
             eq,
             id: unique_time_id(),
+            live_frequency_plot: Vec::with_capacity(PLOT_POINTS),
+            frequency_analyser: None,
+            last_update: Instant::now()
         })
     }
 }
@@ -74,8 +122,8 @@ impl GraphicEq7 {
                 format!("gain{}", i + 1),
                 PedalParameter {
                     value: PedalParameterValue::Float(init_gain),
-                    min: Some(PedalParameterValue::Float(-15.0)),
-                    max: Some(PedalParameterValue::Float(15.0)),
+                    min: Some(PedalParameterValue::Float(-EQ_DB_GAIN)),
+                    max: Some(PedalParameterValue::Float(EQ_DB_GAIN)),
                     step: Some(PedalParameterValue::Float(0.1))
                 },
             );
@@ -110,13 +158,35 @@ impl GraphicEq7 {
             },
         );
 
+        parameters.insert(
+            "live_frequency_plot".to_string(),
+            PedalParameter {
+                value: PedalParameterValue::Float(0.0),
+                min: Some(PedalParameterValue::Float(0.0)),
+                max: Some(PedalParameterValue::Float(1.0)),
+                step: Some(PedalParameterValue::Float(1.0))
+            },
+        );
+
         let eq = Self::build_eq([init_bandwidth; 7], [init_gain; 7], true, false);
 
-        GraphicEq7 { parameters, eq, id: unique_time_id(), response_plot: Vec::new() }
+        GraphicEq7 {
+            response_plot: Self::amplitude_response_plot(&eq),
+            id: unique_time_id(),
+            parameters,
+            eq,
+            live_frequency_plot: Vec::with_capacity(PLOT_POINTS),
+            frequency_analyser: None,
+            last_update: Instant::now()
+        }
+    }
+
+    pub fn frequency_analyser() -> FrequencyAnalyser {
+        FrequencyAnalyser::new(48000.0, 60.0, 11000.0, PLOT_POINTS, 2.0)
     }
 
     pub fn amplitude_response_plot(eq: &Equalizer) -> Vec<PlotPoint> {
-        eq.amplitude_response_plot(48000.0, 60.0, 15000.0, 100)
+        eq.amplitude_response_plot(48000.0, 60.0, 11000.0, PLOT_POINTS)
     }
 
     pub fn get_gains(parameters: &HashMap<String, PedalParameter>) -> [f32; 7] {
@@ -163,9 +233,30 @@ impl GraphicEq7 {
 
 
 impl PedalTrait for GraphicEq7 {
-    fn process_audio(&mut self, buffer: &mut [f32]) {
+    fn process_audio(&mut self, buffer: &mut [f32], message_buffer: &mut Vec<String>) {
         for sample in buffer.iter_mut() {
             *sample = self.eq.process(*sample);
+        }
+
+        if self.parameters.get("live_frequency_plot").unwrap().value.as_float().unwrap() > 0.0 {
+            let frequency_analyser = self.frequency_analyser.as_mut().expect("Frequency Analyser should not be None on server");
+            frequency_analyser.push_samples(buffer);
+
+            // Check if enough time has passed since the last update
+            if self.last_update.elapsed().as_millis() as usize >= LIVE_FREQUENCY_UPDATE_MS {
+                if frequency_analyser.analyse_log2(&mut self.live_frequency_plot) {
+                    // New frequency data available, serialize and send to client
+                    self.last_update = Instant::now();
+                    let message = serialize_plot_points(&mut self.live_frequency_plot);
+                    message_buffer.push(message);
+                }
+            }
+        }
+    }
+
+    fn set_config(&mut self, _buffer_size:usize, _sample_rate:usize) {
+        if self.frequency_analyser.is_none() {
+            self.frequency_analyser = Some(Self::frequency_analyser());
         }
     }
 
@@ -194,7 +285,30 @@ impl PedalTrait for GraphicEq7 {
         }
     }
 
-    fn ui(&mut self, ui: &mut eframe::egui::Ui) -> Option<(String, PedalParameterValue)> {
+    fn ui(&mut self, ui: &mut egui::Ui, message_buffer: &[String]) -> Option<(String, PedalParameterValue)> {
+        let live_frequency_enabled = self.parameters.get("live_frequency_plot").unwrap().value.as_float().unwrap() > 0.0;
+        if live_frequency_enabled {
+            ui.ctx().request_repaint();
+        }
+
+        if message_buffer.len() > 0 {
+            // Deserialize the frequency response plot from the message buffer
+            if let Ok(mut plot_points) = deserialize_plot_points(&message_buffer[0]) {
+                // Scale plot points to within 0-EQ_DB_GAIN
+                let max_value = plot_points.iter()
+                    .map(|p| p.y)
+                    .fold(f64::NEG_INFINITY, |a, b| a.max(b));
+                let scale_factor = EQ_DB_GAIN / max_value as f32;
+                for point in plot_points.iter_mut() {
+                    point.y *= scale_factor as f64;
+                }
+
+                self.live_frequency_plot = plot_points;
+            } else {
+                log::error!("Failed to deserialize frequency response plot");
+            }
+        }
+
         let mut changed_param = None;
 
         let pedal_size = ui.available_size();
@@ -294,7 +408,7 @@ impl PedalTrait for GraphicEq7 {
         // Frequency Response Graph
         ui.add_space(2.0);
 
-        Plot::new(self.id)
+        let plot_response = Plot::new(self.id)
             .height(ui.available_height()*0.75)
             .width(ui.available_width())
             .allow_drag(false)
@@ -304,15 +418,24 @@ impl PedalTrait for GraphicEq7 {
             .show_y(false)
             .center_y_axis(true)
             .show_axes(false)
-            .include_y(15.0)
-            .include_y(-15.0)
+            .include_y(EQ_DB_GAIN)
+            .include_y(-EQ_DB_GAIN)
             .show_grid(false)
             .set_margin_fraction(Vec2::ZERO)
             .show(ui, |plot_ui| {
                 plot_ui.line(
                     Line::new("freq_response", self.response_plot.as_slice())
                         .width(1.0)
+                        .color(Color32::from_rgb(150, 150, 245))
                 );
+
+                if self.parameters.get("live_frequency_plot").unwrap().value.as_float().unwrap() > 0.0 {
+                    plot_ui.line(
+                        Line::new("live_frequency", self.live_frequency_plot.as_slice())
+                            .color(Color32::from_rgb(200, 0, 0))
+                            .width(1.0)
+                    );
+                }
 
                 let freqs: [f64; 7] = [100.0, 200.0, 400.0, 800.0, 1600.0, 3200.0, 6400.0];
                 for hz in freqs {
@@ -331,8 +454,31 @@ impl PedalTrait for GraphicEq7 {
                 );
             });
 
+        let mut live_freq_response_button_rect = plot_response.response.rect.translate(Vec2::splat(2.0));
+        live_freq_response_button_rect.max = live_freq_response_button_rect.min + Vec2::splat(10.0);
+        if ui.new_child(
+            UiBuilder::new()
+                .max_rect(live_freq_response_button_rect)
+                .sense(egui::Sense::click())
+        ).add(
+            ImageButton::new(include_image!("images/eq/live.png"))
+                .corner_radius(3.0)
+                .tint(Color32::from_rgb(200, 20, 20))
+                .selected(live_frequency_enabled)
+                .frame(false)
+        ).clicked() {
+            let new_value = if live_frequency_enabled {
+                0.0
+            } else {
+                1.0
+            };
+            changed_param = Some(("live_frequency_plot".to_string(), PedalParameterValue::Float(new_value)));
+        }
+
         changed_param
     }
+
+
 }
 
 enum EqChange {

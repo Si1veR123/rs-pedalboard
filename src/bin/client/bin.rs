@@ -144,6 +144,10 @@ impl PedalboardClientApp {
 
 impl eframe::App for PedalboardClientApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.state.socket.borrow_mut().update_recv().unwrap_or_else(|e| {
+            log::error!("Failed to receive messages on client: {}", e);
+        });
+
         egui::TopBottomPanel::bottom(Id::new("bottom_window_select"))
             .min_height(WINDOW_HEIGHT / 10.0)
             .show(&ctx, |ui| {

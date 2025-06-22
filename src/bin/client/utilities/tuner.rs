@@ -8,11 +8,12 @@ pub struct TunerWidget {
     recent_freq: f32,
     recent_freq_smooth: f32,
     pub active: bool,
+    command_buffer: Vec<String>
 }
 
 impl TunerWidget {
     pub fn new(state: &'static State) -> Self {
-        Self { state, recent_freq: 0.0, recent_freq_smooth: 0.0, active: false }
+        Self { state, recent_freq: 0.0, recent_freq_smooth: 0.0, active: false, command_buffer: Vec::with_capacity(1) }
     }
 
     pub fn update_frequency(&mut self) {
@@ -21,20 +22,18 @@ impl TunerWidget {
             self.recent_freq_smooth += (self.recent_freq - self.recent_freq_smooth) * 0.02;
         }
 
-        if let Some(cmd) = self.state.get_command("tuner") {
-            if let Some(freq) = cmd.get(6..) {
-                if let Ok(freq) = freq.parse::<f32>() {
-                    self.recent_freq = freq;
-                    if (self.recent_freq - self.recent_freq_smooth).abs() > 5.0 {
-                        self.recent_freq_smooth = self.recent_freq;
-                    }
-
-                    log::debug!("Tuner frequency updated: {:?}", self.recent_freq);
-                } else {
-                    log::warn!("Failed to parse frequency from command: {}", cmd);
+        self.state.get_commands("tuner", &mut self.command_buffer);
+        if !self.command_buffer.is_empty() {
+            let cmd = self.command_buffer.remove(0);
+            if let Ok(freq) = cmd.parse::<f32>() {
+                self.recent_freq = freq;
+                if (self.recent_freq - self.recent_freq_smooth).abs() > 5.0 {
+                    self.recent_freq_smooth = self.recent_freq;
                 }
+
+                log::debug!("Tuner frequency updated: {:?}", self.recent_freq);
             } else {
-                log::warn!("Tuner command does not contain frequency: {}", cmd);
+                log::warn!("Failed to parse frequency from command: {}", cmd);
             }
         }
     }

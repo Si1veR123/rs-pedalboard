@@ -159,7 +159,8 @@ impl PedalParameterValue {
 
 #[enum_dispatch]
 pub trait PedalTrait: Hash {
-    fn process_audio(&mut self, buffer: &mut [f32]);
+    /// message_buffer is where messages to send to the client can be passed
+    fn process_audio(&mut self, buffer: &mut [f32], message_buffer: &mut Vec<String>);
 
     fn get_parameters(&self) -> &HashMap<String, PedalParameter>;
     fn get_parameters_mut(&mut self) -> &mut HashMap<String, PedalParameter>;
@@ -176,7 +177,9 @@ pub trait PedalTrait: Hash {
     }
 
     /// Returns the name of the parameter that needs to be changed, and its value
-    fn ui(&mut self, _ui: &mut egui::Ui) -> Option<(String, PedalParameterValue)> { None }
+    /// 
+    /// `message_buffer` contains messages from the pedal on the server to the client
+    fn ui(&mut self, _ui: &mut egui::Ui, _message_buffer: &[String]) -> Option<(String, PedalParameterValue)> { None }
 
     /// Call after creating a pedal so that it can set up its internal state
     fn set_config(&mut self, _buffer_size: usize, _sample_rate: usize) {}

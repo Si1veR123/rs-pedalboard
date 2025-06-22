@@ -57,6 +57,7 @@ pub fn create_linked_streams(
                             tuner_enabled: false,
                             tuner_last_sent: Instant::now(),
                             tuner: Yin::new(0.1, 40, 1300, 48000),
+                            pedal_command_to_client_buffer: Vec::with_capacity(12)
                         });
                     }
 
@@ -89,6 +90,7 @@ struct InputProcessor {
     command_sender: Sender<Box<str>>,
     writer: HeapProd<f32>,
     processing_buffer: Vec<f32>,
+    pedal_command_to_client_buffer: Vec<String>,
     master_volume: f32,
 
     tuner_enabled: bool,
@@ -98,7 +100,7 @@ struct InputProcessor {
 
 impl InputProcessor {
     fn process_audio(&mut self, data: &[f32]) {
-        
+        // Send the tuner frequency to the client if active
         if self.tuner_enabled {
             self.tuner.push_to_buffer(data);
             if Instant::now().duration_since(self.tuner_last_sent).as_millis() >= 50 {
@@ -107,7 +109,7 @@ impl InputProcessor {
                 log::debug!("Tuner frequency: {:.2} Hz", frequency);
                 let command = format!("tuner {:.2}\n", frequency);
                 if self.command_sender.send(command.into()).is_err() {
-                    log::error!("Failed to send tuner command");
+                    log::error!("Failed to send tuner command to client");
                 }
             }
         }
@@ -115,20 +117,35 @@ impl InputProcessor {
         self.processing_buffer.clear();
         self.processing_buffer.extend_from_slice(data);
 
-        // In case data is larger than buffer_size and pedals may only expect buffer_size or less
-        for i in 0..(data.len() as f32 / constants::FRAMES_PER_PERIOD as f32).ceil() as usize {
-            let start = i * constants::FRAMES_PER_PERIOD;
-            let mut end = start + constants::FRAMES_PER_PERIOD;
-            end = end.min(self.processing_buffer.len());
-            let frame = &mut self.processing_buffer[start..end];
-            self.pedalboard_set.process_audio(frame);
-        }
+        self.pedal_command_to_client_buffer.clear();
 
-        self.processing_buffer.iter_mut().for_each(|sample| *sample *= self.master_volume);
+        if data.iter().all(|&sample| sample == 0.0) {
+            log::debug!("Buffer is silent, skipping processing.");
+        } else {
+            // In case data is larger than buffer_size and pedals may only expect buffer_size or less,
+            // we process the data in chunks of FRAMES_PER_PERIOD.
+            for i in 0..(data.len() as f32 / constants::FRAMES_PER_PERIOD as f32).ceil() as usize {
+                let start = i * constants::FRAMES_PER_PERIOD;
+                let mut end = start + constants::FRAMES_PER_PERIOD;
+                end = end.min(self.processing_buffer.len());
+                let frame = &mut self.processing_buffer[start..end];
+                self.pedalboard_set.process_audio(frame, &mut self.pedal_command_to_client_buffer);
+            }
+
+            self.processing_buffer.iter_mut().for_each(|sample| *sample *= self.master_volume);   
+        }
 
         let written = self.writer.push_slice(&self.processing_buffer);
         if written != self.processing_buffer.len() {
             log::error!("Failed to write all processed data. Output is behind.")
+        }
+
+        // Send any commands from pedals to client
+        for mut command in self.pedal_command_to_client_buffer.drain(..) {
+            command.push('\n');
+            if self.command_sender.send(command.into()).is_err() {
+                log::error!("Failed to send pedal command to client");
+            }
         }
 
         // Handle commands that have been received

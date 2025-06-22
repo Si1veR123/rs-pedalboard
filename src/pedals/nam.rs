@@ -191,7 +191,7 @@ impl PedalTrait for Nam {
         self.modeler.set_maximum_buffer_size(buffer_size);
     }
 
-    fn process_audio(&mut self, buffer: &mut [f32]) {
+    fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
         let gain = self.parameters.get("gain").unwrap().value.as_float().unwrap();
         let dry_wet = self.parameters.get("dry_wet").unwrap().value.as_float().unwrap();
         let level = self.parameters.get("level").unwrap().value.as_float().unwrap();
@@ -235,7 +235,7 @@ impl PedalTrait for Nam {
         }
     }
 
-    fn ui(&mut self, ui: &mut eframe::egui::Ui) -> Option<(String,PedalParameterValue)> {
+    fn ui(&mut self, ui: &mut egui::Ui, _message_buffer: &[String]) -> Option<(String,PedalParameterValue)> {
         let mut img_ui = ui.new_child(
             UiBuilder::new()
                 .max_rect(ui.available_rect_before_wrap())

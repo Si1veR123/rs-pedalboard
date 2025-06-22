@@ -170,7 +170,7 @@ impl Equalizer {
         response
     }
 
-    /// log2 frequency response from start_freq to end_freq with num_points points
+    /// log2 frequency response in dB from start_freq to end_freq with num_points points
     pub fn amplitude_response_plot(&self, sample_rate: f64, mut start_freq: f64, end_freq: f64, num_points: usize) -> Vec<PlotPoint> {
         if start_freq == 0.0 {
             start_freq += 1.0; // Avoid log2(0)
@@ -186,7 +186,7 @@ impl Equalizer {
             let f = 2f64.powf(log2_f);
             let complex_response = self.response_at_freq(f, sample_rate);
             let amplitude = complex_response.norm();
-            let amplitude_db = 20.0 * amplitude.log10();
+            let amplitude_db = 20.0 * amplitude.log10(); // Convert to dB
             response.push(PlotPoint::new(log2_f, amplitude_db));
         }
     

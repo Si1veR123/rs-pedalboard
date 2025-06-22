@@ -94,8 +94,7 @@ impl Hash for NoiseGate {
 }
 
 impl PedalTrait for NoiseGate {
-    fn process_audio(&mut self, buffer: &mut [f32]) {
-    
+    fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
         let threshold_open = self.parameters.get("threshold_open").unwrap().value.as_float().unwrap();
         let threshold_close = self.parameters.get("threshold_close").unwrap().value.as_float().unwrap();
         let release = self.parameters.get("release").unwrap().value.as_float().unwrap();
@@ -166,7 +165,7 @@ impl PedalTrait for NoiseGate {
         
     }
 
-    fn ui(&mut self, ui: &mut eframe::egui::Ui) -> Option<(String,PedalParameterValue)> {
+    fn ui(&mut self, ui: &mut egui::Ui, _message_buffer: &[String]) -> Option<(String,PedalParameterValue)> {
         ui.add(egui::Image::new(include_image!("images/pedal_base.png")));
 
         let mut to_change = None;

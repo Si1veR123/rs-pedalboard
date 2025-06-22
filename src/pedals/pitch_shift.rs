@@ -156,7 +156,7 @@ impl PitchShift {
 
 
 impl PedalTrait for PitchShift {
-    fn process_audio(&mut self, buffer: &mut [f32]) {
+    fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
         if self.output_buffer.len() != buffer.len() {
             self.output_buffer.resize(buffer.len(), 0.0);
         }
@@ -194,7 +194,7 @@ impl PedalTrait for PitchShift {
         }
     }
 
-    fn ui(&mut self, ui: &mut eframe::egui::Ui) -> Option<(String, PedalParameterValue)> {
+    fn ui(&mut self, ui: &mut egui::Ui, _message_buffer: &[String]) -> Option<(String, PedalParameterValue)> {
         ui.add(egui::Image::new(include_image!("images/pedal_base.png")));
 
         let mut to_change = None;

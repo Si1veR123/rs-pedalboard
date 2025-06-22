@@ -48,7 +48,7 @@ impl Fuzz {
 }
 
 impl PedalTrait for Fuzz {
-    fn process_audio(&mut self, buffer: &mut [f32]) {
+    fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
 
         let gain = self.parameters.get("gain").unwrap().value.as_float().unwrap();
         let level = self.parameters.get("level").unwrap().value.as_float().unwrap();
@@ -69,7 +69,7 @@ impl PedalTrait for Fuzz {
         &mut self.parameters
     }
 
-    fn ui(&mut self, ui: &mut eframe::egui::Ui) -> Option<(String, PedalParameterValue)> {
+    fn ui(&mut self, ui: &mut egui::Ui, _message_buffer: &[String]) -> Option<(String, PedalParameterValue)> {
         ui.add(egui::Image::new(include_image!("images/pedal_base.png")));
 
         let mut to_change = None;

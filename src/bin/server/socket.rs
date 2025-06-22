@@ -1,13 +1,15 @@
-use std::io::{Read, Write};
+use std::io::Write;
 use std::net::{TcpListener, TcpStream};
 use std::net::Ipv4Addr;
 
 use crossbeam::channel::{Sender, Receiver};
+use rs_pedalboard::socket_helper::CommandReceiver;
 
 pub struct ServerSocket {
     port: u16,
     command_sender: Sender<Box<str>>,
     command_receiver: Receiver<Box<str>>,
+    command_receive_helper: CommandReceiver
 }
 
 impl ServerSocket {
@@ -16,6 +18,7 @@ impl ServerSocket {
             port,
             command_sender,
             command_receiver,
+            command_receive_helper: CommandReceiver::new()
         }
     }
 
@@ -37,43 +40,19 @@ impl ServerSocket {
         Ok(())
     }
 
-    /// Returns true if closed
-    fn read_to_newline(&mut self, stream: &mut TcpStream, buffer: &mut Vec<u8>) -> std::io::Result<bool> {
-        let mut chunk_buffer = [0; 256];
-        buffer.clear();
-        loop {
-            match stream.read(&mut chunk_buffer) {
-                Ok(0) => return Ok(true), // Connection closed
-                Ok(n) => {
-                    buffer.extend_from_slice(&chunk_buffer[..n]);
-                    if let Some(pos) = buffer.iter().position(|&b| b == b'\n') {
-                        buffer.truncate(pos + 1); // Keep the newline character
-                        break;
-                    }
-                }
-                Err(e) => return Err(e),
-            }
-        }
-        Ok(false) // Connection still open
-    }
-
     fn handle_client(&mut self, mut stream: TcpStream) {
         let mut buffer = Vec::new();
         stream.set_nonblocking(true).expect("Failed to set non-blocking");
 
         loop {
-            match self.read_to_newline(&mut stream, &mut buffer) {
+            match self.command_receive_helper.receive_commands(&mut stream, &mut buffer) {
                 Ok(true) => break, // Connection closed
                 Ok(false) => {
-                    if let Ok(received_str) = std::str::from_utf8(buffer.as_slice()) {
-                        log::info!("Received: {:?}", received_str);
-                        
-                        if self.command_sender.send(received_str.into()).is_err() {
+                    for command in buffer.drain(..) {
+                        if self.command_sender.send(command.into()).is_err() {
                             log::error!("Failed to send command to audio thread");
                             break;
                         }
-                    } else {
-                        log::error!("Received invalid UTF-8 string");
                     }
                 },
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
@@ -89,8 +68,14 @@ impl ServerSocket {
                     log::error!("Failed to send command to client: {}", e);
                     break;
                 }
-                log::info!("Sent command: {:?}", command);
+                if command.len() <= 20 {
+                    log::info!("Sent command: {:?}", command);
+                } else {
+                    log::info!("Sent command: {:?}...", &command[..20]);
+                }
             }
+
+            std::thread::sleep(std::time::Duration::from_millis(50)); // Avoid busy waiting
         }
 
         stream.set_nonblocking(false).expect("Failed to restore blocking");

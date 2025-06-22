@@ -1,4 +1,3 @@
-use std::io::Read;
 use std::io::Write;
 use std::net::TcpStream;
 use std::net::Ipv4Addr;
@@ -7,10 +6,12 @@ use rs_pedalboard::pedalboard::Pedalboard;
 use rs_pedalboard::pedalboard_set::PedalboardSet;
 use rs_pedalboard::pedals::Pedal;
 use rs_pedalboard::pedals::PedalParameterValue;
+use rs_pedalboard::socket_helper::CommandReceiver;
 
 pub struct ClientSocket {
     port: u16,
     stream: Option<TcpStream>,
+    command_receiver: CommandReceiver,
     // Commands that have been received but not yet processed
     pub received_commands: Vec<String>,
 }
@@ -20,6 +21,7 @@ impl ClientSocket {
         ClientSocket {
             port,
             stream: None,
+            command_receiver: CommandReceiver::new(),
             received_commands: Vec::new(),
         }
     }
@@ -50,24 +52,60 @@ impl ClientSocket {
 
     pub fn update_recv(&mut self) -> std::io::Result<()> {
         if let Some(stream) = &mut self.stream {
-            let mut buffer = [0u8; 1024];
-            loop {
-                // Stream is non-blocking
-                match stream.read(&mut buffer) {
-                    Ok(0) => break, // No more data
-                    Ok(n) => {
-                        let data = String::from_utf8_lossy(&buffer[..n]);
-                        for line in data.lines() {
-                            log::info!("Received: {:?}", line);
-                            self.received_commands.push(line.to_string());
-                        }
-                    }
-                    Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => break,
-                    Err(e) => return Err(e),
-                }
-            }
+            self.command_receiver.receive_commands(stream, &mut self.received_commands)?;
         }
         Ok(())
+
+        //if let Some(stream) = &mut self.stream {
+        //    let mut buffer_writing_at = 0;
+        //    let mut buffer = [0u8; 1024];
+        //    loop {
+        //        // Stream is non-blocking
+        //        match stream.read(&mut buffer[buffer_writing_at..]) {
+        //            Ok(0) => break, // No more data
+        //            Ok(n) => {
+        //                let data = String::from_utf8_lossy(&buffer[..buffer_writing_at+n]).to_string();
+        //                match data.rfind('\n') {
+        //                    Some(pos) => {
+        //                        // If we found a newline, we can process the data up to that point
+        //                        let complete_data = &data[..pos + 1];
+        //                        for line in complete_data.lines() {
+        //                            if line.len() < 20 {
+        //                                log::info!("Received command: {:?}", line);
+        //                            } else {
+        //                                log::info!("Received command: {:?}...", &line[..20]);
+        //                            }
+        //                            self.received_commands.push(line.to_string());
+        //                        }
+        //                        if pos != data.len() - 1 {
+        //                            // If there is more data after the newline, keep it for the next read
+        //                            let remaining_data = &data[pos + 1..];
+        //                            // Clear the buffer and push the remaining data back to the stream
+        //                            buffer[..remaining_data.len()].copy_from_slice(remaining_data.as_bytes());
+        //                            buffer_writing_at = remaining_data.len();
+        //                        }
+        //                    },
+        //                    None => {
+        //                        // No new line found. Increase `buffer_writing_at` so that next read will append to the end of the current data.
+        //                        // In theory this shouldn't happen as the server should always send complete commands ending with a newline.
+        //                        // This could happen if the server sends a message longer than the buffer.
+        //                        log::warn!("Received data without newline, appending to buffer.");
+        //                        buffer_writing_at += n;
+//
+        //                        if buffer_writing_at >= buffer.len() {
+        //                            // If the buffer is full, we need to reset it
+        //                            log::error!("Client received command longer than buffer, discarding.");
+        //                            buffer_writing_at = 0;
+        //                        }
+        //                    }
+        //                }
+        //            }
+        //            Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => break,
+        //            Err(e) => return Err(e),
+        //        }
+        //    }
+        //}
+        //Ok(())
     }
 
     pub fn set_tuner(&mut self, active: bool) -> std::io::Result<()> {
