@@ -2,7 +2,7 @@ use std::sync::{atomic::AtomicBool, Arc};
 use crossbeam::channel::Sender;
 use rs_pedalboard::dsp_algorithms::yin::Yin;
 
-pub fn start_tuner(mut yin: Yin, kill: Arc<AtomicBool>, send_to: Sender<f32>, every_ms: u64) {
+pub fn start_tuner(mut yin: Yin, kill: Arc<AtomicBool>, send_to: Sender<f32>) {
     std::thread::spawn(move || {
         log::info!("Tuner thread started");
         let mut consecutive_zeros = 0;
@@ -24,7 +24,7 @@ pub fn start_tuner(mut yin: Yin, kill: Arc<AtomicBool>, send_to: Sender<f32>, ev
                 }
             }
 
-            std::thread::sleep(std::time::Duration::from_millis(every_ms));
+            std::thread::sleep(std::time::Duration::from_millis(rs_pedalboard::dsp_algorithms::yin::SERVER_UPDATE_FREQ_MS));
         }
         log::info!("Tuner thread stopped");
     });

@@ -1,25 +1,30 @@
+use std::time::Instant;
+
 use eframe::egui::{self, RichText, Vec2, Widget};
 
 use crate::state::State;
-use rs_pedalboard::dsp_algorithms::yin::freq_to_note;
+use rs_pedalboard::dsp_algorithms::yin::{freq_to_note, SERVER_UPDATE_FREQ_MS};
 
 pub struct TunerWidget {
     pub state: &'static State,
     recent_freq: f32,
     recent_freq_smooth: f32,
+    last_update: Instant,
     pub active: bool,
     command_buffer: Vec<String>
 }
 
 impl TunerWidget {
     pub fn new(state: &'static State) -> Self {
-        Self { state, recent_freq: 0.0, recent_freq_smooth: 0.0, active: false, command_buffer: Vec::with_capacity(1) }
+        Self { state, recent_freq: 0.0, recent_freq_smooth: 0.0, active: false, command_buffer: Vec::with_capacity(1), last_update: Instant::now() }
     }
 
     pub fn update_frequency(&mut self) {
         // Smooth the recent_freq_smooth towards recent_freq
+        let update_frac = self.last_update.elapsed().as_millis() as f32 / SERVER_UPDATE_FREQ_MS as f32;
+        self.last_update = Instant::now();
         if self.recent_freq_smooth != self.recent_freq {
-            self.recent_freq_smooth += (self.recent_freq - self.recent_freq_smooth) * 0.02;
+            self.recent_freq_smooth += (self.recent_freq - self.recent_freq_smooth) * update_frac;
         }
 
         self.state.get_commands("tuner", &mut self.command_buffer);
@@ -49,7 +54,7 @@ impl Widget for &mut TunerWidget {
 
         let (note_name, octave, cents_offset) = if self.recent_freq_smooth == 0.0 {
             let question = String::from("?");
-            (question.clone(), question.clone(), 0)
+            (question.clone(), question.clone(), 0.0)
         } else {
             let recent_note = freq_to_note(self.recent_freq_smooth);
             (recent_note.0.to_string(), recent_note.1.to_string(), recent_note.2)
@@ -89,12 +94,12 @@ impl Widget for &mut TunerWidget {
             });
 
             // Cents offset label
-            let cents_label = if cents_offset == 0 {
+            let cents_label = if cents_offset == 0.0 {
                 String::from("0")
-            } else if cents_offset > 0 {
-                format!("+{}", cents_offset)
+            } else if cents_offset > 0.0 {
+                format!("+{}", cents_offset.round() as isize)
             } else {
-                format!("-{}", cents_offset)
+                format!("{}", cents_offset.round() as isize)
             };
             ui.label(RichText::new(cents_label).size(20.0));
         }).response;

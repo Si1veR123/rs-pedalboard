@@ -106,10 +106,16 @@ impl InputProcessor {
             tuner_writer.push_slice(data);
             
             if !frequency_channel_recv.is_empty() {
-                let frequency =  frequency_channel_recv.recv().expect("Channel is not empty");
-                let command = format!("tuner {:.2}\n", frequency);
-                if self.command_sender.send(command.into()).is_err() {
-                    log::error!("Failed to send tuner command to client");
+                match frequency_channel_recv.recv() {
+                    Ok(frequency) => {
+                        let command = format!("tuner {:.2}\n", frequency);
+                        if self.command_sender.send(command.into()).is_err() {
+                            log::error!("Failed to send tuner command to client");
+                        }
+                    },
+                    Err(e) => {
+                        log::error!("Failed to receive frequency from tuner: {}", e);
+                    }
                 }
             }
         } else {
@@ -126,6 +132,7 @@ impl InputProcessor {
             self.processing_buffer.iter_mut().for_each(|sample| *sample *= self.master_volume);   
         }
 
+        
         let written = self.writer.push_slice(&self.processing_buffer);
         if written != self.processing_buffer.len() {
             log::error!("Failed to write all processed data. Output is behind.")
@@ -152,6 +159,12 @@ impl InputProcessor {
         let command_name = words.next()?;
 
         match command_name {
+            "disconnect" => {
+                // The client has disconnected, stop tuner if it is running
+                if let Some((_, _, k)) = self.tuner_handle.take() {
+                    k.store(true, std::sync::atomic::Ordering::Relaxed);
+                }
+            }
             "setparameter" => {
                 let pedalboard_index = words.next()?.parse::<usize>().ok()?;
                 let pedal_index = words.next()?.parse::<usize>().ok()?;
@@ -258,15 +271,13 @@ impl InputProcessor {
                             tuner_reader,
                         );
                         let kill = Arc::new(AtomicBool::new(false));
-                        crate::tuner::start_tuner(yin, kill.clone(), frequency_channel_send, 100);
+                        crate::tuner::start_tuner(yin, kill.clone(), frequency_channel_send);
                         self.tuner_handle = Some((tuner_writer, frequency_channel_recv, kill));
-                        log::info!("Tuner enabled");
                     },
                     "off" => {
                         if let Some((_, _, kill)) = self.tuner_handle.take() {
                             kill.store(true, std::sync::atomic::Ordering::Relaxed);
                         }
-                        log::info!("Tuner disabled");
                     },
                     _ => {
                         log::error!("Invalid value for tuner command: expected 'on' or 'off'");

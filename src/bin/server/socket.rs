@@ -90,7 +90,7 @@ impl ServerSocket {
 
             std::thread::sleep(std::time::Duration::from_millis(50)); // Avoid busy waiting
         }
-
+        self.command_sender.send("disconnect".into()).expect("Failed to send disconnect command");
         stream.set_nonblocking(false).expect("Failed to restore blocking");
     }
 }

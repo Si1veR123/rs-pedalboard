@@ -22,7 +22,7 @@ pub mod constants {
 
 pub const TUNER_MIN_FREQ: usize = 40;
 pub const TUNER_MAX_FREQ: usize = 1300;
-pub const TUNER_PERIODS: usize = 3;
+pub const TUNER_PERIODS: usize = 5;
 
 mod audio_io;
 mod socket;
