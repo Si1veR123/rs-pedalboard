@@ -1,6 +1,6 @@
 use egui_plot::PlotPoint;
 use realfft::{RealFftPlanner, RealToComplex};
-use rustfft::num_complex::Complex32;
+use num_complex::Complex32;
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -8,7 +8,7 @@ pub struct FrequencyAnalyser {
     sample_rate: f32,
     min_freq: f32,
     max_freq: f32,
-    num_bins_in_range: usize,
+    num_bins: usize,
 
     fft: Arc<dyn RealToComplex<f32>>,
     scratch: Vec<Complex32>,
@@ -40,7 +40,7 @@ impl FrequencyAnalyser {
             fft,
             output,
             input,
-            num_bins_in_range: num_bins,
+            num_bins,
         }
     }
 
@@ -50,39 +50,6 @@ impl FrequencyAnalyser {
             // Keep only most recent fft_size samples
             self.input.drain(..self.input.len() - self.fft.len());
         }
-    }
-
-    pub fn analyse(&mut self, amplitude_output: &mut Vec<PlotPoint>) -> bool {
-        // `push_samples` should ensure that self.input.len() is up to fft_size
-        // If there are not enough samples, then self.input.len() != self.fft_size
-        if self.input.len() != self.fft.len() {
-            return false;
-        }
-
-        amplitude_output.clear();
-
-        self.fft
-            .process_with_scratch(&mut self.input, &mut self.output, &mut self.scratch)
-            .expect("Buffers and input should be correct");
-
-        // Compute magnitudes and map to frequency bins
-        let bin_width = self.sample_rate / self.fft.len() as f32;
-        let freq_range = self.max_freq - self.min_freq;
-        let bin_step = freq_range / self.num_bins_in_range as f32;
-
-        for bin in 0..self.num_bins_in_range {
-            let freq_center = self.min_freq + bin_step * (bin as f32 + 0.5);
-            let fft_bin_index = (freq_center / bin_width).round() as usize;
-
-            if fft_bin_index < self.output.len() {
-                amplitude_output.push(PlotPoint::new(freq_center, self.output[fft_bin_index].norm()));
-            } else {
-                log::warn!("FrequencyAnalyser: FFT bin index out of range");
-                amplitude_output.push(PlotPoint::new(freq_center, 0.0));
-            }
-        }
-
-        true
     }
 
     pub fn analyse_log2(&mut self, amplitude_output: &mut Vec<PlotPoint>) -> bool {
@@ -100,9 +67,9 @@ impl FrequencyAnalyser {
     
         let log2_min = self.min_freq.log2();
         let log2_max = self.max_freq.log2();
-        let log2_step = (log2_max - log2_min) / self.num_bins_in_range as f32;
+        let log2_step = (log2_max - log2_min) / self.num_bins as f32;
     
-        for bin in 0..self.num_bins_in_range {
+        for bin in 0..self.num_bins {
             let log2_f = log2_min + bin as f32 * log2_step;
             let freq_center = 2f32.powf(log2_f);
             let fft_bin_index = (freq_center / bin_width).round() as usize;

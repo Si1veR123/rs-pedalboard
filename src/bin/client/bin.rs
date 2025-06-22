@@ -240,11 +240,7 @@ impl eframe::App for PedalboardClientApp {
                                 Ok(_) => {
                                     log::info!("Connected to server; Loading set...");
                                     let pedalboardset = self.state.active_pedalboardstage.borrow();
-                                    if let Err(e) = socket.load_set(&pedalboardset) {
-                                        log::error!("Failed to load set: {}", e);
-                                    } else {
-                                        log::info!("Set loaded successfully");
-                                    }
+                                    socket.load_set(&pedalboardset);
                                 },
                                 Err(e) => log::error!("Failed to connect to server: {}", e)
                             }

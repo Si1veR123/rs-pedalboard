@@ -137,7 +137,7 @@ impl State {
             pedalboard_set.active_pedalboard -= 1;
         }
 
-        self.socket.borrow_mut().delete_pedalboard(index).expect("Failed to delete pedalboard from socket");
+        self.socket.borrow_mut().delete_pedalboard(index);
     }
 
     /// Move a pedalboard in the active pedalboard stage
@@ -147,7 +147,7 @@ impl State {
         let mut pedalboard_set = self.active_pedalboardstage.borrow_mut();
         egui_dnd::utils::shift_vec(src_index, dest_index, &mut pedalboard_set.pedalboards);
 
-        self.socket.borrow_mut().move_pedalboard(src_index, dest_index).expect("Failed to move pedalboard in socket");
+        self.socket.borrow_mut().move_pedalboard(src_index, dest_index);
     }
 
     /// Add a pedalboard to the active pedalboard stage
@@ -157,7 +157,7 @@ impl State {
         let mut pedalboard_set = self.active_pedalboardstage.borrow_mut();
         let mut socket = self.socket.borrow_mut();
 
-        socket.add_pedalboard(&pedalboard).expect("Failed to add pedalboard to socket");
+        socket.add_pedalboard(&pedalboard);
         pedalboard_set.pedalboards.push(pedalboard);
     }
 
@@ -187,8 +187,8 @@ impl State {
         let new_pedalboard = pedalboard.clone();
 
         let mut socket = self.socket.borrow_mut();
-        socket.add_pedalboard(&pedalboard).expect("Failed to add pedalboard");
-        socket.move_pedalboard(pedalboard_set.pedalboards.len()-1, index+1).expect("Failed to move pedalboard");
+        socket.add_pedalboard(&pedalboard);
+        socket.move_pedalboard(pedalboard_set.pedalboards.len()-1, index+1);
 
         pedalboard_set.pedalboards.insert(index+1, new_pedalboard);
     }
@@ -209,8 +209,8 @@ impl State {
         let pedalboard = &pedalboard_set.pedalboards[index];
 
         let mut socket = self.socket.borrow_mut();
-        socket.add_pedalboard(&pedalboard).expect("Failed to add pedalboard");
-        socket.move_pedalboard(pedalboard_set.pedalboards.len()-1, index+1).expect("Failed to move pedalboard");
+        socket.add_pedalboard(&pedalboard);
+        socket.move_pedalboard(pedalboard_set.pedalboards.len()-1, index+1);
 
         pedalboard_set.pedalboards.insert(index+1, new_pedalboard);
     }
@@ -237,7 +237,7 @@ impl State {
         for (i, pedalboard) in active_pedalboardstage.pedalboards.iter_mut().enumerate() {
             if pedalboard.name == *active_pedalboard_name {
                 pedalboard.pedals.push(pedal.clone());
-                socket.add_pedal(i, &pedal).expect("Failed to add pedal to socket");
+                socket.add_pedal(i, &pedal);
             }
         }
     }
@@ -261,7 +261,7 @@ impl State {
         for (i, pedalboard) in active_pedalboardstage.pedalboards.iter_mut().enumerate() {
             if pedalboard.name == *active_pedalboard_name {
                 egui_dnd::utils::shift_vec(src_index, dest_index, &mut pedalboard.pedals);
-                self.socket.borrow_mut().move_pedal(i, src_index, dest_index).expect("Failed to move pedal in socket");
+                self.socket.borrow_mut().move_pedal(i, src_index, dest_index);
             }
         }
     }
@@ -285,7 +285,7 @@ impl State {
         for (i, pedalboard) in active_pedalboardstage.pedalboards.iter_mut().enumerate() {
             if pedalboard.name == *active_pedalboard_name {
                 pedalboard.pedals.remove(pedal_index);
-                self.socket.borrow_mut().delete_pedal(i, pedal_index).expect("Failed to delete pedal from socket");
+                self.socket.borrow_mut().delete_pedal(i, pedal_index);
             }
         }
     }
@@ -299,7 +299,7 @@ impl State {
         // Set parameter on pedalboard stage
         for (i, pedalboard) in self.active_pedalboardstage.borrow_mut().pedalboards.iter_mut().enumerate() {
             if pedalboard.name == pedalboard_name {
-                socket.set_parameter(i, pedal_index, name, parameter_value).expect("Failed to set parameter");
+                socket.set_parameter(i, pedal_index, name, parameter_value);
                 pedalboard.pedals[pedal_index].set_parameter_value(name, parameter_value.clone());
             }
         }
@@ -317,7 +317,7 @@ impl State {
     /// Requires a lock on active_pedalboardstage and socket
     pub fn load_set(&self, pedalboard_set: PedalboardSet) {
         let mut socket = self.socket.borrow_mut();
-        socket.load_set(&pedalboard_set).expect("Failed to load pedalboard set");
+        socket.load_set(&pedalboard_set);
 
         *self.active_pedalboardstage.borrow_mut() = pedalboard_set;
     }
@@ -326,7 +326,7 @@ impl State {
     pub fn server_synchronise(&self) {
         let mut socket = self.socket.borrow_mut();
         let active_pedalboardstage = self.active_pedalboardstage.borrow();
-        socket.load_set(&active_pedalboardstage).expect("Failed to load pedalboard set");
+        socket.load_set(&active_pedalboardstage);
     }
 
     /// Play a pedalboard from the active stage
@@ -334,7 +334,7 @@ impl State {
     /// Requires a lock on active_pedalboardstage and socket
     pub fn play(&self, pedalboard_index: usize) {
         let mut socket = self.socket.borrow_mut();
-        socket.play(pedalboard_index).expect("Failed to play pedalboard");
+        socket.play(pedalboard_index);
         self.active_pedalboardstage.borrow_mut().set_active_pedalboard(pedalboard_index);
     }
 
@@ -362,7 +362,7 @@ impl State {
     /// Requires a lock on socket.
     pub fn set_tuner_active_server(&self, active: bool) {
         let mut socket = self.socket.borrow_mut();
-        socket.set_tuner(active).expect("Failed to set tuner active");
+        socket.set_tuner(active);
     }
 
     /// Save the entire state into the save file

@@ -12,6 +12,7 @@ use crate::{dsp_algorithms::{eq::{self, Equalizer}, frequency_analysis::Frequenc
 const PLOT_POINTS: usize = 80;
 const LIVE_FREQUENCY_UPDATE_MS: usize = 100;
 const EQ_DB_GAIN: f32 = 15.0;
+const OVERSAMPLE: f32 = 10.0;
 
 pub fn serialize_plot_points(plot_points: &mut [PlotPoint]) -> String {
     // First round the points to 2 decimal places to reduce size
@@ -48,8 +49,15 @@ pub struct GraphicEq7 {
 
     // Only exists on server
     frequency_analyser: Option<FrequencyAnalyser>,
-    live_frequency_plot: Vec<PlotPoint>,
-    last_update: Instant
+    last_frequencies_sent: Instant,
+
+    // Used for smoothing the frequency plot
+    prev_live_frequency_plot: Vec<PlotPoint>,
+    target_live_frequency_plot: Vec<PlotPoint>,
+    last_frame: Instant,
+
+    // Used to clamp the live frequency plot values
+    dynamic_max: f32
 }
 
 impl Hash for GraphicEq7 {
@@ -103,9 +111,12 @@ impl<'a> Deserialize<'a> for GraphicEq7 {
             response_plot: Self::amplitude_response_plot(&eq),
             eq,
             id: unique_time_id(),
-            live_frequency_plot: Vec::with_capacity(PLOT_POINTS),
+            prev_live_frequency_plot: Vec::with_capacity(PLOT_POINTS),
+            target_live_frequency_plot: Vec::with_capacity(PLOT_POINTS),
+            last_frame: Instant::now(),
             frequency_analyser: None,
-            last_update: Instant::now()
+            last_frequencies_sent: Instant::now(),
+            dynamic_max: 0.0
         })
     }
 }
@@ -175,14 +186,17 @@ impl GraphicEq7 {
             id: unique_time_id(),
             parameters,
             eq,
-            live_frequency_plot: Vec::with_capacity(PLOT_POINTS),
+            prev_live_frequency_plot: Vec::with_capacity(PLOT_POINTS),
+            target_live_frequency_plot: Vec::with_capacity(PLOT_POINTS),
+            last_frame: Instant::now(),
             frequency_analyser: None,
-            last_update: Instant::now()
+            last_frequencies_sent: Instant::now(),
+            dynamic_max: 0.0
         }
     }
 
     pub fn frequency_analyser() -> FrequencyAnalyser {
-        FrequencyAnalyser::new(48000.0, 60.0, 11000.0, PLOT_POINTS, 2.0)
+        FrequencyAnalyser::new(48000.0, 60.0, 11000.0, PLOT_POINTS, OVERSAMPLE)
     }
 
     pub fn amplitude_response_plot(eq: &Equalizer) -> Vec<PlotPoint> {
@@ -243,11 +257,11 @@ impl PedalTrait for GraphicEq7 {
             frequency_analyser.push_samples(buffer);
 
             // Check if enough time has passed since the last update
-            if self.last_update.elapsed().as_millis() as usize >= LIVE_FREQUENCY_UPDATE_MS {
-                if frequency_analyser.analyse_log2(&mut self.live_frequency_plot) {
+            if self.last_frequencies_sent.elapsed().as_millis() as usize >= LIVE_FREQUENCY_UPDATE_MS {
+                if frequency_analyser.analyse_log2(&mut self.target_live_frequency_plot) {
                     // New frequency data available, serialize and send to client
-                    self.last_update = Instant::now();
-                    let message = serialize_plot_points(&mut self.live_frequency_plot);
+                    self.last_frequencies_sent = Instant::now();
+                    let message = serialize_plot_points(&mut self.target_live_frequency_plot);
                     message_buffer.push(message);
                 }
             }
@@ -288,22 +302,40 @@ impl PedalTrait for GraphicEq7 {
     fn ui(&mut self, ui: &mut egui::Ui, message_buffer: &[String]) -> Option<(String, PedalParameterValue)> {
         let live_frequency_enabled = self.parameters.get("live_frequency_plot").unwrap().value.as_float().unwrap() > 0.0;
         if live_frequency_enabled {
+            // Update the live frequency plot smoothly
+            if self.prev_live_frequency_plot.is_empty() {
+                self.prev_live_frequency_plot = self.target_live_frequency_plot.clone();
+            }
+
+            let time_since_last_frame_ms = self.last_frame.elapsed().as_millis() as usize;
+            let smooth_factor = (time_since_last_frame_ms as f64 / LIVE_FREQUENCY_UPDATE_MS as f64).min(1.0);
+            self.last_frame = Instant::now();
+
+            for (prev, target) in self.prev_live_frequency_plot.iter_mut().zip(self.target_live_frequency_plot.iter()) {
+                prev.x = prev.x * (1.0 - smooth_factor) + target.x * smooth_factor;
+                prev.y = prev.y * (1.0 - smooth_factor) + target.y * smooth_factor;
+            }
+
             ui.ctx().request_repaint();
         }
 
         if message_buffer.len() > 0 {
             // Deserialize the frequency response plot from the message buffer
             if let Ok(mut plot_points) = deserialize_plot_points(&message_buffer[0]) {
-                // Scale plot points to within 0-EQ_DB_GAIN
+                // Scale plot points to 0-EQ_DB_GAIN
                 let max_value = plot_points.iter()
                     .map(|p| p.y)
                     .fold(f64::NEG_INFINITY, |a, b| a.max(b));
-                let scale_factor = EQ_DB_GAIN / max_value as f32;
+
+                // Smoothly adjust dynamic max
+                self.dynamic_max = (self.dynamic_max*0.9).max(max_value as f32);
+
+                let scale_factor = EQ_DB_GAIN / self.dynamic_max as f32;
                 for point in plot_points.iter_mut() {
                     point.y *= scale_factor as f64;
                 }
 
-                self.live_frequency_plot = plot_points;
+                self.target_live_frequency_plot = plot_points;
             } else {
                 log::error!("Failed to deserialize frequency response plot");
             }
@@ -431,7 +463,7 @@ impl PedalTrait for GraphicEq7 {
 
                 if self.parameters.get("live_frequency_plot").unwrap().value.as_float().unwrap() > 0.0 {
                     plot_ui.line(
-                        Line::new("live_frequency", self.live_frequency_plot.as_slice())
+                        Line::new("live_frequency", self.prev_live_frequency_plot.as_slice())
                             .color(Color32::from_rgb(200, 0, 0))
                             .width(1.0)
                     );
@@ -454,8 +486,8 @@ impl PedalTrait for GraphicEq7 {
                 );
             });
 
-        let mut live_freq_response_button_rect = plot_response.response.rect.translate(Vec2::splat(2.0));
-        live_freq_response_button_rect.max = live_freq_response_button_rect.min + Vec2::splat(10.0);
+        let mut live_freq_response_button_rect = plot_response.response.rect.translate(Vec2::splat(-2.0));
+        live_freq_response_button_rect.min = live_freq_response_button_rect.max - Vec2::splat(13.0);
         if ui.new_child(
             UiBuilder::new()
                 .max_rect(live_freq_response_button_rect)
@@ -463,7 +495,7 @@ impl PedalTrait for GraphicEq7 {
         ).add(
             ImageButton::new(include_image!("images/eq/live.png"))
                 .corner_radius(3.0)
-                .tint(Color32::from_rgb(200, 20, 20))
+                .tint(Color32::from_rgba_unmultiplied(220, 100, 100, 200))
                 .selected(live_frequency_enabled)
                 .frame(false)
         ).clicked() {

@@ -39,127 +39,104 @@ impl ClientSocket {
         self.stream.is_some()
     }
 
-    pub fn send(&mut self, message: &str) -> std::io::Result<()> {
+    pub fn send(&mut self, message: &str) {
         if let Some(stream) = &mut self.stream {
-            stream.write_all(message.as_bytes())?;
-            log::info!("Sent: {:?}", message);
+            if let Err(e) = stream.write_all(message.as_bytes()) {
+                match e.kind() {
+                    std::io::ErrorKind::BrokenPipe |
+                    std::io::ErrorKind::NotConnected |
+                    std::io::ErrorKind::ConnectionReset |
+                    std::io::ErrorKind::ConnectionAborted => {
+                        log::info!("Connection closed");
+                        self.stream = None;
+                    },
+                    _ => {
+                        log::error!("Failed to send message. Closing connection. Error: {}", e);
+                        self.stream = None
+                    }
+                }
+            } else {
+                if message.len() < 40 {
+                    log::info!("Sent: {:?}", message);
+                } else {
+                    log::info!("Sent: {:?}...", &message[..40]);
+                }
+            }
         } else {
             log::error!("Socket not connected");
         }
-        
-        Ok(())
     }
 
     pub fn update_recv(&mut self) -> std::io::Result<()> {
         if let Some(stream) = &mut self.stream {
-            self.command_receiver.receive_commands(stream, &mut self.received_commands)?;
+            match self.command_receiver.receive_commands(stream, &mut self.received_commands) {
+                Ok(closed) if closed => {
+                    log::info!("Connection closed");
+                    self.stream = None;
+                },
+                Err(e) if e.kind() == std::io::ErrorKind::ConnectionAborted || e.kind() == std::io::ErrorKind::ConnectionReset => {
+                    log::info!("Connection closed");
+                    self.stream = None;
+                },
+                Err(e) => return Err(e),
+                _ => {}
+            }
         }
         Ok(())
-
-        //if let Some(stream) = &mut self.stream {
-        //    let mut buffer_writing_at = 0;
-        //    let mut buffer = [0u8; 1024];
-        //    loop {
-        //        // Stream is non-blocking
-        //        match stream.read(&mut buffer[buffer_writing_at..]) {
-        //            Ok(0) => break, // No more data
-        //            Ok(n) => {
-        //                let data = String::from_utf8_lossy(&buffer[..buffer_writing_at+n]).to_string();
-        //                match data.rfind('\n') {
-        //                    Some(pos) => {
-        //                        // If we found a newline, we can process the data up to that point
-        //                        let complete_data = &data[..pos + 1];
-        //                        for line in complete_data.lines() {
-        //                            if line.len() < 20 {
-        //                                log::info!("Received command: {:?}", line);
-        //                            } else {
-        //                                log::info!("Received command: {:?}...", &line[..20]);
-        //                            }
-        //                            self.received_commands.push(line.to_string());
-        //                        }
-        //                        if pos != data.len() - 1 {
-        //                            // If there is more data after the newline, keep it for the next read
-        //                            let remaining_data = &data[pos + 1..];
-        //                            // Clear the buffer and push the remaining data back to the stream
-        //                            buffer[..remaining_data.len()].copy_from_slice(remaining_data.as_bytes());
-        //                            buffer_writing_at = remaining_data.len();
-        //                        }
-        //                    },
-        //                    None => {
-        //                        // No new line found. Increase `buffer_writing_at` so that next read will append to the end of the current data.
-        //                        // In theory this shouldn't happen as the server should always send complete commands ending with a newline.
-        //                        // This could happen if the server sends a message longer than the buffer.
-        //                        log::warn!("Received data without newline, appending to buffer.");
-        //                        buffer_writing_at += n;
-//
-        //                        if buffer_writing_at >= buffer.len() {
-        //                            // If the buffer is full, we need to reset it
-        //                            log::error!("Client received command longer than buffer, discarding.");
-        //                            buffer_writing_at = 0;
-        //                        }
-        //                    }
-        //                }
-        //            }
-        //            Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => break,
-        //            Err(e) => return Err(e),
-        //        }
-        //    }
-        //}
-        //Ok(())
     }
 
-    pub fn set_tuner(&mut self, active: bool) -> std::io::Result<()> {
+    pub fn set_tuner(&mut self, active: bool) {
         let message = format!("tuner {}\n", if active { "on" } else { "off" });
-        self.send(&message)
+        self.send(&message);
     }
 
-    pub fn set_parameter(&mut self, pedalboard_index: usize, pedal_index: usize, name: &str, parameter_value: &PedalParameterValue) -> std::io::Result<()> {
+    pub fn set_parameter(&mut self, pedalboard_index: usize, pedal_index: usize, name: &str, parameter_value: &PedalParameterValue) {
         let message = format!("setparameter {} {} {} {}\n", pedalboard_index, pedal_index, name, serde_json::to_string(parameter_value).unwrap());
-        self.send(&message)
+        self.send(&message);
     }
 
-    pub fn move_pedalboard(&mut self, src_index: usize, dest_index: usize) -> std::io::Result<()> {
+    pub fn move_pedalboard(&mut self, src_index: usize, dest_index: usize) {
         let message = format!("movepedalboard {} {}\n", src_index, dest_index);
-        self.send(&message)
+        self.send(&message);
     }
 
-    pub fn add_pedalboard(&mut self, pedalboard: &Pedalboard) -> std::io::Result<()> {
+    pub fn add_pedalboard(&mut self, pedalboard: &Pedalboard) {
         let message = format!("addpedalboard {}\n", serde_json::to_string(pedalboard).unwrap());
-        self.send(&message)
+        self.send(&message);
     }
 
-    pub fn delete_pedalboard(&mut self, pedalboard_index: usize) -> std::io::Result<()> {
+    pub fn delete_pedalboard(&mut self, pedalboard_index: usize) {
         let message = format!("deletepedalboard {}\n", pedalboard_index);
-        self.send(&message)
+        self.send(&message);
     }
 
-    pub fn add_pedal(&mut self, pedalboard_index: usize, pedal: &Pedal) -> std::io::Result<()> {
+    pub fn add_pedal(&mut self, pedalboard_index: usize, pedal: &Pedal) {
         let message = format!("addpedal {} {}\n", pedalboard_index, serde_json::to_string(pedal).unwrap());
-        self.send(&message)
+        self.send(&message);
     }
 
-    pub fn delete_pedal(&mut self, pedalboard_index: usize, pedal_index: usize) -> std::io::Result<()> {
+    pub fn delete_pedal(&mut self, pedalboard_index: usize, pedal_index: usize) {
         let message = format!("deletepedal {} {}\n", pedalboard_index, pedal_index);
-        self.send(&message)
+        self.send(&message);
     }
 
-    pub fn move_pedal(&mut self, pedalboard_index: usize, src_index: usize, dest_index: usize) -> std::io::Result<()> {
+    pub fn move_pedal(&mut self, pedalboard_index: usize, src_index: usize, dest_index: usize) {
         let message = format!("movepedal {} {} {}\n", pedalboard_index, src_index, dest_index);
-        self.send(&message)
+        self.send(&message);
     }
 
-    pub fn load_set(&mut self, pedalboard_set: &PedalboardSet) -> std::io::Result<()> {
+    pub fn load_set(&mut self, pedalboard_set: &PedalboardSet) {
         let message = format!("loadset {}\n", serde_json::to_string(pedalboard_set).unwrap());
-        self.send(&message)
+        self.send(&message);
     }
 
-    pub fn play(&mut self, pedalboard_index: usize) -> std::io::Result<()> {
+    pub fn play(&mut self, pedalboard_index: usize) {
         let message = format!("play {}\n", pedalboard_index);
-        self.send(&message)
+        self.send(&message);
     }
 
-    pub fn master(&mut self, volume: f32) -> std::io::Result<()> {
+    pub fn master(&mut self, volume: f32) {
         let message = format!("master {}\n", volume);
-        self.send(&message)
+        self.send(&message);
     }
 }

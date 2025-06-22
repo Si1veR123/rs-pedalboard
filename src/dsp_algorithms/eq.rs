@@ -1,5 +1,5 @@
 use egui_plot::PlotPoint;
-use rustfft::num_complex::Complex64;
+use num_complex::Complex64;
 
 use super::biquad::BiquadFilter;
 

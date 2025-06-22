@@ -1,4 +1,4 @@
-use rustfft::num_complex::Complex64;
+use num_complex::Complex64;
 
 #[derive(Debug, Clone, Copy)]
 pub struct BiquadFilter {

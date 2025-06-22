@@ -1,6 +1,6 @@
 
 use realfft::{RealFftPlanner, RealToComplex, ComplexToReal};
-use rustfft::num_complex::Complex;
+use num_complex::Complex;
 use std::sync::Arc;
 
 pub fn load_ir(ir_path: &str) -> Result<Vec<f32>, String> {
