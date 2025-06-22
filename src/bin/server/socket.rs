@@ -56,17 +56,30 @@ impl ServerSocket {
                     }
                 },
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
+                Err(e) if e.kind() == std::io::ErrorKind::ConnectionAborted || e.kind() == std::io::ErrorKind::ConnectionReset => {
+                    log::info!("Client closed connection");
+                    break;
+                },
                 Err(e) => {
-                    log::error!("Failed to read from socket: {}", e);
+                    log::error!("Error receiving commands: {}", e);
                     break;
                 }
             }
 
             // Send any commands that have been received
             while let Ok(command) = self.command_receiver.try_recv() {
-                if let Err(e) = stream.write_all(command.as_bytes()) {
-                    log::error!("Failed to send command to client: {}", e);
-                    break;
+                match stream.write_all(command.as_bytes()) {
+                    Ok(_) => {},
+                    Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe ||
+                              e.kind() == std::io::ErrorKind::ConnectionReset ||
+                              e.kind() == std::io::ErrorKind::ConnectionAborted => {
+                        log::info!("Client disconnected");
+                        break;
+                    },
+                    Err(e) => {
+                        log::error!("Failed to send command to client: {}", e);
+                        break;
+                    }
                 }
                 if command.len() <= 20 {
                     log::info!("Sent command: {:?}", command);

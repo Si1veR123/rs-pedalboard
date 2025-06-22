@@ -20,9 +20,14 @@ pub mod constants {
     pub const RING_BUFFER_LATENCY_MS: f32 = 10.0;
 }
 
+pub const TUNER_MIN_FREQ: usize = 40;
+pub const TUNER_MAX_FREQ: usize = 1300;
+pub const TUNER_PERIODS: usize = 3;
+
 mod audio_io;
 mod socket;
 mod device_select;
+mod tuner;
 
 use cpal::traits::StreamTrait;
 use crossbeam::channel::bounded;

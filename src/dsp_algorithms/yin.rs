@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 /// Credit to https://github.com/saresend/yin/ for some functions
-use ringbuf::{traits::{Consumer, Observer, Producer, Split}, HeapCons, HeapProd, HeapRb};
+use ringbuf::{traits::{Consumer, Observer}, HeapCons};
 
 #[derive(Debug, Clone, Copy)]
 pub enum Note {
@@ -72,8 +72,7 @@ pub fn freq_to_note(freq: f32) -> (Note, isize, isize) {
 }
 
 pub struct Yin {
-    sample_buffer_prod: HeapProd<f32>,
-    sample_buffer_cons: HeapCons<f32>,
+    read_from: HeapCons<f32>,
 
     sample_frame_buffer: Vec<f32>,
     diff_buffer: Vec<f32>,
@@ -83,23 +82,28 @@ pub struct Yin {
 
     tau_min: usize,
     tau_max: usize,
+    num_periods: usize,
     threshold: f32,
     sample_rate: usize
 }
 
 impl Yin {
-    pub fn new(threshold: f32, freq_min: usize, freq_max: usize, sample_rate: usize) -> Self {
+    pub fn minimum_buffer_length(sample_rate: usize, freq_min: usize, num_periods: usize) -> usize {
+        let tau_max = sample_rate / freq_min;
+        tau_max * num_periods
+    }
+
+    pub fn new(threshold: f32, freq_min: usize, freq_max: usize, sample_rate: usize, num_periods: usize, read_from: HeapCons<f32>) -> Self {
+        let min_buffer = Self::minimum_buffer_length(sample_rate, freq_min, num_periods);
+        assert!(read_from.capacity().get() >= min_buffer, "Yin buffer too small: {} < {}", read_from.capacity(), min_buffer);
+        
         let tau_max = sample_rate / freq_min;
         let tau_min = sample_rate / freq_max;
 
         log::debug!("Yin tau_max: {}, tau_min: {}", tau_max, tau_min);
 
-        let sample_buffer = HeapRb::new(tau_max*3);
-        let (sample_buffer_prod, sample_buffer_cons) = sample_buffer.split();
-
         Self {
-            sample_buffer_prod,
-            sample_buffer_cons,
+            read_from,
             sample_frame_buffer: Vec::with_capacity(tau_max),
             diff_buffer: Vec::with_capacity(tau_max),
             cmndf_buffer: Vec::with_capacity(tau_max),
@@ -107,19 +111,27 @@ impl Yin {
             threshold,
             tau_max,
             tau_min,
+            num_periods,
             sample_rate,
         }
     }
 
-    pub fn push_to_buffer(&mut self, buffer: &[f32]) -> usize {
-        self.sample_buffer_prod.push_slice(buffer)
-    }
-
     pub fn process_buffer(&mut self) -> f32 {
-        let occupied_samples = self.sample_buffer_cons.occupied_len();
-        if occupied_samples >= self.tau_max {
+        let occupied_samples = self.read_from.occupied_len();
+        let samples_to_take = self.tau_max * self.num_periods;
+        if occupied_samples >= samples_to_take {
             self.sample_frame_buffer.clear();
-            self.sample_frame_buffer.extend(self.sample_buffer_cons.pop_iter());
+            self.sample_frame_buffer.extend(self.read_from.pop_iter().take(samples_to_take));
+
+            // Normalise the buffer between -1 and 1
+            if let Some(max_amplitude) = self.sample_frame_buffer.iter().map(|v| v.abs()).max_by(|a, b| a.partial_cmp(b).unwrap()) {
+                if max_amplitude > 0.0 {
+                    for sample in self.sample_frame_buffer.iter_mut() {
+                        *sample /= max_amplitude;
+                    }
+                }
+            }
+
             let freq = self.frequency_from_frame();
             self.prev_estimation = freq;
             return freq;
@@ -164,17 +176,27 @@ impl Yin {
     }
 
     fn compute_diff_min(&mut self) -> f32 {
-        let mut tau = self.tau_min;
-        while tau < self.tau_max {
-            if self.cmndf_buffer[tau] < self.threshold {
-                let refined = Self::parabolic_interpolation(&self.cmndf_buffer, tau);
-                let freq = self.sample_rate as f32 / refined;
-                return freq;
-            }
-            tau += 1;
+        if self.cmndf_buffer.len() < self.tau_min {
+            return 0.0;
         }
-        0.0
+    
+        let relevant_cmndf_buffer = &self.cmndf_buffer[self.tau_min..self.tau_max];
+        let (min_tau, value) = relevant_cmndf_buffer
+            .iter()
+            .copied()
+            .enumerate()
+            .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
+            .expect("Shouldn't be any NaN in Yin");
+    
+        if value >= self.threshold {
+            0.0
+        } else {
+            let true_tau = self.tau_min + min_tau;
+            let refined = Self::parabolic_interpolation(&self.cmndf_buffer, true_tau);
+            self.sample_rate as f32 / refined
+        }
     }
+    
 
     fn parabolic_interpolation(cmndf: &[f32], tau_m: usize) -> f32 {
         if tau_m <= 0 || tau_m >= cmndf.len() - 1 {
@@ -195,11 +217,14 @@ impl Yin {
 
 #[cfg(test)]
 mod tests {
+    use ringbuf::{traits::{Producer, Split}, HeapRb};
+
     use super::*;
 
     #[test]
     fn test_yin() {
-        let mut estimator = Yin::new(0.1, 10, 30, 80);
+        let (mut prod, cons) = HeapRb::<f32>::new(Yin::minimum_buffer_length(80, 10, 3)).split();
+        let mut estimator = Yin::new(0.1, 10, 30, 80, 3, cons);
         let mut example = vec![];
         let mut prev_value = -1.0;
         // Periodic over every 4 values of i, giving us a frequency of: 80 / 4 == 20
@@ -211,7 +236,7 @@ mod tests {
                 example.push(prev_value);
             }
         }
-        estimator.push_to_buffer(&example);
+        prod.push_slice(&example);
         let freq = estimator.process_buffer();
         assert!(freq - 20.0 < 0.5, "Yin frequency estimation failed: {} != 20.0", freq);
     }

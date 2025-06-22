@@ -146,7 +146,6 @@ impl PluginHost for Vst2Instance {
             out_buf.fill(0.0);
         }
 
-        // TODO: remove allocations
         let input_buffer = self.in_buffers.iter_mut().map(|buf| buf.as_mut_slice()).collect::<Vec<_>>();
         let output_buffer = self.out_buffers.iter_mut().map(|buf| buf.as_mut_slice()).collect::<Vec<_>>();
 

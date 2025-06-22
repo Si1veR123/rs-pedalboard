@@ -1,4 +1,4 @@
-use std::{cell::UnsafeCell, time::Instant};
+use std::{cell::UnsafeCell, sync::{atomic::AtomicBool, Arc}};
 
 use cpal::{traits::DeviceTrait, Device, Stream, StreamConfig};
 use crossbeam::channel::{Receiver, Sender};
@@ -54,9 +54,7 @@ pub fn create_linked_streams(
                             writer: maybe_writer.take().expect("Writer moved more than once"),
                             processing_buffer: Vec::with_capacity(buffer_size),
                             master_volume: 1.0,
-                            tuner_enabled: false,
-                            tuner_last_sent: Instant::now(),
-                            tuner: Yin::new(0.1, 40, 1300, 48000),
+                            tuner_handle: None,
                             pedal_command_to_client_buffer: Vec::with_capacity(12)
                         });
                     }
@@ -93,34 +91,27 @@ struct InputProcessor {
     pedal_command_to_client_buffer: Vec<String>,
     master_volume: f32,
 
-    tuner_enabled: bool,
-    tuner_last_sent: Instant, 
-    tuner: Yin
+    tuner_handle: Option<(HeapProd<f32>, Receiver<f32>, Arc<AtomicBool>)>,
 }
 
 impl InputProcessor {
     fn process_audio(&mut self, data: &[f32]) {
-        // Send the tuner frequency to the client if active
-        if self.tuner_enabled {
-            self.tuner.push_to_buffer(data);
-            if Instant::now().duration_since(self.tuner_last_sent).as_millis() >= 50 {
-                let frequency = self.tuner.process_buffer();
-                self.tuner_last_sent = Instant::now();
-                log::debug!("Tuner frequency: {:.2} Hz", frequency);
+        self.processing_buffer.clear();
+        self.processing_buffer.extend_from_slice(data);
+        self.pedal_command_to_client_buffer.clear();
+
+        if data.iter().all(|&sample| sample == 0.0) {
+            log::debug!("Buffer is silent, skipping processing.");
+        } else if let Some((tuner_writer, frequency_channel_recv, _kill)) = &mut self.tuner_handle {
+            tuner_writer.push_slice(data);
+            
+            if !frequency_channel_recv.is_empty() {
+                let frequency =  frequency_channel_recv.recv().expect("Channel is not empty");
                 let command = format!("tuner {:.2}\n", frequency);
                 if self.command_sender.send(command.into()).is_err() {
                     log::error!("Failed to send tuner command to client");
                 }
             }
-        }
-
-        self.processing_buffer.clear();
-        self.processing_buffer.extend_from_slice(data);
-
-        self.pedal_command_to_client_buffer.clear();
-
-        if data.iter().all(|&sample| sample == 0.0) {
-            log::debug!("Buffer is silent, skipping processing.");
         } else {
             // In case data is larger than buffer_size and pedals may only expect buffer_size or less,
             // we process the data in chunks of FRAMES_PER_PERIOD.
@@ -255,11 +246,26 @@ impl InputProcessor {
                 let enable_str = words.next()?;
                 match enable_str {
                     "on" => {
-                        self.tuner_enabled = true;
+                        let buffer_size = Yin::minimum_buffer_length(48000, crate::TUNER_MIN_FREQ, crate::TUNER_PERIODS);
+                        let (tuner_writer, tuner_reader) = HeapRb::new(buffer_size).split();
+                        let (frequency_channel_send, frequency_channel_recv) = crossbeam::channel::bounded(1);
+                        let yin = Yin::new(
+                            0.2,
+                            crate::TUNER_MIN_FREQ,
+                            crate::TUNER_MAX_FREQ,
+                            48000,
+                            crate::TUNER_PERIODS,
+                            tuner_reader,
+                        );
+                        let kill = Arc::new(AtomicBool::new(false));
+                        crate::tuner::start_tuner(yin, kill.clone(), frequency_channel_send, 100);
+                        self.tuner_handle = Some((tuner_writer, frequency_channel_recv, kill));
                         log::info!("Tuner enabled");
                     },
                     "off" => {
-                        self.tuner_enabled = false;
+                        if let Some((_, _, kill)) = self.tuner_handle.take() {
+                            kill.store(true, std::sync::atomic::Ordering::Relaxed);
+                        }
                         log::info!("Tuner disabled");
                     },
                     _ => {
