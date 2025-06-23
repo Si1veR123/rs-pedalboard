@@ -9,20 +9,15 @@ mod windows;
 use windows::{setup, after_setup};
 
 #[cfg(target_os = "linux")]
-pub mod constants {
-    pub const FRAMES_PER_PERIOD: usize = 256;
-    pub const PERIODS_PER_BUFFER: usize = 3;
-    pub const RING_BUFFER_LATENCY_MS: f32 = 5.0;
+mod constants {
+    pub const DEFAULT_FRAMES_PER_PERIOD: &'static str = "256";
+    pub const DEFAULT_RING_BUFFER_LATENCY_MS: &'static str = "5.0";
 }
 #[cfg(target_os = "windows")]
-pub mod constants {
-    pub const FRAMES_PER_PERIOD: usize = 512;
-    pub const RING_BUFFER_LATENCY_MS: f32 = 7.5;
+mod constants {
+    pub const DEFAULT_FRAMES_PER_PERIOD: &'static str = "512";
+    pub const DEFAULT_RING_BUFFER_LATENCY_MS: &'static str = "7.5";
 }
-
-pub const TUNER_MIN_FREQ: usize = 40;
-pub const TUNER_MAX_FREQ: usize = 1300;
-pub const TUNER_PERIODS: usize = 5;
 
 mod audio_io;
 mod socket;
@@ -31,8 +26,29 @@ mod tuner;
 
 use cpal::traits::StreamTrait;
 use crossbeam::channel::bounded;
-
 use simplelog::*;
+use clap::Parser;
+
+#[derive(Parser, Clone, Debug)]
+#[command(name = "Pedalboard Server", version = "1.0")]
+struct ServerArguments {
+    #[arg(short, long, default_value=constants::DEFAULT_FRAMES_PER_PERIOD)]
+    frames_per_period: usize,
+    #[arg(short, long, default_value=constants::DEFAULT_RING_BUFFER_LATENCY_MS, help="Latency in milliseconds for the internal ring buffer")]
+    buffer_latency: f32,
+    #[arg(long, default_value="3", help="Number of periods per buffer (JACK)")]
+    periods_per_buffer: usize,
+    #[arg(long, default_value="40")]
+    tuner_min_freq: usize,
+    #[arg(long, default_value="1300")]
+    tuner_max_freq: usize,
+    #[arg(long, default_value="5", help="Number of periods of the minimum frequency to process for pitch")]
+    tuner_periods: usize,
+    #[arg(short, long)]
+    input_device: Option<String>,
+    #[arg(short, long)]
+    output_device: Option<String>,
+}
 
 fn main() {
     CombinedLogger::init(
@@ -42,8 +58,14 @@ fn main() {
         ]
     ).expect("Failed to start logging");
     log::info!("Started logging...");
+    log::info!("Parsing command line arguments...");
+    let args = ServerArguments::parse();
 
-    let (_host, input, output) = setup();
+    let (_host, input, output) = setup(
+        args.input_device.as_ref().map(|s| s.as_str()),
+        args.output_device.as_ref().map(|s| s.as_str()),
+        &args
+    );
 
     let (socket_command_sender, audio_command_receiver) = bounded(12);
     let (audio_command_sender, socket_command_receiver) = bounded(12);
@@ -51,10 +73,11 @@ fn main() {
     let (in_stream, out_stream) = audio_io::create_linked_streams(
         input,
         output,
-        constants::RING_BUFFER_LATENCY_MS,
-        constants::FRAMES_PER_PERIOD,
+        args.buffer_latency,
+        args.frames_per_period,
         audio_command_receiver,
-        audio_command_sender
+        audio_command_sender,
+        args
     );
 
     in_stream.play().expect("Failed to play input stream");

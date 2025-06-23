@@ -1,7 +1,6 @@
 use cpal::{traits::{DeviceTrait, HostTrait}, Host, Device};
 use std::{fs::File, io, process::{Child, Command, Stdio}};
 
-
 pub fn get_jack_host() -> (Host, Device, Device) {
     let jack_host = cpal::host_from_id(
         cpal::available_hosts()

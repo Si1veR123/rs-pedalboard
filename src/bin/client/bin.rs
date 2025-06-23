@@ -17,7 +17,7 @@ use utilities::UtilitiesScreen;
 mod settings;
 use settings::SettingsScreen;
 
-use eframe::egui::{self, include_image, Button, Id, ImageButton, Layout, RichText, Vec2};
+use eframe::egui::{self, include_image, Button, Color32, Id, ImageButton, RichText, Vec2};
 
 const SERVER_PORT: u16 = 29475;
 const WINDOW_HEIGHT: f32 = 600.0;
@@ -117,8 +117,9 @@ pub struct PedalboardClientApp {
     selected_screen: usize,
     pedalboard_stage_screen: PedalboardStageScreen,
     pedalboard_library_screen: PedalboardLibraryScreen,
-    songs_screen: SongsScreen,
     utilities_screen: UtilitiesScreen,
+    songs_screen: SongsScreen,
+    settings_screen: SettingsScreen
 }
 
 impl PedalboardClientApp {
@@ -139,6 +140,7 @@ impl PedalboardClientApp {
             pedalboard_library_screen: PedalboardLibraryScreen::new(leaked_state),
             songs_screen: SongsScreen::new(leaked_state),
             utilities_screen: UtilitiesScreen::new(leaked_state),
+            settings_screen: SettingsScreen::new(leaked_state),
             state: leaked_state,
         }
     }
@@ -209,6 +211,7 @@ impl eframe::App for PedalboardClientApp {
                         Vec2::splat(bottom_window_select_height-padding-5.0), // why -5.0? idk
                         ImageButton::new(include_image!("files/songs_icon.png"))
                             .corner_radius(3.0)
+                            .tint(Color32::from_white_alpha(200))
                     ).clicked() {
                         if self.selected_screen == 2 {
                             self.utilities_screen.tuner.active = false;
@@ -223,6 +226,7 @@ impl eframe::App for PedalboardClientApp {
                         Vec2::new(bottom_window_select_height, bottom_window_select_height-padding-5.0),
                         ImageButton::new(include_image!("files/settings_icon.png"))
                             .corner_radius(3.0)
+                            .tint(Color32::from_white_alpha(200))
                     ).clicked() {
                         if self.selected_screen == 2 {
                             self.utilities_screen.tuner.active = false;
@@ -246,6 +250,9 @@ impl eframe::App for PedalboardClientApp {
                 },
                 3 => {
                     ui.add(&mut self.songs_screen);
+                },
+                4 => {
+                    ui.add(&mut self.settings_screen);
                 },
                 _ => {
                     ui.label("Invalid screen selected");
