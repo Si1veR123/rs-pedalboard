@@ -14,8 +14,10 @@ mod songs;
 use songs::SongsScreen;
 mod utilities;
 use utilities::UtilitiesScreen;
+mod settings;
+use settings::SettingsScreen;
 
-use eframe::egui::{self, Id, RichText};
+use eframe::egui::{self, include_image, Button, Id, ImageButton, Layout, RichText, Vec2};
 
 const SERVER_PORT: u16 = 29475;
 const WINDOW_HEIGHT: f32 = 600.0;
@@ -148,59 +150,86 @@ impl eframe::App for PedalboardClientApp {
             log::error!("Failed to receive messages on client: {}", e);
         });
 
+        let bottom_window_select_height = WINDOW_HEIGHT / 10.0;
+        let padding = 10.0;
         egui::TopBottomPanel::bottom(Id::new("bottom_window_select"))
-            .min_height(WINDOW_HEIGHT / 10.0)
+            .min_height(bottom_window_select_height)
             .show(&ctx, |ui| {
-                ui.columns(4, |columns| {
-                    let button_size = [columns[0].available_width(), columns[0].available_height() - 10.0];
-
-                    let mut button_outline = [egui::Stroke::new(0.3, egui::Color32::BLACK); 4];
+                ui.horizontal_centered(|ui| {
+                    let mut button_outline = [egui::Stroke::new(0.3, egui::Color32::BLACK); 5];
                     button_outline[self.selected_screen] = egui::Stroke::new(1.0, THEME_COLOUR);
-                    let mut button_bg = [egui::Color32::from_gray(18); 4];
+                    let mut button_bg = [egui::Color32::from_gray(19); 5];
                     button_bg[self.selected_screen] = egui::Color32::from_gray(33);
 
-                    columns[0].horizontal_centered(|ui| {
-                        if ui.add_sized(button_size, egui::Button::new(
-                            RichText::new("Stage View").size(20.0)
-                        ).stroke(button_outline[0]).fill(button_bg[0])).clicked() {
-                            if self.selected_screen == 3 {
-                                self.utilities_screen.tuner.active = false;
-                                self.state.set_tuner_active_server(false);
-                            }
-                            self.selected_screen = 0;
-                        }
+                    ui.allocate_ui(Vec2::new(ui.available_width()-(bottom_window_select_height*2.0), ui.available_height()), |ui| {
+                        ui.columns_const(|[column0, column1, column2]| {
+                            let button_size = [column0.available_width(), column0.available_height() - padding];
+        
+                            column0.horizontal_centered(|ui| {
+                                if ui.add_sized(button_size, Button::new(
+                                    RichText::new("Stage View").size(20.0)
+                                ).stroke(button_outline[0]).fill(button_bg[0])).clicked() {
+                                    if self.selected_screen == 2 {
+                                        self.utilities_screen.tuner.active = false;
+                                        self.state.set_tuner_active_server(false);
+                                    }
+                                    self.selected_screen = 0;
+                                }
+                            });
+                            column1.horizontal_centered(|ui| {
+                                if ui.add_sized(button_size, Button::new(
+                                    RichText::new("Library").size(20.0)
+                                ).stroke(button_outline[1]).fill(button_bg[1])).clicked() {
+                                    if self.selected_screen == 2 {
+                                        self.utilities_screen.tuner.active = false;
+                                        self.state.set_tuner_active_server(false);
+                                    }
+                                    self.selected_screen = 1;
+                                }
+                            });
+                            column2.horizontal_centered(|ui| {
+                                if ui.add_sized(button_size, Button::new(
+                                    RichText::new("Utilities").size(20.0)
+                                ).stroke(button_outline[2]).fill(button_bg[2])).clicked() {
+                                    self.utilities_screen.tuner.active = true;
+                                    self.state.set_tuner_active_server(true);
+                                    self.selected_screen = 2;
+                                }
+                            });
+                        });
                     });
-                    columns[1].horizontal_centered(|ui| {
-                        if ui.add_sized(button_size, egui::Button::new(
-                            RichText::new("Library").size(20.0)
-                        ).stroke(button_outline[1]).fill(button_bg[1])).clicked() {
-                            if self.selected_screen == 3 {
-                                self.utilities_screen.tuner.active = false;
-                                self.state.set_tuner_active_server(false);
-                            }
-                            self.selected_screen = 1;
+
+                    ui.add_space(padding/2.0);
+
+                    // Smaller songs and settings buttons
+                    // ImageButton doesnt have methods for stroke and fill, so we use style_mut() to set the style
+                    ui.style_mut().visuals.widgets.inactive.weak_bg_fill = button_bg[3];
+                    ui.style_mut().visuals.widgets.inactive.bg_stroke = button_outline[3];
+                    if ui.add_sized(
+                        Vec2::splat(bottom_window_select_height-padding-5.0), // why -5.0? idk
+                        ImageButton::new(include_image!("files/songs_icon.png"))
+                            .corner_radius(3.0)
+                    ).clicked() {
+                        if self.selected_screen == 2 {
+                            self.utilities_screen.tuner.active = false;
+                            self.state.set_tuner_active_server(false);
                         }
-                    });
-                    columns[2].horizontal_centered(|ui| {
-                        if ui.add_sized(button_size, egui::Button::new(
-                            RichText::new("Songs").size(20.0)
-                        ).stroke(button_outline[2]).fill(button_bg[2])).clicked() {
-                            if self.selected_screen == 3 {
-                                self.utilities_screen.tuner.active = false;
-                                self.state.set_tuner_active_server(false);
-                            }
-                            self.selected_screen = 2;
+                        self.selected_screen = 3;
+                    }
+
+                    ui.style_mut().visuals.widgets.inactive.weak_bg_fill = button_bg[4];
+                    ui.style_mut().visuals.widgets.inactive.bg_stroke = button_outline[4];
+                    if ui.add_sized(
+                        Vec2::new(bottom_window_select_height, bottom_window_select_height-padding-5.0),
+                        ImageButton::new(include_image!("files/settings_icon.png"))
+                            .corner_radius(3.0)
+                    ).clicked() {
+                        if self.selected_screen == 2 {
+                            self.utilities_screen.tuner.active = false;
+                            self.state.set_tuner_active_server(false);
                         }
-                    });
-                    columns[3].horizontal_centered(|ui| {
-                        if ui.add_sized(button_size, egui::Button::new(
-                            RichText::new("Utilities").size(20.0)
-                        ).stroke(button_outline[3]).fill(button_bg[3])).clicked() {
-                            self.utilities_screen.tuner.active = true;
-                            self.state.set_tuner_active_server(true);
-                            self.selected_screen = 3;
-                        }
-                    });
+                        self.selected_screen = 4;
+                    };
                 });
         });
 
@@ -213,10 +242,10 @@ impl eframe::App for PedalboardClientApp {
                     ui.add(&mut self.pedalboard_library_screen);
                 },
                 2 => {
-                    ui.add(&mut self.songs_screen);
+                    ui.add(&mut self.utilities_screen);
                 },
                 3 => {
-                    ui.add(&mut self.utilities_screen);
+                    ui.add(&mut self.songs_screen);
                 },
                 _ => {
                     ui.label("Invalid screen selected");
