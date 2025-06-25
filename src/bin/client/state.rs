@@ -2,6 +2,7 @@ use std::{cell::RefCell, collections::HashMap};
 use rs_pedalboard::{pedalboard::Pedalboard, pedalboard_set::PedalboardSet, pedals::{Pedal, PedalParameterValue, PedalTrait}};
 use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
 use crate::socket::ClientSocket;
+use crate::SAVE_DIR;
 
 const SAVE_NAME: &str = "state.json";
 
@@ -372,7 +373,7 @@ impl State {
         let stringified = serde_json::to_string(self).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
         let dir_path = homedir::my_home().map_err(
             |e| std::io::Error::new(std::io::ErrorKind::Other, e)
-        )?.unwrap().join("rs_pedalboard");
+        )?.unwrap().join(SAVE_DIR);
 
         if !dir_path.exists() {
             std::fs::create_dir_all(&dir_path)?;
@@ -386,7 +387,7 @@ impl State {
     pub fn load() -> Result<State, std::io::Error> {
         let file_path = homedir::my_home().map_err(
             |e| std::io::Error::new(std::io::ErrorKind::Other, e)
-        )?.unwrap().join("rs_pedalboard").join(SAVE_NAME);
+        )?.unwrap().join(SAVE_DIR).join(SAVE_NAME);
 
         if !file_path.exists() {
             return Ok(State::default());

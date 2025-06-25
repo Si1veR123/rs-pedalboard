@@ -26,6 +26,12 @@ impl ClientSocket {
         }
     }
 
+    /// Check if the server is available, but don't maintain a connection.
+    pub fn is_server_available(&mut self) -> bool {
+        log::info!("Checking if server is available on port {}", self.port);
+        TcpStream::connect((Ipv4Addr::LOCALHOST, self.port)).is_ok()
+    }
+
     pub fn connect(&mut self) -> std::io::Result<()> {
         log::info!("Connecting to server on port {}", self.port);
         let stream = TcpStream::connect((Ipv4Addr::LOCALHOST, self.port))?;
@@ -138,5 +144,12 @@ impl ClientSocket {
     pub fn master(&mut self, volume: f32) {
         let message = format!("master {}\n", volume);
         self.send(&message);
+    }
+
+    pub fn kill(&mut self) {
+        log::info!("Sending kill command to server.");
+        self.send("kill\n");
+        self.stream.take();
+        self.command_receiver.reset();
     }
 }

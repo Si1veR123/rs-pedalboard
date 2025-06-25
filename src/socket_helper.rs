@@ -74,4 +74,8 @@ impl CommandReceiver {
 
         Ok(false)
     }
+
+    pub fn reset(&mut self) {
+        self.partial_buffer.clear();
+    }
 }

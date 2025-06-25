@@ -3,13 +3,13 @@ use std::collections::HashMap;
 use std::hash::Hash;
 
 use crate::dsp_algorithms::impluse_response::{IRConvolver, load_ir};
-use crate::unique_time_id;
+use crate::{unique_time_id, SAVE_DIR};
 use serde::{ser::SerializeMap, Deserialize, Serialize};
 use eframe::egui::{self, include_image, Color32, Layout, RichText, UiBuilder, Vec2};
 
 use super::{ui::pedal_knob, PedalParameter, PedalParameterValue, PedalTrait};
 
-const IR_SAVE_PATH: &str = r"rs_pedalboard/IR";
+const IR_SAVE_PATH: &str = r"IR";
 
 pub struct ImpulseResponse {
     // IRConvolver requires block size. This is set on the server after being created, and not set on client at all.
@@ -130,7 +130,7 @@ impl ImpulseResponse {
     }
 
     pub fn get_save_directory() -> Option<PathBuf> {
-        Some(homedir::my_home().ok()??.join(IR_SAVE_PATH))
+        Some(homedir::my_home().ok()??.join(SAVE_DIR).join(IR_SAVE_PATH))
     }
 
     pub fn saved_ir_files() -> Vec<PathBuf> {

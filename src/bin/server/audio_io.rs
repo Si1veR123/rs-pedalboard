@@ -5,7 +5,7 @@ use crossbeam::channel::{Receiver, Sender};
 use ringbuf::{traits::{Consumer, Producer, Split}, HeapProd, HeapRb};
 use rs_pedalboard::{pedalboard_set::PedalboardSet, pedals::{Pedal, PedalTrait}, dsp_algorithms::yin::Yin};
 
-use crate::ServerArguments;
+use crate::settings::ServerSettings;
 
 
 pub fn ring_buffer_size(buffer_size: usize, latency: f32, sample_rate: f32) -> usize {
@@ -20,7 +20,7 @@ pub fn create_linked_streams(
     buffer_size: usize,
     command_receiver: Receiver<Box<str>>,
     command_sender: Sender<Box<str>>,
-    args: ServerArguments
+    settings: ServerSettings
 ) -> (Stream, Stream) {
     let ring_buffer_size = ring_buffer_size(buffer_size, latency, 48000.0);
     log::info!("Ring buffer size: {}", ring_buffer_size);
@@ -58,7 +58,7 @@ pub fn create_linked_streams(
                             master_volume: 1.0,
                             tuner_handle: None,
                             pedal_command_to_client_buffer: Vec::with_capacity(12),
-                            args: args.clone()
+                            settings: settings.clone()
                         });
                     }
 
@@ -93,7 +93,7 @@ struct InputProcessor {
     processing_buffer: Vec<f32>,
     pedal_command_to_client_buffer: Vec<String>,
     master_volume: f32,
-    args: ServerArguments,
+    settings: ServerSettings,
     tuner_handle: Option<(HeapProd<f32>, Receiver<f32>, Arc<AtomicBool>)>,
 }
 
@@ -124,9 +124,9 @@ impl InputProcessor {
         } else {
             // In case data is larger than buffer_size and pedals may only expect buffer_size or less,
             // we process the data in chunks of FRAMES_PER_PERIOD.
-            for i in 0..(data.len() as f32 / self.args.frames_per_period as f32).ceil() as usize {
-                let start = i * self.args.frames_per_period;
-                let mut end = start + self.args.frames_per_period;
+            for i in 0..(data.len() as f32 / self.settings.frames_per_period as f32).ceil() as usize {
+                let start = i * self.settings.frames_per_period;
+                let mut end = start + self.settings.frames_per_period;
                 end = end.min(self.processing_buffer.len());
                 let frame = &mut self.processing_buffer[start..end];
                 self.pedalboard_set.process_audio(frame, &mut self.pedal_command_to_client_buffer);
@@ -162,12 +162,16 @@ impl InputProcessor {
         let command_name = words.next()?;
 
         match command_name {
+            "kill" => {
+                log::info!("Received kill command, shutting down server.");
+                std::process::exit(0);
+            },
             "disconnect" => {
                 // The client has disconnected, stop tuner if it is running
                 if let Some((_, _, k)) = self.tuner_handle.take() {
                     k.store(true, std::sync::atomic::Ordering::Relaxed);
                 }
-            }
+            },
             "setparameter" => {
                 let pedalboard_index = words.next()?.parse::<usize>().ok()?;
                 let pedal_index = words.next()?.parse::<usize>().ok()?;
@@ -210,7 +214,7 @@ impl InputProcessor {
                 let pedal_stringified = &command[pedalboard_ser_start_index + 1..];
                 
                 let mut pedal: Pedal = serde_json::from_str(&pedal_stringified).ok()?;
-                pedal.set_config(self.args.frames_per_period, 48000);
+                pedal.set_config(self.settings.frames_per_period, 48000);
                 self.pedalboard_set.pedalboards.get_mut(pedalboard_index)?
                     .pedals.push(pedal);
             },
@@ -244,7 +248,7 @@ impl InputProcessor {
                 // Call set_config on every pedal
                 for pedalboard in &mut pedalboardset.pedalboards {
                     for pedal in &mut pedalboard.pedals {
-                        pedal.set_config(self.args.frames_per_period, 48000);
+                        pedal.set_config(self.settings.frames_per_period, 48000);
                     }
                 }
 
@@ -262,15 +266,15 @@ impl InputProcessor {
                 let enable_str = words.next()?;
                 match enable_str {
                     "on" => {
-                        let buffer_size = Yin::minimum_buffer_length(48000, self.args.tuner_min_freq, self.args.tuner_periods);
+                        let buffer_size = Yin::minimum_buffer_length(48000, self.settings.tuner_min_freq, self.settings.tuner_periods);
                         let (tuner_writer, tuner_reader) = HeapRb::new(buffer_size).split();
                         let (frequency_channel_send, frequency_channel_recv) = crossbeam::channel::bounded(1);
                         let yin = Yin::new(
                             0.2,
-                            self.args.tuner_min_freq,
-                            self.args.tuner_max_freq,
+                            self.settings.tuner_min_freq,
+                            self.settings.tuner_max_freq,
                             48000,
-                            self.args.tuner_periods,
+                            self.settings.tuner_periods,
                             tuner_reader,
                         );
                         let kill = Arc::new(AtomicBool::new(false));

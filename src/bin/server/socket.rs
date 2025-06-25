@@ -32,6 +32,7 @@ impl ServerSocket {
                     log::info!("New connection: {}", stream.peer_addr()?);
                     // Don't make a new thread as currently only one client is supported
                     self.handle_client(stream);
+                    log::info!("Finished handling client.");
                 }
                 Err(e) => log::error!("Connection failed: {}", e),
             }
@@ -46,14 +47,15 @@ impl ServerSocket {
 
         loop {
             match self.command_receive_helper.receive_commands(&mut stream, &mut buffer) {
-                Ok(true) => break, // Connection closed
-                Ok(false) => {
+                Ok(closed) => {
                     for command in buffer.drain(..) {
                         if self.command_sender.send(command.into()).is_err() {
                             log::error!("Failed to send command to audio thread");
                             break;
                         }
                     }
+                    
+                    if closed { break }
                 },
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
                 Err(e) if e.kind() == std::io::ErrorKind::ConnectionAborted || e.kind() == std::io::ErrorKind::ConnectionReset => {

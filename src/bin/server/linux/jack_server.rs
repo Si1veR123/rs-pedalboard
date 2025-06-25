@@ -1,13 +1,9 @@
 use cpal::{traits::{DeviceTrait, HostTrait}, Host, Device};
 use std::{fs::File, io, process::{Child, Command, Stdio}};
+use rs_pedalboard::audio_devices::get_host;
 
 pub fn get_jack_host() -> (Host, Device, Device) {
-    let jack_host = cpal::host_from_id(
-        cpal::available_hosts()
-            .into_iter()
-            .find(|id| *id == cpal::HostId::Jack)
-            .expect("JACK host not found")
-    ).unwrap();
+    let jack_host = get_host().expect("Failed to get JACK host");
 
     if jack_host.devices().unwrap().count() == 0 {
         panic!("Failed to initialise JACK client");
@@ -32,7 +28,6 @@ pub fn start_jack_server(frames_per_period: usize, periods_per_buffer: usize, in
     kill_jack_servers();
     jack_server_wait(false);
     std::thread::sleep(std::time::Duration::from_millis(1000));
-
 
     log::info!("Starting JACK server with: Frames per Period {frames_per_period}, Periods per Buffer {periods_per_buffer}, Input {input}, Output {output}");
 

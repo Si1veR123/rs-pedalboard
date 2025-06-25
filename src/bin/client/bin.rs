@@ -1,11 +1,6 @@
 mod socket;
 mod state;
-
-use std::sync::Arc;
-
-use simplelog::*;
 use state::State;
-
 mod stage;
 use stage::PedalboardStageScreen;
 mod library;
@@ -16,8 +11,12 @@ mod utilities;
 use utilities::UtilitiesScreen;
 mod settings;
 use settings::SettingsScreen;
+mod server_process;
 
 use eframe::egui::{self, include_image, Button, Color32, Id, ImageButton, RichText, Vec2};
+use rs_pedalboard::SAVE_DIR;
+use std::sync::Arc;
+use simplelog::*;
 
 const SERVER_PORT: u16 = 29475;
 const WINDOW_HEIGHT: f32 = 600.0;
@@ -84,7 +83,7 @@ fn main() {
 
     let mut native_options = eframe::NativeOptions::default();
     native_options.persist_window = false;
-    native_options.persistence_path = homedir::my_home().map(|d| d.unwrap().join("rs_pedalboard").join("egui_persistence")).ok();
+    native_options.persistence_path = homedir::my_home().map(|d| d.unwrap().join(SAVE_DIR).join("egui_persistence")).ok();
     native_options.viewport = native_options.viewport.with_inner_size((WINDOW_WIDTH, WINDOW_HEIGHT)).with_resizable(false).with_maximized(false).with_maximize_button(false);
 
     eframe::run_native("Pedalboard", native_options, Box::new(
@@ -292,6 +291,12 @@ impl eframe::App for PedalboardClientApp {
             log::error!("Failed to save state: {}", e);
         } else {
             log::info!("State saved successfully");
-        }
+        };
+
+        if let Err(e) = self.settings_screen.server_settings.save() {
+            log::error!("Failed to save settings: {}", e);
+        } else {
+            log::info!("Settings saved successfully");
+        };
     }
 }

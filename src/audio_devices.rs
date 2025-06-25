@@ -57,6 +57,17 @@ pub fn get_output_devices(host: Option<&Host>) -> Result<Vec<String>, AudioDevic
     }
 }
 
+#[cfg(target_os = "windows")]
+pub fn get_host() -> Option<Host> {
+    let host_id = cpal::available_hosts()
+        .into_iter()
+        .find(|id| *id == cpal::HostId::Wasapi)?;
+
+    cpal::host_from_id(
+        host_id
+    ).ok()
+}
+
 #[cfg(target_os = "linux")]
 fn get_hw_devices() -> Result<Vec<String>, AudioDeviceError> {
     let mut sound_cards = String::new();
@@ -82,4 +93,15 @@ pub fn get_input_devices(_host: Option<Host>) -> Result<Vec<String>> {
 #[cfg(target_os = "linux")]
 pub fn get_output_devices(_host: Option<Host>) -> Result<Vec<String>> {
     get_hw_devices()
+}
+
+#[cfg(target_os = "linux")]
+pub fn get_host() -> Option<Host> {
+    let host_id = cpal::available_hosts()
+        .into_iter()
+        .find(|id| *id == cpal::HostId::Jack)?;
+
+    cpal::host_from_id(
+        host_id
+    ).ok()
 }

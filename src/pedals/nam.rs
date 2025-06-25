@@ -7,9 +7,9 @@ use serde::{ser::SerializeMap, Deserialize, Serialize};
 use eframe::egui::{self, include_image, Color32, Layout, RichText, UiBuilder, Vec2};
 
 use super::{ui::pedal_knob, PedalParameter, PedalParameterValue, PedalTrait};
-use crate::unique_time_id;
+use crate::{unique_time_id, SAVE_DIR};
 
-const NAM_SAVE_PATH: &str = r"rs_pedalboard/NAM";
+const NAM_SAVE_PATH: &str = r"NAM";
 
 pub struct Nam {
     modeler: NeuralAmpModeler,
@@ -163,7 +163,7 @@ impl Nam {
     }
 
     pub fn get_save_directory() -> Option<PathBuf> {
-        Some(homedir::my_home().ok()??.join(NAM_SAVE_PATH))
+        Some(homedir::my_home().ok()??.join(SAVE_DIR).join(NAM_SAVE_PATH))
     }
 
     pub fn saved_nam_files() -> Vec<PathBuf> {
