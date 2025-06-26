@@ -353,7 +353,7 @@ impl PedalTrait for Vst2 {
 
                 if ui.add_enabled(
                     self.instance.as_ref().map(|i| !i.ui_open).unwrap_or(false),
-                    Button::new("Parameters")
+                    Button::new(RichText::new("Parameters").size(14.0))
                 ).clicked() {
                     if let Some(instance) = self.instance.as_mut() {
                         if instance.ui_open {

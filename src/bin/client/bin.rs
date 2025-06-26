@@ -10,12 +10,12 @@ use songs::SongsScreen;
 mod utilities;
 use utilities::UtilitiesScreen;
 mod settings;
-use settings::SettingsScreen;
+use settings::{SettingsScreen, ServerLaunchState};
 mod server_process;
 
-use eframe::egui::{self, include_image, Button, Color32, Id, ImageButton, RichText, Vec2};
+use eframe::egui::{self, include_image, Button, Color32, FontId, Id, ImageButton, RichText, Vec2};
 use rs_pedalboard::SAVE_DIR;
-use std::sync::Arc;
+use std::{sync::Arc, time::Instant};
 use simplelog::*;
 
 const SERVER_PORT: u16 = 29475;
@@ -23,8 +23,8 @@ const WINDOW_HEIGHT: f32 = 600.0;
 const WINDOW_WIDTH: f32 = 1024.0;
 
 pub const THEME_COLOUR: egui::Color32 = egui::Color32::from_rgb(255, 105, 46);
-pub const ROW_COLOUR_LIGHT: egui::Color32 = egui::Color32::from_gray(26);
-pub const ROW_COLOUR_DARK: egui::Color32 = egui::Color32::from_gray(21);
+pub const ROW_COLOUR_LIGHT: egui::Color32 = egui::Color32::from_gray(28);
+pub const ROW_COLOUR_DARK: egui::Color32 = egui::Color32::from_gray(22);
 pub const TEXT_COLOUR: egui::Color32 = egui::Color32::from_gray(200);
 pub const EXTREME_BACKGROUND_COLOUR: egui::Color32 = egui::Color32::from_gray(2);
 pub const BACKGROUND_COLOUR: egui::Color32 = egui::Color32::from_gray(15);
@@ -70,6 +70,18 @@ fn setup_custom_fonts(ctx: &egui::Context) {
 
     // Tell egui to use these fonts:
     ctx.set_fonts(fonts);
+
+    // Change text style sizes
+    ctx.style_mut(|style| {
+        style.text_styles = [
+            (egui::TextStyle::Small, FontId::new(12.0, egui::FontFamily::Proportional)),
+            (egui::TextStyle::Body, FontId::new(18.0, egui::FontFamily::Proportional)),
+            (egui::TextStyle::Button, FontId::new(18.0, egui::FontFamily::Proportional)),
+            (egui::TextStyle::Heading, FontId::new(30.0, egui::FontFamily::Proportional)),
+            (egui::TextStyle::Monospace, FontId::new(14.0, egui::FontFamily::Monospace)),
+        ]
+        .into();
+    });
 }
 
 fn main() {
@@ -131,7 +143,29 @@ impl PedalboardClientApp {
             Box::leak(Box::new(loaded_state.unwrap()))
         };
 
-        leaked_state.server_synchronise();
+        let mut settings_screen = SettingsScreen::new(leaked_state);
+
+        // Start up the server process if configured to do so, and not already connected
+        if settings_screen.client_settings.startup_server && !leaked_state.socket.borrow().is_connected() {
+            log::info!("Starting server on startup");
+            if settings_screen.ready_to_start_server() {
+                match server_process::start_server_process(&settings_screen.server_settings) {
+                    Some(child) => {
+                        settings_screen.server_launch_state = ServerLaunchState::AwaitingStart { start_time: Instant::now(), process: child };
+                        loop {
+                            settings_screen.handle_server_launch();
+                            if !settings_screen.server_launch_state.is_awaiting() {
+                                break;
+                            }
+                            std::thread::sleep(std::time::Duration::from_millis(100));
+                        }
+                    },
+                    None => log::error!("Failed to start server process")
+                }
+            } else {
+                log::error!("Set input and output device to launch server on start");
+            }
+        }
 
         PedalboardClientApp {
             selected_screen: 0,
@@ -139,7 +173,7 @@ impl PedalboardClientApp {
             pedalboard_library_screen: PedalboardLibraryScreen::new(leaked_state),
             songs_screen: SongsScreen::new(leaked_state),
             utilities_screen: UtilitiesScreen::new(leaked_state),
-            settings_screen: SettingsScreen::new(leaked_state),
+            settings_screen,
             state: leaked_state,
         }
     }
@@ -294,9 +328,22 @@ impl eframe::App for PedalboardClientApp {
         };
 
         if let Err(e) = self.settings_screen.server_settings.save() {
-            log::error!("Failed to save settings: {}", e);
+            log::error!("Failed to save server settings: {}", e);
         } else {
-            log::info!("Settings saved successfully");
+            log::info!("Server settings saved successfully");
         };
+
+        if let Err(e) = self.settings_screen.client_settings.save() {
+            log::error!("Failed to save client settings: {}", e);
+        } else {
+            log::info!("Client settings saved successfully");
+        };
+    }
+
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        if self.settings_screen.client_settings.kill_server_on_close {
+            log::info!("Killing server on exit");
+            self.state.socket.borrow_mut().kill();
+        }
     }
 }

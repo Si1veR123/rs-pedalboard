@@ -110,7 +110,7 @@ impl Widget for &mut SongsScreen {
                             for pedalboard_name in song {
                                 if let Some(pedalboard) = pedalboard_library.iter().find(|pedalboard| &pedalboard.name == pedalboard_name) {
                                     self.state.active_pedalboardstage.borrow_mut().pedalboards.push(pedalboard.clone());
-                                    self.state.server_synchronise();
+                                    self.state.load_active_set();
                                 }
                             }
                         },

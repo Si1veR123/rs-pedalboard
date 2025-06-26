@@ -324,7 +324,7 @@ impl State {
     }
 
     /// Tell the server to load the client's active pedalboard stage
-    pub fn server_synchronise(&self) {
+    pub fn load_active_set(&self) {
         let mut socket = self.socket.borrow_mut();
         let active_pedalboardstage = self.active_pedalboardstage.borrow();
         socket.load_set(&active_pedalboardstage);
