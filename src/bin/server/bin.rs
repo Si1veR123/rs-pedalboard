@@ -9,7 +9,10 @@ use rs_pedalboard::server_settings::ServerSettingsSave;
 #[cfg(target_os = "windows")]
 use windows::{setup, after_setup};
 
-mod audio_io;
+mod audio_processor;
+mod sample_conversion;
+mod stream_config;
+mod audio_callback;
 mod socket;
 mod device_select;
 mod tuner;
@@ -42,7 +45,7 @@ fn main() {
     let (socket_command_sender, audio_command_receiver) = bounded(12);
     let (audio_command_sender, socket_command_receiver) = bounded(12);
 
-    let (in_stream, out_stream) = audio_io::create_linked_streams(
+    let (in_stream, out_stream) = audio_callback::create_linked_streams(
         input,
         output,
         settings.buffer_latency,

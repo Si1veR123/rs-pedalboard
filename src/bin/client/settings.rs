@@ -1,12 +1,13 @@
 use std::{process::Child, time::Instant, path::PathBuf};
 
-use cpal::Host;
+use cpal::{Host, HostId};
 use eframe::egui::{self, Color32, Layout, Response, RichText, Vec2, Widget};
 use serde::{Deserialize, Serialize};
+use strum::IntoEnumIterator;
 
 use crate::state::State;
 use crate::server_process::start_server_process;
-use rs_pedalboard::{audio_devices::{get_input_devices, get_output_devices, get_host}, server_settings::ServerSettingsSave, SAVE_DIR};
+use rs_pedalboard::{audio_devices::{get_input_devices, get_output_devices}, server_settings::{ServerSettingsSave, SupportedHost}, SAVE_DIR};
 
 pub const CLIENT_SAVE_NAME: &'static str = "client_settings.json";
 
@@ -72,8 +73,9 @@ struct AudioDevices {
 }
 
 impl AudioDevices {
-    fn new() -> Self {
-        let host = get_host();
+    fn new(host_id: HostId) -> Self {
+        let host = Some(cpal::host_from_id(host_id)
+            .expect("Failed to get host from ID"));
         let input_devices = get_input_devices(host.as_ref()).unwrap_or_default();
         let output_devices = get_output_devices(host.as_ref()).unwrap_or_default();
 
@@ -121,11 +123,11 @@ impl SettingsScreen {
         };
 
         Self {
+            audio_devices: AudioDevices::new(server_settings.host.into()),
             program_state: state,
             server_settings,
             client_settings,
             server_launch_state: ServerLaunchState::None,
-            audio_devices: AudioDevices::new(),
         }
     }
 
@@ -139,6 +141,13 @@ impl SettingsScreen {
     }
 
     pub fn handle_server_launch(&mut self) {
+        // Remove error state if now connected
+        if self.program_state.socket.borrow().is_connected() {
+            if matches!(self.server_launch_state, ServerLaunchState::KillError | ServerLaunchState::StartError) {
+                self.server_launch_state = ServerLaunchState::None;
+            }
+        }
+
         if let ServerLaunchState::AwaitingKill(start_time) = self.server_launch_state {
             if start_time.elapsed().as_secs() > 5 {
                 log::error!("Failed to stop server");
@@ -191,6 +200,27 @@ impl Widget for &mut SettingsScreen {
                         .min_row_height(45.0)
                         .striped(true)
                         .show(ui, |ui| {
+                            // Audio Host
+                            // Currently only one host supported on linux, so dont show host select
+                            if cfg!(target_os = "windows") {
+                                ui.label("Host");
+                                let prev_host = self.server_settings.host;
+                                egui::ComboBox::new("host_dropdown", "")
+                                    .selected_text(self.server_settings.host.to_string())
+                                    .show_ui(ui, |ui| {
+                                        for host in SupportedHost::iter() {
+                                            ui.selectable_value(&mut self.server_settings.host, host, host.to_string());
+                                        }
+                                    });
+                                // Selection has changed
+                                if prev_host != self.server_settings.host {
+                                    self.audio_devices = AudioDevices::new(self.server_settings.host.into());
+                                    self.server_settings.input_device = None;
+                                    self.server_settings.output_device = None;
+                                }
+                                ui.end_row();
+                            }
+
                             // Buffer Size
                             let current_buffer_size = self.server_settings.buffer_size_samples();
                             ui.label(format!("Buffer Size - {} samples", current_buffer_size));
@@ -265,7 +295,14 @@ impl Widget for &mut SettingsScreen {
                     ui.add_space(10.0);
                     let button_size = Vec2::new(ui.available_width() * 0.25, 45.0);
                     ui.allocate_ui_with_layout(Vec2::new(ui.available_width(), button_size.y), Layout::left_to_right(egui::Align::Center), |ui| {
-                        ui.add_space((ui.available_width()-button_size.x)/2.0);
+                        let is_connected = self.program_state.socket.borrow().is_connected();
+                        // If not connected, make spacing for 2 buttons. Else make spacing for 1.
+                        let button_horizontal_space = if is_connected {
+                            ui.available_width()/2.0-button_size.x/2.0
+                        } else {
+                            ui.available_width()/4.0-button_size.x/2.0
+                        };
+                        ui.add_space(button_horizontal_space);
 
                         let currently_connected = self.program_state.socket.borrow().is_connected();
                         let button_text = if currently_connected {
@@ -294,6 +331,26 @@ impl Widget for &mut SettingsScreen {
                                 }
                             }
                         };
+
+                        if !is_connected {
+                            ui.add_space(button_horizontal_space*2.0);
+                            let button = ui.add(
+                                egui::Button::new("Connect")
+                                    .stroke(egui::Stroke::new(1.0, crate::ROW_COLOUR_LIGHT))
+                                    .min_size(button_size)
+                            );
+
+                            if button.clicked() {
+                                log::info!("Connecting to server...");
+                                match self.program_state.socket.borrow_mut().connect() {
+                                    Ok(_) => {
+                                        log::info!("Connected to server; Loading set...");
+                                        self.program_state.load_active_set();
+                                    },
+                                    Err(e) => log::error!("Failed to connect to server: {}", e)
+                                }
+                            }
+                        }
                     });
                     ui.add_space(15.0);
                     self.handle_server_launch();

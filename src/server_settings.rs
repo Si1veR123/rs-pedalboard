@@ -1,12 +1,71 @@
 use crate::SAVE_DIR;
 use serde::{Serialize, Deserialize};
-use std::path::PathBuf;
+use std::{fmt::Display, path::PathBuf, str::FromStr};
+use strum_macros::EnumIter;
 
 const SAVE_NAME: &str = "server_settings.json";
+
+#[cfg(target_os = "linux")]
+#[derive(Serialize, Deserialize, Clone, Copy, Default, Debug, EnumIter, PartialEq)]
+pub enum SupportedHost {
+    #[default]
+    Jack
+}
+
+#[cfg(target_os = "windows")]
+#[derive(Serialize, Deserialize, Clone, Copy, Default, Debug, EnumIter, PartialEq)]
+pub enum SupportedHost {
+    #[default]
+    Wasapi,
+    Asio
+}
+
+impl Display for SupportedHost {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Just use debug implementation
+        write!(f, "{:?}", self)
+
+    }
+}
+
+impl FromStr for SupportedHost {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        #[cfg(target_os = "linux")]
+        match s.to_lowercase().as_str() {
+            "jack" => Ok(SupportedHost::Jack),
+            _ => Err(format!("Unsupported host: {}", s)),
+        }
+
+        #[cfg(target_os = "windows")]
+        match s.to_lowercase().as_str() {
+            "wasapi" => Ok(SupportedHost::Wasapi),
+            "asio" => Ok(SupportedHost::Asio),
+            _ => Err(format!("Unsupported host: {}", s)),
+        }
+    }
+}
+
+impl From<SupportedHost> for cpal::HostId {
+    fn from(value: SupportedHost) -> Self {
+        #[cfg(target_os = "linux")]
+        match value {
+            SupportedHost::Jack => cpal::HostId::Jack,
+        }
+
+        #[cfg(target_os = "windows")]
+        match value {
+            SupportedHost::Wasapi => cpal::HostId::Wasapi,
+            SupportedHost::Asio => cpal::HostId::Asio,
+        }
+    }
+}
 
 /// Server settings that will be saved to a file.
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ServerSettingsSave {
+    pub host: SupportedHost,
     // Buffer size is this value ^2
     pub buffer_size: usize,
     pub latency: f32,
@@ -20,6 +79,7 @@ pub struct ServerSettingsSave {
 impl Default for ServerSettingsSave {
     fn default() -> Self {
         Self {
+            host: SupportedHost::default(),
             buffer_size: f32::log2(256.0) as usize,
             latency: 5.0,
             periods_per_buffer: 3,

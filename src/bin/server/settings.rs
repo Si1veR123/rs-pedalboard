@@ -1,20 +1,28 @@
+use std::str::FromStr;
+
 use clap::Parser;
-use rs_pedalboard::server_settings::ServerSettingsSave;
+use rs_pedalboard::server_settings::{ServerSettingsSave, SupportedHost};
 
 #[cfg(target_os = "linux")]
 mod constants {
     pub const DEFAULT_FRAMES_PER_PERIOD: usize = 256;
     pub const DEFAULT_RING_BUFFER_LATENCY_MS: f32 = 5.0;
+    pub const DEFAULT_HOST: &'static str = "Jack";
+    pub const HOST_HELP_STR: &'static str = "Audio host to use (JACK (default) or ALSA)";
 }
 #[cfg(target_os = "windows")]
 mod constants {
     pub const DEFAULT_FRAMES_PER_PERIOD: usize = 512;
     pub const DEFAULT_RING_BUFFER_LATENCY_MS: f32 = 7.5;
+    pub const DEFAULT_HOST: &'static str = "Wasapi";
+    pub const HOST_HELP_STR: &'static str = "Audio host to use (WASAPI (default) or ASIO)";
 }
 
 #[derive(Parser, Clone, Debug)]
 #[command(name = "Pedalboard Server")]
 pub struct ServerArguments {
+    #[arg(short, long, default_value=constants::DEFAULT_HOST, help=constants::HOST_HELP_STR)]
+    pub host: Option<String>,
     #[arg(short, long, help="Number of frames (samples) processed at a time")]
     pub frames_per_period: Option<usize>,
     #[arg(short, long, help="Latency in milliseconds for the internal buffer")]
@@ -38,6 +46,7 @@ pub struct ServerArguments {
 /// All server settings, compiled from args, save file and default values.
 #[derive(Clone, Debug)]
 pub struct ServerSettings {
+    pub host: SupportedHost,
     pub frames_per_period: usize,
     pub buffer_latency: f32,
     #[allow(dead_code)]
@@ -54,6 +63,18 @@ impl ServerSettings {
         if args.ignore_save {
             saved = None;
         }
+
+        let host = match args.host {
+            Some(host_str) => SupportedHost::from_str(&host_str).unwrap_or_else(|e| {
+                panic!("{}", e);
+            }),
+            None => {
+                saved.as_ref().map_or_else(
+                    || SupportedHost::default(),
+                    |s| s.host.clone()
+                )
+            },
+        };
 
         let frames_per_period = args.frames_per_period.unwrap_or_else(|| {
             saved.as_ref().map_or_else(
@@ -92,6 +113,7 @@ impl ServerSettings {
         });
 
         ServerSettings {
+            host,
             frames_per_period,
             buffer_latency,
             periods_per_buffer,

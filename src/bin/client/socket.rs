@@ -69,7 +69,7 @@ impl ClientSocket {
                 }
             }
         } else {
-            log::error!("Socket not connected");
+            log::warn!("Socket not connected");
         }
     }
 

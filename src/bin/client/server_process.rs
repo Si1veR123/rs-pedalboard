@@ -29,6 +29,7 @@ pub fn start_server_process(settings: &ServerSettingsSave) -> Option<Child> {
         Some(path) => {
             let mut command = std::process::Command::new(path);
             let full_command = command.arg("--frames-per-period").arg(settings.buffer_size_samples().to_string())
+                .arg("--host").arg(settings.host.to_string())
                 .arg("--periods-per-buffer").arg(settings.periods_per_buffer.to_string())
                 .arg("--buffer-latency").arg(settings.latency.to_string())
                 .arg("--tuner-periods").arg(settings.tuner_periods.to_string())

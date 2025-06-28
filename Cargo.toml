@@ -19,7 +19,7 @@ required-features = ["client"]
 
 [dependencies]
 log = "0.4.26"
-cpal = { version = "0.15.3", features=["jack"] }
+cpal = { version = "0.15.3", features=["jack", "asio"] }
 simplelog = "0.12.2"
 ringbuf = "0.4.7"
 regex = { optional=true, version = "^1.11.1" }

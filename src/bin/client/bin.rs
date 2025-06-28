@@ -31,6 +31,8 @@ pub const BACKGROUND_COLOUR: egui::Color32 = egui::Color32::from_gray(15);
 pub const WIDGET_BACKGROUND_COLOUR: egui::Color32 = egui::Color32::from_gray(34);
 pub const WIDGET_HOVER_BACKGROUND_COLOUR: egui::Color32 = egui::Color32::from_gray(40);
 pub const WIDGET_CLICK_BACKGROUND_COLOUR_THEME_ALPHA: f32 = 0.025;
+// Buttons
+pub const INACTIVE_BG_STROKE_COLOR: egui::Color32 = egui::Color32::from_gray(54);
 
 /// Get a FontId for the egui default proportional font
 pub fn default_proportional(size: f32) -> egui::FontId {
@@ -88,7 +90,7 @@ fn main() {
     CombinedLogger::init(
         vec![
             TermLogger::new(LevelFilter::Info, Config::default(), TerminalMode::Mixed, ColorChoice::Auto),
-            WriteLogger::new(LevelFilter::Info, Config::default(), std::fs::File::create("pedalboard-server.log").expect("Failed to create log file")),
+            WriteLogger::new(LevelFilter::Info, Config::default(), std::fs::File::create("pedalboard-client.log").expect("Failed to create log file")),
         ]
     ).expect("Failed to start logging");
     log::info!("Started logging...");
@@ -112,6 +114,7 @@ fn main() {
                 style.visuals.widgets.hovered.weak_bg_fill = WIDGET_HOVER_BACKGROUND_COLOUR.into();
                 style.visuals.widgets.inactive.bg_fill = WIDGET_BACKGROUND_COLOUR.into();
                 style.visuals.widgets.inactive.weak_bg_fill = WIDGET_BACKGROUND_COLOUR.into();
+                style.visuals.widgets.inactive.bg_stroke = (1.0, INACTIVE_BG_STROKE_COLOR).into();
                 style.visuals.widgets.active.bg_stroke = (1.0, THEME_COLOUR).into();
             });
             egui_extras::install_image_loaders(&cc.egui_ctx);
@@ -191,7 +194,7 @@ impl eframe::App for PedalboardClientApp {
             .min_height(bottom_window_select_height)
             .show(&ctx, |ui| {
                 ui.horizontal_centered(|ui| {
-                    let mut button_outline = [egui::Stroke::new(0.3, egui::Color32::BLACK); 5];
+                    let mut button_outline = [egui::Stroke::new(0.3, INACTIVE_BG_STROKE_COLOR); 5];
                     button_outline[self.selected_screen] = egui::Stroke::new(1.0, THEME_COLOUR);
                     let mut button_bg = [egui::Color32::from_gray(19); 5];
                     button_bg[self.selected_screen] = egui::Color32::from_gray(33);
@@ -254,7 +257,16 @@ impl eframe::App for PedalboardClientApp {
                     }
 
                     ui.style_mut().visuals.widgets.inactive.weak_bg_fill = button_bg[4];
-                    ui.style_mut().visuals.widgets.inactive.bg_stroke = button_outline[4];
+                    let settings_button_outline = if self.selected_screen == 4 {
+                        button_outline[4]
+                    } else {
+                        if self.state.socket.borrow().is_connected() {
+                            button_outline[4]
+                        } else {
+                            egui::Stroke::new(1.5, Color32::RED)
+                        }
+                    };
+                    ui.style_mut().visuals.widgets.inactive.bg_stroke = settings_button_outline;
                     if ui.add_sized(
                         Vec2::new(bottom_window_select_height, bottom_window_select_height-padding-5.0),
                         ImageButton::new(include_image!("files/settings_icon.png"))
@@ -290,32 +302,6 @@ impl eframe::App for PedalboardClientApp {
                 _ => {
                     ui.label("Invalid screen selected");
                 }
-            };
-
-            let mut socket = self.state.socket.borrow_mut();
-            if !socket.is_connected() {
-                let reconnect_rect = egui::Rect {
-                    min: egui::Pos2::new(WINDOW_WIDTH - 100.0, 15.0),
-                    max: egui::Pos2::new(WINDOW_WIDTH, WINDOW_HEIGHT)
-                };
-                ui.allocate_new_ui(
-                    egui::UiBuilder::new().max_rect(reconnect_rect),
-                    |ui| {
-                        ui.style_mut().visuals.widgets.inactive.weak_bg_fill = egui::Color32::DARK_RED;
-                        let button = ui.button(RichText::new("Connect").size(20.0)).on_hover_text("Connect to audio server");
-                        if button.clicked() {
-                            log::info!("Connecting to server...");
-                            match socket.connect() {
-                                Ok(_) => {
-                                    log::info!("Connected to server; Loading set...");
-                                    let pedalboardset = self.state.active_pedalboardstage.borrow();
-                                    socket.load_set(&pedalboardset);
-                                },
-                                Err(e) => log::error!("Failed to connect to server: {}", e)
-                            }
-                        }
-                    }
-                );
             };
         });
     }

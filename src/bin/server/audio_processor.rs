@@ -1,104 +1,24 @@
-use std::{cell::UnsafeCell, sync::{atomic::AtomicBool, Arc}};
-
-use cpal::{traits::DeviceTrait, Device, Stream, StreamConfig};
+use std::sync::{atomic::AtomicBool, Arc};
 use crossbeam::channel::{Receiver, Sender};
-use ringbuf::{traits::{Consumer, Producer, Split}, HeapProd, HeapRb};
+use ringbuf::{traits::{Producer, Split}, HeapProd, HeapRb};
 use rs_pedalboard::{pedalboard_set::PedalboardSet, pedals::{Pedal, PedalTrait}, dsp_algorithms::yin::Yin};
 
 use crate::settings::ServerSettings;
 
-
-pub fn ring_buffer_size(buffer_size: usize, latency: f32, sample_rate: f32) -> usize {
-    let latency_frames = (latency / 1000.0) * sample_rate;
-    buffer_size * 2 + latency_frames as usize
+pub struct AudioProcessor {
+    pub pedalboard_set: PedalboardSet,
+    pub command_receiver: Receiver<Box<str>>,
+    pub command_sender: Sender<Box<str>>,
+    pub writer: HeapProd<f32>,
+    pub processing_buffer: Vec<f32>,
+    pub pedal_command_to_client_buffer: Vec<String>,
+    pub master_volume: f32,
+    pub settings: ServerSettings,
+    pub tuner_handle: Option<(HeapProd<f32>, Receiver<f32>, Arc<AtomicBool>)>,
 }
 
-pub fn create_linked_streams(
-    in_device: Device,
-    out_device: Device,
-    latency: f32,
-    buffer_size: usize,
-    command_receiver: Receiver<Box<str>>,
-    command_sender: Sender<Box<str>>,
-    settings: ServerSettings
-) -> (Stream, Stream) {
-    let ring_buffer_size = ring_buffer_size(buffer_size, latency, 48000.0);
-    log::info!("Ring buffer size: {}", ring_buffer_size);
-    let ring_buffer: HeapRb<f32> = HeapRb::new(ring_buffer_size);
-
-    let (audio_buffer_writer, mut audio_buffer_reader) = ring_buffer.split();
-    let mut maybe_writer = Some(audio_buffer_writer);
-
-    let config = StreamConfig {
-        channels: 1,
-        sample_rate: cpal::SampleRate(48000),
-        buffer_size: cpal::BufferSize::Fixed(buffer_size as u32)
-    };
-
-    let stream_in = in_device.build_input_stream(
-        &config,
-        {
-            move |data: &[f32], _| {
-                thread_local! {
-                    static INPUT_PROCESSOR: UnsafeCell<Option<InputProcessor>> = UnsafeCell::new(None);
-                }
-
-                INPUT_PROCESSOR.with(|ip| {
-                    // Safety: This only exists on the current thread (no other threads have a reference to it),
-                    // and this is the only place where a reference is acquired. This is a unique reference.
-                    let input_processor = unsafe { &mut *ip.get() };
-
-                    if input_processor.is_none() {
-                        *input_processor = Some(InputProcessor {
-                            pedalboard_set: PedalboardSet::default(),
-                            command_receiver: command_receiver.clone(),
-                            command_sender: command_sender.clone(),
-                            writer: maybe_writer.take().expect("Writer moved more than once"),
-                            processing_buffer: Vec::with_capacity(buffer_size),
-                            master_volume: 1.0,
-                            tuner_handle: None,
-                            pedal_command_to_client_buffer: Vec::with_capacity(12),
-                            settings: settings.clone()
-                        });
-                    }
-
-                    input_processor.as_mut().unwrap().process_audio(data);
-                });
-            }
-        },
-        move |err| {
-            log::error!("An error occurred on the input stream: {}", err);
-        },
-        None,
-    ).expect("Failed to build input stream");
-
-    let stream_out = out_device.build_output_stream(&config, move |data: &mut [f32], _| {
-        let read = audio_buffer_reader.pop_slice(data);
-        if read != data.len() {
-            log::error!("Failed to provide a full buffer to output device. Input is behind.");
-        }
-    }, move |err| {
-        log::error!("An error occurred on the output stream: {}", err);
-    }, None).expect("Failed to build output stream");
-
-    (stream_in, stream_out)
-}
-
-
-struct InputProcessor {
-    pedalboard_set: PedalboardSet,
-    command_receiver: Receiver<Box<str>>,
-    command_sender: Sender<Box<str>>,
-    writer: HeapProd<f32>,
-    processing_buffer: Vec<f32>,
-    pedal_command_to_client_buffer: Vec<String>,
-    master_volume: f32,
-    settings: ServerSettings,
-    tuner_handle: Option<(HeapProd<f32>, Receiver<f32>, Arc<AtomicBool>)>,
-}
-
-impl InputProcessor {
-    fn process_audio(&mut self, data: &[f32]) {
+impl AudioProcessor {
+    pub fn process_audio(&mut self, data: &[f32]) {
         self.processing_buffer.clear();
         self.processing_buffer.extend_from_slice(data);
         self.pedal_command_to_client_buffer.clear();
