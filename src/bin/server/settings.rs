@@ -14,14 +14,13 @@ mod constants {
 mod constants {
     pub const DEFAULT_FRAMES_PER_PERIOD: usize = 512;
     pub const DEFAULT_RING_BUFFER_LATENCY_MS: f32 = 7.5;
-    pub const DEFAULT_HOST: &'static str = "Wasapi";
     pub const HOST_HELP_STR: &'static str = "Audio host to use (WASAPI (default) or ASIO)";
 }
 
 #[derive(Parser, Clone, Debug)]
 #[command(name = "Pedalboard Server")]
 pub struct ServerArguments {
-    #[arg(short, long, default_value=constants::DEFAULT_HOST, help=constants::HOST_HELP_STR)]
+    #[arg(short, long, help=constants::HOST_HELP_STR)]
     pub host: Option<String>,
     #[arg(short, long, help="Number of frames (samples) processed at a time")]
     pub frames_per_period: Option<usize>,
@@ -68,12 +67,12 @@ impl ServerSettings {
             Some(host_str) => SupportedHost::from_str(&host_str).unwrap_or_else(|e| {
                 panic!("{}", e);
             }),
-            None => {
-                saved.as_ref().map_or_else(
+            None => saved
+                .as_ref()
+                .map_or_else(
                     || SupportedHost::default(),
                     |s| s.host.clone()
                 )
-            },
         };
 
         let frames_per_period = args.frames_per_period.unwrap_or_else(|| {

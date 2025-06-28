@@ -8,7 +8,7 @@ use ringbuf::{traits::Consumer, HeapRb};
 use rs_pedalboard::pedalboard_set::PedalboardSet;
 
 use crate::audio_processor::AudioProcessor;
-use crate::sample_conversion::SampleConverter;
+use crate::sample_conversion::*;
 use crate::settings::ServerSettings;
 use crate::stream_config::{get_output_config_for_device, get_input_config_for_device};
 
@@ -33,45 +33,54 @@ fn build_input_stream(
         log::error!("An error occurred on the input stream: {}", err);
     };
 
-    let mut sample_converter = SampleConverter::new();
+    let mut sample_converter_buffer = Vec::with_capacity(buffer_size);
 
     match sample {
         cpal::SampleFormat::F32 => device.build_input_stream(&config, data_callback, err_fn, None),
         cpal::SampleFormat::I8 => device.build_input_stream(&config, move |data: &[i8], info: &InputCallbackInfo| {
-            sample_converter.convert_i8(data);
-            data_callback(sample_converter.as_ref(), info);
+            sample_converter_buffer.resize(data.len(), 0.0);
+            convert_i8_to_f32(data, sample_converter_buffer.as_mut());
+            data_callback(sample_converter_buffer.as_ref(), info);
         }, err_fn, None),
         cpal::SampleFormat::U8 => device.build_input_stream(&config, move |data: &[u8], info: &InputCallbackInfo| {
-            sample_converter.convert_u8(data);
-            data_callback(sample_converter.as_ref(), info);
+            sample_converter_buffer.resize(data.len(), 0.0);
+            convert_u8_to_f32(data, sample_converter_buffer.as_mut());
+            data_callback(sample_converter_buffer.as_ref(), info);
         }, err_fn, None),
         cpal::SampleFormat::I16 => device.build_input_stream(&config, move |data: &[i16], info: &InputCallbackInfo| {
-            sample_converter.convert_i16(data);
-            data_callback(sample_converter.as_ref(), info);
+            sample_converter_buffer.resize(data.len(), 0.0);
+            convert_i16_to_f32(data, sample_converter_buffer.as_mut());
+            data_callback(sample_converter_buffer.as_ref(), info);
         }, err_fn, None),
         cpal::SampleFormat::U16 => device.build_input_stream(&config, move |data: &[u16], info: &InputCallbackInfo| {
-            sample_converter.convert_u16(data);
-            data_callback(sample_converter.as_ref(), info);
+            sample_converter_buffer.resize(data.len(), 0.0);
+            convert_u16_to_f32(data, sample_converter_buffer.as_mut());
+            data_callback(sample_converter_buffer.as_ref(), info);
         }, err_fn, None),
         cpal::SampleFormat::I32 => device.build_input_stream(&config, move |data: &[i32], info: &InputCallbackInfo| {
-            sample_converter.convert_i32(data);
-            data_callback(sample_converter.as_ref(), info);
+            sample_converter_buffer.resize(data.len(), 0.0);
+            convert_i32_to_f32(data, sample_converter_buffer.as_mut());
+            data_callback(sample_converter_buffer.as_ref(), info);
         }, err_fn, None),
         cpal::SampleFormat::U32 => device.build_input_stream(&config, move |data: &[u32], info: &InputCallbackInfo| {
-            sample_converter.convert_u32(data);
-            data_callback(sample_converter.as_ref(), info);
+            sample_converter_buffer.resize(data.len(), 0.0);
+            convert_u32_to_f32(data, sample_converter_buffer.as_mut());
+            data_callback(sample_converter_buffer.as_ref(), info);
         }, err_fn, None),
         cpal::SampleFormat::I64 => device.build_input_stream(&config, move |data: &[i64], info: &InputCallbackInfo| {
-            sample_converter.convert_i64(data);
-            data_callback(sample_converter.as_ref(), info);
+            sample_converter_buffer.resize(data.len(), 0.0);
+            convert_i64_to_f32(data, sample_converter_buffer.as_mut());
+            data_callback(sample_converter_buffer.as_ref(), info);
         }, err_fn, None),
         cpal::SampleFormat::U64 => device.build_input_stream(&config, move |data: &[u64], info: &InputCallbackInfo| {
-            sample_converter.convert_u64(data);
-            data_callback(sample_converter.as_ref(), info);
+            sample_converter_buffer.resize(data.len(), 0.0);
+            convert_u64_to_f32(data, sample_converter_buffer.as_mut());
+            data_callback(sample_converter_buffer.as_ref(), info);
         }, err_fn, None),
         cpal::SampleFormat::F64 => device.build_input_stream(&config, move |data: &[f64], info: &InputCallbackInfo| {
-            sample_converter.convert_f64(data);
-            data_callback(sample_converter.as_ref(), info);
+            sample_converter_buffer.resize(data.len(), 0.0);
+            convert_f64_to_f32(data, sample_converter_buffer.as_mut());
+            data_callback(sample_converter_buffer.as_ref(), info);
         }, err_fn, None),
         _ => panic!("Unsupported sample format: {}", sample),
     }
@@ -93,41 +102,54 @@ fn build_output_stream(
         log::error!("An error occurred on the output stream: {}", err);
     };
 
-    let mut sample_converter = SampleConverter::new();
+    let mut sample_converter_buffer = Vec::with_capacity(buffer_size);
 
     match sample {
         cpal::SampleFormat::F32 => device.build_output_stream(&config, data_callback, err_fn, None),
         cpal::SampleFormat::I8 => device.build_output_stream(&config, move |data: &mut [i8], info: &OutputCallbackInfo| {
-            sample_converter.convert_i8(data);
-            data_callback(sample_converter.as_mut(), info);
+            sample_converter_buffer.resize(data.len(), 0.0);
+            data_callback(sample_converter_buffer.as_mut(), info);
+            convert_f32_to_i8(sample_converter_buffer.as_ref(), data);
         }, err_fn, None),
         cpal::SampleFormat::U8 => device.build_output_stream(&config, move |data: &mut [u8], info: &OutputCallbackInfo| {
-            sample_converter.convert_u8(data);
-            data_callback(sample_converter.as_mut(), info);
+            sample_converter_buffer.resize(data.len(), 0.0);
+            data_callback(sample_converter_buffer.as_mut(), info);
+            convert_f32_to_u8(sample_converter_buffer.as_ref(), data);
         }, err_fn, None),
         cpal::SampleFormat::I16 => device.build_output_stream(&config, move |data: &mut [i16], info: &OutputCallbackInfo| {
-            sample_converter.convert_i16(data);
-            data_callback(sample_converter.as_mut(), info);
+            sample_converter_buffer.resize(data.len(), 0.0);
+            data_callback(sample_converter_buffer.as_mut(), info);
+            convert_f32_to_i16(sample_converter_buffer.as_ref(), data);
         }, err_fn, None),
         cpal::SampleFormat::U16 => device.build_output_stream(&config, move |data: &mut [u16], info: &OutputCallbackInfo| {
-            sample_converter.convert_u16(data);
-            data_callback(sample_converter.as_mut(), info);
+            sample_converter_buffer.resize(data.len(), 0.0);
+            data_callback(sample_converter_buffer.as_mut(), info);
+            convert_f32_to_u16(sample_converter_buffer.as_ref(), data);
         }, err_fn, None),
         cpal::SampleFormat::I32 => device.build_output_stream(&config, move |data: &mut [i32], info: &OutputCallbackInfo| {
-            sample_converter.convert_i32(data);
-            data_callback(sample_converter.as_mut(), info);
+            sample_converter_buffer.resize(data.len(), 0.0);
+            data_callback(sample_converter_buffer.as_mut(), info);
+            convert_f32_to_i32(sample_converter_buffer.as_ref(), data);
         }, err_fn, None),
         cpal::SampleFormat::U32 => device.build_output_stream(&config, move |data: &mut [u32], info: &OutputCallbackInfo| {
-            sample_converter.convert_u32(data);
-            data_callback(sample_converter.as_mut(), info);
+            sample_converter_buffer.resize(data.len(), 0.0);
+            data_callback(sample_converter_buffer.as_mut(), info);
+            convert_f32_to_u32(sample_converter_buffer.as_ref(), data);
         }, err_fn, None),
         cpal::SampleFormat::I64 => device.build_output_stream(&config, move |data: &mut [i64], info: &OutputCallbackInfo| {
-            sample_converter.convert_i64(data);
-            data_callback(sample_converter.as_mut(), info);
+            sample_converter_buffer.resize(data.len(), 0.0);
+            data_callback(sample_converter_buffer.as_mut(), info);
+            convert_f32_to_i64(sample_converter_buffer.as_ref(), data);
         }, err_fn, None),
         cpal::SampleFormat::U64 => device.build_output_stream(&config, move |data: &mut [u64], info: &OutputCallbackInfo| {
-            sample_converter.convert_u64(data);
-            data_callback(sample_converter.as_mut(), info);
+            sample_converter_buffer.resize(data.len(), 0.0);
+            data_callback(sample_converter_buffer.as_mut(), info);
+            convert_f32_to_u64(sample_converter_buffer.as_ref(), data);
+        }, err_fn, None),
+        cpal::SampleFormat::F64 => device.build_output_stream(&config, move |data: &mut [f64], info: &OutputCallbackInfo| {
+            sample_converter_buffer.resize(data.len(), 0.0);
+            data_callback(sample_converter_buffer.as_mut(), info);
+            convert_f32_to_f64(sample_converter_buffer.as_ref(), data);
         }, err_fn, None),
         _ => panic!("Unsupported sample format: {}", sample)
     }
@@ -187,6 +209,7 @@ pub fn create_linked_streams(
             });
         }
     ).expect("Failed to build input stream");
+    log::info!("Input stream built successfully");
 
     let stream_out = build_output_stream(
         &out_device,
@@ -199,6 +222,7 @@ pub fn create_linked_streams(
             }
         }
     ).expect("Failed to build output stream");
+    log::info!("Output stream built successfully");
 
     (stream_in, stream_out)
 }

@@ -63,7 +63,7 @@ impl From<SupportedHost> for cpal::HostId {
 }
 
 /// Server settings that will be saved to a file.
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ServerSettingsSave {
     pub host: SupportedHost,
     // Buffer size is this value ^2

@@ -25,8 +25,6 @@ use simplelog::*;
 use clap::Parser;
 
 fn main() {
-    let settings = ServerSettings::new(ServerArguments::parse(), ServerSettingsSave::load().ok());
-
     CombinedLogger::init(
         vec![
             TermLogger::new(LevelFilter::Debug, Config::default(), TerminalMode::Mixed, ColorChoice::Auto),
@@ -34,6 +32,8 @@ fn main() {
         ]
     ).expect("Failed to start logging");
     log::info!("Started logging...");
+    
+    let settings = ServerSettings::new(ServerArguments::parse(), ServerSettingsSave::load().ok());
     log::info!("Server settings: {:?}", settings);
 
     let (_host, input, output) = setup(
