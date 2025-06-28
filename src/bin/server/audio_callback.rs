@@ -6,6 +6,8 @@ use crossbeam::channel::{Receiver, Sender};
 use ringbuf::traits::Split;
 use ringbuf::{traits::Consumer, HeapRb};
 use rs_pedalboard::pedalboard_set::PedalboardSet;
+#[cfg(target_os = "windows")]
+use rs_pedalboard::server_settings::SupportedHost;
 
 use crate::audio_processor::AudioProcessor;
 use crate::sample_conversion::*;
@@ -89,12 +91,13 @@ fn build_input_stream(
 fn build_output_stream(
     device: &Device,
     stream_config: SupportedStreamConfig,
+    stereo: bool,
     buffer_size: usize,
     mut data_callback: impl FnMut(&mut [f32], &OutputCallbackInfo) + Send + 'static
 ) -> Result<Stream, BuildStreamError> {
     let sample = stream_config.sample_format();
     let config = StreamConfig {
-        channels: 1,
+        channels: if stereo { 2 } else { 1 },
         sample_rate: stream_config.sample_rate(),
         buffer_size: cpal::BufferSize::Fixed(buffer_size as u32),
     };
@@ -174,6 +177,17 @@ pub fn create_linked_streams(
     log::info!("Finding a compatible config for input and output devices...");
     let in_config = get_input_config_for_device(&in_device, 48000, buffer_size);
     let out_config = get_output_config_for_device(&out_device, 48000, buffer_size);
+
+    // If the host is ASIO, and output device isn't mono, we must output stereo audio.
+    // This is because other hosts (WASAPI, JACK) remap the mono output to stereo outside
+    // of this program, but ASIO doesn't.
+    let mut stereo_output = false;
+    #[cfg(target_os = "windows")]
+    if settings.host == SupportedHost::Asio && out_config.channels() > 1 {
+        log::info!("Enabling stereo output for ASIO");
+        stereo_output = true;
+    }
+
     log::info!("Input config: {:?}", in_config);
     log::info!("Output config: {:?}", out_config);
 
@@ -204,24 +218,53 @@ pub fn create_linked_streams(
                         settings: settings.clone()
                     });
                 }
-                log::info!("Processing audio data with input processor");
+                
                 input_processor.as_mut().unwrap().process_audio(data);
             });
         }
     ).expect("Failed to build input stream");
     log::info!("Input stream built successfully");
 
-    let stream_out = build_output_stream(
-        &out_device,
-        out_config,
-        buffer_size,
-        move |data: &mut [f32], _| {
-            let read = audio_buffer_reader.pop_slice(data);
-            if read != data.len() {
-                log::error!("Failed to provide a full buffer to output device. Input is behind.");
+    let stream_out = if stereo_output {
+        let mut mono_buffer = vec![0.0; buffer_size];
+        build_output_stream(
+            &out_device,
+            out_config,
+            stereo_output,
+            buffer_size,
+            move |data: &mut [f32], _| {
+                if data.len() % 2 == 0 {
+                    mono_buffer.resize(data.len()/2, 0.0);
+
+                    let read = audio_buffer_reader.pop_slice(&mut mono_buffer);
+                    if read != data.len() {
+                        log::error!("Failed to provide a full buffer to output device. Input is behind.");
+                    };
+
+                    for (i, sample) in mono_buffer.iter().enumerate() {
+                        data[i * 2] = *sample;     // Left channel
+                        data[i * 2 + 1] = *sample; // Right channel
+                    }
+                } else {
+                    log::error!("Output buffer length is not even, cannot write stereo output.");
+                }
             }
-        }
-    ).expect("Failed to build output stream");
+        ).expect("Failed to build output stream")
+    } else {
+        build_output_stream(
+            &out_device,
+            out_config,
+            stereo_output,
+            buffer_size,
+            move |data: &mut [f32], _| {
+                let read = audio_buffer_reader.pop_slice(data);
+                if read != data.len() {
+                    log::error!("Failed to provide a full buffer to output device. Input is behind.");
+                }
+            }
+        ).expect("Failed to build output stream")
+    };
+
     log::info!("Output stream built successfully");
 
     (stream_in, stream_out)

@@ -20,11 +20,6 @@ pub fn get_server_executable_path() -> Option<PathBuf> {
 }
 
 pub fn start_server_process(settings: &ServerSettingsSave) -> Option<Child> {
-    if settings.input_device.is_none() || settings.output_device.is_none() {
-        log::error!("Input or output device is not set. Cannot start server.");
-        return None;
-    }
-
     match get_server_executable_path() {
         Some(path) => {
             let mut command = std::process::Command::new(path);
@@ -33,11 +28,18 @@ pub fn start_server_process(settings: &ServerSettingsSave) -> Option<Child> {
                 .arg("--periods-per-buffer").arg(settings.periods_per_buffer.to_string())
                 .arg("--buffer-latency").arg(settings.latency.to_string())
                 .arg("--tuner-periods").arg(settings.tuner_periods.to_string())
-                .arg("--input-device").arg(settings.input_device.as_ref().unwrap())
-                .arg("--output-device").arg(settings.output_device.as_ref().unwrap())
                 .stdin(std::process::Stdio::null())
                 .stdout(std::process::Stdio::null())
                 .stderr(std::process::Stdio::null());
+
+            // These may not necessarily be required, e.g. ASIO only uses input device
+            if let Some(input_device) = &settings.input_device {
+                full_command.arg("--input-device").arg(input_device);
+            }
+            if let Some(output_device) = &settings.output_device {
+                full_command.arg("--output-device").arg(output_device);
+            }
+
             log::info!("Full command to start server: {:?}", full_command);
             let process = full_command.spawn();
 

@@ -127,11 +127,6 @@ pub fn convert_f32_to_u64(input: &[f32], output: &mut [u64]) {
     }
 }
 
-pub fn convert_f32_to_f32(input: &[f32], output: &mut [f32]) {
-    assert_eq!(input.len(), output.len(), "Input and output slices must be of equal length");
-    output.copy_from_slice(input);
-}
-
 pub fn convert_f32_to_f64(input: &[f32], output: &mut [f64]) {
     assert_eq!(input.len(), output.len(), "Input and output slices must be of equal length");
     for (src, dst) in input.iter().zip(output.iter_mut()) {

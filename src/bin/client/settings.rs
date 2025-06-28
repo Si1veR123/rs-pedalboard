@@ -66,7 +66,7 @@ impl ServerLaunchState {
 }
 
 struct AudioDevices {
-    host: Option<Host>,
+    host_id: HostId,
     pub input_devices: Vec<String>,
     pub output_devices: Vec<String>,
     last_updated: Instant,
@@ -74,23 +74,32 @@ struct AudioDevices {
 
 impl AudioDevices {
     fn new(host_id: HostId) -> Self {
-        let host = Some(cpal::host_from_id(host_id)
-            .expect("Failed to get host from ID"));
+        let host = Self::get_host(host_id);
         let input_devices = get_input_devices(host.as_ref()).unwrap_or_default();
         let output_devices = get_output_devices(host.as_ref()).unwrap_or_default();
 
         Self {
-            host,
+            host_id,
             input_devices,
             output_devices,
             last_updated: Instant::now(),
         }
     }
 
+    fn get_host(host_id: HostId) -> Option<Host> {
+        // JACK doesnt need host to get devices
+        if cfg!(target_os = "linux") {
+            None
+        } else {
+            Some(cpal::host_from_id(host_id).expect("Failed to get host from ID"))
+        }
+    }
+
     fn update(&mut self) {
         if self.last_updated.elapsed().as_secs() > 30 {
-            self.input_devices = get_input_devices(self.host.as_ref()).unwrap_or_default();
-            self.output_devices = get_output_devices(self.host.as_ref()).unwrap_or_default();
+            let host = Self::get_host(self.host_id);
+            self.input_devices = get_input_devices(host.as_ref()).unwrap_or_default();
+            self.output_devices = get_output_devices(host.as_ref()).unwrap_or_default();
             self.last_updated = Instant::now();
         }
     }
@@ -131,13 +140,27 @@ impl SettingsScreen {
         }
     }
 
+    #[cfg(target_os = "linux")]
     pub fn ready_to_start_server(&self) -> bool {
-        self.server_settings.input_device.is_some() &&
-        self.server_settings.output_device.is_some() &&
+        self.server_settings.input_device.is_some() && self.server_settings.output_device.is_some() &&
         matches!(
             self.server_launch_state,
             ServerLaunchState::None | ServerLaunchState::StartError | ServerLaunchState::KillError
         )
+    }
+
+    #[cfg(target_os = "windows")]
+    // On windows, we have the possibility of ASIO which only requires output device to be set
+    pub fn ready_to_start_server(&self) -> bool {
+        let correct_state = matches!(
+            self.server_launch_state,
+            ServerLaunchState::None | ServerLaunchState::StartError | ServerLaunchState::KillError
+        );
+        if self.server_settings.host == SupportedHost::Asio {
+            self.server_settings.output_device.is_some() && correct_state
+        } else {
+            self.server_settings.input_device.is_some() && self.server_settings.output_device.is_some() && correct_state
+        }
     }
 
     pub fn handle_server_launch(&mut self) {
@@ -201,8 +224,8 @@ impl Widget for &mut SettingsScreen {
                         .striped(true)
                         .show(ui, |ui| {
                             // Audio Host
-                            // Currently only one host supported on linux, so dont show host select
-                            if cfg!(target_os = "windows") {
+                            // Only show if the platform has multiple host options
+                            if SupportedHost::iter().count() > 1 {
                                 ui.label("Host");
                                 let prev_host = self.server_settings.host;
                                 egui::ComboBox::new("host_dropdown", "")
@@ -218,6 +241,59 @@ impl Widget for &mut SettingsScreen {
                                     self.server_settings.input_device = None;
                                     self.server_settings.output_device = None;
                                 }
+                                ui.end_row();
+                            }
+
+                            // If on windows, and using ASIO host, we cannot control audio devices. Instead, we select the ASIO driver
+                            #[cfg(target_os = "windows")]
+                            let show_asio_driver = self.server_settings.host == SupportedHost::Asio;
+                            #[cfg(not(target_os = "windows"))]
+                            let show_asio_driver = false;
+
+                            if show_asio_driver {
+                                // ASIO Driver
+                                ui.label("ASIO Driver");
+                                if egui::ComboBox::from_id_salt("output_device_dropdown")
+                                    .wrap_mode(egui::TextWrapMode::Truncate)
+                                    .selected_text(self.server_settings.output_device.clone().unwrap_or_else(|| "None".to_string()))
+                                    .show_ui(ui, |ui| {
+                                        ui.selectable_value(&mut self.server_settings.output_device, None, "None");
+                                        for device in &self.audio_devices.output_devices {
+                                            ui.selectable_value(&mut self.server_settings.output_device, Some(device.clone()), device);
+                                        }
+                                }).response.clicked() {
+                                    self.audio_devices.update();
+                                };
+                                ui.end_row();
+                            } else {
+                                // Input Devices
+                                ui.label("Input Device");
+                                if egui::ComboBox::from_id_salt("input_device_dropdown")
+                                    .wrap_mode(egui::TextWrapMode::Truncate)
+                                    .selected_text(self.server_settings.input_device.clone().unwrap_or_else(|| "None".to_string()))
+                                    .show_ui(ui, |ui| {
+                                        ui.selectable_value(&mut self.server_settings.input_device, None, "None");
+                                        for device in &self.audio_devices.input_devices {
+                                            ui.selectable_value(&mut self.server_settings.input_device, Some(device.clone()), device);
+                                        }
+                                }).response.clicked() {
+                                    self.audio_devices.update();
+                                };
+                                ui.end_row();
+
+                                // Output Devices
+                                ui.label("Output Device");
+                                if egui::ComboBox::from_id_salt("output_device_dropdown")
+                                    .wrap_mode(egui::TextWrapMode::Truncate)
+                                    .selected_text(self.server_settings.output_device.clone().unwrap_or_else(|| "None".to_string()))
+                                    .show_ui(ui, |ui| {
+                                        ui.selectable_value(&mut self.server_settings.output_device, None, "None");
+                                        for device in &self.audio_devices.output_devices {
+                                            ui.selectable_value(&mut self.server_settings.output_device, Some(device.clone()), device);
+                                        }
+                                }).response.clicked() {
+                                    self.audio_devices.update();
+                                };
                                 ui.end_row();
                             }
 
@@ -261,35 +337,6 @@ impl Widget for &mut SettingsScreen {
                                     .show_value(false)
                             ).on_hover_text("Higher values may improve accuracy but increase computation, and decrease update time.");
                             ui.end_row();
-
-                            // Input Devices
-                            ui.label("Input Device");
-                            if egui::ComboBox::from_id_salt("input_device_dropdown")
-                                .wrap_mode(egui::TextWrapMode::Truncate)
-                                .selected_text(self.server_settings.input_device.clone().unwrap_or_else(|| "None".to_string()))
-                                .show_ui(ui, |ui| {
-                                    ui.selectable_value(&mut self.server_settings.input_device, None, "None");
-                                    for device in &self.audio_devices.input_devices {
-                                        ui.selectable_value(&mut self.server_settings.input_device, Some(device.clone()), device);
-                                    }
-                            }).response.clicked() {
-                                self.audio_devices.update();
-                            };
-                            ui.end_row();
-
-                            // Output Devices
-                            ui.label("Output Device");
-                            if egui::ComboBox::from_id_salt("output_device_dropdown")
-                                .wrap_mode(egui::TextWrapMode::Truncate)
-                                .selected_text(self.server_settings.output_device.clone().unwrap_or_else(|| "None".to_string()))
-                                .show_ui(ui, |ui| {
-                                    ui.selectable_value(&mut self.server_settings.output_device, None, "None");
-                                    for device in &self.audio_devices.output_devices {
-                                        ui.selectable_value(&mut self.server_settings.output_device, Some(device.clone()), device);
-                                    }
-                            }).response.clicked() {
-                                self.audio_devices.update();
-                            };
                         });
                     
                     ui.add_space(10.0);
