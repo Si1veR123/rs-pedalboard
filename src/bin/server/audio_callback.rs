@@ -191,11 +191,17 @@ pub fn create_linked_streams(
     log::info!("Input config: {:?}", in_config);
     log::info!("Output config: {:?}", out_config);
 
+    let mut input_stream_running = false;
     let stream_in = build_input_stream(
         &in_device,
         in_config,
         buffer_size,
         move |data: &[f32], _| {
+            if !input_stream_running {
+                log::info!("Input stream started");
+                input_stream_running = true;
+            }
+
             thread_local! {
                 static INPUT_PROCESSOR: UnsafeCell<Option<AudioProcessor>> = UnsafeCell::new(None);
             }
@@ -225,6 +231,7 @@ pub fn create_linked_streams(
     ).expect("Failed to build input stream");
     log::info!("Input stream built successfully");
 
+    let mut output_stream_running = false;
     let stream_out = if stereo_output {
         let mut mono_buffer = vec![0.0; buffer_size];
         build_output_stream(
@@ -233,11 +240,17 @@ pub fn create_linked_streams(
             stereo_output,
             buffer_size,
             move |data: &mut [f32], _| {
+                if !output_stream_running {
+                    log::info!("Output stream started");
+                    output_stream_running = true;
+                }
+
                 if data.len() % 2 == 0 {
-                    mono_buffer.resize(data.len()/2, 0.0);
+                    let frame_count = data.len() / 2;
+                    mono_buffer.resize(frame_count, 0.0);
 
                     let read = audio_buffer_reader.pop_slice(&mut mono_buffer);
-                    if read != data.len() {
+                    if read != frame_count {
                         log::error!("Failed to provide a full buffer to output device. Input is behind.");
                     };
 
@@ -257,6 +270,11 @@ pub fn create_linked_streams(
             stereo_output,
             buffer_size,
             move |data: &mut [f32], _| {
+                if !output_stream_running {
+                    log::info!("Output stream started");
+                    output_stream_running = true;
+                }
+
                 let read = audio_buffer_reader.pop_slice(data);
                 if read != data.len() {
                     log::error!("Failed to provide a full buffer to output device. Input is behind.");
