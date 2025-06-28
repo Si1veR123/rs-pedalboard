@@ -183,7 +183,7 @@ pub fn create_linked_streams(
     // of this program, but ASIO doesn't.
     let mut stereo_output = false;
     #[cfg(target_os = "windows")]
-    if settings.host == SupportedHost::Asio && out_config.channels() > 1 {
+    if settings.host == SupportedHost::ASIO && out_config.channels() > 1 {
         log::info!("Enabling stereo output for ASIO");
         stereo_output = true;
     }

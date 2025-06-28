@@ -47,7 +47,7 @@ pub fn get_input_config_for_device(device: &Device, sample_rate: usize, buffer_s
             .expect("Failed to get supported input configs")
             .collect::<Vec<_>>();
         log::error!("Supported input configs: {:?}", supported_configs_range);
-        panic!("No compatible input or output configs found for sample rate={}, buffer size={} Please check your audio devices.", sample_rate, buffer_size);
+        panic!("No compatible input configs found for sample rate={}, buffer size={}", sample_rate, buffer_size);
     }
 
     // Prioritise configs based on sample format
@@ -70,7 +70,7 @@ pub fn get_output_config_for_device(device: &Device, sample_rate: usize, buffer_
             .expect("Failed to get supported output configs")
             .collect::<Vec<_>>();
         log::error!("Supported output configs: {:?}", supported_configs_range);
-        panic!("No compatible input or output configs found for sample rate={}, buffer size={} and channels=1. Please check your audio devices.", sample_rate, buffer_size);
+        panic!("No compatible output configs found for sample rate={}, buffer size={}", sample_rate, buffer_size);
     }
 
     // Prioritise configs based on first channel count, then sample type, for output

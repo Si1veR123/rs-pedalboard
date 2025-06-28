@@ -23,15 +23,48 @@ use cpal::traits::StreamTrait;
 use crossbeam::channel::bounded;
 use simplelog::*;
 use clap::Parser;
+use std::{fs::{File, OpenOptions}, io::Write};
+
+const LOG_FILE: &str = "pedalboard-server.log";
+
+fn insert_log_panic_hook() {
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let panic_str = if let Some(&s) = info.payload().downcast_ref::<&str>() {
+            Some(s)
+        } else if let Some(s) = info.payload().downcast_ref::<String>() {
+            Some(s.as_str())
+        } else {
+            None
+        };
+
+        let panic_message = match panic_str {
+            Some(s) => format!("Panic occurred. Message: {}. PanicHookInfo: {:?}\n", s, info),
+            None => format!("Panic occurred: {:?}\n", info),
+        };
+
+        OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(LOG_FILE)
+            .expect("Failed to open log file")
+            .write_all(panic_message.as_bytes())
+            .expect("Failed to write to log file");
+
+        default_hook(info);
+    }));
+}
 
 fn main() {
     CombinedLogger::init(
         vec![
             TermLogger::new(LevelFilter::Debug, Config::default(), TerminalMode::Mixed, ColorChoice::Auto),
-            WriteLogger::new(LevelFilter::Info, Config::default(), std::fs::File::create("pedalboard-server.log").expect("Failed to create log file")),
+            WriteLogger::new(LevelFilter::Info, Config::default(), File::create(LOG_FILE).expect("Failed to create log file")),
         ]
     ).expect("Failed to start logging");
     log::info!("Started logging...");
+
+    insert_log_panic_hook();
     
     let settings = ServerSettings::new(ServerArguments::parse(), ServerSettingsSave::load().ok());
     log::info!("Server settings: {:?}", settings);

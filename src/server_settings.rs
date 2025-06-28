@@ -9,15 +9,15 @@ const SAVE_NAME: &str = "server_settings.json";
 #[derive(Serialize, Deserialize, Clone, Copy, Default, Debug, EnumIter, PartialEq)]
 pub enum SupportedHost {
     #[default]
-    Jack
+    JACK
 }
 
 #[cfg(target_os = "windows")]
 #[derive(Serialize, Deserialize, Clone, Copy, Default, Debug, EnumIter, PartialEq)]
 pub enum SupportedHost {
     #[default]
-    Wasapi,
-    Asio
+    WASAPI,
+    ASIO
 }
 
 impl Display for SupportedHost {
@@ -34,14 +34,14 @@ impl FromStr for SupportedHost {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         #[cfg(target_os = "linux")]
         match s.to_lowercase().as_str() {
-            "jack" => Ok(SupportedHost::Jack),
+            "jack" => Ok(SupportedHost::JACK),
             _ => Err(format!("Unsupported host: {}", s)),
         }
 
         #[cfg(target_os = "windows")]
         match s.to_lowercase().as_str() {
-            "wasapi" => Ok(SupportedHost::Wasapi),
-            "asio" => Ok(SupportedHost::Asio),
+            "wasapi" => Ok(SupportedHost::WASAPI),
+            "asio" => Ok(SupportedHost::ASIO),
             _ => Err(format!("Unsupported host: {}", s)),
         }
     }
@@ -51,13 +51,13 @@ impl From<SupportedHost> for cpal::HostId {
     fn from(value: SupportedHost) -> Self {
         #[cfg(target_os = "linux")]
         match value {
-            SupportedHost::Jack => cpal::HostId::Jack,
+            SupportedHost::JACK => cpal::HostId::Jack,
         }
 
         #[cfg(target_os = "windows")]
         match value {
-            SupportedHost::Wasapi => cpal::HostId::Wasapi,
-            SupportedHost::Asio => cpal::HostId::Asio,
+            SupportedHost::WASAPI => cpal::HostId::Wasapi,
+            SupportedHost::ASIO => cpal::HostId::Asio,
         }
     }
 }

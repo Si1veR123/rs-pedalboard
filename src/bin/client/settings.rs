@@ -156,7 +156,7 @@ impl SettingsScreen {
             self.server_launch_state,
             ServerLaunchState::None | ServerLaunchState::StartError | ServerLaunchState::KillError
         );
-        if self.server_settings.host == SupportedHost::Asio {
+        if self.server_settings.host == SupportedHost::ASIO {
             self.server_settings.output_device.is_some() && correct_state
         } else {
             self.server_settings.input_device.is_some() && self.server_settings.output_device.is_some() && correct_state
@@ -246,7 +246,7 @@ impl Widget for &mut SettingsScreen {
 
                             // If on windows, and using ASIO host, we cannot control audio devices. Instead, we select the ASIO driver
                             #[cfg(target_os = "windows")]
-                            let show_asio_driver = self.server_settings.host == SupportedHost::Asio;
+                            let show_asio_driver = self.server_settings.host == SupportedHost::ASIO;
                             #[cfg(not(target_os = "windows"))]
                             let show_asio_driver = false;
 
