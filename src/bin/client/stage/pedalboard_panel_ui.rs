@@ -8,21 +8,21 @@ use crate::THEME_COLOUR;
 // Big ugly function to display the pedalboard stage panel
 // Effectively a method on PedalboardStageScreen
 pub fn pedalboard_stage_panel(screen: &mut PedalboardStageScreen, ui: &mut egui::Ui) {
-    ui.painter().rect_filled(ui.available_rect_before_wrap(), 5.0, Color32::from_gray(20));
+    ui.painter().rect_filled(ui.available_rect_before_wrap(), 5.0, crate::LIGHT_BACKGROUND_COLOR);
 
     let mut pedalboard_library = screen.state.pedalboard_library.borrow_mut();
 
     ui.add_space(5.0);
 
     // === Header buttons ===
-    let buttons_row_height = 50.0;
+    let buttons_row_height = ui.available_height() * 0.075;
     ui.columns(2, |columns| {
         columns[0].allocate_ui_with_layout(
             Vec2::new(0.0, buttons_row_height),
             Layout::left_to_right(egui::Align::Center),
             |ui| {
                 ui.add_space(10.0);
-                if ui.add_sized([100.0, buttons_row_height], egui::Button::new("Clear Stage")).clicked() {
+                if ui.add_sized([100.0, ui.available_height()], egui::Button::new("Clear Stage")).clicked() {
                     screen.state.load_set(PedalboardSet::default());
                 }
             }
@@ -33,7 +33,7 @@ pub fn pedalboard_stage_panel(screen: &mut PedalboardStageScreen, ui: &mut egui:
             Layout::right_to_left(egui::Align::Center),
             |ui| {
                 ui.add_space(10.0);
-                if ui.add_sized([100.0, buttons_row_height], egui::Button::new("Save to Song")).clicked() {
+                if ui.add_sized([100.0, ui.available_height()], egui::Button::new("Save to Song")).clicked() {
                     screen.current_action = Some(CurrentAction::SaveToSong(String::new()));
                 }
             }

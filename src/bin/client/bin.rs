@@ -28,6 +28,7 @@ pub const ROW_COLOUR_DARK: egui::Color32 = egui::Color32::from_gray(22);
 pub const TEXT_COLOUR: egui::Color32 = egui::Color32::from_gray(200);
 pub const EXTREME_BACKGROUND_COLOUR: egui::Color32 = egui::Color32::from_gray(2);
 pub const BACKGROUND_COLOUR: egui::Color32 = egui::Color32::from_gray(15);
+pub const LIGHT_BACKGROUND_COLOR: egui::Color32 = egui::Color32::from_gray(22);
 pub const WIDGET_BACKGROUND_COLOUR: egui::Color32 = egui::Color32::from_gray(34);
 pub const WIDGET_HOVER_BACKGROUND_COLOUR: egui::Color32 = egui::Color32::from_gray(40);
 pub const WIDGET_CLICK_BACKGROUND_COLOUR_THEME_ALPHA: f32 = 0.025;

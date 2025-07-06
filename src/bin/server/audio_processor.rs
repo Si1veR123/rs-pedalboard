@@ -55,9 +55,11 @@ impl AudioProcessor {
             self.processing_buffer.iter_mut().for_each(|sample| *sample *= self.master_volume);   
         }
 
-        
         let written = self.writer.push_slice(&self.processing_buffer);
         if written != self.processing_buffer.len() {
+            if let Err(e) = self.command_sender.send("xrun\n".into()) {
+                log::error!("Failed to send xrun command: {}", e);
+            }
             log::error!("Failed to write all processed data. Output is behind.")
         }
 

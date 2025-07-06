@@ -1,8 +1,10 @@
 use core::f32;
 
+use crate::stage::{ClippingState, XRunState};
+
 use super::PedalboardStageScreen;
 
-use eframe::egui::{self, Button, Color32, Layout, Pos2, Rect, RichText, Sense, Ui, UiBuilder, Vec2};
+use eframe::egui::{self, Button, Color32, Layout, Pos2, Rect, RichText, Sense, Stroke, Ui, UiBuilder, Vec2};
 use rs_pedalboard::pedals::{PedalDiscriminants, PedalParameterValue, PedalTrait};
 use egui_dnd;
 use strum::IntoEnumIterator;
@@ -14,7 +16,7 @@ const PEDAL_HEIGHT_RATIO: f32 = 2.2;
 const MAX_PEDAL_COUNT: usize = 12;
 
 /// Assumes scene rect is smaller than available size
-pub fn bound_scene_rect(scene_rect: &mut Rect, available_size: &Vec2) {
+fn bound_scene_rect(scene_rect: &mut Rect, available_size: &Vec2) {
     let delta_max_x = available_size.x - scene_rect.max.x;
     let delta_max_y = available_size.y - scene_rect.max.y;
 
@@ -32,7 +34,7 @@ pub fn bound_scene_rect(scene_rect: &mut Rect, available_size: &Vec2) {
     }
 }
 
-pub fn add_pedal_menu(screen: &mut PedalboardStageScreen, ui: &mut Ui, rect: Rect) {
+fn add_pedal_menu(screen: &mut PedalboardStageScreen, ui: &mut Ui, rect: Rect) {
     let menu_layer_id = egui::LayerId::new(egui::Order::Foreground, ui.id().with("pedal_menu"));
     let mut menu_ui = ui.new_child(
         UiBuilder::new()
@@ -62,32 +64,130 @@ pub fn add_pedal_menu(screen: &mut PedalboardStageScreen, ui: &mut Ui, rect: Rec
         });
 }
 
-pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
-    ui.add_space(5.0);
+fn current_time_string() -> String {
+    let now = std::time::SystemTime::now();
+    let duration = now.duration_since(std::time::UNIX_EPOCH).unwrap();
+    let seconds = duration.as_secs() % 60;
+    let minutes = (duration.as_secs() / 60) % 60;
+    let hours = (duration.as_secs() / 3600) % 24;
+    format!("{:02}:{:02}:{:02}", hours, minutes, seconds)
+}
 
+pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
+    // For some unknown reason, the available width changes after drawing the status bar. Store it here.
+    let available_width = ui.available_width();
+
+    // Status bar at the top. Allocate a top down ui for padding, then a left to right ui inside.
+    let vertical_padding = 5.0;
     ui.allocate_ui_with_layout(
-        ui.available_size() * Vec2::new(1.0, 0.1),
+        Vec2::new(available_width, ui.available_height()*0.075 + vertical_padding*2.0),
         Layout::top_down(egui::Align::Center),
         |ui| {
-            let can_show = {
-                let mut pedalboard_set = screen.state.active_pedalboardstage.borrow_mut();
-                let active_index = pedalboard_set.active_pedalboard;
-                let pedalboard = pedalboard_set.pedalboards.get_mut(active_index).unwrap();
-                pedalboard.pedals.len() < MAX_PEDAL_COUNT
-            };
-            
-            if ui.add_enabled(
-                can_show,
-                egui::Button::new(RichText::new("Add Pedal").size(30.0).font(crate::default_proportional(30.0)))
-            ).clicked() {
-                screen.show_pedal_menu = !screen.show_pedal_menu;
-            }
-    });
+            ui.painter().rect_filled(ui.available_rect_before_wrap(), 5.0, crate::LIGHT_BACKGROUND_COLOR);
 
-    ui.add_space(5.0);
+            ui.add_space(vertical_padding);
+
+            ui.allocate_ui_with_layout(
+                ui.available_size() - Vec2::new(0.0, vertical_padding), // Subtract the amount of padding that will be added after
+                Layout::left_to_right(egui::Align::Center),
+                |ui| {
+                    let can_show_add_button = {
+                        let mut pedalboard_set = screen.state.active_pedalboardstage.borrow_mut();
+                        let active_index = pedalboard_set.active_pedalboard;
+                        let pedalboard = pedalboard_set.pedalboards.get_mut(active_index).unwrap();
+                        pedalboard.pedals.len() < MAX_PEDAL_COUNT
+                    };
+
+                    ui.add_space(20.0);
+                    if ui
+                        .add_enabled_ui(
+                            can_show_add_button,
+                            |ui| {
+                                ui.add_sized(
+                                    [140.0, ui.available_height()],
+                                    egui::Button::new(RichText::new("Add Pedal")).stroke(egui::Stroke::new(1.0, crate::THEME_COLOUR))
+                                )
+                            },
+                        )
+                        .inner
+                        .clicked()
+                    {
+                        screen.show_pedal_menu = !screen.show_pedal_menu;
+                    };
+                    ui.add_space(20.0);
+
+                    ui.columns_const(|[ui_1, ui_2, ui_3, ui_4, ui_5]| {
+                        if screen.state.socket.borrow().is_connected() {
+                            // XRun monitor
+                            ui_1.allocate_ui_with_layout(
+                                ui_1.available_size(),
+                                Layout::left_to_right(egui::Align::Center),
+                                |ui| {
+                                    ui.add_space(10.0);
+                                    let xrun_color = match screen.xrun_state {
+                                        XRunState::None => Color32::from_rgb(50, 255, 50),
+                                        XRunState::Few(_) => Color32::from_rgb(255, 165, 50),
+                                        XRunState::Many(_) => Color32::from_rgb(255, 50, 50),
+                                    };
+
+                                    ui.label("XRun");
+                                    let (_id, rect) = ui.allocate_space(Vec2::splat(20.0));
+                                    ui.painter().rect_filled(rect, 2.0, xrun_color);
+                                },
+                            );
+
+                            // Clipping monitor
+                            ui_2.allocate_ui_with_layout(
+                                ui_2.available_size(),
+                                Layout::left_to_right(egui::Align::Center),
+                                |ui| {
+                                    ui.label("Clip");
+                                    let clipping_color = match screen.clipping_state {
+                                        ClippingState::None => Color32::from_rgb(50, 255, 50),
+                                        ClippingState::Clipping(_) => Color32::from_rgb(255, 50, 50),
+                                    };
+                                    let (_id, rect) = ui.allocate_space(Vec2::splat(20.0));
+                                    ui.painter().rect_filled(rect, 2.0, clipping_color);
+                                },
+                            );
+                        }
+
+                        let col_vertical_padding = (ui_3.available_height() - 20.0) * 0.5;
+                        // CPU Usage
+                        ui_3.with_layout(Layout::top_down(egui::Align::Center), |ui| {
+                            ui.add_space(col_vertical_padding);
+                            let cpu_usage = screen.system.global_cpu_usage();
+                            ui.label(format!("CPU: {:.0}%", cpu_usage.round()));
+                        });
+
+                        // RAM Usage
+                        ui_4.with_layout(Layout::top_down(egui::Align::Center), |ui| {
+                            ui.add_space(col_vertical_padding);
+                            let memory = screen.system.total_memory();
+                            let used_memory = screen.system.used_memory();
+                            let memory_usage = used_memory as f32 / memory as f32;
+                            ui.label(format!("RAM: {:.0}%", (memory_usage * 100.0).round()));
+                        });
+
+                        // Time
+                        ui_5.with_layout(Layout::top_down(egui::Align::Center), |ui| {
+                            ui.add_space(col_vertical_padding);
+                            ui.label(current_time_string());
+                        });
+                    });
+                },
+            );
+
+            ui.add_space(vertical_padding);
+        },
+    );
 
     // Available rect for the pedalboard itself
-    let available_rect = ui.available_rect_before_wrap();
+    let mut available_rect = ui.available_rect_before_wrap();
+    //// The width of this value can be incorrect, after drawing status bar, so change width to previously saved value.
+    //available_rect.set_width(available_width);
+
+    ui.painter().rect_filled(available_rect, 5.0, crate::LIGHT_BACKGROUND_COLOR);
 
     let pedal_width = 0.85 * (available_rect.width() / PEDAL_ROW_COUNT as f32);
     let pedal_spacing = 0.15 * (available_rect.width() / PEDAL_ROW_COUNT as f32);
@@ -106,19 +206,16 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
     let mut child = ui.new_child(UiBuilder::new()
         .layer_id(egui::LayerId::new(egui::Order::Foreground, ui.id().with("delete_button")))
         .max_rect(delete_button_rect));
-    
 
     let changed: Option<(usize, (String, PedalParameterValue))> = egui::Scene::new().zoom_range(1.0..=3.0).show(ui, &mut screen.pedalboard_rect, |ui| {
-    
         ui.allocate_new_ui(
             UiBuilder::new()
                 .max_rect(Rect { min: Pos2::ZERO, max: available_rect.size().to_pos2() })
                 .layout(Layout::left_to_right(egui::Align::Min)),
             |ui| {
-                ui.painter().rect_filled(ui.available_rect_before_wrap(), 5.0, Color32::from_gray(20));
                 ui.add_space(pedal_spacing/2.0);
                 ui.horizontal_wrapped(|ui| {
-                    ui.spacing_mut().item_spacing = Vec2::new(pedal_spacing, 20.0);
+                    ui.spacing_mut().item_spacing = Vec2::new(pedal_spacing, 25.0);
                     let mut changed = None;
 
                     let mut pedalboard_set = screen.state.active_pedalboardstage.borrow_mut();
@@ -182,7 +279,6 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
     }).inner;
 
     bound_scene_rect(&mut screen.pedalboard_rect, &available_rect.size());
-
     
     let pedalboard_name = {
         let mut pedalboard_set = screen.state.active_pedalboardstage.borrow_mut();

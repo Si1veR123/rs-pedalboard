@@ -19,6 +19,29 @@ pub fn ring_buffer_size(buffer_size: usize, latency: f32, sample_rate: f32) -> u
     buffer_size * 2 + latency_frames as usize
 }
 
+fn clip_f32_samples(samples: &mut [f32]) -> bool {
+    let mut clipped = false;
+    for sample in samples.iter_mut() {
+        if *sample < -1.0 {
+            *sample = -1.0;
+            clipped = true;
+        } else if *sample > 1.0 {
+            *sample = 1.0;
+            clipped = true;
+        }
+    }
+    clipped
+}
+
+fn handle_clipped_f32_samples(samples: &mut [f32], command_sender: &Sender<Box<str>>) {
+    if clip_f32_samples(samples) {
+        log::warn!("Output samples clipped");
+        if let Err(e) = command_sender.send("clipped\n".into()) {
+            log::error!("Failed to send clipped command: {}", e);
+        }
+    }
+}
+
 fn build_input_stream(
     device: &Device,
     stream_config: SupportedStreamConfig,
@@ -93,6 +116,7 @@ fn build_output_stream(
     stream_config: SupportedStreamConfig,
     stereo: bool,
     buffer_size: usize,
+    command_sender: Sender<Box<str>>,
     mut data_callback: impl FnMut(&mut [f32], &OutputCallbackInfo) + Send + 'static
 ) -> Result<Stream, BuildStreamError> {
     let sample = stream_config.sample_format();
@@ -108,50 +132,62 @@ fn build_output_stream(
     let mut sample_converter_buffer = Vec::with_capacity(buffer_size);
 
     match sample {
-        cpal::SampleFormat::F32 => device.build_output_stream(&config, data_callback, err_fn, None),
+        cpal::SampleFormat::F32 => device.build_output_stream(&config, move |data: &mut [f32], info: &OutputCallbackInfo| {
+            data_callback(data, info);
+            handle_clipped_f32_samples(data.as_mut(), &command_sender);
+        }, err_fn, None),
         cpal::SampleFormat::I8 => device.build_output_stream(&config, move |data: &mut [i8], info: &OutputCallbackInfo| {
             sample_converter_buffer.resize(data.len(), 0.0);
             data_callback(sample_converter_buffer.as_mut(), info);
+            handle_clipped_f32_samples(sample_converter_buffer.as_mut(), &command_sender);
             convert_f32_to_i8(sample_converter_buffer.as_ref(), data);
         }, err_fn, None),
         cpal::SampleFormat::U8 => device.build_output_stream(&config, move |data: &mut [u8], info: &OutputCallbackInfo| {
             sample_converter_buffer.resize(data.len(), 0.0);
             data_callback(sample_converter_buffer.as_mut(), info);
+            handle_clipped_f32_samples(sample_converter_buffer.as_mut(), &command_sender);
             convert_f32_to_u8(sample_converter_buffer.as_ref(), data);
         }, err_fn, None),
         cpal::SampleFormat::I16 => device.build_output_stream(&config, move |data: &mut [i16], info: &OutputCallbackInfo| {
             sample_converter_buffer.resize(data.len(), 0.0);
             data_callback(sample_converter_buffer.as_mut(), info);
+            handle_clipped_f32_samples(sample_converter_buffer.as_mut(), &command_sender);
             convert_f32_to_i16(sample_converter_buffer.as_ref(), data);
         }, err_fn, None),
         cpal::SampleFormat::U16 => device.build_output_stream(&config, move |data: &mut [u16], info: &OutputCallbackInfo| {
             sample_converter_buffer.resize(data.len(), 0.0);
             data_callback(sample_converter_buffer.as_mut(), info);
+            handle_clipped_f32_samples(sample_converter_buffer.as_mut(), &command_sender);
             convert_f32_to_u16(sample_converter_buffer.as_ref(), data);
         }, err_fn, None),
         cpal::SampleFormat::I32 => device.build_output_stream(&config, move |data: &mut [i32], info: &OutputCallbackInfo| {
             sample_converter_buffer.resize(data.len(), 0.0);
             data_callback(sample_converter_buffer.as_mut(), info);
+            handle_clipped_f32_samples(sample_converter_buffer.as_mut(), &command_sender);
             convert_f32_to_i32(sample_converter_buffer.as_ref(), data);
         }, err_fn, None),
         cpal::SampleFormat::U32 => device.build_output_stream(&config, move |data: &mut [u32], info: &OutputCallbackInfo| {
             sample_converter_buffer.resize(data.len(), 0.0);
             data_callback(sample_converter_buffer.as_mut(), info);
+            handle_clipped_f32_samples(sample_converter_buffer.as_mut(), &command_sender);
             convert_f32_to_u32(sample_converter_buffer.as_ref(), data);
         }, err_fn, None),
         cpal::SampleFormat::I64 => device.build_output_stream(&config, move |data: &mut [i64], info: &OutputCallbackInfo| {
             sample_converter_buffer.resize(data.len(), 0.0);
             data_callback(sample_converter_buffer.as_mut(), info);
+            handle_clipped_f32_samples(sample_converter_buffer.as_mut(), &command_sender);
             convert_f32_to_i64(sample_converter_buffer.as_ref(), data);
         }, err_fn, None),
         cpal::SampleFormat::U64 => device.build_output_stream(&config, move |data: &mut [u64], info: &OutputCallbackInfo| {
             sample_converter_buffer.resize(data.len(), 0.0);
             data_callback(sample_converter_buffer.as_mut(), info);
+            handle_clipped_f32_samples(sample_converter_buffer.as_mut(), &command_sender);
             convert_f32_to_u64(sample_converter_buffer.as_ref(), data);
         }, err_fn, None),
         cpal::SampleFormat::F64 => device.build_output_stream(&config, move |data: &mut [f64], info: &OutputCallbackInfo| {
             sample_converter_buffer.resize(data.len(), 0.0);
             data_callback(sample_converter_buffer.as_mut(), info);
+            handle_clipped_f32_samples(sample_converter_buffer.as_mut(), &command_sender);
             convert_f32_to_f64(sample_converter_buffer.as_ref(), data);
         }, err_fn, None),
         _ => panic!("Unsupported sample format: {}", sample)
@@ -161,13 +197,14 @@ fn build_output_stream(
 pub fn create_linked_streams(
     in_device: Device,
     out_device: Device,
-    latency: f32,
-    buffer_size: usize,
     command_receiver: Receiver<Box<str>>,
     command_sender: Sender<Box<str>>,
     settings: ServerSettings
 ) -> (Stream, Stream) {
-    let ring_buffer_size = ring_buffer_size(buffer_size, latency, 48000.0);
+    let in_command_sender = command_sender.clone();
+    let in_settings = settings.clone();
+
+    let ring_buffer_size = ring_buffer_size(settings.frames_per_period, settings.buffer_latency, 48000.0);
     log::info!("Ring buffer size: {}", ring_buffer_size);
     let ring_buffer: HeapRb<f32> = HeapRb::new(ring_buffer_size);
 
@@ -175,8 +212,8 @@ pub fn create_linked_streams(
     let mut maybe_writer = Some(audio_buffer_writer);
 
     log::info!("Finding a compatible config for input and output devices...");
-    let in_config = get_input_config_for_device(&in_device, 48000, buffer_size);
-    let out_config = get_output_config_for_device(&out_device, 48000, buffer_size);
+    let in_config = get_input_config_for_device(&in_device, 48000, settings.frames_per_period);
+    let out_config = get_output_config_for_device(&out_device, 48000, settings.frames_per_period);
 
     // If the host is ASIO, and output device isn't mono, we must output stereo audio.
     // This is because other hosts (WASAPI, JACK) remap the mono output to stereo outside
@@ -195,7 +232,7 @@ pub fn create_linked_streams(
     let stream_in = build_input_stream(
         &in_device,
         in_config,
-        buffer_size,
+        settings.frames_per_period,
         move |data: &[f32], _| {
             if !input_stream_running {
                 log::info!("Input stream started");
@@ -215,13 +252,13 @@ pub fn create_linked_streams(
                     *input_processor = Some(AudioProcessor {
                         pedalboard_set: PedalboardSet::default(),
                         command_receiver: command_receiver.clone(),
-                        command_sender: command_sender.clone(),
+                        command_sender: in_command_sender.clone(),
                         writer: maybe_writer.take().expect("Writer moved more than once"),
-                        processing_buffer: Vec::with_capacity(buffer_size),
+                        processing_buffer: Vec::with_capacity(settings.frames_per_period),
                         master_volume: 1.0,
                         tuner_handle: None,
                         pedal_command_to_client_buffer: Vec::with_capacity(12),
-                        settings: settings.clone()
+                        settings: in_settings.clone()
                     });
                 }
                 
@@ -233,12 +270,13 @@ pub fn create_linked_streams(
 
     let mut output_stream_running = false;
     let stream_out = if stereo_output {
-        let mut mono_buffer = vec![0.0; buffer_size];
+        let mut mono_buffer = vec![0.0; settings.frames_per_period];
         build_output_stream(
             &out_device,
             out_config,
             stereo_output,
-            buffer_size,
+            settings.frames_per_period,
+            command_sender.clone(),
             move |data: &mut [f32], _| {
                 if !output_stream_running {
                     log::info!("Output stream started");
@@ -251,6 +289,9 @@ pub fn create_linked_streams(
 
                     let read = audio_buffer_reader.pop_slice(&mut mono_buffer);
                     if read != frame_count {
+                        if let Err(e) = command_sender.send("xrun".into()) {
+                            log::error!("Failed to send xrun command: {}", e);
+                        }
                         log::error!("Failed to provide a full buffer to output device. Input is behind.");
                     };
 
@@ -268,7 +309,8 @@ pub fn create_linked_streams(
             &out_device,
             out_config,
             stereo_output,
-            buffer_size,
+            settings.frames_per_period,
+            command_sender.clone(),
             move |data: &mut [f32], _| {
                 if !output_stream_running {
                     log::info!("Output stream started");

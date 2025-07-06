@@ -81,8 +81,6 @@ fn main() {
     let (in_stream, out_stream) = audio_callback::create_linked_streams(
         input,
         output,
-        settings.buffer_latency,
-        settings.frames_per_period,
         audio_command_receiver,
         audio_command_sender,
         settings
