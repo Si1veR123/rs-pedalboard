@@ -74,13 +74,10 @@ fn current_time_string() -> String {
 }
 
 pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
-    // For some unknown reason, the available width changes after drawing the status bar. Store it here.
-    let available_width = ui.available_width();
-
     // Status bar at the top. Allocate a top down ui for padding, then a left to right ui inside.
     let vertical_padding = 5.0;
     ui.allocate_ui_with_layout(
-        Vec2::new(available_width, ui.available_height()*0.075 + vertical_padding*2.0),
+        Vec2::new(ui.available_width(), ui.available_height()*0.075 + vertical_padding*2.0),
         Layout::top_down(egui::Align::Center),
         |ui| {
             ui.painter().rect_filled(ui.available_rect_before_wrap(), 5.0, crate::LIGHT_BACKGROUND_COLOR);
@@ -183,9 +180,7 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
     );
 
     // Available rect for the pedalboard itself
-    let mut available_rect = ui.available_rect_before_wrap();
-    //// The width of this value can be incorrect, after drawing status bar, so change width to previously saved value.
-    //available_rect.set_width(available_width);
+    let available_rect = ui.available_rect_before_wrap();
 
     ui.painter().rect_filled(available_rect, 5.0, crate::LIGHT_BACKGROUND_COLOR);
 

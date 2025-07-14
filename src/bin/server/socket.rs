@@ -83,7 +83,7 @@ impl ServerSocket {
                         break;
                     }
                 }
-                if command.len() <= 20 {
+                if command.len() <= 20 || cfg!(feature="log_full_commands") {
                     log::info!("Sent command: {:?}", command);
                 } else {
                     log::info!("Sent command: {:?}...", &command[..20]);

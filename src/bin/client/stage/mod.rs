@@ -87,8 +87,8 @@ impl PedalboardStageScreen {
                 }
             },
             XRunState::Few((count, last_xrun)) => {
-                // If no xrun occurred for more than 3 seconds, reset the state
-                if xrun_count == 0 && last_xrun.elapsed().as_secs() > 3 {
+                // If no xrun occurred for more than 2 seconds, reset the state
+                if xrun_count == 0 && last_xrun.elapsed().as_secs() > 2 {
                     self.xrun_state = XRunState::None;
                     return;
                 }
@@ -102,8 +102,8 @@ impl PedalboardStageScreen {
                 }
             },
             XRunState::Many(last_xrun) => {
-                // If no xrun occurred for more than 3 seconds, reset the state
-                if xrun_count == 0 && last_xrun.elapsed().as_secs() > 3 {
+                // If no xrun occurred for more than 2 seconds, reset the state
+                if xrun_count == 0 && last_xrun.elapsed().as_secs() > 2 {
                     self.xrun_state = XRunState::None;
                 } else if xrun_count > 0 {
                     self.xrun_state = XRunState::Many(Instant::now());
@@ -117,7 +117,7 @@ impl PedalboardStageScreen {
         self.state.get_commands("clipped", &mut self.command_buffer);
         if self.command_buffer.is_empty() {
             if let ClippingState::Clipping(last_clipping) = self.clipping_state {
-                if last_clipping.elapsed().as_secs() > 3 {
+                if last_clipping.elapsed().as_millis() > 500 {
                     self.clipping_state = ClippingState::None;
                 }
             }

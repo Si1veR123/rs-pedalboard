@@ -62,7 +62,7 @@ impl ClientSocket {
                     }
                 }
             } else {
-                if message.len() < 40 {
+                if message.len() < 40 || cfg!(feature="log_full_commands") {
                     log::info!("Sent: {:?}", message);
                 } else {
                     log::info!("Sent: {:?}...", &message[..40]);

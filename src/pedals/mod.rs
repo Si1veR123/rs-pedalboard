@@ -36,9 +36,12 @@ mod ui;
 pub struct PedalParameter {
     pub value: PedalParameterValue,
     // min and max are used for floats and selections
+    #[serde(skip_serializing_if = "Option::is_none")]
     min: Option<PedalParameterValue>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     max: Option<PedalParameterValue>,
     // For floats only
+    #[serde(skip_serializing_if = "Option::is_none")]
     step: Option<PedalParameterValue>
 }
 

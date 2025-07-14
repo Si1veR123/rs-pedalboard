@@ -52,7 +52,7 @@ impl CommandReceiver {
                             }
                         };
                         if !line.is_empty() {
-                            if line.len() < 40 {
+                            if line.len() < 40 || cfg!(feature="log_full_commands") {
                                 log::info!("Received command: {:?}", line);
                             } else {
                                 log::info!("Received command: {:?}...", &line[..40]);

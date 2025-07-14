@@ -149,8 +149,9 @@ impl PedalboardClientApp {
 
         let mut settings_screen = SettingsScreen::new(leaked_state);
 
-        // Start up the server process if configured to do so, and not already connected
-        if settings_screen.client_settings.startup_server && !leaked_state.socket.borrow().is_connected() {
+        let no_server_start_arg = std::env::args().any(|arg| arg == "--no-server");
+        // Start up the server process if configured to do so, not already connected and not running with the `--no-server` argument
+        if settings_screen.client_settings.startup_server && !leaked_state.socket.borrow().is_connected() && !no_server_start_arg {
             log::info!("Starting server on startup");
             if settings_screen.ready_to_start_server() {
                 match server_process::start_server_process(&settings_screen.server_settings) {

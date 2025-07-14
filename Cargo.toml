@@ -6,6 +6,7 @@ edition = "2021"
 [features]
 server = ["dep:regex", "dep:clap"]
 client = ["dep:egui_extras", "dep:image", "dep:egui_dnd", "dep:which", "dep:sysinfo"]
+log_full_commands = []
 
 [[bin]]
 name = "server"
