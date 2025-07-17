@@ -366,6 +366,15 @@ impl State {
         socket.set_tuner(active);
     }
 
+    /// Set the metronome settings on the server.
+    /// 
+    /// Requires a lock on socket.
+    pub fn set_metronome_server(&self, active: bool, bpm: u32, volume: f32) {
+        let mut socket = self.socket.borrow_mut();
+        let rounded_volume = (volume * 100.0).round() / 100.0;
+        socket.set_metronome(active, bpm, rounded_volume);
+    }
+
     /// Save the entire state into the save file
     /// 
     /// Requires a lock on active_pedalboardstage, pedalboard_library, and songs_library

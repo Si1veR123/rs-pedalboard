@@ -96,6 +96,11 @@ impl ClientSocket {
         self.send(&message);
     }
 
+    pub fn set_metronome(&mut self, active: bool, bpm: u32, volume: f32) {
+        let message = format!("metronome {} {} {}\n", if active { "on" } else { "off" }, bpm, volume);
+        self.send(&message);
+    }
+
     pub fn set_parameter(&mut self, pedalboard_index: usize, pedal_index: usize, name: &str, parameter_value: &PedalParameterValue) {
         let message = format!("setparameter {} {} {} {}\n", pedalboard_index, pedal_index, name, serde_json::to_string(parameter_value).unwrap());
         self.send(&message);

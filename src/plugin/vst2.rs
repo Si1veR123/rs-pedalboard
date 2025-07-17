@@ -44,8 +44,8 @@ pub fn available_plugins() -> Vec<String> {
 
 struct PedalboardVst2Host;
 impl Host for PedalboardVst2Host {
-    fn automate(&mut self, index: i32, value: f32) {
-        log::info!("Automating parameter {} with value {}", index, value);
+    fn automate(&mut self, _index: i32, _value: f32) {
+        //log::info!("Automating parameter {} with value {}", index, value);
     }
 
     fn get_info(&self) -> (isize, String, String) {

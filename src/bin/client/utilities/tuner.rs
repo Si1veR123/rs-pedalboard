@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use eframe::egui::{self, RichText, Vec2, Widget};
+use eframe::egui::{self, Color32, RichText, Vec2, Widget};
 
 use crate::state::State;
 use rs_pedalboard::dsp_algorithms::yin::{freq_to_note, SERVER_UPDATE_FREQ_MS};
@@ -60,8 +60,11 @@ impl Widget for &mut TunerWidget {
             (recent_note.0.to_string(), recent_note.1.to_string(), recent_note.2)
         };
         
+        ui.vertical_centered(|ui| {
+            ui.add_space(10.0);
+            ui.label(RichText::from("Tuner").size(30.0).color(Color32::from_gray(90)));
+            ui.add_space(7.0);
 
-        let r = ui.vertical_centered(|ui| {
             // Note name
             ui.label(RichText::new(format!("{}", note_name)).size(50.0));
             // Octave
@@ -102,8 +105,8 @@ impl Widget for &mut TunerWidget {
                 format!("{}", cents_offset.round() as isize)
             };
             ui.label(RichText::new(cents_label).size(20.0));
-        }).response;
 
-        r
+            ui.add_space(10.0);
+        }).response
     }
 }

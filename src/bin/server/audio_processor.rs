@@ -3,7 +3,7 @@ use crossbeam::channel::{Receiver, Sender};
 use ringbuf::{traits::{Producer, Split}, HeapProd, HeapRb};
 use rs_pedalboard::{pedalboard_set::PedalboardSet, pedals::{Pedal, PedalTrait}, dsp_algorithms::yin::Yin};
 
-use crate::settings::ServerSettings;
+use crate::{metronome_player::MetronomePlayer, settings::ServerSettings};
 
 pub struct AudioProcessor {
     pub pedalboard_set: PedalboardSet,
@@ -15,6 +15,7 @@ pub struct AudioProcessor {
     pub master_volume: f32,
     pub settings: ServerSettings,
     pub tuner_handle: Option<(HeapProd<f32>, Receiver<f32>, Arc<AtomicBool>)>,
+    pub metronome: (bool, MetronomePlayer)
 }
 
 impl AudioProcessor {
@@ -53,6 +54,10 @@ impl AudioProcessor {
             }
 
             self.processing_buffer.iter_mut().for_each(|sample| *sample *= self.master_volume);   
+        }
+
+        if self.metronome.0 {
+            self.metronome.1.add_to_buffer(&mut self.processing_buffer);
         }
 
         let written = self.writer.push_slice(&self.processing_buffer);
@@ -214,6 +219,26 @@ impl AudioProcessor {
                     }
                 }
             },
+            "metronome" => {
+                let enable_str = words.next()?;
+                let bpm = words.next()?.parse::<u32>().ok()?;
+                let volume = words.next()?.parse::<f32>().ok()?;
+                match enable_str {
+                    "on" => {
+                        self.metronome.0 = true;
+                    },
+                    "off" => {
+                        self.metronome.0 = false;
+                    },
+                    _ => {
+                        log::error!("Invalid value for metronome command: expected 'on' or 'off'");
+                        return None;
+                    }
+                }
+
+                self.metronome.1.bpm = bpm;
+                self.metronome.1.volume = volume.clamp(0.0, 1.0);
+            }
             _ => return None
         }
 

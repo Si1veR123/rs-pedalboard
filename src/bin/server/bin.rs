@@ -16,6 +16,7 @@ mod audio_callback;
 mod socket;
 mod device_select;
 mod tuner;
+mod metronome_player;
 mod settings;
 use settings::{ServerSettings, ServerArguments};
 
@@ -58,8 +59,8 @@ fn insert_log_panic_hook() {
 fn main() {
     CombinedLogger::init(
         vec![
-            TermLogger::new(LevelFilter::Debug, Config::default(), TerminalMode::Mixed, ColorChoice::Auto),
-            WriteLogger::new(LevelFilter::Info, Config::default(), File::create(LOG_FILE).expect("Failed to create log file")),
+            TermLogger::new(LevelFilter::Info, Config::default(), TerminalMode::Mixed, ColorChoice::Auto),
+            WriteLogger::new(LevelFilter::Debug, Config::default(), File::create(LOG_FILE).expect("Failed to create log file")),
         ]
     ).expect("Failed to start logging");
     log::info!("Started logging...");

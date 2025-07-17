@@ -167,7 +167,8 @@ impl Widget for &mut PedalboardStageScreen {
     fn ui(self, ui: &mut egui::Ui) -> egui::Response {
         ui.ctx().request_repaint_after(STAGE_REPAINT_DURATION);
         
-        if self.last_system_refresh.elapsed() > sysinfo::MINIMUM_CPU_UPDATE_INTERVAL {
+        // We don't want to refresh every minimum, as that makes the update time inconsistent (updates quicker when moving mouse etc.)
+        if self.last_system_refresh.elapsed() > sysinfo::MINIMUM_CPU_UPDATE_INTERVAL.max(STAGE_REPAINT_DURATION) {
             self.system.refresh_cpu_usage();
             self.system.refresh_memory_specifics(sysinfo::MemoryRefreshKind::nothing().with_ram());
             self.last_system_refresh = Instant::now();

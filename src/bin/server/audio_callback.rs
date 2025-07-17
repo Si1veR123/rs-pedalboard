@@ -10,6 +10,7 @@ use rs_pedalboard::pedalboard_set::PedalboardSet;
 use rs_pedalboard::server_settings::SupportedHost;
 
 use crate::audio_processor::AudioProcessor;
+use crate::metronome_player::MetronomePlayer;
 use crate::sample_conversion::*;
 use crate::settings::ServerSettings;
 use crate::stream_config::{get_output_config_for_device, get_input_config_for_device};
@@ -258,7 +259,8 @@ pub fn create_linked_streams(
                         master_volume: 1.0,
                         tuner_handle: None,
                         pedal_command_to_client_buffer: Vec::with_capacity(12),
-                        settings: in_settings.clone()
+                        settings: in_settings.clone(),
+                        metronome: (false, MetronomePlayer::new(120, 0.5, 48000))
                     });
                 }
                 

@@ -4,7 +4,7 @@ use crate::stage::{ClippingState, XRunState};
 
 use super::PedalboardStageScreen;
 
-use eframe::egui::{self, Button, Color32, Layout, Pos2, Rect, RichText, Sense, Stroke, Ui, UiBuilder, Vec2};
+use eframe::egui::{self, Button, Color32, Layout, Pos2, Rect, RichText, Sense, Ui, UiBuilder, Vec2};
 use rs_pedalboard::pedals::{PedalDiscriminants, PedalParameterValue, PedalTrait};
 use egui_dnd;
 use strum::IntoEnumIterator;
