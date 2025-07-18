@@ -65,12 +65,7 @@ fn add_pedal_menu(screen: &mut PedalboardStageScreen, ui: &mut Ui, rect: Rect) {
 }
 
 fn current_time_string() -> String {
-    let now = std::time::SystemTime::now();
-    let duration = now.duration_since(std::time::UNIX_EPOCH).unwrap();
-    let seconds = duration.as_secs() % 60;
-    let minutes = (duration.as_secs() / 60) % 60;
-    let hours = (duration.as_secs() / 3600) % 24;
-    format!("{:02}:{:02}:{:02}", hours, minutes, seconds)
+    format!("{}", chrono::Local::now().format("%H:%M:%S"))
 }
 
 pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
