@@ -12,7 +12,7 @@ use rs_pedalboard::{
 use crate::{
     metronome_player::MetronomePlayer,
     settings::ServerSettings,
-    volume_monitor::PeakVolumeMonitor
+    volume_monitor::PeakVolumeMonitor, volume_normalization::{PeakNormalizer}
 };
 
 pub struct AudioProcessor {
@@ -31,6 +31,7 @@ pub struct AudioProcessor {
     pub metronome: (bool, MetronomePlayer),
     // Enabled?, last sent, last value both 0?, input volume monitor, output volume monitor
     pub volume_monitor: (bool, Instant, bool, PeakVolumeMonitor, PeakVolumeMonitor),
+    pub volume_normalizer: Option<PeakNormalizer>
 }
 
 impl AudioProcessor {
@@ -39,8 +40,13 @@ impl AudioProcessor {
         self.processing_buffer.extend_from_slice(data);
         self.pedal_command_to_client_buffer.clear();
 
+        // Volume Normalization
+        if let Some(normalizer) = &mut self.volume_normalizer {
+            normalizer.process_buffer(&mut self.processing_buffer);
+        }
+
         // Update input volume monitor
-        self.volume_monitor.3.add_samples(data);
+        self.volume_monitor.3.add_samples(&self.processing_buffer);
 
         if data.iter().all(|&sample| sample == 0.0) {
             log::debug!("Buffer is silent, skipping processing.");
@@ -300,6 +306,32 @@ impl AudioProcessor {
                     },
                     _ => {
                         log::error!("Invalid value for volumemonitor command: expected 'on' or 'off'");
+                        return None;
+                    }
+                }
+            },
+            "volumenormalization" => {
+                let mode = words.next()?;
+                match mode {
+                    "off" => {
+                        self.volume_normalizer = None;
+                    },
+                    "manual" => {
+                        self.volume_normalizer = Some(PeakNormalizer::new(0.98, 1.0, self.settings.frames_per_period, 48000));
+                    },
+                    "automatic" => {
+                        let decay = words.next()?.parse::<f32>().ok()?.clamp(0.01, 1.0);
+                        self.volume_normalizer = Some(PeakNormalizer::new(0.98, decay, self.settings.frames_per_period, 48000));
+                    },
+                    "reset" => {
+                        if let Some(normalizer) = &mut self.volume_normalizer {
+                            normalizer.reset();
+                        } else {
+                            log::warn!("Volume normalizer is not enabled, cannot reset");
+                        }
+                    },
+                    _ => {
+                        log::error!("Invalid value for volumenormalization command: expected 'off', 'manual', 'automatic' or 'reset'");
                         return None;
                     }
                 }

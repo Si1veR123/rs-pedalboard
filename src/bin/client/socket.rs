@@ -112,6 +112,18 @@ impl ClientSocket {
         self.send(&message);
     }
 
+    pub fn set_volume_normalization(&mut self, mode: crate::settings::VolumeNormalizationMode, target_volume: f32) {
+        match mode {
+            crate::settings::VolumeNormalizationMode::None => self.send("volumenormalization none\n"),
+            crate::settings::VolumeNormalizationMode::Manual => self.send("volumenormalization manual\n"),
+            crate::settings::VolumeNormalizationMode::Automatic => self.send(&format!("volumenormalization automatic {}\n", target_volume)),
+        };
+    }
+
+    pub fn reset_volume_normalization_peak(&mut self) {
+        self.send("volumenormalization reset\n");
+    }
+
     pub fn set_parameter(&mut self, pedalboard_index: usize, pedal_index: usize, name: &str, parameter_value: &PedalParameterValue) {
         let message = format!("setparameter {} {} {} {}\n", pedalboard_index, pedal_index, name, serde_json::to_string(parameter_value).unwrap());
         self.send(&message);

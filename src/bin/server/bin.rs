@@ -18,6 +18,7 @@ mod device_select;
 mod tuner;
 mod metronome_player;
 mod volume_monitor;
+mod volume_normalization;
 mod settings;
 use settings::{ServerSettings, ServerArguments};
 

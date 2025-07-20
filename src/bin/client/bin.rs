@@ -267,7 +267,7 @@ impl eframe::App for PedalboardClientApp {
                         if self.state.socket.borrow().is_connected() {
                             button_outline[4]
                         } else {
-                            egui::Stroke::new(1.5, Color32::RED)
+                            egui::Stroke::new(2.5, Color32::RED)
                         }
                     };
                     ui.style_mut().visuals.widgets.inactive.bg_stroke = settings_button_outline;

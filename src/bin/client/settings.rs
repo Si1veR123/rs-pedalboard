@@ -5,7 +5,8 @@ use eframe::egui::{self, Color32, Layout, Response, RichText, Vec2, Widget};
 #[cfg(target_os = "windows")]
 use rs_pedalboard::server_settings::ServerSettingsSave;
 use serde::{Deserialize, Serialize};
-use strum::IntoEnumIterator;
+use strum::{IntoEnumIterator};
+use strum_macros::EnumIter;
 
 use crate::state::State;
 use crate::server_process::start_server_process;
@@ -13,11 +14,23 @@ use rs_pedalboard::{audio_devices::{get_input_devices, get_output_devices}, serv
 
 pub const CLIENT_SAVE_NAME: &'static str = "client_settings.json";
 
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, EnumIter, PartialEq, Default)]
+pub enum VolumeNormalizationMode {
+    #[default]
+    None,
+    Manual,
+    Automatic
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(default)]
 pub struct ClientSettings {
     pub startup_server: bool,
     pub kill_server_on_close: bool,
-    pub show_volume_monitor: bool
+    pub show_volume_monitor: bool,
+    pub volume_normalization: VolumeNormalizationMode,
+    // Only used if volume_normalization is set to Automatic
+    pub auto_volume_normalization_decay: f32
 }
 
 impl ClientSettings {
@@ -50,7 +63,9 @@ impl Default for ClientSettings {
         Self {
             startup_server: true,
             kill_server_on_close: true,
-            show_volume_monitor: true
+            show_volume_monitor: true,
+            volume_normalization: VolumeNormalizationMode::None,
+            auto_volume_normalization_decay: 0.95
         }
     }
 }
@@ -333,6 +348,11 @@ impl Widget for &mut SettingsScreen {
                     
                     ui.add_space(10.0);
                     let button_size = Vec2::new(ui.available_width() * 0.25, 45.0);
+
+                    // Connecting requires a lock on client settings so must be done after rendering settings
+                    // Store the connect button response to use later
+                    let mut connect_button: Option<Response> = None;
+
                     ui.allocate_ui_with_layout(Vec2::new(ui.available_width(), button_size.y), Layout::left_to_right(egui::Align::Center), |ui| {
                         let is_connected = self.state.socket.borrow().is_connected();
                         // If not connected, make spacing for 2 buttons. Else make spacing for 1.
@@ -373,15 +393,11 @@ impl Widget for &mut SettingsScreen {
 
                         if !is_connected {
                             ui.add_space(button_horizontal_space*2.0);
-                            let button = ui.add(
+                            connect_button = Some(ui.add(
                                 egui::Button::new("Connect")
                                     .stroke(egui::Stroke::new(1.0, crate::ROW_COLOUR_LIGHT))
                                     .min_size(button_size)
-                            );
-
-                            if button.clicked() {
-                                let _ = self.state.connect_to_server();
-                            }
+                            ));
                         }
                     });
                     ui.add_space(15.0);
@@ -403,6 +419,52 @@ impl Widget for &mut SettingsScreen {
                         .min_row_height(45.0)
                         .striped(true)
                         .show(ui, |ui| {
+                            ui.label("Volume Normalization");
+                            let mut normalization_mode_change = false;
+                            egui::ComboBox::from_id_salt("volume_normalization_dropdown")
+                                .selected_text(format!("{:?}", client_settings.volume_normalization))
+                                .wrap_mode(egui::TextWrapMode::Truncate)
+                                .show_ui(ui, |ui| {
+                                    for value in VolumeNormalizationMode::iter() {
+                                        let response = ui.selectable_value(&mut client_settings.volume_normalization, value.clone(), format!("{:?}", value));
+                                        normalization_mode_change |= response.changed();
+                                        if value == VolumeNormalizationMode::Automatic {
+                                            response.on_hover_text("Automatically normalize volume based on the peak volume of the audio stream. The peak is decayed to adjust to decreases in input volume.");
+                                        } else if value == VolumeNormalizationMode::Manual {
+                                            response.on_hover_text("Volume is normalized using the peak of the input audio stream. If input volume is decreased, the peak must be manually reset.");
+                                        }
+                                    }
+                                });
+
+                            if normalization_mode_change {
+                                self.state.set_volume_normalization_server(client_settings.volume_normalization, client_settings.auto_volume_normalization_decay);
+                            };
+                            ui.end_row();
+
+                            if client_settings.volume_normalization == VolumeNormalizationMode::Automatic {
+                                ui.label("Volume Normalization Decay");
+                                ui.add_sized(
+                                    Vec2::new(ui.available_width(), 45.0),
+                                    egui::Slider::new(&mut client_settings.auto_volume_normalization_decay, 0.9..=1.0)
+                                        .show_value(true)
+                                        .fixed_decimals(3)
+                                ).on_hover_text("The decay of the peak per second. Lower values respond to decreases in volume quicker but cause more overall fluctuations. 1.0 = Manual.");
+                                ui.end_row();
+                            }
+
+                            if client_settings.volume_normalization != VolumeNormalizationMode::None {
+                                // Show peak reset button
+                                ui.label("Reset Volume Normalization");
+
+                                if ui.add_sized(
+                                    Vec2::new(ui.available_width()*0.5, ui.available_height()*0.75),
+                                    egui::Button::new("Reset Peak")
+                                ).on_hover_text("Reset the current peak used to normalize volume.").clicked() {
+                                    self.state.socket.borrow_mut().reset_volume_normalization_peak();
+                                };
+                                ui.end_row();
+                            }
+
                             ui.style_mut().spacing.icon_width = 35.0;
                             ui.style_mut().spacing.icon_width_inner = 12.0;
                             ui.style_mut().visuals.widgets.inactive.fg_stroke = egui::Stroke::new(2.0, Color32::from_rgb(200, 200, 200));
@@ -420,7 +482,13 @@ impl Widget for &mut SettingsScreen {
                             if ui.checkbox(&mut client_settings.show_volume_monitor, "").on_hover_text(volume_monitor_message).changed() {
                                 self.state.set_volume_monitor_active_server(client_settings.show_volume_monitor);
                             }
+                            ui.end_row();
                         });
+
+                    if connect_button.is_some_and(|r| r.clicked()) {
+                        drop(client_settings);
+                        let _ = self.state.connect_to_server();
+                    }
                 })
             });
         }).response

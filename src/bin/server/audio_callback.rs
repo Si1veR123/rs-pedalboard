@@ -238,7 +238,7 @@ pub fn create_linked_streams(
         settings.frames_per_period,
         move |data: &[f32], _| {
             if !input_stream_running {
-                log::info!("Input stream started");
+                log::info!("Input stream started. Received {} samples.", data.len());
                 input_stream_running = true;
             }
 
@@ -264,6 +264,7 @@ pub fn create_linked_streams(
                         settings: in_settings.clone(),
                         metronome: (false, MetronomePlayer::new(120, 0.5, 48000)),
                         volume_monitor: (false, Instant::now(), false, PeakVolumeMonitor::new(), PeakVolumeMonitor::new()),
+                        volume_normalizer: None
                     });
                 }
                 
@@ -284,7 +285,7 @@ pub fn create_linked_streams(
             command_sender.clone(),
             move |data: &mut [f32], _| {
                 if !output_stream_running {
-                    log::info!("Output stream started");
+                    log::info!("Output stream started. Received {} samples.", data.len());
                     output_stream_running = true;
                 }
 
@@ -318,7 +319,7 @@ pub fn create_linked_streams(
             command_sender.clone(),
             move |data: &mut [f32], _| {
                 if !output_stream_running {
-                    log::info!("Output stream started");
+                    log::info!("Output stream started. Received {} samples.", data.len());
                     output_stream_running = true;
                 }
 

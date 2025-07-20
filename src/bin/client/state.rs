@@ -248,9 +248,18 @@ impl State {
         socket.set_metronome(active, bpm, rounded_volume);
     }
 
+    /// Set whether the volume monitor is active on the server.
+    /// 
+    /// Requires a lock on socket.
     pub fn set_volume_monitor_active_server(&self, active: bool) {
         let mut socket = self.socket.borrow_mut();
         socket.set_volume_monitor(active);
+    }
+
+    pub fn set_volume_normalization_server(&self, mode: crate::settings::VolumeNormalizationMode, auto_decay: f32) {
+        let mut socket = self.socket.borrow_mut();
+        let rounded_auto_decay = (auto_decay * 100.0).round() / 100.0;
+        socket.set_volume_normalization(mode, rounded_auto_decay);
     }
 
     pub fn load_state() -> Result<State, std::io::Error> {
@@ -280,7 +289,9 @@ impl State {
             socket.connect()?;
             if socket.is_connected() {
                 drop(socket);
-                self.set_volume_monitor_active_server(self.client_settings.borrow().show_volume_monitor);
+                let client_settings = self.client_settings.borrow();
+                self.set_volume_monitor_active_server(client_settings.show_volume_monitor);
+                self.set_volume_normalization_server(client_settings.volume_normalization, client_settings.auto_volume_normalization_decay);
                 self.load_active_set();
             }
         }
