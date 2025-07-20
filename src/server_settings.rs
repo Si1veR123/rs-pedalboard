@@ -95,19 +95,22 @@ impl ServerSettingsSave {
         Some(homedir::my_home().ok()??.join(SAVE_DIR).join(SAVE_NAME))
     }
 
-    pub fn load() -> Result<Self, String> {
-        match std::fs::read_to_string(Self::get_save_path().expect("Failed to get server settings save path")) {
-            Ok(data) => serde_json::from_str(&data).map_err(|e| format!("Failed to deserialize server settings, error: {}", e)),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                Err("Settings file not found".to_string())
-            },
-            Err(e) => Err(format!("Failed to read server settings file, error: {}", e)),
+    pub fn load_or_default() -> Result<Self, std::io::Error> {
+        let save_path = Self::get_save_path().expect("Failed to get client settings save path");
+
+        if !save_path.exists() {
+            log::info!("Server settings save file not found, using default");
+            return Ok(Self::default());
         }
+
+        let data = std::fs::read_to_string(save_path)?;
+
+        Ok(serde_json::from_str(&data).expect("Failed to deserialize server settings"))
     }
 
-    pub fn save(&self) -> Result<(), String> {
-        let data = serde_json::to_string(self).map_err(|e| format!("Failed to serialize server settings, error: {}", e))?;
-        std::fs::write(Self::get_save_path().expect("Failed to get server settings save path"), data).map_err(|e| format!("Failed to write server settings file, error: {}", e))?;
+    pub fn save(&self) -> Result<(), std::io::Error> {
+        let data = serde_json::to_string(self).expect("Failed to serialize server settings");
+        std::fs::write(Self::get_save_path().expect("Failed to get server settings save path"), data)?;
         Ok(())
     }
 

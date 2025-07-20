@@ -85,8 +85,8 @@ impl Widget for &mut PedalboardLibraryScreen {
                             RichText::new("New Pedalboard").size(20.0)
                         ).stroke((0.7, crate::THEME_COLOUR))).clicked()
                     {
-                        let unique_name = self.state.unique_library_pedalboard_name(String::from("New Pedalboard"));
-                        self.state.pedalboard_library.borrow_mut().push(Pedalboard::new(unique_name));
+                        let unique_name = self.state.pedalboards.unique_library_pedalboard_name(String::from("New Pedalboard"));
+                        self.state.pedalboards.pedalboard_library.borrow_mut().push(Pedalboard::new(unique_name));
                 }
             });
         });
@@ -99,7 +99,7 @@ impl Widget for &mut PedalboardLibraryScreen {
         let row_height = 50.0;
         let row_size = Vec2::new(ui.available_width(), row_height);
 
-        let pedalboard_library = self.state.pedalboard_library.borrow();
+        let pedalboard_library = self.state.pedalboards.pedalboard_library.borrow();
         if pedalboard_library.is_empty() {
             ui.add_sized(row_size, egui::Label::new(RichText::new("No Pedalboards Found").size(30.0)))
         } else {
@@ -136,7 +136,7 @@ impl Widget for &mut PedalboardLibraryScreen {
                         RowAction::Delete => {
                             let pedalboard_name = &pedalboard_library.get(pedalboard_index).unwrap().name.clone();
                             drop(pedalboard_library);
-                            self.state.delete_pedalboard(&pedalboard_name);
+                            self.state.pedalboards.delete_pedalboard(&pedalboard_name);
                         }
                     }
                 };

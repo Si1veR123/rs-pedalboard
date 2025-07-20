@@ -6,14 +6,20 @@ use pedalboard_panel_ui::pedalboard_stage_panel;
 mod pedalboard_designer;
 use pedalboard_designer::pedalboard_designer;
 
+mod volume_monitor_ui;
+
 use eframe::egui::{self, Layout, Rect, Vec2, Widget};
 use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
-use crate::state::State;
+use crate::{stage::volume_monitor_ui::VolumeMonitorWidget, state::State};
 
-/// How often should the stage screen be refreshed when not interacted.
-/// This is to update stats, time, etc.
-const STAGE_REPAINT_DURATION: std::time::Duration = Duration::from_secs(1);
+/// Repaint duration for pedalboard stage for stats, time etc.
+const STATS_STAGE_REPAINT_DURATION: std::time::Duration = Duration::from_secs(1);
 
+/// Repaint duration for pedalboard stage when volume monitor is enabled
+const VOLUME_MONITOR_STAGE_REPAINT_DURATION: std::time::Duration = Duration::from_millis(33); // 30 FPS
+
+/// Duration after which the clipping state is reset if no clipping occurs
+pub const CLIPPING_STATE_DURATION: Duration = Duration::from_secs(2);
 pub enum CurrentAction {
     DuplicateLinked(usize),
     DuplicateNew(usize),
@@ -50,7 +56,8 @@ pub struct PedalboardStageScreen {
 
     command_buffer: Vec<String>,
     xrun_state: XRunState,
-    clipping_state: ClippingState
+    clipping_state: ClippingState,
+    volume_monitors: (VolumeMonitorWidget, VolumeMonitorWidget)
 }
 
 impl PedalboardStageScreen {
@@ -62,6 +69,8 @@ impl PedalboardStageScreen {
         system.refresh_cpu_usage();
         system.refresh_memory_specifics(MemoryRefreshKind::nothing().with_ram());
 
+        let volume_monitor = VolumeMonitorWidget::new(crate::THEME_COLOUR);
+
         Self {
             state,
             show_pedal_menu: false,
@@ -71,7 +80,8 @@ impl PedalboardStageScreen {
             last_system_refresh: Instant::now(),
             command_buffer: Vec::new(),
             xrun_state: XRunState::None,
-            clipping_state: ClippingState::None
+            clipping_state: ClippingState::None,
+            volume_monitors: (volume_monitor.clone(), volume_monitor)
         }
     }
 
@@ -117,13 +127,38 @@ impl PedalboardStageScreen {
         self.state.get_commands("clipped", &mut self.command_buffer);
         if self.command_buffer.is_empty() {
             if let ClippingState::Clipping(last_clipping) = self.clipping_state {
-                if last_clipping.elapsed().as_millis() > 500 {
+                if last_clipping.elapsed() > CLIPPING_STATE_DURATION {
                     self.clipping_state = ClippingState::None;
                 }
             }
         } else {
             self.clipping_state = ClippingState::Clipping(Instant::now());
         }
+    }
+
+    pub fn update_volume_monitors_from_commands(&mut self) {
+        self.command_buffer.clear();
+        self.state.get_commands("volumemonitor", &mut self.command_buffer);
+
+        if self.command_buffer.is_empty() {
+            return;
+        }
+
+        let latest_command = self.command_buffer.last().unwrap();
+
+        // Contains an input and output volume float
+        if let Some((input, output)) = latest_command.split_once(' ') {
+            if let Ok(input_volume) = input.parse::<f32>() {
+                if let Ok(output_volume) = output.parse::<f32>() {
+                    self.volume_monitors.0.set_volume(input_volume);
+                    self.volume_monitors.1.set_volume(output_volume);
+                    return;
+                }
+            }
+        }
+
+        // If we reach here, the command was not in the expected format
+        log::error!("Invalid volume monitor command format: {}", latest_command);
     }
 
     fn save_song_input_window(&mut self, ui: &mut egui::Ui, title: &str, input: &mut String, open: &mut bool) -> bool {
@@ -165,13 +200,18 @@ impl PedalboardStageScreen {
 
 impl Widget for &mut PedalboardStageScreen {
     fn ui(self, ui: &mut egui::Ui) -> egui::Response {
-        ui.ctx().request_repaint_after(STAGE_REPAINT_DURATION);
+        ui.ctx().request_repaint_after(STATS_STAGE_REPAINT_DURATION);
         
         // We don't want to refresh every minimum, as that makes the update time inconsistent (updates quicker when moving mouse etc.)
-        if self.last_system_refresh.elapsed() > sysinfo::MINIMUM_CPU_UPDATE_INTERVAL.max(STAGE_REPAINT_DURATION) {
+        if self.last_system_refresh.elapsed() > sysinfo::MINIMUM_CPU_UPDATE_INTERVAL.max(STATS_STAGE_REPAINT_DURATION) {
             self.system.refresh_cpu_usage();
             self.system.refresh_memory_specifics(sysinfo::MemoryRefreshKind::nothing().with_ram());
             self.last_system_refresh = Instant::now();
+        }
+
+        if self.state.client_settings.borrow().show_volume_monitor {
+            self.update_volume_monitors_from_commands();
+            ui.ctx().request_repaint_after(VOLUME_MONITOR_STAGE_REPAINT_DURATION);
         }
 
         self.update_xrun_from_commands();

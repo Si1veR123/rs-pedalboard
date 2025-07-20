@@ -81,7 +81,7 @@ impl Widget for &mut SongsScreen {
             let row_height = 70.0;
             let row_size = Vec2::new(ui.available_width(), row_height);
 
-            let mut songs_library = self.state.songs_library.borrow_mut();
+            let mut songs_library = self.state.pedalboards.songs_library.borrow_mut();
             if songs_library.is_empty() {
                 ui.add_sized(row_size, egui::Label::new(RichText::new("No Songs Found").size(30.0)));
             } else {
@@ -106,10 +106,10 @@ impl Widget for &mut SongsScreen {
                     match action {
                         RowAction::Load => {
                             let song = songs_library.get(song).unwrap();
-                            let pedalboard_library = self.state.pedalboard_library.borrow();
+                            let pedalboard_library = self.state.pedalboards.pedalboard_library.borrow();
                             for pedalboard_name in song {
                                 if let Some(pedalboard) = pedalboard_library.iter().find(|pedalboard| &pedalboard.name == pedalboard_name) {
-                                    self.state.active_pedalboardstage.borrow_mut().pedalboards.push(pedalboard.clone());
+                                    self.state.pedalboards.active_pedalboardstage.borrow_mut().pedalboards.push(pedalboard.clone());
                                     self.state.load_active_set();
                                 }
                             }

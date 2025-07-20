@@ -1,9 +1,19 @@
-use std::sync::{atomic::AtomicBool, Arc};
+use std::{sync::{atomic::AtomicBool, Arc}, time::Instant};
 use crossbeam::channel::{Receiver, Sender};
 use ringbuf::{traits::{Producer, Split}, HeapProd, HeapRb};
-use rs_pedalboard::{pedalboard_set::PedalboardSet, pedals::{Pedal, PedalTrait}, dsp_algorithms::yin::Yin};
 
-use crate::{metronome_player::MetronomePlayer, settings::ServerSettings};
+use rs_pedalboard::{
+    pedalboard_set::PedalboardSet,
+    pedals::{Pedal, PedalTrait},
+    dsp_algorithms::yin::Yin,
+    DEFAULT_VOLUME_MONITOR_UPDATE_RATE
+};
+
+use crate::{
+    metronome_player::MetronomePlayer,
+    settings::ServerSettings,
+    volume_monitor::PeakVolumeMonitor
+};
 
 pub struct AudioProcessor {
     pub pedalboard_set: PedalboardSet,
@@ -14,8 +24,13 @@ pub struct AudioProcessor {
     pub pedal_command_to_client_buffer: Vec<String>,
     pub master_volume: f32,
     pub settings: ServerSettings,
+    // If tuner is enabled, this will contain the writer to the tuner buffer,
+    // a receiver for frequency updates, and a kill flag
     pub tuner_handle: Option<(HeapProd<f32>, Receiver<f32>, Arc<AtomicBool>)>,
-    pub metronome: (bool, MetronomePlayer)
+    // Enabled?, metronome
+    pub metronome: (bool, MetronomePlayer),
+    // Enabled?, last sent, last value both 0?, input volume monitor, output volume monitor
+    pub volume_monitor: (bool, Instant, bool, PeakVolumeMonitor, PeakVolumeMonitor),
 }
 
 impl AudioProcessor {
@@ -24,9 +39,13 @@ impl AudioProcessor {
         self.processing_buffer.extend_from_slice(data);
         self.pedal_command_to_client_buffer.clear();
 
+        // Update input volume monitor
+        self.volume_monitor.3.add_samples(data);
+
         if data.iter().all(|&sample| sample == 0.0) {
             log::debug!("Buffer is silent, skipping processing.");
         } else if let Some((tuner_writer, frequency_channel_recv, _kill)) = &mut self.tuner_handle {
+            // Tuner
             tuner_writer.push_slice(data);
             
             if !frequency_channel_recv.is_empty() {
@@ -43,6 +62,8 @@ impl AudioProcessor {
                 }
             }
         } else {
+            // Main pedal audio processing
+
             // In case data is larger than buffer_size and pedals may only expect buffer_size or less,
             // we process the data in chunks of FRAMES_PER_PERIOD.
             for i in 0..(data.len() as f32 / self.settings.frames_per_period as f32).ceil() as usize {
@@ -56,16 +77,44 @@ impl AudioProcessor {
             self.processing_buffer.iter_mut().for_each(|sample| *sample *= self.master_volume);   
         }
 
+        // Update output volume monitor
+        self.volume_monitor.4.add_samples(&self.processing_buffer);
+
+        // Add metronome click
         if self.metronome.0 {
             self.metronome.1.add_to_buffer(&mut self.processing_buffer);
         }
 
         let written = self.writer.push_slice(&self.processing_buffer);
         if written != self.processing_buffer.len() {
+            // XRun occurred
             if let Err(e) = self.command_sender.send("xrun\n".into()) {
                 log::error!("Failed to send xrun command: {}", e);
             }
             log::error!("Failed to write all processed data. Output is behind.")
+        }
+
+        // Send volume monitor to client
+        if self.volume_monitor.0 {
+            if Instant::now().duration_since(self.volume_monitor.1) >= DEFAULT_VOLUME_MONITOR_UPDATE_RATE {
+                self.volume_monitor.1 = Instant::now();
+
+                let in_peak = self.volume_monitor.3.take_peak();
+                let out_peak = self.volume_monitor.4.take_peak();
+
+                let epsilon = 5e-4;
+                let both_zero = in_peak.abs() < epsilon && out_peak.abs() < epsilon;
+
+                // Prevent sending multiple consecutive zeros
+                if !(both_zero && self.volume_monitor.2) {
+                    let command = format!("volumemonitor {:.3} {:.3}\n", in_peak, out_peak); 
+                    if self.command_sender.send(command.into()).is_err() {
+                        log::error!("Failed to send volume monitor command to client");
+                    }
+                }
+
+                self.volume_monitor.2 = both_zero;
+            }
         }
 
         // Send any commands from pedals to client
@@ -238,6 +287,22 @@ impl AudioProcessor {
 
                 self.metronome.1.bpm = bpm;
                 self.metronome.1.volume = volume.clamp(0.0, 1.0);
+            },
+            "volumemonitor" => {
+                let enable_str = words.next()?;
+                match enable_str {
+                    "on" => {
+                        self.volume_monitor.0 = true;
+                    },
+                    "off" => {
+                        self.volume_monitor.0 = false;
+                        self.volume_monitor.3.reset();
+                    },
+                    _ => {
+                        log::error!("Invalid value for volumemonitor command: expected 'on' or 'off'");
+                        return None;
+                    }
+                }
             }
             _ => return None
         }

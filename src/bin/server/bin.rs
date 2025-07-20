@@ -17,6 +17,7 @@ mod socket;
 mod device_select;
 mod tuner;
 mod metronome_player;
+mod volume_monitor;
 mod settings;
 use settings::{ServerSettings, ServerArguments};
 
@@ -67,7 +68,7 @@ fn main() {
 
     insert_log_panic_hook();
     
-    let settings = ServerSettings::new(ServerArguments::parse(), ServerSettingsSave::load().ok());
+    let settings = ServerSettings::new(ServerArguments::parse(), ServerSettingsSave::load_or_default().ok());
     log::info!("Server settings: {:?}", settings);
 
     let (_host, input, output) = setup(

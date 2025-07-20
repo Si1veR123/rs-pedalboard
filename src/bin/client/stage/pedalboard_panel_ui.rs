@@ -10,7 +10,7 @@ use crate::THEME_COLOUR;
 pub fn pedalboard_stage_panel(screen: &mut PedalboardStageScreen, ui: &mut egui::Ui) {
     ui.painter().rect_filled(ui.available_rect_before_wrap(), 5.0, crate::LIGHT_BACKGROUND_COLOR);
 
-    let mut pedalboard_library = screen.state.pedalboard_library.borrow_mut();
+    let mut pedalboard_library = screen.state.pedalboards.pedalboard_library.borrow_mut();
 
     ui.add_space(5.0);
 
@@ -49,7 +49,7 @@ pub fn pedalboard_stage_panel(screen: &mut PedalboardStageScreen, ui: &mut egui:
     let row_height = 50.0;
 
     egui::ScrollArea::vertical().show(ui, |ui| {
-        let active_pedalboards = screen.state.active_pedalboardstage.borrow_mut();
+        let active_pedalboards = screen.state.pedalboards.active_pedalboardstage.borrow_mut();
 
         let dnd_response = dnd(ui, "pedalboard_dnd").show_sized(
             active_pedalboards.pedalboards.iter().enumerate(),
@@ -186,7 +186,7 @@ pub fn pedalboard_stage_panel(screen: &mut PedalboardStageScreen, ui: &mut egui:
     }).inner;
 
     // === Perform actions ===
-    let active_pedalboards = screen.state.active_pedalboardstage.borrow_mut();
+    let active_pedalboards = screen.state.pedalboards.active_pedalboardstage.borrow_mut();
     match screen.current_action.take() {
         Some(CurrentAction::DuplicateLinked(index)) => {
             drop(active_pedalboards);
@@ -207,7 +207,7 @@ pub fn pedalboard_stage_panel(screen: &mut PedalboardStageScreen, ui: &mut egui:
 
             if saved {
                 drop(pedalboard_library);
-                screen.state.save_to_song(song_name.clone());
+                screen.state.pedalboards.save_to_song(song_name.clone());
             } else if open {
                 screen.current_action = Some(CurrentAction::SaveToSong(song_name));
             }
@@ -220,7 +220,7 @@ pub fn pedalboard_stage_panel(screen: &mut PedalboardStageScreen, ui: &mut egui:
                 let old_name = active_pedalboards.pedalboards.get(index).unwrap().name.clone();
                 drop(active_pedalboards);
                 drop(pedalboard_library);
-                screen.state.rename_pedalboard(&old_name, &new_name);
+                screen.state.pedalboards.rename_pedalboard(&old_name, &new_name);
             } else if open {
                 screen.current_action = Some(CurrentAction::Rename((index, new_name)));
             }

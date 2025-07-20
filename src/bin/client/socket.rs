@@ -33,8 +33,14 @@ impl ClientSocket {
     }
 
     pub fn connect(&mut self) -> std::io::Result<()> {
-        log::info!("Connecting to server on port {}", self.port);
-        let stream = TcpStream::connect((Ipv4Addr::LOCALHOST, self.port))?;
+        log::info!("Attempting to connect to server on port {}", self.port);
+        let stream = match TcpStream::connect((Ipv4Addr::LOCALHOST, self.port)) {
+            Ok(s) => s,
+            Err(e) => {
+                log::error!("Failed to connect to server: {}", e);
+                return Err(e);
+            }
+        };
         stream.set_nonblocking(true)?;
         self.stream = Some(stream);
         log::info!("Connected to server on port {}", self.port);
@@ -98,6 +104,11 @@ impl ClientSocket {
 
     pub fn set_metronome(&mut self, active: bool, bpm: u32, volume: f32) {
         let message = format!("metronome {} {} {}\n", if active { "on" } else { "off" }, bpm, volume);
+        self.send(&message);
+    }
+
+    pub fn set_volume_monitor(&mut self, active: bool) {
+        let message = format!("volumemonitor {}\n", if active { "on" } else { "off" });
         self.send(&message);
     }
 

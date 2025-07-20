@@ -2,19 +2,22 @@ use std::{process::Child, time::Instant, path::PathBuf};
 
 use cpal::{Host, HostId};
 use eframe::egui::{self, Color32, Layout, Response, RichText, Vec2, Widget};
+#[cfg(target_os = "windows")]
+use rs_pedalboard::server_settings::ServerSettingsSave;
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 
 use crate::state::State;
 use crate::server_process::start_server_process;
-use rs_pedalboard::{audio_devices::{get_input_devices, get_output_devices}, server_settings::{ServerSettingsSave, SupportedHost}, SAVE_DIR};
+use rs_pedalboard::{audio_devices::{get_input_devices, get_output_devices}, server_settings::{SupportedHost}, SAVE_DIR};
 
 pub const CLIENT_SAVE_NAME: &'static str = "client_settings.json";
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ClientSettings {
     pub startup_server: bool,
-    pub kill_server_on_close: bool
+    pub kill_server_on_close: bool,
+    pub show_volume_monitor: bool
 }
 
 impl ClientSettings {
@@ -22,19 +25,22 @@ impl ClientSettings {
         Some(homedir::my_home().ok()??.join(SAVE_DIR).join(CLIENT_SAVE_NAME))
     }
 
-    pub fn load() -> Result<Self, String> {
-        match std::fs::read_to_string(Self::get_save_path().expect("Failed to get client settings save path")) {
-            Ok(data) => serde_json::from_str(&data).map_err(|e| format!("Failed to deserialize client settings, error: {}", e)),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                Err("Client settings file not found".to_string())
-            },
-            Err(e) => Err(format!("Failed to read client settings file, error: {}", e)),
+    pub fn load_or_default() -> Result<Self, std::io::Error> {
+        let save_path = Self::get_save_path().expect("Failed to get client settings save path");
+
+        if !save_path.exists() {
+            log::info!("Client settings save file not found, using default");
+            return Ok(Self::default());
         }
+
+        let data = std::fs::read_to_string(save_path)?;
+
+        Ok(serde_json::from_str(&data).expect("Failed to deserialize client settings"))
     }
 
-    pub fn save(&self) -> Result<(), String> {
-        let data = serde_json::to_string(self).map_err(|e| format!("Failed to serialize client settings, error: {}", e))?;
-        std::fs::write(Self::get_save_path().expect("Failed to get client settings save path"), data).map_err(|e| format!("Failed to write client settings file, error: {}", e))?;
+    pub fn save(&self) -> Result<(), std::io::Error> {
+        let data = serde_json::to_string(self).expect("Failed to serialize client settings");
+        std::fs::write(Self::get_save_path().expect("Failed to get client settings save path"), data)?;
         Ok(())
     }
 }
@@ -43,7 +49,8 @@ impl Default for ClientSettings {
     fn default() -> Self {
         Self {
             startup_server: true,
-            kill_server_on_close: true
+            kill_server_on_close: true,
+            show_volume_monitor: true
         }
     }
 }
@@ -106,36 +113,16 @@ impl AudioDevices {
 }
 
 pub struct SettingsScreen {
-    program_state: &'static State,
-    pub server_settings: ServerSettingsSave,
-    pub client_settings: ClientSettings,
+    state: &'static State,
     pub server_launch_state: ServerLaunchState,
     audio_devices: AudioDevices,
 }
 
 impl SettingsScreen {
     pub fn new(state: &'static State) -> Self {
-        let server_settings = match ServerSettingsSave::load() {
-            Ok(data) => data,
-            Err(e) => {
-                log::error!("{}", e);
-                ServerSettingsSave::default()
-            }
-        };
-
-        let client_settings = match ClientSettings::load() {
-            Ok(data) => data,
-            Err(e) => {
-                log::error!("{}", e);
-                ClientSettings::default()
-            }
-        };
-
         Self {
-            audio_devices: AudioDevices::new(server_settings.host.into()),
-            program_state: state,
-            server_settings,
-            client_settings,
+            audio_devices: AudioDevices::new(state.server_settings.borrow().host.into()),
+            state,
             server_launch_state: ServerLaunchState::None,
         }
     }
@@ -151,21 +138,23 @@ impl SettingsScreen {
 
     #[cfg(target_os = "windows")]
     // On windows, we have the possibility of ASIO which only requires output device to be set
-    pub fn ready_to_start_server(&self) -> bool {
+    pub fn ready_to_start_server(&self, server_settings: &ServerSettingsSave) -> bool {
         let correct_state = matches!(
             self.server_launch_state,
             ServerLaunchState::None | ServerLaunchState::StartError | ServerLaunchState::KillError
         );
-        if self.server_settings.host == SupportedHost::ASIO {
-            self.server_settings.output_device.is_some() && correct_state
+        
+        if server_settings.host == SupportedHost::ASIO {
+            server_settings.output_device.is_some() && correct_state
         } else {
-            self.server_settings.input_device.is_some() && self.server_settings.output_device.is_some() && correct_state
+            server_settings.input_device.is_some() && server_settings.output_device.is_some() && correct_state
         }
     }
 
+    /// Must be able to get a lock on socket and server_settings
     pub fn handle_server_launch(&mut self) {
         // Remove error state if now connected
-        if self.program_state.socket.borrow().is_connected() {
+        if self.state.socket.borrow().is_connected() {
             if matches!(self.server_launch_state, ServerLaunchState::KillError | ServerLaunchState::StartError) {
                 self.server_launch_state = ServerLaunchState::None;
             }
@@ -176,8 +165,8 @@ impl SettingsScreen {
                 log::error!("Failed to stop server");
                 self.server_launch_state = ServerLaunchState::KillError;
             } else if start_time.elapsed().as_secs() > 1 {
-                if !self.program_state.socket.borrow_mut().is_server_available() {
-                    if let Some(process) = start_server_process(&self.server_settings) {
+                if !self.state.socket.borrow_mut().is_server_available() {
+                    if let Some(process) = start_server_process(&self.state.server_settings.borrow()) {
                         self.server_launch_state = ServerLaunchState::AwaitingStart {
                             start_time: Instant::now(),
                             process
@@ -194,11 +183,9 @@ impl SettingsScreen {
                 log::error!("Server process started but did not connect, or closed. Check server logs");
                 self.server_launch_state = ServerLaunchState::StartError;
             } else {
-                if self.program_state.socket.borrow_mut().connect().is_ok() {
+                if self.state.connect_to_server().is_ok() {
                     self.server_launch_state = ServerLaunchState::None;
                     log::info!("Server started successfully");
-
-                    self.program_state.load_active_set();
                 }
             }
         }
@@ -207,6 +194,11 @@ impl SettingsScreen {
 
 impl Widget for &mut SettingsScreen {
     fn ui(self, ui: &mut egui::Ui) -> Response {
+        self.handle_server_launch();
+
+        let mut server_settings = self.state.server_settings.borrow_mut();
+        let mut client_settings = self.state.client_settings.borrow_mut();
+
         ui.add_space(ui.available_height()*0.05);
         ui.allocate_ui_with_layout(ui.available_size(), Layout::left_to_right(egui::Align::Center), |ui| {
             ui.add_space(ui.available_width()*0.05);
@@ -227,26 +219,26 @@ impl Widget for &mut SettingsScreen {
                             // Only show if the platform has multiple host options
                             if SupportedHost::iter().count() > 1 {
                                 ui.label("Host");
-                                let prev_host = self.server_settings.host;
+                                let prev_host = server_settings.host;
                                 egui::ComboBox::new("host_dropdown", "")
-                                    .selected_text(self.server_settings.host.to_string())
+                                    .selected_text(server_settings.host.to_string())
                                     .show_ui(ui, |ui| {
                                         for host in SupportedHost::iter() {
-                                            ui.selectable_value(&mut self.server_settings.host, host, host.to_string());
+                                            ui.selectable_value(&mut server_settings.host, host, host.to_string());
                                         }
                                     });
                                 // Selection has changed
-                                if prev_host != self.server_settings.host {
-                                    self.audio_devices = AudioDevices::new(self.server_settings.host.into());
-                                    self.server_settings.input_device = None;
-                                    self.server_settings.output_device = None;
+                                if prev_host != server_settings.host {
+                                    self.audio_devices = AudioDevices::new(server_settings.host.into());
+                                    server_settings.input_device = None;
+                                    server_settings.output_device = None;
                                 }
                                 ui.end_row();
                             }
 
                             // If on windows, and using ASIO host, we cannot control audio devices. Instead, we select the ASIO driver
                             #[cfg(target_os = "windows")]
-                            let show_asio_driver = self.server_settings.host == SupportedHost::ASIO;
+                            let show_asio_driver = server_settings.host == SupportedHost::ASIO;
                             #[cfg(not(target_os = "windows"))]
                             let show_asio_driver = false;
 
@@ -255,11 +247,11 @@ impl Widget for &mut SettingsScreen {
                                 ui.label("ASIO Driver");
                                 if egui::ComboBox::from_id_salt("output_device_dropdown")
                                     .wrap_mode(egui::TextWrapMode::Truncate)
-                                    .selected_text(self.server_settings.output_device.clone().unwrap_or_else(|| "None".to_string()))
+                                    .selected_text(server_settings.output_device.clone().unwrap_or_else(|| "None".to_string()))
                                     .show_ui(ui, |ui| {
-                                        ui.selectable_value(&mut self.server_settings.output_device, None, "None");
+                                        ui.selectable_value(&mut server_settings.output_device, None, "None");
                                         for device in &self.audio_devices.output_devices {
-                                            ui.selectable_value(&mut self.server_settings.output_device, Some(device.clone()), device);
+                                            ui.selectable_value(&mut server_settings.output_device, Some(device.clone()), device);
                                         }
                                 }).response.clicked() {
                                     self.audio_devices.update();
@@ -270,11 +262,11 @@ impl Widget for &mut SettingsScreen {
                                 ui.label("Input Device");
                                 if egui::ComboBox::from_id_salt("input_device_dropdown")
                                     .wrap_mode(egui::TextWrapMode::Truncate)
-                                    .selected_text(self.server_settings.input_device.clone().unwrap_or_else(|| "None".to_string()))
+                                    .selected_text(server_settings.input_device.clone().unwrap_or_else(|| "None".to_string()))
                                     .show_ui(ui, |ui| {
-                                        ui.selectable_value(&mut self.server_settings.input_device, None, "None");
+                                        ui.selectable_value(&mut server_settings.input_device, None, "None");
                                         for device in &self.audio_devices.input_devices {
-                                            ui.selectable_value(&mut self.server_settings.input_device, Some(device.clone()), device);
+                                            ui.selectable_value(&mut server_settings.input_device, Some(device.clone()), device);
                                         }
                                 }).response.clicked() {
                                     self.audio_devices.update();
@@ -285,11 +277,11 @@ impl Widget for &mut SettingsScreen {
                                 ui.label("Output Device");
                                 if egui::ComboBox::from_id_salt("output_device_dropdown")
                                     .wrap_mode(egui::TextWrapMode::Truncate)
-                                    .selected_text(self.server_settings.output_device.clone().unwrap_or_else(|| "None".to_string()))
+                                    .selected_text(server_settings.output_device.clone().unwrap_or_else(|| "None".to_string()))
                                     .show_ui(ui, |ui| {
-                                        ui.selectable_value(&mut self.server_settings.output_device, None, "None");
+                                        ui.selectable_value(&mut server_settings.output_device, None, "None");
                                         for device in &self.audio_devices.output_devices {
-                                            ui.selectable_value(&mut self.server_settings.output_device, Some(device.clone()), device);
+                                            ui.selectable_value(&mut server_settings.output_device, Some(device.clone()), device);
                                         }
                                 }).response.clicked() {
                                     self.audio_devices.update();
@@ -298,42 +290,42 @@ impl Widget for &mut SettingsScreen {
                             }
 
                             // Buffer Size
-                            let current_buffer_size = self.server_settings.buffer_size_samples();
+                            let current_buffer_size = server_settings.buffer_size_samples();
                             ui.label(format!("Buffer Size - {} samples", current_buffer_size));
                             ui.add_sized(
                                 Vec2::new(ui.available_width(), 45.0),
-                                egui::Slider::new(&mut self.server_settings.buffer_size, 6..=12)
+                                egui::Slider::new(&mut server_settings.buffer_size, 6..=12)
                                     .show_value(false)
                             );
                             ui.end_row();
 
                             // Latency
-                            ui.label(format!("Latency - {:.2} ms", self.server_settings.latency));
+                            ui.label(format!("Latency - {:.2} ms", server_settings.latency));
                             ui.add_sized(
                                 Vec2::new(ui.available_width(), 45.0),
-                                egui::Slider::new(&mut self.server_settings.latency, 0.0..=25.0)
+                                egui::Slider::new(&mut server_settings.latency, 0.0..=25.0)
                                     .show_value(false)
                             );
                             ui.end_row();
 
                             // Periods per Buffer (JACK/Linux)
                             if cfg!(target_os = "linux") {
-                                let periods_per_buffer = self.server_settings.periods_per_buffer;
+                                let periods_per_buffer = server_settings.periods_per_buffer;
                                 ui.label(format!("Periods per Buffer - {periods_per_buffer}"));
                                 ui.add_sized(
                                     Vec2::new(ui.available_width(), 45.0),
-                                    egui::Slider::new(&mut self.server_settings.periods_per_buffer, 1..=4)
+                                    egui::Slider::new(&mut server_settings.periods_per_buffer, 1..=4)
                                         .show_value(false)
                                 );
                                 ui.end_row();
                             };
 
                             // Tuner Periods
-                            let tuner_periods = self.server_settings.tuner_periods;
+                            let tuner_periods = server_settings.tuner_periods;
                             ui.label(format!("Tuner Periods - {tuner_periods}"));
                             ui.add_sized(
                                 Vec2::new(ui.available_width(), 45.0),
-                                egui::Slider::new(&mut self.server_settings.tuner_periods, 1..=8)
+                                egui::Slider::new(&mut server_settings.tuner_periods, 1..=8)
                                     .show_value(false)
                             ).on_hover_text("Higher values may improve accuracy but increase computation, and decrease update time.");
                             ui.end_row();
@@ -342,7 +334,7 @@ impl Widget for &mut SettingsScreen {
                     ui.add_space(10.0);
                     let button_size = Vec2::new(ui.available_width() * 0.25, 45.0);
                     ui.allocate_ui_with_layout(Vec2::new(ui.available_width(), button_size.y), Layout::left_to_right(egui::Align::Center), |ui| {
-                        let is_connected = self.program_state.socket.borrow().is_connected();
+                        let is_connected = self.state.socket.borrow().is_connected();
                         // If not connected, make spacing for 2 buttons. Else make spacing for 1.
                         let button_horizontal_space = if is_connected {
                             ui.available_width()/2.0-button_size.x/2.0
@@ -351,24 +343,24 @@ impl Widget for &mut SettingsScreen {
                         };
                         ui.add_space(button_horizontal_space);
 
-                        let currently_connected = self.program_state.socket.borrow().is_connected();
+                        let currently_connected = self.state.socket.borrow().is_connected();
                         let button_text = if currently_connected {
                             "Restart Server"
                         } else {
                             "Start Server"
                         };
                         if ui.add_enabled(
-                            self.ready_to_start_server(), 
+                            self.ready_to_start_server(&server_settings), 
                             egui::Button::new(button_text)
                                 .stroke(egui::Stroke::new(1.0, crate::THEME_COLOUR))
                                 .min_size(button_size)
                         ).clicked() {
                             ui.ctx().request_repaint();
                             if currently_connected {
-                                self.program_state.socket.borrow_mut().kill();
+                                self.state.socket.borrow_mut().kill();
                                 self.server_launch_state = ServerLaunchState::AwaitingKill(Instant::now());
                             } else {
-                                if let Some(process) = start_server_process(&self.server_settings) {
+                                if let Some(process) = start_server_process(&server_settings) {
                                     self.server_launch_state = ServerLaunchState::AwaitingStart {
                                         start_time: Instant::now(),
                                         process
@@ -388,19 +380,12 @@ impl Widget for &mut SettingsScreen {
                             );
 
                             if button.clicked() {
-                                log::info!("Connecting to server...");
-                                match self.program_state.socket.borrow_mut().connect() {
-                                    Ok(_) => {
-                                        log::info!("Connected to server; Loading set...");
-                                        self.program_state.load_active_set();
-                                    },
-                                    Err(e) => log::error!("Failed to connect to server: {}", e)
-                                }
+                                let _ = self.state.connect_to_server();
                             }
                         }
                     });
                     ui.add_space(15.0);
-                    self.handle_server_launch();
+
                     match self.server_launch_state {
                         ServerLaunchState::StartError => { ui.label(RichText::new("Failed to start server. Check the logs for more details.").color(Color32::RED)); },
                         ServerLaunchState::KillError => { ui.label(RichText::new("Failed to stop server. Check the logs for more details.").color(Color32::RED)); },
@@ -423,11 +408,18 @@ impl Widget for &mut SettingsScreen {
                             ui.style_mut().visuals.widgets.inactive.fg_stroke = egui::Stroke::new(2.0, Color32::from_rgb(200, 200, 200));
 
                             ui.label("Startup Server");
-                            ui.checkbox(&mut self.client_settings.startup_server, "");
+                            ui.checkbox(&mut client_settings.startup_server, "");
                             ui.end_row();
 
                             ui.label("Kill Server on Close");
-                            ui.checkbox(&mut self.client_settings.kill_server_on_close, "");
+                            ui.checkbox(&mut client_settings.kill_server_on_close, "");
+                            ui.end_row();
+
+                            ui.label("Show Volume Monitor");
+                            let volume_monitor_message = "This can affect performance as the UI will have to frequently update";
+                            if ui.checkbox(&mut client_settings.show_volume_monitor, "").on_hover_text(volume_monitor_message).changed() {
+                                self.state.set_volume_monitor_active_server(client_settings.show_volume_monitor);
+                            }
                         });
                 })
             });

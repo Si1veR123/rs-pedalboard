@@ -1,5 +1,6 @@
 use core::panic;
 use std::cell::UnsafeCell;
+use std::time::Instant;
 use cpal::{BuildStreamError, InputCallbackInfo, OutputCallbackInfo, StreamConfig, SupportedStreamConfig};
 use cpal::{traits::DeviceTrait, Device, Stream};
 use crossbeam::channel::{Receiver, Sender};
@@ -14,6 +15,7 @@ use crate::metronome_player::MetronomePlayer;
 use crate::sample_conversion::*;
 use crate::settings::ServerSettings;
 use crate::stream_config::{get_output_config_for_device, get_input_config_for_device};
+use crate::volume_monitor::PeakVolumeMonitor;
 
 pub fn ring_buffer_size(buffer_size: usize, latency: f32, sample_rate: f32) -> usize {
     let latency_frames = (latency / 1000.0) * sample_rate;
@@ -260,7 +262,8 @@ pub fn create_linked_streams(
                         tuner_handle: None,
                         pedal_command_to_client_buffer: Vec::with_capacity(12),
                         settings: in_settings.clone(),
-                        metronome: (false, MetronomePlayer::new(120, 0.5, 48000))
+                        metronome: (false, MetronomePlayer::new(120, 0.5, 48000)),
+                        volume_monitor: (false, Instant::now(), false, PeakVolumeMonitor::new(), PeakVolumeMonitor::new()),
                     });
                 }
                 

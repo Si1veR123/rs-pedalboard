@@ -1,6 +1,7 @@
 mod socket;
 mod state;
 use state::State;
+mod saved_pedalboards;
 mod stage;
 use stage::PedalboardStageScreen;
 mod library;
@@ -139,22 +140,23 @@ pub struct PedalboardClientApp {
 
 impl PedalboardClientApp {
     pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
-        let loaded_state = State::load();
+        let loaded_state = State::load_state();
         let leaked_state = if let Err(e) = loaded_state {
             log::error!("Failed to load state. Using default state. Error: {}", e);
             Box::leak(Box::new(State::default()))
         } else {
             Box::leak(Box::new(loaded_state.unwrap()))
         };
+        let _ = leaked_state.connect_to_server();
 
         let mut settings_screen = SettingsScreen::new(leaked_state);
 
         let no_server_start_arg = std::env::args().any(|arg| arg == "--no-server");
         // Start up the server process if configured to do so, not already connected and not running with the `--no-server` argument
-        if settings_screen.client_settings.startup_server && !leaked_state.socket.borrow().is_connected() && !no_server_start_arg {
+        if leaked_state.client_settings.borrow().startup_server && !leaked_state.socket.borrow().is_connected() && !no_server_start_arg {
             log::info!("Starting server on startup");
-            if settings_screen.ready_to_start_server() {
-                match server_process::start_server_process(&settings_screen.server_settings) {
+            if settings_screen.ready_to_start_server(&leaked_state.server_settings.borrow()) {
+                match server_process::start_server_process(&leaked_state.server_settings.borrow()) {
                     Some(child) => {
                         settings_screen.server_launch_state = ServerLaunchState::AwaitingStart { start_time: Instant::now(), process: child };
                         loop {
@@ -309,27 +311,16 @@ impl eframe::App for PedalboardClientApp {
     }
 
     fn save(&mut self, _storage: &mut dyn eframe::Storage) {
-        if let Err(e) = self.state.save() {
+        log::info!("Saving state");
+        if let Err(e) = self.state.save_state() {
             log::error!("Failed to save state: {}", e);
         } else {
             log::info!("State saved successfully");
-        };
-
-        if let Err(e) = self.settings_screen.server_settings.save() {
-            log::error!("Failed to save server settings: {}", e);
-        } else {
-            log::info!("Server settings saved successfully");
-        };
-
-        if let Err(e) = self.settings_screen.client_settings.save() {
-            log::error!("Failed to save client settings: {}", e);
-        } else {
-            log::info!("Client settings saved successfully");
-        };
+        }
     }
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
-        if self.settings_screen.client_settings.kill_server_on_close {
+        if self.state.client_settings.borrow().kill_server_on_close {
             log::info!("Killing server on exit");
             self.state.socket.borrow_mut().kill();
         }
