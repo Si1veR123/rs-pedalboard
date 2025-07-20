@@ -10,7 +10,7 @@ impl PeakNormalizer {
         let decay = decay_per_second.powf(time_per_buffer);
 
         Self {
-            current_peak: 1e-3,
+            current_peak: Self::start_peak(decay),
             decay,
             target_peak,
         }
@@ -22,7 +22,6 @@ impl PeakNormalizer {
         }
 
         self.current_peak *= self.decay;
-        log::debug!("Current peak: {}", self.current_peak);
 
         let gain = self.target_peak / self.current_peak;
 
@@ -31,7 +30,17 @@ impl PeakNormalizer {
         }
     }
 
+    fn start_peak(decay: f32) -> f32 {
+        if decay == 1.0 {
+            // 'Manual' mode. Peak can't decay so start low.
+            1e-3
+        } else {
+            // Since the peak is able to decay we dont need to start so low
+            1e-2
+        }
+    }
+
     pub fn reset(&mut self) {
-        self.current_peak = 1e-3;
+        self.current_peak = Self::start_peak(self.decay);
     }
 }

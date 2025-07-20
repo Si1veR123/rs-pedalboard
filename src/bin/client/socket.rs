@@ -112,11 +112,11 @@ impl ClientSocket {
         self.send(&message);
     }
 
-    pub fn set_volume_normalization(&mut self, mode: crate::settings::VolumeNormalizationMode, target_volume: f32) {
+    pub fn set_volume_normalization(&mut self, mode: crate::settings::VolumeNormalizationMode, auto_decay: f32) {
         match mode {
             crate::settings::VolumeNormalizationMode::None => self.send("volumenormalization none\n"),
             crate::settings::VolumeNormalizationMode::Manual => self.send("volumenormalization manual\n"),
-            crate::settings::VolumeNormalizationMode::Automatic => self.send(&format!("volumenormalization automatic {}\n", target_volume)),
+            crate::settings::VolumeNormalizationMode::Automatic => self.send(&format!("volumenormalization automatic {}\n", auto_decay)),
         };
     }
 
@@ -169,8 +169,13 @@ impl ClientSocket {
         self.send(&message);
     }
 
-    pub fn master(&mut self, volume: f32) {
-        let message = format!("master {}\n", volume);
+    pub fn master_in(&mut self, volume: f32) {
+        let message = format!("masterin {}\n", volume);
+        self.send(&message);
+    }
+
+    pub fn master_out(&mut self, volume: f32) {
+        let message = format!("masterout {}\n", volume);
         self.send(&message);
     }
 

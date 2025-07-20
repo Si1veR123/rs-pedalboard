@@ -258,7 +258,7 @@ impl State {
 
     pub fn set_volume_normalization_server(&self, mode: crate::settings::VolumeNormalizationMode, auto_decay: f32) {
         let mut socket = self.socket.borrow_mut();
-        let rounded_auto_decay = (auto_decay * 100.0).round() / 100.0;
+        let rounded_auto_decay = (auto_decay * 1000.0).round() / 1000.0;
         socket.set_volume_normalization(mode, rounded_auto_decay);
     }
 
@@ -292,6 +292,7 @@ impl State {
                 let client_settings = self.client_settings.borrow();
                 self.set_volume_monitor_active_server(client_settings.show_volume_monitor);
                 self.set_volume_normalization_server(client_settings.volume_normalization, client_settings.auto_volume_normalization_decay);
+                self.socket.borrow_mut().master_in(client_settings.input_volume);
                 self.load_active_set();
             }
         }

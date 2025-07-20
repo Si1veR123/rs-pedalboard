@@ -22,7 +22,8 @@ pub struct AudioProcessor {
     pub writer: HeapProd<f32>,
     pub processing_buffer: Vec<f32>,
     pub pedal_command_to_client_buffer: Vec<String>,
-    pub master_volume: f32,
+    pub master_in_volume: f32,
+    pub master_out_volume: f32,
     pub settings: ServerSettings,
     // If tuner is enabled, this will contain the writer to the tuner buffer,
     // a receiver for frequency updates, and a kill flag
@@ -43,6 +44,8 @@ impl AudioProcessor {
         // Volume Normalization
         if let Some(normalizer) = &mut self.volume_normalizer {
             normalizer.process_buffer(&mut self.processing_buffer);
+        } else {
+            self.processing_buffer.iter_mut().for_each(|sample| *sample *= self.master_in_volume);
         }
 
         // Update input volume monitor
@@ -80,7 +83,7 @@ impl AudioProcessor {
                 self.pedalboard_set.process_audio(frame, &mut self.pedal_command_to_client_buffer);
             }
 
-            self.processing_buffer.iter_mut().for_each(|sample| *sample *= self.master_volume);   
+            self.processing_buffer.iter_mut().for_each(|sample| *sample *= self.master_out_volume);   
         }
 
         // Update output volume monitor
@@ -240,9 +243,13 @@ impl AudioProcessor {
                 let pedalboard_index = words.next()?.parse::<usize>().ok()?;
                 self.pedalboard_set.set_active_pedalboard(pedalboard_index);
             },
-            "master" => {
+            "masterin" => {
                 let volume = words.next()?.parse::<f32>().ok()?;
-                self.master_volume = volume;
+                self.master_in_volume = volume;
+            },
+            "masterout" => {
+                let volume = words.next()?.parse::<f32>().ok()?;
+                self.master_out_volume = volume.clamp(0.0, 1.0);
             },
             "tuner" => {
                 let enable_str = words.next()?;
@@ -317,11 +324,11 @@ impl AudioProcessor {
                         self.volume_normalizer = None;
                     },
                     "manual" => {
-                        self.volume_normalizer = Some(PeakNormalizer::new(0.98, 1.0, self.settings.frames_per_period, 48000));
+                        self.volume_normalizer = Some(PeakNormalizer::new(0.95, 1.0, self.settings.frames_per_period, 48000));
                     },
                     "automatic" => {
                         let decay = words.next()?.parse::<f32>().ok()?.clamp(0.01, 1.0);
-                        self.volume_normalizer = Some(PeakNormalizer::new(0.98, decay, self.settings.frames_per_period, 48000));
+                        self.volume_normalizer = Some(PeakNormalizer::new(0.95, decay, self.settings.frames_per_period, 48000));
                     },
                     "reset" => {
                         if let Some(normalizer) = &mut self.volume_normalizer {
