@@ -124,3 +124,17 @@ impl ServerSettings {
         }
     }
 }
+
+impl From<ServerSettings> for ServerSettingsSave {
+    fn from(value: ServerSettings) -> Self {
+        Self {
+            host: value.host,
+            buffer_size: value.frames_per_period,
+            latency: value.buffer_latency,
+            periods_per_buffer: value.periods_per_buffer,
+            tuner_periods: value.tuner_periods,
+            input_device: value.input_device,
+            output_device: value.output_device
+        }
+    }
+}

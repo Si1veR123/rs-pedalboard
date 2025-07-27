@@ -6,6 +6,7 @@ use rs_pedalboard::{
     pedalboard_set::PedalboardSet,
     pedals::{Pedal, PedalTrait},
     dsp_algorithms::yin::Yin,
+    server_settings::ServerSettingsSave,
     DEFAULT_VOLUME_MONITOR_UPDATE_RATE
 };
 
@@ -336,9 +337,15 @@ impl AudioProcessor {
                     },
                     _ => {
                         log::error!("Invalid value for volumenormalization command: expected 'off', 'manual', 'automatic' or 'reset'");
-                        return None;
+                        return None;command_receiver
                     }
                 }
+            },
+            "requestsettings" => {
+                let settings_save: ServerSettingsSave = self.settings.clone().into();
+                let settings_serialized = serde_json::to_string(settings_save).expect("TODO ERROR HANDLING");
+
+                self.command_sender.send(format!("settings {}", self.settings_serialized).into_boxed_str()); // TODO error handling
             }
             _ => return None
         }
