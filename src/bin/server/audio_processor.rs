@@ -30,8 +30,8 @@ pub struct AudioProcessor {
     pub tuner_handle: Option<(HeapProd<f32>, Receiver<f32>, Arc<AtomicBool>)>,
     // Enabled?, metronome
     pub metronome: (bool, MetronomePlayer),
-    // Enabled?, last sent, last value both 0?, input volume monitor, output volume monitor
-    pub volume_monitor: (bool, Instant, bool, PeakVolumeMonitor, PeakVolumeMonitor),
+    // Enabled?, last sent time, last sent values, input volume monitor, output volume monitor
+    pub volume_monitor: (bool, Instant, (f32, f32), PeakVolumeMonitor, PeakVolumeMonitor),
     pub volume_normalizer: Option<PeakNormalizer>
 }
 
@@ -111,18 +111,15 @@ impl AudioProcessor {
                 let in_peak = self.volume_monitor.3.take_peak();
                 let out_peak = self.volume_monitor.4.take_peak();
 
-                let epsilon = 5e-4;
-                let both_zero = in_peak.abs() < epsilon && out_peak.abs() < epsilon;
-
-                // Prevent sending multiple consecutive zeros
-                if !(both_zero && self.volume_monitor.2) {
+                // Prevent sending multiple consecutive same values
+                if !(self.volume_monitor.2.0 == in_peak && self.volume_monitor.2.1 == out_peak) {
                     let command = format!("volumemonitor {:.3} {:.3}\n", in_peak, out_peak); 
                     if self.command_sender.send(command.into()).is_err() {
                         log::error!("Failed to send volume monitor command to client");
                     }
                 }
 
-                self.volume_monitor.2 = both_zero;
+                self.volume_monitor.2 = (in_peak, out_peak);
             }
         }
 
