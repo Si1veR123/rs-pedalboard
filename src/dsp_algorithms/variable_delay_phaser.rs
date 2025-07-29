@@ -39,7 +39,7 @@ impl VariableDelayPhaser {
             let max_depth_samples = self.delay.buffer.len();
 
             let oscillator_val = (self.oscillator.next().unwrap() + 1.0) / 2.0;
-            let delay_val = (oscillator_val * (max_depth_samples-self.min_delay_samples) as f32) as usize + self.min_delay_samples;
+            let delay_val = (oscillator_val * (max_depth_samples-self.min_delay_samples) as f32) + self.min_delay_samples as f32;
 
             let delayed_sample = self.delay.get_sample(delay_val);
 

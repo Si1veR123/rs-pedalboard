@@ -12,9 +12,12 @@ impl VariableDelayLine {
         }
     }
 
-    pub fn get_sample(&mut self, delay: usize) -> f32 {
-        let index = (self.buffer.len() - delay).max(0).min(self.buffer.len() - 1);
-
-        self.buffer[index]
+    pub fn get_sample(&mut self, delay: f32) -> f32 {
+        let prev_int_index = (self.buffer.len() - delay.floor() as usize).max(0).min(self.buffer.len() - 1);
+        let next_int_index =  (self.buffer.len() - delay.ceil() as usize).max(0).min(self.buffer.len() - 1);
+        let prev_value = self.buffer[prev_int_index];
+        let next_value = self.buffer[next_int_index];
+        let interpolation = self.prev_value + delay.fract() * (next_value - prev_value);
+        interpolation
     }
 }
