@@ -1839,6 +1839,11 @@ dependencies = [
 ]
 
 [[package]]
+name = "freeverb"
+version = "0.1.0"
+source = "git+https://github.com/Si1veR123/freeverb-with-derive.git#d89365ce8381751bea6b0e85294b7f6da3ad98ef"
+
+[[package]]
 name = "fuchsia-cprng"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4133,6 +4138,7 @@ dependencies = [
  "egui_extras",
  "egui_plot",
  "enum_dispatch",
+ "freeverb",
  "homedir",
  "hound",
  "image",

@@ -29,6 +29,8 @@ mod noise_gate;
 pub use noise_gate::NoiseGate;
 mod vst2;
 pub use vst2::Vst2;
+mod reverb;
+pub use reverb::Reverb;
 
 mod ui;
 
@@ -186,8 +188,6 @@ pub trait PedalTrait: Hash {
 
     /// Call after creating a pedal so that it can set up its internal state
     fn set_config(&mut self, _buffer_size: usize, _sample_rate: usize) {}
-
-    fn get_latency(&self) -> f32 { 0.0 }
 }
 
 
@@ -207,6 +207,7 @@ pub enum Pedal {
     ImpulseResponse(ImpulseResponse),
     NoiseGate(NoiseGate),
     Vst2(Vst2),
+    Reverb(Reverb),
 }
 
 impl PedalDiscriminants {
@@ -223,6 +224,7 @@ impl PedalDiscriminants {
             PedalDiscriminants::ImpulseResponse => Pedal::ImpulseResponse(ImpulseResponse::new()),
             PedalDiscriminants::NoiseGate => Pedal::NoiseGate(NoiseGate::new()),
             PedalDiscriminants::Vst2 => Pedal::Vst2(Vst2::new()),
+            PedalDiscriminants::Reverb => Pedal::Reverb(Reverb::new()),
         }
     }
 }

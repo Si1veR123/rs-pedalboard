@@ -264,7 +264,7 @@ pub fn create_linked_streams(
                         pedal_command_to_client_buffer: Vec::with_capacity(12),
                         settings: in_settings.clone(),
                         metronome: (false, MetronomePlayer::new(120, 0.5, 48000)),
-                        volume_monitor: (false, Instant::now(), false, PeakVolumeMonitor::new(), PeakVolumeMonitor::new()),
+                        volume_monitor: (false, Instant::now(), (0.0, 0.0), PeakVolumeMonitor::new(), PeakVolumeMonitor::new()),
                         volume_normalizer: None
                     });
                 }

@@ -194,10 +194,6 @@ impl PedalTrait for PitchShift {
         }
     }
 
-    fn get_latency(&self) -> f32 {
-        self.signalsmith_stretch.input_latency() as f32 + self.signalsmith_stretch.output_latency() as f32
-    }
-
     fn ui(&mut self, ui: &mut egui::Ui, _message_buffer: &[String]) -> Option<(String, PedalParameterValue)> {
         ui.add(egui::Image::new(include_image!("images/pedal_base.png")));
 

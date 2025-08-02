@@ -49,3 +49,4 @@ clap = { version = "4.5.40", optional=true, features=["derive"] }
 which = { version = "8.0.0", optional=true }
 sysinfo = { version = "0.35.2", optional = true }
 chrono = { version = "0.4.41", optional = true }
+freeverb = { git = "https://github.com/Si1veR123/freeverb-with-derive.git" }
