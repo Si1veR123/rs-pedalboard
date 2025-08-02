@@ -17,7 +17,7 @@ impl VariableDelayLine {
         let next_int_index =  (self.buffer.len() - delay.ceil() as usize).max(0).min(self.buffer.len() - 1);
         let prev_value = self.buffer[prev_int_index];
         let next_value = self.buffer[next_int_index];
-        let interpolation = self.prev_value + delay.fract() * (next_value - prev_value);
+        let interpolation = prev_value + delay.fract() * (next_value - prev_value);
         interpolation
     }
 }
