@@ -18,7 +18,8 @@ use signalsmith_stretch::Stretch;
 pub struct PitchShift {
     parameters: HashMap<String, PedalParameter>,
     signalsmith_stretch: Stretch,
-    eq: Equalizer,
+    // Server only, (eq, sample rate)
+    eq: Option<(Equalizer, u32)>,
     output_buffer: Vec<f32>,
 }
 
@@ -58,12 +59,11 @@ impl<'a> Deserialize<'a> for PitchShift {
         let parameters: HashMap<String, PedalParameter> = HashMap::deserialize(deserializer)?;
         
         let stretch = Self::stretch_from_parameters(&parameters);
-        let eq = PitchShift::eq_from_presence(parameters.get("presence").unwrap().value.as_float().unwrap());
 
         Ok(PitchShift {
             parameters,
             signalsmith_stretch: stretch,
-            eq,
+            eq: None,
             output_buffer: Vec::new(),
         })
     }
@@ -131,12 +131,11 @@ impl PitchShift {
         );
 
         let stretch = Self::stretch_from_parameters(&parameters);
-        let eq = Self::eq_from_presence(0.0);
-        PitchShift { parameters, signalsmith_stretch: stretch, eq, output_buffer: Vec::new() }
+        PitchShift { parameters, signalsmith_stretch: stretch, eq: None, output_buffer: Vec::new() }
     }
 
-    pub fn eq_from_presence(presence: f32) -> Equalizer {
-        let biquad = BiquadFilter::high_shelf(3000.0, 48000.0, 0.707, presence);
+    pub fn eq_from_presence(presence: f32, sample_rate: f32) -> Equalizer {
+        let biquad = BiquadFilter::high_shelf(3000.0, sample_rate, 0.707, presence);
         Equalizer::new(vec![biquad])
     }
 
@@ -156,7 +155,18 @@ impl PitchShift {
 
 
 impl PedalTrait for PitchShift {
+    fn set_config(&mut self,_buffer_size:usize, sample_rate:u32) {
+        // Set eq
+        let eq = Self::eq_from_presence(self.parameters.get("presence").unwrap().value.as_float().unwrap(), sample_rate as f32);
+        self.eq = Some((eq, sample_rate));
+    }
+
     fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
+        if self.eq.is_none() {
+            log::warn!("PitchShift: Call set_config before processing.");
+            return;
+        }
+
         if self.output_buffer.len() != buffer.len() {
             self.output_buffer.resize(buffer.len(), 0.0);
         }
@@ -164,7 +174,7 @@ impl PedalTrait for PitchShift {
         self.signalsmith_stretch.process(buffer.as_ref(), &mut self.output_buffer);
 
         for sample in self.output_buffer.iter_mut() {
-            *sample = self.eq.process(*sample);
+            *sample = self.eq.as_mut().unwrap().0.process(*sample);
         }
 
         buffer.copy_from_slice(&self.output_buffer);
@@ -185,7 +195,9 @@ impl PedalTrait for PitchShift {
                 if name == "presence" {
                     let presence = value.as_float().unwrap();
                     parameter.value = value;
-                    self.eq = Self::eq_from_presence(presence);
+                    if let Some((_eq, sample_rate)) = &self.eq {
+                        self.eq = Some((Self::eq_from_presence(presence, *sample_rate as f32), *sample_rate));
+                    }
                 } else {
                     parameter.value = value;
                     self.signalsmith_stretch = Self::stretch_from_parameters(parameters);

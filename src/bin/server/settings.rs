@@ -29,15 +29,17 @@ pub struct ServerArguments {
     #[arg(long, help="Number of periods per buffer (JACK) (default: 3)")]
     pub periods_per_buffer: Option<usize>,
     #[arg(long, help="Minimum frequency for the tuner (default: 40)")]
-    pub tuner_min_freq: Option<usize>,
+    pub tuner_min_freq: Option<u32>,
     #[arg(long, help="Maximum frequency for the tuner (default: 1300)")]
-    pub tuner_max_freq: Option<usize>,
+    pub tuner_max_freq: Option<u32>,
     #[arg(long, help="Number of periods of the minimum frequency to process for pitch (default: 5)")]
     pub tuner_periods: Option<usize>,
     #[arg(short, long)]
     pub input_device: Option<String>,
     #[arg(short, long)]
     pub output_device: Option<String>,
+    #[arg(long, help="Preferred sample rate for the audio host. Uses highest if not available. (default: 48000)")]
+    pub preferred_sample_rate: Option<u32>,
     #[arg(long, default_value_t=false, help="Ignore saved settings - use command line arguments/default")]
     pub ignore_save: bool
 }
@@ -50,11 +52,12 @@ pub struct ServerSettings {
     pub buffer_latency: f32,
     #[allow(dead_code)]
     pub periods_per_buffer: usize,
-    pub tuner_min_freq: usize,
-    pub tuner_max_freq: usize,
+    pub tuner_min_freq: u32,
+    pub tuner_max_freq: u32,
     pub tuner_periods: usize,
     pub input_device: Option<String>,
     pub output_device: Option<String>,
+    pub preferred_sample_rate: u32,
 }
 
 impl ServerSettings {
@@ -111,6 +114,13 @@ impl ServerSettings {
             saved.as_ref().and_then(|s| s.output_device.clone())
         });
 
+        let preferred_sample_rate = args.preferred_sample_rate.unwrap_or_else(|| {
+            saved.as_ref().map_or_else(
+                || 48000,
+                |s| s.preferred_sample_rate
+            )
+        });
+
         ServerSettings {
             host,
             frames_per_period,
@@ -121,6 +131,7 @@ impl ServerSettings {
             tuner_periods,
             input_device,
             output_device,
+            preferred_sample_rate,
         }
     }
 }
@@ -134,7 +145,8 @@ impl From<ServerSettings> for ServerSettingsSave {
             periods_per_buffer: value.periods_per_buffer,
             tuner_periods: value.tuner_periods,
             input_device: value.input_device,
-            output_device: value.output_device
+            output_device: value.output_device,
+            preferred_sample_rate: value.preferred_sample_rate,
         }
     }
 }

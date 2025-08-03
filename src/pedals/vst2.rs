@@ -7,7 +7,6 @@ use super::PedalParameterValue;
 use super::ui::pedal_knob;
 
 use crate::plugin::vst2::{Vst2Instance, path_from_name, available_plugins};
-use crate::plugin::PluginHost;
 use crate::unique_time_id;
 
 use eframe::egui::RichText;
@@ -19,7 +18,7 @@ use serde::{Serialize, Deserialize};
 pub struct Vst2 {
     instance: Option<Vst2Instance>,
     // buffer size, sample rate
-    config: Option<(usize, usize)>,
+    config: Option<(usize, u32)>,
     parameters: HashMap<String, PedalParameter>,
     // Map of parameter names to their index in the plugin instance
     param_index_map: HashMap<String, usize>,
@@ -253,7 +252,7 @@ impl Vst2 {
 }
 
 impl PedalTrait for Vst2 {
-    fn set_config(&mut self, buffer_size: usize, sample_rate: usize) {
+    fn set_config(&mut self, buffer_size: usize, sample_rate: u32) {
         if let Some(instance) = self.instance.as_mut() {
             instance.set_config(buffer_size, sample_rate);
         }

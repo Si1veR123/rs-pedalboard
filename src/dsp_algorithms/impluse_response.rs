@@ -1,9 +1,9 @@
-
-use realfft::{RealFftPlanner, RealToComplex, ComplexToReal};
+use realfft::{ComplexToReal, RealFftPlanner, RealToComplex};
 use num_complex::Complex;
+use rubato::{Resampler, SincFixedIn, SincInterpolationParameters};
 use std::sync::Arc;
 
-pub fn load_ir(ir_path: &str) -> Result<Vec<f32>, String> {
+pub fn load_ir(ir_path: &str, sample_rate: f32) -> Result<Vec<Vec<f32>>, String> {
     let mut reader = hound::WavReader::open(ir_path).unwrap();
     
     let spec = reader.spec();
@@ -11,11 +11,9 @@ pub fn load_ir(ir_path: &str) -> Result<Vec<f32>, String> {
         return Err("WAV file has more than 32 bits per sample. This is not supported.".into());
     }
 
-    if spec.channels != 1 {
-        return Err("Expected mono channel".into());
-    }
+    let resample_ratio = sample_rate / spec.sample_rate as f32;
 
-    match spec.sample_format {
+    let float_samples = match spec.sample_format {
         hound::SampleFormat::Float => {
             let ir_samples: Result<Vec<f32>, _> = reader.into_samples().collect();
             ir_samples.map_err(|e| e.to_string())
@@ -27,7 +25,38 @@ pub fn load_ir(ir_path: &str) -> Result<Vec<f32>, String> {
                 .collect();
             ir_samples.map_err(|e| e.to_string())
         }
-    }
+    };
+
+    float_samples.and_then(|float_samples| {
+        let num_channels = spec.channels as usize;
+
+        let mut resampler = SincFixedIn::<f32>::new(
+            resample_ratio as f64,
+            1.0,
+            SincInterpolationParameters {
+                sinc_len: 512,
+                f_cutoff: 0.9,
+                oversampling_factor: 128,
+                interpolation: rubato::SincInterpolationType::Linear,
+                window: rubato::WindowFunction::BlackmanHarris2,
+            },
+            float_samples.len() / num_channels,
+            num_channels,
+        ).map_err(|e| e.to_string())?;
+
+        // Deinterleave samples into a Vec of channels
+        let mut channels: Vec<Vec<f32>> = vec![Vec::with_capacity(float_samples.len() / num_channels); num_channels];
+        for frame in float_samples.chunks_exact(num_channels) {
+            for (i, &sample) in frame.iter().enumerate() {
+                channels[i].push(sample);
+            }
+        }
+
+        let channel_refs: Vec<&[f32]> = channels.iter().map(|ch| ch.as_slice()).collect();
+
+        resampler.process(&channel_refs, None)
+            .map_err(|e| e.to_string())
+    })
 }
 
 #[derive(Clone)]

@@ -8,8 +8,12 @@ pub struct VariableDelayLine {
 impl VariableDelayLine {
     pub fn new(max_delay: usize) -> Self {
         VariableDelayLine {
-            buffer: VecDeque::from_iter(std::iter::repeat(0.0).take(max_delay))
+            buffer: VecDeque::from_iter(std::iter::repeat(0.0).take(max_delay+1)) // add 1 for linear interpolation
         }
+    }
+
+    pub fn max_delay(&self) -> f32 {
+        (self.buffer.len() - 1) as f32
     }
 
     pub fn get_sample(&mut self, delay: f32) -> f32 {

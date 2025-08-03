@@ -14,7 +14,7 @@ use crate::audio_processor::AudioProcessor;
 use crate::metronome_player::MetronomePlayer;
 use crate::sample_conversion::*;
 use crate::settings::ServerSettings;
-use crate::stream_config::{get_output_config_for_device, get_input_config_for_device};
+use crate::stream_config::{get_compatible_configs};
 use crate::volume_monitor::PeakVolumeMonitor;
 
 pub fn ring_buffer_size(buffer_size: usize, latency: f32, sample_rate: f32) -> usize {
@@ -207,16 +207,22 @@ pub fn create_linked_streams(
     let in_command_sender = command_sender.clone();
     let in_settings = settings.clone();
 
-    let ring_buffer_size = ring_buffer_size(settings.frames_per_period, settings.buffer_latency, 48000.0);
+    log::info!("Finding a compatible config for input and output devices...");
+    let (in_config, out_config) = get_compatible_configs(
+        &in_device,
+        &out_device,
+        in_settings.preferred_sample_rate,
+        settings.frames_per_period
+    );
+
+    let used_sample_rate = in_config.sample_rate().0;
+
+    let ring_buffer_size = ring_buffer_size(settings.frames_per_period, settings.buffer_latency, used_sample_rate as f32);
     log::info!("Ring buffer size: {}", ring_buffer_size);
     let ring_buffer: HeapRb<f32> = HeapRb::new(ring_buffer_size);
 
     let (audio_buffer_writer, mut audio_buffer_reader) = ring_buffer.split();
     let mut maybe_writer = Some(audio_buffer_writer);
-
-    log::info!("Finding a compatible config for input and output devices...");
-    let in_config = get_input_config_for_device(&in_device, 48000, settings.frames_per_period);
-    let out_config = get_output_config_for_device(&out_device, 48000, settings.frames_per_period);
 
     // If the host is ASIO, and output device isn't mono, we must output stereo audio.
     // This is because other hosts (WASAPI, JACK) remap the mono output to stereo outside
@@ -227,9 +233,6 @@ pub fn create_linked_streams(
         log::info!("Enabling stereo output for ASIO");
         stereo_output = true;
     }
-
-    log::info!("Input config: {:?}", in_config);
-    log::info!("Output config: {:?}", out_config);
 
     let mut input_stream_running = false;
     let stream_in = build_input_stream(
@@ -263,9 +266,10 @@ pub fn create_linked_streams(
                         tuner_handle: None,
                         pedal_command_to_client_buffer: Vec::with_capacity(12),
                         settings: in_settings.clone(),
-                        metronome: (false, MetronomePlayer::new(120, 0.5, 48000)),
+                        metronome: (false, MetronomePlayer::new(120, 0.5, used_sample_rate)),
                         volume_monitor: (false, Instant::now(), (0.0, 0.0), PeakVolumeMonitor::new(), PeakVolumeMonitor::new()),
-                        volume_normalizer: None
+                        volume_normalizer: None,
+                        used_sample_rate
                     });
                 }
                 

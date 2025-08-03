@@ -12,7 +12,7 @@ macro_rules! var_delay_phaser {
     ($name:ident, ($default_rate:expr, $min_rate:expr, $max_rate:expr), ($default_min_depth:expr, $default_max_depth:expr, $min_depth: expr, $max_depth: expr), ($incl_feedback: expr, $default_feedback:expr, $max_feedback:expr), $default_mix: expr) => {
         #[derive(Clone)]
         pub struct $name {
-            variable_delay_phaser: VariableDelayPhaser,
+            variable_delay_phaser: Option<VariableDelayPhaser>, // Server only
             parameters: HashMap<String, PedalParameter>,
             oscillator_open: bool
         }
@@ -42,20 +42,9 @@ macro_rules! var_delay_phaser {
                 D: serde::Deserializer<'a>,
             {
                 let parameters = HashMap::<String, PedalParameter>::deserialize(deserializer)?;
-                let min_depth = parameters.get("min_depth").and_then(|p| p.value.as_float()).unwrap();
-                let max_depth = parameters.get("max_depth").and_then(|p| p.value.as_float()).unwrap();
-                let oscillator = parameters.get("oscillator").and_then(|p| p.value.as_oscillator()).unwrap();
-                let mix = parameters.get("mix").and_then(|p| p.value.as_float()).unwrap();
-                let feedback = if $incl_feedback {
-                    parameters.get("feedback").and_then(|p| p.value.as_float()).unwrap_or(0.0)
-                } else {
-                    0.0
-                };
-
-                let variable_delay_phaser = VariableDelayPhaser::new(min_depth, max_depth, mix, oscillator.clone(), feedback);
 
                 Ok(Self {
-                    variable_delay_phaser,
+                    variable_delay_phaser: None,
                     parameters,
                     oscillator_open: false
                 })
@@ -70,6 +59,7 @@ macro_rules! var_delay_phaser {
                 let init_min_depth = $default_min_depth;
                 let init_max_depth = $default_max_depth;
                 let init_mix = $default_mix;
+                // Sample rate on oscillators is not used on clients so the hardcoded sample rate is ok
                 let init_oscillator = Oscillator::Sine(Sine::new(48000.0, init_rate, 0.0, 0.0));
 
                 parameters.insert(
@@ -122,7 +112,7 @@ macro_rules! var_delay_phaser {
                 }
         
                 Self {
-                    variable_delay_phaser: VariableDelayPhaser::new(init_min_depth, init_max_depth, init_mix, init_oscillator, $default_feedback),
+                    variable_delay_phaser: None,
                     parameters,
                     oscillator_open: false
                 }
@@ -131,7 +121,11 @@ macro_rules! var_delay_phaser {
         
         impl PedalTrait for $name {
             fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
-                self.variable_delay_phaser.process_audio(buffer);
+                if self.variable_delay_phaser.is_none() {
+                    log::error!("{}: VariableDelayPhaser is not initialized. Call set_config() first.", stringify!($name));
+                    return;
+                }
+                self.variable_delay_phaser.as_mut().unwrap().process_audio(buffer);
             }
         
             fn get_parameters(&self) -> &HashMap<String, PedalParameter> {
@@ -152,33 +146,50 @@ macro_rules! var_delay_phaser {
                         if let PedalParameterValue::Float(depth) = value {
                             let current_max_depth = self.parameters.get("max_depth").unwrap().value.as_float().unwrap();
                             let bounded_depth = depth.min(current_max_depth);
-                            self.variable_delay_phaser.set_min_depth(bounded_depth);
                             self.parameters.get_mut(name).unwrap().value = PedalParameterValue::Float(bounded_depth);
+
+                            if let Some(variable_delay_phaser) = &mut self.variable_delay_phaser {
+                                variable_delay_phaser.set_min_depth(bounded_depth);
+                            }
                         }
                     },
                     "max_depth" => {
                         if let PedalParameterValue::Float(depth) = value {
                             let current_min_depth = self.parameters.get("min_depth").unwrap().value.as_float().unwrap();
                             let bounded_depth = depth.max(current_min_depth);
-                            self.variable_delay_phaser.set_max_depth(bounded_depth);
                             self.parameters.get_mut(name).unwrap().value = PedalParameterValue::Float(bounded_depth);
+
+                            if let Some(variable_delay_phaser) = &mut self.variable_delay_phaser {
+                                variable_delay_phaser.set_max_depth(bounded_depth);
+                            }
                         }
                     },
                     "mix" => {
                         if let PedalParameterValue::Float(mix) = value {
-                            self.variable_delay_phaser.mix = mix;
+                            if let Some(variable_delay_phaser) = &mut self.variable_delay_phaser {
+                                variable_delay_phaser.mix = mix;
+                            }
                             self.parameters.get_mut(name).unwrap().value = PedalParameterValue::Float(mix);
                         }
                     },
                     "oscillator" => {
                         if let PedalParameterValue::Oscillator(oscillator) = value {
-                            self.variable_delay_phaser.oscillator = oscillator.clone();
+                            if let Some(variable_delay_phaser) = &mut self.variable_delay_phaser {
+                                variable_delay_phaser.oscillator = oscillator.clone();
+                            }
+
                             self.parameters.get_mut(name).unwrap().value = PedalParameterValue::Oscillator(oscillator);
                         }
                     },
                     "feedback" => {
                         if let PedalParameterValue::Float(feedback) = value {
-                            self.variable_delay_phaser.feedback = feedback;
+                            if $incl_feedback {
+                                if let Some(variable_delay_phaser) = &mut self.variable_delay_phaser {
+                                    variable_delay_phaser.feedback = feedback;
+                                }
+                            } else {
+                                log::warn!("Feedback parameter is not included in this pedal.");
+                            }
                             self.parameters.get_mut(name).unwrap().value = PedalParameterValue::Float(feedback);
                         }
                     },
@@ -233,7 +244,7 @@ macro_rules! var_delay_phaser {
                 if self.oscillator_open {
                     if let Some(osc) = oscillator_selection_window(
                         ui,
-                        &self.variable_delay_phaser.oscillator,
+                        &self.parameters.get("oscillator").unwrap().value.as_oscillator().unwrap(),
                         &mut self.oscillator_open,
                         false,
                         Some($min_rate..=$max_rate)
@@ -256,6 +267,23 @@ macro_rules! var_delay_phaser {
                 ));
 
                 to_change
+            }
+
+            fn set_config(&mut self, _buffer_size: usize, sample_rate: u32) {
+                let parameter_oscillator = self.parameters.get_mut("oscillator").unwrap().value.as_oscillator_mut().unwrap();
+                parameter_oscillator.set_sample_rate(sample_rate as f32);
+                let variable_delay_phaser_oscillator = parameter_oscillator.clone();
+
+                let min_depth = self.parameters.get("min_depth").unwrap().value.as_float().unwrap();
+                let max_depth = self.parameters.get("max_depth").unwrap().value.as_float().unwrap();
+                let mix = self.parameters.get("mix").unwrap().value.as_float().unwrap();
+                let feedback = if $incl_feedback {
+                    self.parameters.get("feedback").unwrap().value.as_float().unwrap()
+                } else {
+                    0.0
+                };
+
+                self.variable_delay_phaser = Some(VariableDelayPhaser::new(min_depth, max_depth, mix, variable_delay_phaser_oscillator, feedback, sample_rate as f32));
             }
         }
     };

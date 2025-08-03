@@ -187,8 +187,12 @@ impl Nam {
 }
 
 impl PedalTrait for Nam {
-    fn set_config(&mut self, buffer_size: usize, _sample_rate: usize) {
+    fn set_config(&mut self, buffer_size: usize, sample_rate: u32) {
         self.modeler.set_maximum_buffer_size(buffer_size);
+        let expected_sample_rate = self.modeler.expected_sample_rate() as u32;
+        if expected_sample_rate != 0 && expected_sample_rate != sample_rate {
+            log::warn!("NeuralAmpModeler expected sample rate {} does not match provided sample rate {}", self.modeler.expected_sample_rate(), sample_rate);
+        }
     }
 
     fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {

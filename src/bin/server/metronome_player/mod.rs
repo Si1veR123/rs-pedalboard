@@ -4,7 +4,7 @@ use hound::{WavReader, SampleFormat};
 pub struct MetronomePlayer {
     pub bpm: u32,
     pub volume: f32,
-    pub sample_rate: usize,
+    pub sample_rate: u32,
     click_audio: Vec<f32>,
     // Current position, where 0 is the start of the click sound
     // and the maximum value is the 'samples per beat'-1
@@ -54,7 +54,7 @@ impl MetronomePlayer {
         samples
     }
 
-    pub fn new(bpm: u32, volume: f32, sample_rate: usize) -> Self {
+    pub fn new(bpm: u32, volume: f32, sample_rate: u32) -> Self {
         let click_audio = MetronomePlayer::load_click_from_bytes(include_bytes!("click_trim.wav"));
         MetronomePlayer {
             bpm,

@@ -49,6 +49,24 @@ impl Oscillator {
         }
     }
 
+    pub fn set_sample_rate(&mut self, sample_rate: f32) {
+        match self {
+            Oscillator::Sine(sine) => sine.sample_rate = OrderedFloat(sample_rate),
+            Oscillator::Square(square) => square.sample_rate = OrderedFloat(sample_rate),
+            Oscillator::Sawtooth(sawtooth) => sawtooth.sample_rate = OrderedFloat(sample_rate),
+            Oscillator::Triangle(triangle) => triangle.sample_rate = OrderedFloat(sample_rate)
+        }
+    }
+
+    pub fn get_sample_rate(&self) -> f32 {
+        match self {
+            Oscillator::Sine(sine) => sine.sample_rate.0,
+            Oscillator::Square(square) => square.sample_rate.0,
+            Oscillator::Sawtooth(sawtooth) => sawtooth.sample_rate.0,
+            Oscillator::Triangle(triangle) => triangle.sample_rate.0
+        }
+    }
+
     pub fn default(sample_rate: f32) -> Self {
         Oscillator::Sine(Sine::new(sample_rate, 440.0, 0.0, 0.0))
     }
@@ -69,7 +87,7 @@ impl Iterator for Oscillator {
 
 #[derive(Serialize, Deserialize, Clone, Hash, Debug)]
 pub struct Sine {
-    sample_rate: OrderedFloat<f32>,
+    pub sample_rate: OrderedFloat<f32>,
     phase: OrderedFloat<f32>,
     pub phase_offset: OrderedFloat<f32>,
     pub frequency: OrderedFloat<f32>,
@@ -138,7 +156,7 @@ impl Iterator for Sine {
 
 #[derive(Clone, Hash, Debug, Serialize, Deserialize)]
 pub struct Square {
-    sample_rate: OrderedFloat<f32>,
+    pub sample_rate: OrderedFloat<f32>,
     phase: OrderedFloat<f32>,
     pub phase_offset: OrderedFloat<f32>,
     pub frequency: OrderedFloat<f32>
@@ -177,7 +195,7 @@ impl Iterator for Square {
 
 #[derive(Clone, Hash, Debug, Serialize, Deserialize)]
 pub struct Sawtooth {
-    sample_rate: OrderedFloat<f32>,
+    pub sample_rate: OrderedFloat<f32>,
     phase: OrderedFloat<f32>,
     pub phase_offset: OrderedFloat<f32>,
     pub frequency: OrderedFloat<f32>

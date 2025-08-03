@@ -13,8 +13,10 @@ use serde::{Serialize, Deserialize};
 #[derive(Clone)]
 pub struct Delay {
     pub parameters: HashMap<String, PedalParameter>,
-    delay_buffer: VecDeque<f32>,
-    tone_eq: eq::Equalizer
+    // Server only
+    delay_buffer: Option<VecDeque<f32>>,
+    tone_eq: Option<eq::Equalizer>,
+    sample_rate: Option<f32>,
 }
 
 impl Hash for Delay {
@@ -43,12 +45,7 @@ impl<'a> Deserialize<'a> for Delay {
         D: serde::Deserializer<'a>,
     {
         let parameters: HashMap<String, PedalParameter> = HashMap::deserialize(deserializer)?;
-        // Just unwrap since if the parameter is missing, the pedal is going to be unusable anyway
-        let delay = parameters.get("delay").unwrap().value.as_float().unwrap();
-        let delay_samples = ((delay / 1000.0) * 48000.0) as usize;
-        let warmth = parameters.get("warmth").unwrap().value.as_float().unwrap();
-        let eq = Delay::eq_from_warmth(warmth);
-        Ok(Delay { parameters, delay_buffer: VecDeque::from_iter(iter::repeat(0.0).take(delay_samples)), tone_eq: eq })
+        Ok(Delay { parameters, delay_buffer: None, tone_eq: None, sample_rate: None })
     }
 }
 
@@ -58,7 +55,6 @@ impl Delay {
 
         // Units of 10ms for faster pedal knobs
         let init_delay_ten_ms = 430.0 / 10.0;
-        let init_delay_samples = ((init_delay_ten_ms / 100.0) * 48000.0) as usize;
         let init_warmth = 0.0;
 
         parameters.insert(
@@ -98,28 +94,43 @@ impl Delay {
             },
         );
 
-        let eq = Self::eq_from_warmth(init_warmth);
-
-        Delay { parameters, delay_buffer: VecDeque::from_iter(iter::repeat(0.0).take(init_delay_samples)), tone_eq: eq }
+        Delay { parameters, delay_buffer: None, tone_eq: None, sample_rate: None }
     }
 
-    pub fn eq_from_warmth(tone: f32) -> eq::Equalizer {
-        let biquad = biquad::BiquadFilter::high_shelf(4000.0, 48000.0, 0.707, -tone*10.0);
+    pub fn eq_from_warmth(tone: f32, sample_rate: f32) -> eq::Equalizer {
+        let biquad = biquad::BiquadFilter::high_shelf(4000.0, sample_rate, 0.707, -tone*10.0);
         let eq = eq::Equalizer::new(vec![biquad]);
         eq
     }
 }
 
 impl PedalTrait for Delay {
+    fn set_config(&mut self, _buffer_size: usize, sample_rate: u32) {
+        self.tone_eq = Some(
+            Self::eq_from_warmth(self.parameters.get("warmth").unwrap().value.as_float().unwrap(), sample_rate as f32)
+        );
+        self.sample_rate = Some(sample_rate as f32);
+        let delay_ten_ms = self.parameters.get("delay").unwrap().value.as_float().unwrap();
+        let delay_samples = ((delay_ten_ms / 100.0) * sample_rate as f32) as usize;
+        self.delay_buffer = Some(
+            VecDeque::from_iter(iter::repeat(0.0).take(delay_samples))
+        );
+    }
+
     fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
+        if self.tone_eq.is_none() || self.delay_buffer.is_none() {
+            log::warn!("Delay: Call set_config() before processing audio.");
+            return;
+        }
+
         let decay = self.parameters.get("decay").unwrap().value.as_float().unwrap();
         let mix = self.parameters.get("mix").unwrap().value.as_float().unwrap();
         for sample in buffer.iter_mut() {
-            let delay_sample = self.delay_buffer.pop_front().unwrap();
+            let delay_sample = self.delay_buffer.as_mut().unwrap().pop_front().unwrap();
 
             let mut new_sample = *sample + (delay_sample * decay);
-            new_sample = self.tone_eq.process(new_sample);
-            self.delay_buffer.push_back(new_sample);
+            new_sample = self.tone_eq.as_mut().unwrap().process(new_sample);
+            self.delay_buffer.as_mut().unwrap().push_back(new_sample);
 
             *sample = *sample * (1.0 - mix) + delay_sample * mix;
         }
@@ -139,21 +150,27 @@ impl PedalTrait for Delay {
             if parameter.is_valid(&value) {
                 if name == "delay" {
                     let delay_ten_ms = value.as_float().unwrap();
-                    let delay_samples = ((delay_ten_ms / 100.0) * 48000.0) as usize;
-                    let old_delay = parameter.value.as_float().unwrap();
-                    let old_delay_samples = ((old_delay / 1000.0) * 48000.0) as usize;
-
                     parameter.value = value;
 
-                    if delay_samples < old_delay_samples {
-                        self.delay_buffer.truncate(old_delay_samples - delay_samples);
-                    } else {
-                        self.delay_buffer = VecDeque::from_iter(iter::repeat(0.0).take(delay_samples as usize));
+                    if let Some(delay_buffer) = &mut self.delay_buffer {
+                        if let Some(sample_rate) = self.sample_rate {
+                            let delay_samples = ((delay_ten_ms / 100.0) * sample_rate) as usize;
+                            if delay_samples > delay_buffer.len() {
+                                delay_buffer.extend(iter::repeat(0.0).take(delay_samples - delay_buffer.len()));
+                            } else {
+                                delay_buffer.truncate(delay_samples);
+                            }
+                        }
                     }
                 } else if name == "warmth" {
                     let warmth = value.as_float().unwrap();
                     parameter.value = value;
-                    self.tone_eq = Self::eq_from_warmth(warmth);
+                    if let Some(sample_rate) = self.sample_rate {
+                        self.tone_eq = Some(
+                            Self::eq_from_warmth(warmth, sample_rate)
+                        );
+                    }
+                    
                 } else {
                     parameter.value = value;
                 }

@@ -6,6 +6,7 @@ pub mod eq;
 pub mod yin;
 pub mod impluse_response;
 pub mod frequency_analysis;
+pub mod resampler;
 
 pub fn hann_window(size: usize) -> Vec<f32> {
     let mut window = vec![0.0; size];

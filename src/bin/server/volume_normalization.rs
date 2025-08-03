@@ -5,7 +5,7 @@ pub struct PeakNormalizer {
 }
 
 impl PeakNormalizer {
-    pub fn new(target_peak: f32, decay_per_second: f32, buffer_size: usize, sample_rate: usize) -> Self {
+    pub fn new(target_peak: f32, decay_per_second: f32, buffer_size: usize, sample_rate: u32) -> Self {
         let time_per_buffer = buffer_size as f32 / sample_rate as f32;
         let decay = decay_per_second.powf(time_per_buffer);
 

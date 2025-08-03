@@ -7,7 +7,7 @@ use crate::{dsp_algorithms::{oscillator::{Oscillator, Sine}, variable_delay::Var
 
 #[derive(Clone)]
 pub struct Vibrato {
-    delay_line: VariableDelayLine,
+    delay_line: Option<VariableDelayLine>,
     parameters: HashMap<String, PedalParameter>,
     oscillator_open: bool,
 }
@@ -37,14 +37,9 @@ impl<'a> Deserialize<'a> for Vibrato {
         D: serde::Deserializer<'a>,
     {
         let parameters = HashMap::<String, PedalParameter>::deserialize(deserializer)?;
-        let depth_ms = parameters.get("depth").unwrap().value.as_float().unwrap();
-
-        let max_delay_samples = (48000.0 * depth_ms / 1000.0).ceil() as usize;
-
-        let variable_delay = VariableDelayLine::new(max_delay_samples+1);
 
         Ok(Self {
-            delay_line: variable_delay,
+            delay_line: None,
             parameters: parameters.clone(),
             oscillator_open: false,
         })
@@ -53,9 +48,7 @@ impl<'a> Deserialize<'a> for Vibrato {
 
 impl Vibrato {
     pub fn new() -> Self {
-        let max_delay_ms = 15.0f32;
-        let max_delay_samples = (48000.0 * max_delay_ms / 1000.0).ceil() as usize;
-
+        // Oscilallator sample rate not used on client, and is set later in `set_config` on server, so its ok to be hardcoded
         let oscillator = Oscillator::Sine(Sine::new(48000.0, 5.0, 0.0, 0.0));
 
         let mut parameters = HashMap::new();
@@ -63,8 +56,8 @@ impl Vibrato {
             "depth".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Float(5.0),
-                min: Some(PedalParameterValue::Float(0.1)),
-                max: Some(PedalParameterValue::Float(max_delay_ms)),
+                min: Some(PedalParameterValue::Float(0.01)),
+                max: Some(PedalParameterValue::Float(15.0)),
                 step: Some(PedalParameterValue::Float(0.1)),
             },
         );
@@ -79,7 +72,7 @@ impl Vibrato {
         );
 
         Self {
-            delay_line: VariableDelayLine::new(max_delay_samples+1),
+            delay_line: None,
             parameters,
             oscillator_open: false,
         }
@@ -88,23 +81,24 @@ impl Vibrato {
 
 impl PedalTrait for Vibrato {
     fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
-        let depth_ms = self.parameters["depth"].value.as_float().unwrap();
-        let oscillator = match &mut self.parameters.get_mut("oscillator").unwrap().value {
-            PedalParameterValue::Oscillator(ref mut osc) => osc,
-            _ => return,
-        };
+        if self.delay_line.is_none() {
+            log::warn!("Vibrato pedal not initialized. Call set_config before processing audio.");
+            return;
+        }
+
+        let oscillator = self.parameters.get_mut("oscillator").unwrap().value.as_oscillator_mut().unwrap();
     
-        let depth_samples = 48000.0 * depth_ms / 1000.0;
-    
+        let delay_line = self.delay_line.as_mut().unwrap();
+
         for sample in buffer.iter_mut() {
-            self.delay_line.buffer.push_front(*sample);
-            self.delay_line.buffer.pop_back();
+            delay_line.buffer.push_front(*sample);
+            delay_line.buffer.pop_back();
     
             let lfo_value = 0.5 * (1.0 + oscillator.next().unwrap());
     
-            let current_delay = lfo_value * depth_samples;
+            let current_delay = lfo_value * delay_line.max_delay() as f32;
     
-            let delayed_sample = self.delay_line.get_sample(current_delay);
+            let delayed_sample = delay_line.get_sample(current_delay);
     
             *sample = delayed_sample;
         }
@@ -163,5 +157,14 @@ impl PedalTrait for Vibrato {
         ));
 
         to_change
+    }
+
+    fn set_config(&mut self, _buffer_size:usize,sample_rate:u32) {
+        let depth_ms = self.parameters.get("depth").unwrap().value.as_float().unwrap();
+        let max_delay_samples = (sample_rate as f32 * depth_ms / 1000.0).ceil() as usize;
+
+        self.delay_line = Some(VariableDelayLine::new(max_delay_samples));
+
+        self.parameters.get_mut("oscillator").unwrap().value.as_oscillator_mut().unwrap().set_sample_rate(sample_rate as f32);
     }
 }

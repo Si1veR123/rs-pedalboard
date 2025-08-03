@@ -44,7 +44,7 @@ impl DynamicEqualizerBuilder {
         self
     }
 
-    pub fn build(self) -> Vec<BiquadFilter> {
+    pub fn build(self) -> Equalizer {
         let mut biquads = Vec::with_capacity(self.bands.len());
         let last_index = self.bands.len() - 1;
         for (i, (f, bandwidth, gain)) in self.bands.into_iter().enumerate() {
@@ -60,7 +60,9 @@ impl DynamicEqualizerBuilder {
 
             biquads.push(bq);
         }
-        biquads
+        Equalizer {
+            biquads,
+        }
     }
 }
 

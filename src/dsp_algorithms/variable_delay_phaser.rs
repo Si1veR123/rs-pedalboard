@@ -9,25 +9,27 @@ pub struct VariableDelayPhaser {
     min_delay_samples: usize,
     pub feedback: f32,
     pub oscillator: Oscillator,
+    sample_rate: f32
 }
 
 
 impl VariableDelayPhaser {
-    pub fn new(depth_min_ms: f32, depth_max_ms: f32, mix: f32, oscillator: Oscillator, feedback: f32) -> Self {
-        let depth_samples = ((depth_max_ms / 1000.0) * 48000.0) as usize;
+    pub fn new(depth_min_ms: f32, depth_max_ms: f32, mix: f32, oscillator: Oscillator, feedback: f32, sample_rate: f32) -> Self {
+        let depth_samples = ((depth_max_ms / 1000.0) * sample_rate) as usize;
 
         VariableDelayPhaser {
             mix,
-            min_delay_samples: ((depth_min_ms / 1000.0) * 48000.0) as usize,
+            min_delay_samples: ((depth_min_ms / 1000.0) * sample_rate) as usize,
             delay: VariableDelayLine::new(depth_samples),
             feedback,
-            oscillator
+            oscillator,
+            sample_rate
         }
     }
 
     pub fn process_audio(&mut self, buffer: &mut [f32]) {
         for sample in buffer.iter_mut() {
-            let max_depth_samples = self.delay.buffer.len();
+            let max_depth_samples = self.delay.max_delay().ceil() as usize;
 
             let oscillator_val = (self.oscillator.next().unwrap() + 1.0) / 2.0;
             let delay_val = (oscillator_val * (max_depth_samples-self.min_delay_samples) as f32) + self.min_delay_samples as f32;
@@ -48,11 +50,11 @@ impl VariableDelayPhaser {
     }
 
     pub fn set_min_depth(&mut self, depth_ms: f32) {
-        self.min_delay_samples = ((depth_ms / 1000.0) * 48000.0) as usize;
+        self.min_delay_samples = ((depth_ms / 1000.0) * self.sample_rate) as usize;
     }
 
     pub fn set_max_depth(&mut self, depth_ms: f32) {
-        let depth_samples = ((depth_ms / 1000.0) * 48000.0) as usize;
+        let depth_samples = ((depth_ms / 1000.0) * self.sample_rate) as usize;
         self.delay = VariableDelayLine::new(depth_samples);
     }
 }

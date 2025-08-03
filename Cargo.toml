@@ -51,3 +51,4 @@ sysinfo = { version = "0.35.2", optional = true }
 chrono = { version = "0.4.41", optional = true }
 freeverb = { git = "https://github.com/Si1veR123/freeverb-with-derive.git" }
 ordered-float = { version = "5.0.0", features = ["serde"] }
+rubato = "0.16.2"

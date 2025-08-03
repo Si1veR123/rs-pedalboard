@@ -87,16 +87,16 @@ pub struct Yin {
     tau_max: usize,
     num_periods: usize,
     threshold: f32,
-    sample_rate: usize
+    sample_rate: u32
 }
 
 impl Yin {
-    pub fn minimum_buffer_length(sample_rate: usize, freq_min: usize, num_periods: usize) -> usize {
+    pub fn minimum_buffer_length(sample_rate: u32, freq_min: u32, num_periods: usize) -> usize {
         let tau_max = sample_rate / freq_min;
-        tau_max * num_periods
+        tau_max as usize * num_periods
     }
 
-    pub fn new(threshold: f32, freq_min: usize, freq_max: usize, sample_rate: usize, num_periods: usize, read_from: HeapCons<f32>) -> Self {
+    pub fn new(threshold: f32, freq_min: u32, freq_max: u32, sample_rate: u32, num_periods: usize, read_from: HeapCons<f32>) -> Self {
         let min_buffer = Self::minimum_buffer_length(sample_rate, freq_min, num_periods);
         assert!(read_from.capacity().get() >= min_buffer, "Yin buffer too small: {} < {}", read_from.capacity(), min_buffer);
         
@@ -107,13 +107,13 @@ impl Yin {
 
         Self {
             read_from,
-            sample_frame_buffer: Vec::with_capacity(tau_max),
-            diff_buffer: Vec::with_capacity(tau_max),
-            cmndf_buffer: Vec::with_capacity(tau_max),
+            sample_frame_buffer: Vec::with_capacity(tau_max as usize),
+            diff_buffer: Vec::with_capacity(tau_max as usize),
+            cmndf_buffer: Vec::with_capacity(tau_max as usize),
             prev_estimation: 0.0,
             threshold,
-            tau_max,
-            tau_min,
+            tau_max: tau_max as usize,
+            tau_min: tau_min as usize,
             num_periods,
             sample_rate,
         }

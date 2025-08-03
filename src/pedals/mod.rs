@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 use std::hash::Hash;
-
+use crate::dsp_algorithms::oscillator::Oscillator;
 use enum_dispatch::enum_dispatch;
 use serde::{ Deserialize, Serialize};
 use eframe::egui;
@@ -31,10 +31,10 @@ mod vst2;
 pub use vst2::Vst2;
 mod reverb;
 pub use reverb::Reverb;
-
-use crate::dsp_algorithms::oscillator::Oscillator;
 mod vibrato;
 pub use vibrato::Vibrato;
+mod tremolo;
+pub use tremolo::Tremolo;
 
 mod ui;
 
@@ -173,6 +173,13 @@ impl PedalParameterValue {
             _ => None
         }
     }
+
+    pub fn as_oscillator_mut(&mut self) -> Option<&mut Oscillator> {
+        match self {
+            PedalParameterValue::Oscillator(osc) => Some(osc),
+            _ => None
+        }
+    }
 }
 
 #[enum_dispatch]
@@ -200,7 +207,7 @@ pub trait PedalTrait: Hash {
     fn ui(&mut self, _ui: &mut egui::Ui, _message_buffer: &[String]) -> Option<(String, PedalParameterValue)> { None }
 
     /// Call after creating a pedal so that it can set up its internal state
-    fn set_config(&mut self, _buffer_size: usize, _sample_rate: usize) {}
+    fn set_config(&mut self, _buffer_size: usize, _sample_rate: u32) {}
 }
 
 
@@ -222,6 +229,7 @@ pub enum Pedal {
     Vst2(Vst2),
     Reverb(Reverb),
     Vibrato(Vibrato),
+    Tremolo(Tremolo),
 }
 
 impl PedalDiscriminants {
@@ -240,6 +248,7 @@ impl PedalDiscriminants {
             PedalDiscriminants::Vst2 => Pedal::Vst2(Vst2::new()),
             PedalDiscriminants::Reverb => Pedal::Reverb(Reverb::new()),
             PedalDiscriminants::Vibrato => Pedal::Vibrato(Vibrato::new()),
+            PedalDiscriminants::Tremolo => Pedal::Tremolo(Tremolo::new()),
         }
     }
 }

@@ -165,6 +165,7 @@ pub fn oscillator_selection_window(
                         sine_ui.add(egui::Button::new("Sine").selected(true));
                     } else if sine_ui.add(egui::Button::new("Sine")).clicked() {
                         new_oscillator = Some(Oscillator::Sine(oscillator::Sine::new(
+                            // Sample rate on oscillator parameters on client do not matter, it is set correctly on the server
                             48000.0,
                             selected_oscillator.get_frequency(),
                             selected_oscillator.get_phase_offset(),

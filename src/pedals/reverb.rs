@@ -8,7 +8,7 @@ use freeverb::Freeverb;
 pub struct Reverb {
     // Freeverb instance, Sample rate
     // None if sample rate not yet set
-    reverb: Option<(Freeverb, usize)>,
+    reverb: Option<(Freeverb, u32)>,
     parameters: HashMap<String, PedalParameter>
 }
 
@@ -40,7 +40,7 @@ impl<'a> Deserialize<'a> for Reverb {
 impl Clone for Reverb {
     fn clone(&self) -> Self {
         let cloned_reverb = self.reverb.as_ref().and_then(|(_reverb, sample_rate)| {
-            Some((Freeverb::new(*sample_rate), *sample_rate))
+            Some((Freeverb::new(*sample_rate as usize), *sample_rate))
         });
         let cloned_parameters = self.parameters.clone();
         let mut cloned_pedal = Self {
@@ -118,14 +118,14 @@ impl Reverb {
 }
 
 impl PedalTrait for Reverb {
-    fn set_config(&mut self,_buffer_size:usize,_sample_rate:usize) {
+    fn set_config(&mut self,_buffer_size:usize, sample_rate:u32) {
         if self.reverb.is_none() {
-            let reverb = Freeverb::new(_sample_rate);
-            self.reverb = Some((reverb, _sample_rate));
+            let reverb = Freeverb::new(sample_rate as usize);
+            self.reverb = Some((reverb, sample_rate));
             self.sync_parameters();
-        } else if let Some((ref mut reverb, sample_rate)) = &mut self.reverb {
-            if *sample_rate != _sample_rate {
-                *reverb = Freeverb::new(_sample_rate);
+        } else if let Some((ref mut reverb, old_sample_rate)) = &mut self.reverb {
+            if sample_rate != *old_sample_rate {
+                *reverb = Freeverb::new(sample_rate as usize);
                 self.sync_parameters();
             }
         }

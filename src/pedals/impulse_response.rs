@@ -12,15 +12,18 @@ use super::{ui::pedal_knob, PedalParameter, PedalParameterValue, PedalTrait};
 const IR_SAVE_PATH: &str = r"IR";
 
 pub struct ImpulseResponse {
-    // IRConvolver requires block size. This is set on the server after being created, and not set on client at all.
-    ir: Option<IRConvolver>,
-    max_buffer_size: usize,
     parameters: HashMap<String, PedalParameter>,
 
-    dry_buffer: Vec<f32>,
     saved_ir_files: Vec<PathBuf>,
     // Used to generate a unique ID for the drop down menu
-    id: usize
+    id: usize,
+
+    // Server only
+    // IRConvolver requires block size. This is set on the server after being created, and not set on client at all.
+    dry_buffer: Vec<f32>,
+    max_buffer_size: usize,
+    ir: Option<IRConvolver>,
+    sample_rate: Option<f32>,
 }
 
 impl Clone for ImpulseResponse {
@@ -31,7 +34,8 @@ impl Clone for ImpulseResponse {
             parameters: self.parameters.clone(),
             dry_buffer: Vec::new(),
             saved_ir_files: Self::saved_ir_files(),
-            id: unique_time_id()
+            id: unique_time_id(),
+            sample_rate: self.sample_rate,
         }
     }
 }
@@ -63,10 +67,15 @@ impl<'a> Deserialize<'a> for ImpulseResponse {
         // The ir convolver is set when the config is set on the server, as it requires the max buffer size.
         let parameters = HashMap::<String, PedalParameter>::deserialize(deserializer)?;
 
-        let mut ir = Self::new();
-        ir.parameters = parameters;
-
-        Ok(ir)
+        Ok(Self {
+            ir: None,
+            parameters,
+            dry_buffer: Vec::new(),
+            saved_ir_files: Self::saved_ir_files(),
+            max_buffer_size: 0,
+            id: unique_time_id(),
+            sample_rate: None,
+        })
     }
 }
 
@@ -101,21 +110,21 @@ impl ImpulseResponse {
             dry_buffer: Vec::new(),
             saved_ir_files: Self::saved_ir_files(),
             max_buffer_size: 0,
-            id: unique_time_id()
+            id: unique_time_id(),
+            sample_rate: None,
         }
     }
 
     /// Ensure max_buffer_size is set before setting the IR.
-    pub fn set_ir(&mut self, ir_path: &str) {
+    pub fn set_ir_convolver(&mut self, ir_path: &str, sample_rate: f32) {
         if ir_path.is_empty() {
             self.remove_ir();
             return;
         }
 
-        match load_ir(ir_path) {
+        match load_ir(ir_path, sample_rate) {
             Ok(ir) => {
-                self.parameters.get_mut("ir").unwrap().value = PedalParameterValue::String(ir_path.to_string());
-                self.ir = Some(IRConvolver::new(&ir, self.max_buffer_size));
+                self.ir = Some(IRConvolver::new(ir.first().expect("IR has no channels").as_slice(), self.max_buffer_size));
             },
             Err(e) => {
                 log::error!("Failed to load IR: {}", e);
@@ -154,30 +163,31 @@ impl ImpulseResponse {
 }
 
 impl PedalTrait for ImpulseResponse {
-    /// If `ir` parameter is set, but `ir` is None, this will set the IR as it is assumed that we are waiting on knowing the max buffer size.
-    fn set_config(&mut self, buffer_size: usize, _sample_rate: usize) {
+    /// If `ir` parameter is set, but `ir` is None, this will set the IR as it is assumed that we are waiting on knowing the max buffer size and sample rate (on server).
+    fn set_config(&mut self, buffer_size: usize, sample_rate: u32) {
         self.max_buffer_size = buffer_size;
+        self.sample_rate = Some(sample_rate as f32);
 
         let ir_path = self.parameters.get("ir").unwrap().value.as_str().unwrap().to_string();
         if !ir_path.is_empty() && self.ir.is_none() {
-            self.set_ir(&ir_path);
+            self.set_ir_convolver(&ir_path, sample_rate as f32);
         } else {
             self.ir = None;
         }
     }
 
     fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
-        let ir = match self.ir {
-            Some(ref mut ir) => ir,
-            None => return,
-        };
+        if self.ir.is_none() {
+            log::warn!("ImpulseResponse: Call set_config before processing.");
+            return;
+        }
 
         let dry_wet = self.parameters.get("dry_wet").unwrap().value.as_float().unwrap();
 
         self.dry_buffer.clear();
         self.dry_buffer.extend_from_slice(buffer);
 
-        ir.process(buffer);
+        self.ir.as_mut().unwrap().process(buffer);
 
         for (i, sample) in buffer.iter_mut().enumerate() {
             *sample = (*sample * dry_wet) + (self.dry_buffer[i] * (1.0 - dry_wet));
@@ -192,18 +202,21 @@ impl PedalTrait for ImpulseResponse {
         &mut self.parameters
     }
 
-    fn set_parameter_value(&mut self, name: &str, value:PedalParameterValue) {
+    fn set_parameter_value(&mut self, name: &str, value: PedalParameterValue) {
+        if name == "ir" {
+            // If sample rate is not set we are not on server, so don't need to set the IR convolver.
+            if let Some(sample_rate) = self.sample_rate {
+                self.set_ir_convolver(value.as_str().unwrap(), sample_rate);
+            }
+        }
+
         if !self.parameters.get(name).unwrap().is_valid(&value) {
             log::warn!("Attempted to set invalid value for parameter {}: {:?}", name, value);
             return;
         }
 
         if let Some(param) = self.parameters.get_mut(name) {
-            if name == "ir" {
-                self.set_ir(value.as_str().unwrap());
-            } else {
-                param.value = value;
-            }
+            param.value = value;
         } else {
             log::error!("Parameter {} not found", name);
         }

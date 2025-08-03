@@ -24,7 +24,7 @@ pub fn kill_jack_servers() {
     Command::new("pkill").arg("jackd").spawn().expect("Failed to kill any existing JACK servers.").wait().unwrap();
 }
 
-pub fn start_jack_server(frames_per_period: usize, periods_per_buffer: usize, input: String, output: String) -> io::Result<Child> {
+pub fn start_jack_server(frames_per_period: usize, periods_per_buffer: usize, sample_rate: u32, input: String, output: String) -> io::Result<Child> {
     kill_jack_servers();
     jack_server_wait(false);
     std::thread::sleep(std::time::Duration::from_millis(1000));
@@ -33,7 +33,7 @@ pub fn start_jack_server(frames_per_period: usize, periods_per_buffer: usize, in
 
     Command::new("jackd")
         .arg("-dalsa")
-        .arg("-r48000")
+        .arg(format!("-r{sample_rate}"))
         .arg(format!("-p{frames_per_period}"))
         .arg(format!("-n{periods_per_buffer}"))
         .arg(format!("-C{input}"))

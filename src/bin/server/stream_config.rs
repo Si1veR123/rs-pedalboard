@@ -19,14 +19,12 @@ fn sample_format_sort_function(a: &SampleFormat, b: &SampleFormat) -> std::cmp::
     a_index.cmp(&b_index)
 }
 
-/// Return a list of configs that support the given sample rate and buffer size.
-fn get_compatible_configs(
+/// Return a list of configs that support the buffer size.
+fn get_compatible_buffer_size_configs(
     configs: impl Iterator<Item = SupportedStreamConfigRange>,
-    sample_rate: usize,
     buffer_size: usize
-) -> Vec<SupportedStreamConfig> {
-    configs.filter_map(|c| c.try_with_sample_rate(cpal::SampleRate(sample_rate as u32)))
-        .filter(|c| {
+) -> Vec<SupportedStreamConfigRange> {
+    configs.filter(|c| {
             match c.buffer_size() {
                 SupportedBufferSize::Range { min, max } => *min <= buffer_size as u32 && *max >= buffer_size as u32,
                 SupportedBufferSize::Unknown => true,
@@ -35,47 +33,52 @@ fn get_compatible_configs(
         .collect()
 }
 
-pub fn get_input_config_for_device(device: &Device, sample_rate: usize, buffer_size: usize) -> SupportedStreamConfig {
-    let mut compatible_configs = get_compatible_configs(
-        device.supported_input_configs().expect("Failed to get supported input configs"),
-        sample_rate,
+/// Find config matching the buffer size, and return a list of compatible configs sorted by preferred settings.
+pub fn get_input_config_candidates(device: &Device, buffer_size: usize) -> Vec<SupportedStreamConfigRange> {
+    let input_supported_configs = device.supported_input_configs()
+        .expect("Failed to get supported input configs")
+        .collect::<Vec<_>>();
+
+    log::debug!("Supported input configs: {:?}", input_supported_configs);
+
+    let mut buffer_size_compatible_configs = get_compatible_buffer_size_configs(
+        input_supported_configs.iter().cloned(),
         buffer_size
     );
 
-    if compatible_configs.is_empty() {
-        let supported_configs_range = device.supported_input_configs()
-            .expect("Failed to get supported input configs")
-            .collect::<Vec<_>>();
-        log::error!("Supported input configs: {:?}", supported_configs_range);
-        panic!("No compatible input configs found for sample rate={}, buffer size={}", sample_rate, buffer_size);
+    if buffer_size_compatible_configs.is_empty() {
+        panic!("No compatible input configs found for buffer size={}", buffer_size);
     }
 
     // Prioritise configs based on sample format
-    compatible_configs.sort_by(|a, b| {
+    buffer_size_compatible_configs.sort_by(|a, b| {
         sample_format_sort_function(&a.sample_format(), &b.sample_format())
     });
 
-    compatible_configs[0].clone()
+    log::debug!("Sorted compatible buffer size input configs: {:?}", buffer_size_compatible_configs);
+
+    buffer_size_compatible_configs
 }
 
-pub fn get_output_config_for_device(device: &Device, sample_rate: usize, buffer_size: usize) -> SupportedStreamConfig {
-    let mut compatible_configs = get_compatible_configs(
-        device.supported_output_configs().expect("Failed to get supported output configs"),
-        sample_rate,
+/// Find output configs matching the buffer size, and return a list of compatible configs sorted by preferred settings.
+pub fn get_output_config_candidates(device: &Device, buffer_size: usize) -> Vec<SupportedStreamConfigRange> {
+    let supported_output_configs = device.supported_output_configs()
+        .expect("Failed to get supported output configs")
+        .collect::<Vec<_>>();
+
+    log::debug!("Supported output configs: {:?}", supported_output_configs);
+
+    let mut buffer_size_compatible_configs = get_compatible_buffer_size_configs(
+        supported_output_configs.iter().cloned(),
         buffer_size
     );
 
-    if compatible_configs.is_empty() {
-        let supported_configs_range = device.supported_output_configs()
-            .expect("Failed to get supported output configs")
-            .collect::<Vec<_>>();
-        log::error!("Supported output configs: {:?}", supported_configs_range);
-        panic!("No compatible output configs found for sample rate={}, buffer size={}", sample_rate, buffer_size);
+    if buffer_size_compatible_configs.is_empty() {
+        panic!("No compatible output configs found for buffer size={}", buffer_size);
     }
 
-    // Prioritise configs based on first channel count, then sample type, for output
-    // This ensures stereo output is preferred over mono
-    compatible_configs.sort_by(|a, b| {
+    // Prioritise configs based on first channel count (prefer stereo) then sample format
+    buffer_size_compatible_configs.sort_by(|a, b| {
         if a.channels() != b.channels() {
             b.channels().cmp(&a.channels())
         } else {
@@ -83,5 +86,68 @@ pub fn get_output_config_for_device(device: &Device, sample_rate: usize, buffer_
         }
     });
 
-    compatible_configs[0].clone()
+    log::debug!("Sorted compatible buffer size output configs: {:?}", buffer_size_compatible_configs);
+
+    buffer_size_compatible_configs
 }
+
+
+pub fn get_compatible_configs(
+    input: &Device,
+    output: &Device,
+    preferred_sample_rate: u32,
+    buffer_size: usize,
+) -> (SupportedStreamConfig, SupportedStreamConfig) {
+    let input_configs = get_input_config_candidates(input, buffer_size);
+    let output_configs = get_output_config_candidates(output, buffer_size);
+
+    // Collect all supported sample rates for input and output
+    let input_rates: Vec<u32> = input_configs.iter()
+        .flat_map(|cfg| cfg.min_sample_rate().0..=cfg.max_sample_rate().0)
+        .collect();
+
+    let output_rates: Vec<u32> = output_configs.iter()
+        .flat_map(|cfg| cfg.min_sample_rate().0..=cfg.max_sample_rate().0)
+        .collect();
+
+    let mut common_rates: Vec<u32> = input_rates
+        .into_iter()
+        .filter(|rate| output_rates.contains(rate))
+        .collect();
+
+    if common_rates.is_empty() {
+        panic!("No common sample rates between input and output devices.");
+    }
+
+    // Prefer the preferred_sample_rate, otherwise pick the highest common rate
+    common_rates.sort_unstable();
+    let chosen_rate = if common_rates.contains(&preferred_sample_rate) {
+        log::info!("Using preferred sample rate: {}", preferred_sample_rate);
+        preferred_sample_rate
+    } else {
+        log::warn!("Preferred sample rate {} not found in common rates, using highest common rate instead.", preferred_sample_rate);
+        *common_rates.last().unwrap()
+    };
+
+    // Find the first matching input and output config that supports the chosen rate
+    let mut input_config = None;
+    for input_config_range in input_configs {
+        if let Some(config) = input_config_range.try_with_sample_rate(cpal::SampleRate(chosen_rate)) {
+            input_config = Some(config);
+            break;
+        }
+    }
+
+    let mut output_config = None;
+    for output_config_range in output_configs {
+        if let Some(config) = output_config_range.try_with_sample_rate(cpal::SampleRate(chosen_rate)) {
+            output_config = Some(config);
+            break;
+        }
+    }
+
+    log::info!("Using configs: Input: {:?}, Output: {:?}", input_config, output_config);
+
+    (input_config.unwrap(), output_config.unwrap())
+}
+

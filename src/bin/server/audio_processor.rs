@@ -3,10 +3,7 @@ use crossbeam::channel::{Receiver, Sender};
 use ringbuf::{traits::{Producer, Split}, HeapProd, HeapRb};
 
 use rs_pedalboard::{
-    pedalboard_set::PedalboardSet,
-    pedals::{Pedal, PedalTrait},
-    dsp_algorithms::yin::Yin,
-    DEFAULT_VOLUME_MONITOR_UPDATE_RATE
+    dsp_algorithms::yin::Yin, pedalboard_set::PedalboardSet, pedals::{Pedal, PedalParameterValue, PedalTrait}, DEFAULT_VOLUME_MONITOR_UPDATE_RATE
 };
 
 use crate::{
@@ -32,7 +29,8 @@ pub struct AudioProcessor {
     pub metronome: (bool, MetronomePlayer),
     // Enabled?, last sent time, last sent values, input volume monitor, output volume monitor
     pub volume_monitor: (bool, Instant, (f32, f32), PeakVolumeMonitor, PeakVolumeMonitor),
-    pub volume_normalizer: Option<PeakNormalizer>
+    pub volume_normalizer: Option<PeakNormalizer>,
+    pub used_sample_rate: u32
 }
 
 impl AudioProcessor {
@@ -111,15 +109,19 @@ impl AudioProcessor {
                 let in_peak = self.volume_monitor.3.take_peak();
                 let out_peak = self.volume_monitor.4.take_peak();
 
+                let in_peak_round = (in_peak * 1000.0).round() / 1000.0;
+                let out_peak_round = (out_peak * 1000.0).round() / 1000.0;
+
                 // Prevent sending multiple consecutive same values
-                if !(self.volume_monitor.2.0 == in_peak && self.volume_monitor.2.1 == out_peak) {
-                    let command = format!("volumemonitor {:.3} {:.3}\n", in_peak, out_peak); 
+                let eps = 5e-3;
+                if !((self.volume_monitor.2.0 - in_peak_round).abs() < eps && (self.volume_monitor.2.1 - out_peak_round).abs() < eps) {
+                    let command = format!("volumemonitor {} {}\n", in_peak_round, out_peak_round); 
                     if self.command_sender.send(command.into()).is_err() {
                         log::error!("Failed to send volume monitor command to client");
                     }
                 }
 
-                self.volume_monitor.2 = (in_peak, out_peak);
+                self.volume_monitor.2 = (in_peak_round, out_peak_round);
             }
         }
 
@@ -160,7 +162,13 @@ impl AudioProcessor {
                 let parameter_name = words.next()?;
 
                 let pedalboard_ser_start_index = parameter_name.as_ptr() as usize + parameter_name.len() - command.as_ptr() as usize;
-                let parameter_value = serde_json::from_str(&command[pedalboard_ser_start_index + 1..]).ok()?;
+                let mut parameter_value: PedalParameterValue = serde_json::from_str(&command[pedalboard_ser_start_index + 1..]).ok()?;
+
+                // If the parameter is an oscillator, we must change the sample rate to whatever the server is using
+                if let Some(oscillator) = parameter_value.as_oscillator_mut() {
+                    oscillator.set_sample_rate(self.used_sample_rate as f32);
+                }
+
                 self.pedalboard_set.pedalboards.get_mut(pedalboard_index)?
                     .pedals.get_mut(pedal_index)?
                     .set_parameter_value(parameter_name, parameter_value);
@@ -196,7 +204,7 @@ impl AudioProcessor {
                 let pedal_stringified = &command[pedalboard_ser_start_index + 1..];
                 
                 let mut pedal: Pedal = serde_json::from_str(&pedal_stringified).ok()?;
-                pedal.set_config(self.settings.frames_per_period, 48000);
+                pedal.set_config(self.settings.frames_per_period, self.used_sample_rate);
                 self.pedalboard_set.pedalboards.get_mut(pedalboard_index)?
                     .pedals.push(pedal);
             },
@@ -230,7 +238,7 @@ impl AudioProcessor {
                 // Call set_config on every pedal
                 for pedalboard in &mut pedalboardset.pedalboards {
                     for pedal in &mut pedalboard.pedals {
-                        pedal.set_config(self.settings.frames_per_period, 48000);
+                        pedal.set_config(self.settings.frames_per_period, self.used_sample_rate);
                     }
                 }
 
@@ -252,14 +260,14 @@ impl AudioProcessor {
                 let enable_str = words.next()?;
                 match enable_str {
                     "on" => {
-                        let buffer_size = Yin::minimum_buffer_length(48000, self.settings.tuner_min_freq, self.settings.tuner_periods);
+                        let buffer_size = Yin::minimum_buffer_length(self.used_sample_rate, self.settings.tuner_min_freq, self.settings.tuner_periods);
                         let (tuner_writer, tuner_reader) = HeapRb::new(buffer_size).split();
                         let (frequency_channel_send, frequency_channel_recv) = crossbeam::channel::bounded(1);
                         let yin = Yin::new(
                             0.2,
                             self.settings.tuner_min_freq,
                             self.settings.tuner_max_freq,
-                            48000,
+                            self.used_sample_rate,
                             self.settings.tuner_periods,
                             tuner_reader,
                         );
@@ -317,15 +325,15 @@ impl AudioProcessor {
             "volumenormalization" => {
                 let mode = words.next()?;
                 match mode {
-                    "off" => {
+                    "none" => {
                         self.volume_normalizer = None;
                     },
                     "manual" => {
-                        self.volume_normalizer = Some(PeakNormalizer::new(0.95, 1.0, self.settings.frames_per_period, 48000));
+                        self.volume_normalizer = Some(PeakNormalizer::new(0.95, 1.0, self.settings.frames_per_period, self.used_sample_rate));
                     },
                     "automatic" => {
                         let decay = words.next()?.parse::<f32>().ok()?.clamp(0.01, 1.0);
-                        self.volume_normalizer = Some(PeakNormalizer::new(0.95, decay, self.settings.frames_per_period, 48000));
+                        self.volume_normalizer = Some(PeakNormalizer::new(0.95, decay, self.settings.frames_per_period, self.used_sample_rate));
                     },
                     "reset" => {
                         if let Some(normalizer) = &mut self.volume_normalizer {
@@ -340,6 +348,11 @@ impl AudioProcessor {
                     }
                 }
             },
+            "requestsr" => {
+                if self.command_sender.send(format!("sr {}\n", self.used_sample_rate).into()).is_err() {
+                    log::error!("Failed to send sample rate to client");
+                }
+            }
             _ => return None
         }
 

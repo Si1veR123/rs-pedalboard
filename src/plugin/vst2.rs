@@ -1,6 +1,5 @@
 use std::{path::{Path, PathBuf}, sync::{Arc, Mutex, OnceLock}};
 
-use super::PluginHost;
 use crate::{pedals::PedalParameterValue, unique_time_id};
 
 use eframe::egui::{self, Id};
@@ -86,13 +85,13 @@ impl Vst2Instance {
 impl Clone for Vst2Instance {
     fn clone(&self) -> Self {
         let mut instance = Self::load(self.dll_path.as_path()).expect("Plugin has previously been loaded - Clone should succeed");
-        instance.set_config(self.buffer_size, self.sample_rate as usize);
+        instance.set_config(self.buffer_size, self.sample_rate as u32);
         instance
     }
 }
 
-impl PluginHost for Vst2Instance {
-    fn load<P: AsRef<Path>>(path: P) -> Result<Self, ()> {
+impl Vst2Instance {
+    pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, ()> {
         let mut loader = PluginLoader::load(path.as_ref(), get_global_host()).map_err(|_| ())?;
 
         let mut instance = loader.instance().map_err(|_| ())?;
@@ -117,7 +116,7 @@ impl PluginHost for Vst2Instance {
         })
     }
 
-    fn set_config(&mut self, buffer_size: usize, sample_rate: usize) {
+    pub fn set_config(&mut self, buffer_size: usize, sample_rate: u32) {
         self.buffer_size = buffer_size;
         self.sample_rate = sample_rate as f32;
 
@@ -128,12 +127,12 @@ impl PluginHost for Vst2Instance {
         self.out_buffers.iter_mut().for_each(|buf| buf.resize(buffer_size, 0.0));
     }
 
-    fn plugin_name(&self) -> String {
+    pub fn plugin_name(&self) -> String {
         self.instance.get_info().name
     }
 
     /// Ensure that `set_config` has been called before processing audio.
-    fn process(&mut self, input: &mut [f32], output: &mut [f32]) {
+    pub fn process(&mut self, input: &mut [f32], output: &mut [f32]) {
         assert_eq!(input.len(), output.len(), "Input and output buffers must have the same length");
 
         for in_buf in &mut self.in_buffers {
@@ -156,11 +155,11 @@ impl PluginHost for Vst2Instance {
         output.copy_from_slice(&self.out_buffers[0]);
     }
 
-    fn open_ui(&mut self) {
+    pub fn open_ui(&mut self) {
         self.ui_open = true;
     }
     
-    fn close_ui(&mut self) {
+    pub fn close_ui(&mut self) {
         self.ui_open = false;
     }
 
@@ -168,7 +167,7 @@ impl PluginHost for Vst2Instance {
     /// 
     /// This does not directly update the parameter values. If a change is made, the name and value is returned.
     /// The caller is responsible for updating the parameter in the instance.
-    fn ui_frame(&mut self, ui: &mut egui::Ui) -> Option<(String, PedalParameterValue)> {
+    pub fn ui_frame(&mut self, ui: &mut egui::Ui) -> Option<(String, PedalParameterValue)> {
         let mut ui_open_temp = self.ui_open;
         let window = egui::Window::new(&self.info.name)
             .id(Id::new(&self.info.name).with(self.id))
@@ -197,11 +196,11 @@ impl PluginHost for Vst2Instance {
         changed_param
     }
 
-    fn parameter_count(&self) -> usize {
+    pub fn parameter_count(&self) -> usize {
         self.info.parameters as usize
     }
     
-    fn parameter_name(&self, index: usize) -> String {
+    pub fn parameter_name(&self, index: usize) -> String {
         if index < self.info.parameters as usize {
             self.instance.get_parameter_name(index as i32)
         } else {
@@ -210,7 +209,7 @@ impl PluginHost for Vst2Instance {
         }
     }
     
-    fn parameter_value(&self, index: usize) -> f32 {
+    pub fn parameter_value(&self, index: usize) -> f32 {
         if index < self.info.parameters as usize {
             self.instance.get_parameter(index as i32)
         } else {
@@ -219,7 +218,7 @@ impl PluginHost for Vst2Instance {
         }
     }
     
-    fn parameter_label(&self, index: usize) -> String {
+    pub fn parameter_label(&self, index: usize) -> String {
         if index < self.info.parameters as usize {
             self.instance.get_parameter_label(index as i32)
         } else {
@@ -228,7 +227,7 @@ impl PluginHost for Vst2Instance {
         }
     }
     
-    fn set_parameter_value(&mut self, index: usize, value: f32) {
+    pub fn set_parameter_value(&mut self, index: usize, value: f32) {
         if index < self.info.parameters as usize {
             self.instance.set_parameter(index as i32, value);
         } else {

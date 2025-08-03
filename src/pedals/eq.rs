@@ -44,6 +44,7 @@ pub fn deserialize_plot_points(data: &str) -> serde_json::Result<Vec<PlotPoint>>
 pub struct GraphicEq7 {
     parameters: HashMap<String, PedalParameter>,
     eq: eq::Equalizer,
+    sample_rate: f32,
     id: usize,
     response_plot: Vec<PlotPoint>,
 
@@ -85,12 +86,12 @@ impl<'a> Deserialize<'a> for GraphicEq7 {
 
         // Set live_frequency_plot to 0 when loading the pedal as it is intensive
         parameters.entry("live_frequency_plot".to_string())
-            .and_modify(|p| p.value = PedalParameterValue::Float(0.0))
+            .and_modify(|p| p.value = PedalParameterValue::Bool(false))
             .or_insert_with(|| PedalParameter {
-                value: PedalParameterValue::Float(0.0),
-                min: Some(PedalParameterValue::Float(0.0)),
-                max: Some(PedalParameterValue::Float(1.0)),
-                step: Some(PedalParameterValue::Float(1.0))
+                value: PedalParameterValue::Bool(false),
+                min: None,
+                max: None,
+                step: None
             });
 
         let high_shelf_enabled = parameters.get("high_shelf")
@@ -104,12 +105,14 @@ impl<'a> Deserialize<'a> for GraphicEq7 {
             Self::get_bandwidths(&parameters),
             Self::get_gains(&parameters),
             high_shelf_enabled,
-            low_shelf_enabled
+            low_shelf_enabled,
+            48000.0
         );
         Ok(GraphicEq7 {
             parameters,
-            response_plot: Self::amplitude_response_plot(&eq),
+            response_plot: Self::amplitude_response_plot(&eq, 48000.0),
             eq,
+            sample_rate: 48000.0, // Default sample rate, can be set later
             id: unique_time_id(),
             prev_live_frequency_plot: Vec::with_capacity(PLOT_POINTS),
             target_live_frequency_plot: Vec::with_capacity(PLOT_POINTS),
@@ -172,20 +175,21 @@ impl GraphicEq7 {
         parameters.insert(
             "live_frequency_plot".to_string(),
             PedalParameter {
-                value: PedalParameterValue::Float(0.0),
-                min: Some(PedalParameterValue::Float(0.0)),
-                max: Some(PedalParameterValue::Float(1.0)),
-                step: Some(PedalParameterValue::Float(1.0))
+                value: PedalParameterValue::Bool(false),
+                min: None,
+                max: None,
+                step: None
             },
         );
 
-        let eq = Self::build_eq([init_bandwidth; 7], [init_gain; 7], true, false);
+        let eq = Self::build_eq([init_bandwidth; 7], [init_gain; 7], true, false, 48000.0);
 
         GraphicEq7 {
-            response_plot: Self::amplitude_response_plot(&eq),
+            response_plot: Self::amplitude_response_plot(&eq, 48000.0),
             id: unique_time_id(),
             parameters,
             eq,
+            sample_rate: 48000.0, // Default sample rate, can be set later
             prev_live_frequency_plot: Vec::with_capacity(PLOT_POINTS),
             target_live_frequency_plot: Vec::with_capacity(PLOT_POINTS),
             last_frame: Instant::now(),
@@ -195,12 +199,12 @@ impl GraphicEq7 {
         }
     }
 
-    pub fn frequency_analyser() -> FrequencyAnalyser {
-        FrequencyAnalyser::new(48000.0, 60.0, 11000.0, PLOT_POINTS, OVERSAMPLE)
+    pub fn frequency_analyser(sample_rate: f32) -> FrequencyAnalyser {
+        FrequencyAnalyser::new(sample_rate, 60.0, 11000.0, PLOT_POINTS, OVERSAMPLE)
     }
 
-    pub fn amplitude_response_plot(eq: &Equalizer) -> Vec<PlotPoint> {
-        eq.amplitude_response_plot(48000.0, 60.0, 11000.0, PLOT_POINTS)
+    pub fn amplitude_response_plot(eq: &Equalizer, sample_rate: f32) -> Vec<PlotPoint> {
+        eq.amplitude_response_plot(sample_rate as f64, 60.0, 11000.0, PLOT_POINTS)
     }
 
     pub fn get_gains(parameters: &HashMap<String, PedalParameter>) -> [f32; 7] {
@@ -227,8 +231,8 @@ impl GraphicEq7 {
         ]
     }
 
-    fn build_eq(bandwidths: [f32; 7], gains: [f32; 7], high_shelf: bool, low_shelf: bool) -> eq::Equalizer {
-        let mut b = eq::GraphicEqualizerBuilder::new(48000.0)
+    fn build_eq(bandwidths: [f32; 7], gains: [f32; 7], high_shelf: bool, low_shelf: bool, sample_rate: f32) -> eq::Equalizer {
+        let mut b = eq::GraphicEqualizerBuilder::new(sample_rate)
             .with_bands([100.0, 200.0, 400.0, 800.0, 1600.0, 3200.0, 6400.0])
             .with_bandwidths(bandwidths)
             .with_gains(gains);
@@ -252,7 +256,7 @@ impl PedalTrait for GraphicEq7 {
             *sample = self.eq.process(*sample);
         }
 
-        if self.parameters.get("live_frequency_plot").unwrap().value.as_float().unwrap() > 0.0 {
+        if self.parameters.get("live_frequency_plot").unwrap().value.as_bool().unwrap() {
             let frequency_analyser = self.frequency_analyser.as_mut().expect("Frequency Analyser should not be None on server");
             frequency_analyser.push_samples(buffer);
 
@@ -268,10 +272,18 @@ impl PedalTrait for GraphicEq7 {
         }
     }
 
-    fn set_config(&mut self, _buffer_size:usize, _sample_rate:usize) {
+    fn set_config(&mut self, _buffer_size:usize, sample_rate:u32) {
+        self.sample_rate = sample_rate as f32;
         if self.frequency_analyser.is_none() {
-            self.frequency_analyser = Some(Self::frequency_analyser());
+            self.frequency_analyser = Some(Self::frequency_analyser(self.sample_rate));
         }
+        self.eq = Self::build_eq(
+            Self::get_bandwidths(&self.parameters),
+            Self::get_gains(&self.parameters),
+            self.parameters.get("high_shelf").unwrap().value.as_float().unwrap() > 0.0,
+            self.parameters.get("low_shelf").unwrap().value.as_float().unwrap() > 0.0,
+            self.sample_rate
+        );
     }
 
     fn get_parameters(&self) -> &HashMap<String, PedalParameter> {
@@ -292,15 +304,15 @@ impl PedalTrait for GraphicEq7 {
                     let high_shelf = self.parameters.get("high_shelf").unwrap().value.as_float().unwrap() > 0.0;
                     let gains = Self::get_gains(&self.parameters);
                     let bandwidths = Self::get_bandwidths(&self.parameters);
-                    self.eq = Self::build_eq(bandwidths, gains, high_shelf, low_shelf);
-                    self.response_plot = Self::amplitude_response_plot(&self.eq);
+                    self.eq = Self::build_eq(bandwidths, gains, high_shelf, low_shelf, self.sample_rate);
+                    self.response_plot = Self::amplitude_response_plot(&self.eq, self.sample_rate);
                 }
             }
         }
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, message_buffer: &[String]) -> Option<(String, PedalParameterValue)> {
-        let live_frequency_enabled = self.parameters.get("live_frequency_plot").unwrap().value.as_float().unwrap() > 0.0;
+        let live_frequency_enabled = self.parameters.get("live_frequency_plot").unwrap().value.as_bool().unwrap();
         if live_frequency_enabled {
             // Update the live frequency plot smoothly
             if self.prev_live_frequency_plot.is_empty() {
@@ -461,7 +473,7 @@ impl PedalTrait for GraphicEq7 {
                         .color(Color32::from_rgb(150, 150, 245))
                 );
 
-                if self.parameters.get("live_frequency_plot").unwrap().value.as_float().unwrap() > 0.0 {
+                if self.parameters.get("live_frequency_plot").unwrap().value.as_bool().unwrap() {
                     plot_ui.line(
                         Line::new("live_frequency", self.prev_live_frequency_plot.as_slice())
                             .color(Color32::from_rgb(200, 0, 0))
@@ -499,12 +511,7 @@ impl PedalTrait for GraphicEq7 {
                 .selected(live_frequency_enabled)
                 .frame(false)
         ).clicked() {
-            let new_value = if live_frequency_enabled {
-                0.0
-            } else {
-                1.0
-            };
-            changed_param = Some(("live_frequency_plot".to_string(), PedalParameterValue::Float(new_value)));
+            changed_param = Some(("live_frequency_plot".to_string(), PedalParameterValue::Bool(!live_frequency_enabled)));
         }
 
         changed_param
