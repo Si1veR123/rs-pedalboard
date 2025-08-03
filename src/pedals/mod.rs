@@ -33,8 +33,8 @@ mod reverb;
 pub use reverb::Reverb;
 
 use crate::dsp_algorithms::oscillator::Oscillator;
-// mod vibrato;
-// pub use vibrato::Vibrato;
+mod vibrato;
+pub use vibrato::Vibrato;
 
 mod ui;
 
@@ -221,6 +221,7 @@ pub enum Pedal {
     NoiseGate(NoiseGate),
     Vst2(Vst2),
     Reverb(Reverb),
+    Vibrato(Vibrato),
 }
 
 impl PedalDiscriminants {
@@ -238,6 +239,7 @@ impl PedalDiscriminants {
             PedalDiscriminants::NoiseGate => Pedal::NoiseGate(NoiseGate::new()),
             PedalDiscriminants::Vst2 => Pedal::Vst2(Vst2::new()),
             PedalDiscriminants::Reverb => Pedal::Reverb(Reverb::new()),
+            PedalDiscriminants::Vibrato => Pedal::Vibrato(Vibrato::new()),
         }
     }
 }

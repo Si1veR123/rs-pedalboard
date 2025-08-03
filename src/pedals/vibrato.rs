@@ -1,126 +1,112 @@
 use std::collections::HashMap;
+use std::hash::Hash;
+use eframe::egui::{self, include_image, Color32, RichText, Vec2};
+use serde::{ser::SerializeMap, Deserialize, Serialize};
 use super::{PedalTrait, PedalParameter, PedalParameterValue};
-use crate::dsp_algorithms::{oscillator::{Oscillator, Sine}, variable_delay::VariableDelayLine};
+use crate::{dsp_algorithms::{oscillator::{Oscillator, Sine}, variable_delay::VariableDelayLine}, pedals::ui::{oscillator_selection_window, pedal_knob, pedal_label_rect}};
 
 #[derive(Clone)]
 pub struct Vibrato {
-    sample_rate: f32,
-    oscillator: Oscillator,
     delay_line: VariableDelayLine,
-    delay_line_pos: usize,
-    max_delay_samples: usize,
     parameters: HashMap<String, PedalParameter>,
-    oscillator_phase_increment: f32,
+    oscillator_open: bool,
+}
+
+impl Hash for Vibrato {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.parameters.values().map(|p| &p.value).for_each(|v| v.hash(state));
+    }
+}
+
+impl Serialize for Vibrato {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut ser_map = serializer.serialize_map(Some(self.parameters.len()))?;
+        for (key, value) in &self.parameters {
+            ser_map.serialize_entry(key, value)?;
+        }
+        ser_map.end()
+    }
+}
+
+impl<'a> Deserialize<'a> for Vibrato {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'a>,
+    {
+        let parameters = HashMap::<String, PedalParameter>::deserialize(deserializer)?;
+        let depth_ms = parameters.get("depth").unwrap().value.as_float().unwrap();
+
+        let max_delay_samples = (48000.0 * depth_ms / 1000.0).ceil() as usize;
+
+        let variable_delay = VariableDelayLine::new(max_delay_samples+1);
+
+        Ok(Self {
+            delay_line: variable_delay,
+            parameters: parameters.clone(),
+            oscillator_open: false,
+        })
+    }
 }
 
 impl Vibrato {
-    pub fn new(sample_rate: usize) -> Self {
-        let sample_rate = sample_rate as f32;
-        let max_delay_ms = 15.0; // max delay depth in ms, must cover max expected depth + padding
-        let max_delay_samples = (sample_rate * max_delay_ms / 1000.0).ceil() as usize;
+    pub fn new() -> Self {
+        let max_delay_ms = 15.0f32;
+        let max_delay_samples = (48000.0 * max_delay_ms / 1000.0).ceil() as usize;
 
-        let oscillator = Oscillator::Sine(Sine::new(sample_rate, 5.0)); // default freq 5 Hz
+        let oscillator = Oscillator::Sine(Sine::new(48000.0, 5.0, 0.0, 0.0));
 
         let mut parameters = HashMap::new();
         parameters.insert(
             "depth".to_string(),
             PedalParameter {
-                value: PedalParameterValue::Float(5.0), // default depth in ms
+                value: PedalParameterValue::Float(5.0),
                 min: Some(PedalParameterValue::Float(0.1)),
-                max: Some(PedalParameterValue::Float(15.0)),
-                step: Some(0.1),
+                max: Some(PedalParameterValue::Float(max_delay_ms)),
+                step: Some(PedalParameterValue::Float(0.1)),
             },
         );
         parameters.insert(
-            "rate".to_string(),
+            "oscillator".to_string(),
             PedalParameter {
-                value: PedalParameterValue::Float(5.0), // frequency in Hz
-                min: Some(PedalParameterValue::Float(0.1)),
-                max: Some(PedalParameterValue::Float(10.0)),
-                step: Some(0.1),
+                value: PedalParameterValue::Oscillator(oscillator),
+                min: None,
+                max: None,
+                step: None,
             },
         );
 
         Self {
-            sample_rate,
-            oscillator,
-            delay_line: crate::VariableDelayLine::new(max_delay_samples + 2), // add 2 for safety margin
-            delay_line_pos: 0,
-            max_delay_samples,
+            delay_line: VariableDelayLine::new(max_delay_samples+1),
             parameters,
-            oscillator_phase_increment: 0.0,
+            oscillator_open: false,
         }
-    }
-
-    fn ms_to_samples(&self, ms: f32) -> f32 {
-        ms * self.sample_rate / 1000.0
     }
 }
 
 impl PedalTrait for Vibrato {
     fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
-        // Get parameters
-        let depth_ms = self.parameters.get("depth").unwrap().value.as_float().unwrap();
-        let rate_hz = self.parameters.get("rate").unwrap().value.as_float().unwrap();
-
-        // Update oscillator frequency if changed
-        if (self.oscillator.get_frequency() - rate_hz).abs() > f32::EPSILON {
-            self.oscillator.set_frequency(rate_hz);
-        }
-
-        // Compute padding: max(1 ms, 20% of depth)
-        let padding_ms = depth_ms * 0.2_f32.max(1.0);
-
-        // Clamp padding to at least 1 ms
-        let padding_ms = padding_ms.max(1.0);
-
-        // Convert to samples
-        let padding_samples = self.ms_to_samples(padding_ms);
-        let depth_samples = self.ms_to_samples(depth_ms);
-
+        let depth_ms = self.parameters["depth"].value.as_float().unwrap();
+        let oscillator = match &mut self.parameters.get_mut("oscillator").unwrap().value {
+            PedalParameterValue::Oscillator(ref mut osc) => osc,
+            _ => return,
+        };
+    
+        let depth_samples = 48000.0 * depth_ms / 1000.0;
+    
         for sample in buffer.iter_mut() {
-            // Write current input to delay line
-            if self.delay_line.buffer.len() < self.max_delay_samples + 2 {
-                self.delay_line.buffer.push_back(*sample);
-            } else {
-                self.delay_line.buffer[self.delay_line_pos] = *sample;
-            }
-
-            // Get modulator output in [-1,1]
-            let mod_val = self.oscillator.next().unwrap_or(0.0);
-
-            // Calculate modulated delay time in samples: delay = padding + depth * (1 + mod_val)
-            // mod_val in [-1,1], so delay ∈ [padding, padding + 2*depth]
-            let delay_time_samples = padding_samples + depth_samples * (1.0 + mod_val);
-
-            // Compute delay read index (circular buffer)
-            let delay_samples_f = delay_time_samples;
-            let read_pos_f = (self.delay_line_pos as f32 + self.delay_line.buffer.len() as f32)
-                - delay_samples_f;
-
-            // Wrap around buffer length
-            let buffer_len = self.delay_line.buffer.len() as f32;
-            let read_pos_f = if read_pos_f < 0.0 {
-                read_pos_f + buffer_len
-            } else if read_pos_f >= buffer_len {
-                read_pos_f - buffer_len
-            } else {
-                read_pos_f
-            };
-
-            let read_pos_i = read_pos_f.floor() as usize % self.delay_line.buffer.len();
-            let next_pos_i = (read_pos_i + 1) % self.delay_line.buffer.len();
-            let frac = read_pos_f - read_pos_f.floor();
-
-            // Linear interpolation between samples to reduce artifacts
-            let delayed_sample = (1.0 - frac) * self.delay_line.buffer[read_pos_i]
-                + frac * self.delay_line.buffer[next_pos_i];
-
-            // Output the delayed sample (pure vibrato: fully wet)
+            self.delay_line.buffer.push_front(*sample);
+            self.delay_line.buffer.pop_back();
+    
+            let lfo_value = 0.5 * (1.0 + oscillator.next().unwrap());
+    
+            let current_delay = lfo_value * depth_samples;
+    
+            let delayed_sample = self.delay_line.get_sample(current_delay);
+    
             *sample = delayed_sample;
-
-            // Advance delay line write position circularly
-            self.delay_line_pos = (self.delay_line_pos + 1) % self.delay_line.buffer.len();
         }
     }
 
@@ -130,5 +116,52 @@ impl PedalTrait for Vibrato {
 
     fn get_parameters_mut(&mut self) -> &mut HashMap<String, PedalParameter> {
         &mut self.parameters
+    }
+
+    fn ui(&mut self, ui: &mut egui::Ui, _message_buffer: &[String]) -> Option<(String, PedalParameterValue)> {
+        ui.add(egui::Image::new(include_image!("images/pedal_base.png")));
+
+        let mut to_change = None;
+
+        let depth_param = self.get_parameters().get("depth").unwrap();
+        if let Some(value) = pedal_knob(ui, RichText::new("Depth").color(Color32::BLACK).size(8.0), depth_param, egui::Vec2::new(0.38, 0.02), 0.25) {
+            to_change =  Some(("depth".to_string(), value));
+        }
+
+        let offset_x = 0.2 * ui.available_width();
+        let offset_y = 0.3 * ui.available_height();
+
+        let oscillator_button_rect = egui::Rect::from_min_size(
+            ui.max_rect().min + Vec2::new(offset_x, offset_y),
+            Vec2::new(0.6 * ui.available_width(), 0.1 * ui.available_height())
+        );
+
+        if ui.put(oscillator_button_rect, egui::Button::new(
+            RichText::new("Oscillator")
+                .color(Color32::WHITE)
+                .size(9.0)
+        )).clicked() {
+            self.oscillator_open = !self.oscillator_open;
+        };
+
+        if self.oscillator_open {
+            if let Some(osc) = oscillator_selection_window(
+                ui,
+                self.parameters.get("oscillator").unwrap().value.as_oscillator().unwrap(),
+                &mut self.oscillator_open,
+                false,
+                Some(0.1..=20.0)
+            ) {
+                to_change = Some(("oscillator".to_string(), PedalParameterValue::Oscillator(osc)));
+            }
+        }
+
+        let pedal_rect = ui.max_rect();
+        ui.put(pedal_label_rect(pedal_rect), egui::Label::new(
+            egui::RichText::new("Vibrato")
+                .color(egui::Color32::from_black_alpha(200))
+        ));
+
+        to_change
     }
 }
