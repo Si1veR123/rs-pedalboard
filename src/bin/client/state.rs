@@ -294,6 +294,8 @@ impl State {
                 self.set_volume_normalization_server(client_settings.volume_normalization, client_settings.auto_volume_normalization_decay);
                 self.socket.borrow_mut().master_in(client_settings.input_volume);
                 self.load_active_set();
+
+                self.socket.borrow_mut().send("requestsr\n");
             }
         }
         Ok(())

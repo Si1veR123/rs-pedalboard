@@ -347,6 +347,26 @@ impl Widget for &mut SettingsScreen {
                                     .show_value(false)
                             ).on_hover_text("Higher values may improve accuracy but increase computation, and decrease update time.");
                             ui.end_row();
+
+                            // Preferred Sample Rate
+                            ui.label(format!("Preferred Sample Rate"));
+                            egui::ComboBox::from_id_salt("preferred_sample_rate_dropdown")
+                                .selected_text(match server_settings.preferred_sample_rate {
+                                    Some(rate) => format!("{rate}hz"),
+                                    None => "Default (Maximum)".to_string()
+                                })
+                                .wrap_mode(egui::TextWrapMode::Truncate)
+                                .show_ui(ui, |ui| {
+                                    let mut response = ui.selectable_value(&mut server_settings.preferred_sample_rate, None, "Default (Maximum)");
+                                    response |= ui.selectable_value(&mut server_settings.preferred_sample_rate, Some(44100), "44100hz");
+                                    response |= ui.selectable_value(&mut server_settings.preferred_sample_rate, Some(48000), "48000hz");
+                                    response |= ui.selectable_value(&mut server_settings.preferred_sample_rate, Some(88200), "88200hz");
+                                    response |= ui.selectable_value(&mut server_settings.preferred_sample_rate, Some(96000), "96000hz");
+                                    response |= ui.selectable_value(&mut server_settings.preferred_sample_rate, Some(176400), "176400hz");
+                                    response |= ui.selectable_value(&mut server_settings.preferred_sample_rate, Some(192000), "192000hz");
+                                    response
+                                });
+                            ui.end_row()
                         });
                     
                     ui.add_space(10.0);

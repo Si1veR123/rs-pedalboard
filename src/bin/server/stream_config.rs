@@ -95,7 +95,7 @@ pub fn get_output_config_candidates(device: &Device, buffer_size: usize) -> Vec<
 pub fn get_compatible_configs(
     input: &Device,
     output: &Device,
-    preferred_sample_rate: u32,
+    preferred_sample_rate: Option<u32>,
     buffer_size: usize,
 ) -> (SupportedStreamConfig, SupportedStreamConfig) {
     let input_configs = get_input_config_candidates(input, buffer_size);
@@ -121,12 +121,19 @@ pub fn get_compatible_configs(
 
     // Prefer the preferred_sample_rate, otherwise pick the highest common rate
     common_rates.sort_unstable();
-    let chosen_rate = if common_rates.contains(&preferred_sample_rate) {
-        log::info!("Using preferred sample rate: {}", preferred_sample_rate);
-        preferred_sample_rate
+
+    let max_sample_rate = *common_rates.last().unwrap();
+    let chosen_rate = if let Some(preferred_sample_rate) = preferred_sample_rate {
+        if common_rates.contains(&preferred_sample_rate) {
+            log::info!("Using preferred sample rate: {}", preferred_sample_rate);
+            preferred_sample_rate
+        } else {
+            log::warn!("Preferred sample rate {} not available, using max sample rate: {}", preferred_sample_rate, max_sample_rate);
+            max_sample_rate
+        }
     } else {
-        log::warn!("Preferred sample rate {} not found in common rates, using highest common rate instead.", preferred_sample_rate);
-        *common_rates.last().unwrap()
+        log::info!("No preferred sample rate specified, using max sample rate: {}", max_sample_rate);
+        max_sample_rate
     };
 
     // Find the first matching input and output config that supports the chosen rate

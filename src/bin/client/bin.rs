@@ -192,6 +192,12 @@ impl eframe::App for PedalboardClientApp {
             log::error!("Failed to receive messages on client: {}", e);
         });
 
+        let mut sr_buf = Vec::new();
+        self.state.get_commands("sr", &mut sr_buf);
+        if !sr_buf.is_empty() {
+            log::info!("Server is using sample rate: {}hz", sr_buf[0]);
+        }
+
         let bottom_window_select_height = WINDOW_HEIGHT / 10.0;
         let padding = 10.0;
         egui::TopBottomPanel::bottom(Id::new("bottom_window_select"))

@@ -39,6 +39,9 @@ pub fn start_server_process(settings: &ServerSettingsSave) -> Option<Child> {
             if let Some(output_device) = &settings.output_device {
                 full_command.arg("--output-device").arg(output_device);
             }
+            if let Some(preferred_sample_rate) = settings.preferred_sample_rate {
+                full_command.arg("--preferred-sample-rate").arg(preferred_sample_rate.to_string());
+            }
 
             log::info!("Full command to start server: {:?}", full_command);
             let process = full_command.spawn();

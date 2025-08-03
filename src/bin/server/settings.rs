@@ -57,7 +57,7 @@ pub struct ServerSettings {
     pub tuner_periods: usize,
     pub input_device: Option<String>,
     pub output_device: Option<String>,
-    pub preferred_sample_rate: u32,
+    pub preferred_sample_rate: Option<u32>,
 }
 
 impl ServerSettings {
@@ -114,11 +114,8 @@ impl ServerSettings {
             saved.as_ref().and_then(|s| s.output_device.clone())
         });
 
-        let preferred_sample_rate = args.preferred_sample_rate.unwrap_or_else(|| {
-            saved.as_ref().map_or_else(
-                || 48000,
-                |s| s.preferred_sample_rate
-            )
+        let preferred_sample_rate = args.preferred_sample_rate.or_else(|| {
+            saved.as_ref().and_then(|s| s.preferred_sample_rate)
         });
 
         ServerSettings {

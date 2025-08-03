@@ -75,7 +75,7 @@ pub struct ServerSettingsSave {
     pub tuner_periods: usize,
     pub input_device: Option<String>,
     pub output_device: Option<String>,
-    pub preferred_sample_rate: u32
+    pub preferred_sample_rate: Option<u32>
 }
 
 impl Default for ServerSettingsSave {
@@ -88,7 +88,7 @@ impl Default for ServerSettingsSave {
             tuner_periods: 5,
             input_device: None,
             output_device: None,
-            preferred_sample_rate: 48000,
+            preferred_sample_rate: None,
         }
     }
 }
