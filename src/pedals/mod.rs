@@ -32,6 +32,10 @@ pub use vst2::Vst2;
 mod reverb;
 pub use reverb::Reverb;
 
+use crate::dsp_algorithms::oscillator::Oscillator;
+// mod vibrato;
+// pub use vibrato::Vibrato;
+
 mod ui;
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -118,7 +122,8 @@ pub enum PedalParameterValue {
     Float(f32),
     String(String),
     Bool(bool),
-    Int(i16)
+    Int(i16),
+    Oscillator(Oscillator)
 }
 
 impl Hash for PedalParameterValue {
@@ -127,7 +132,8 @@ impl Hash for PedalParameterValue {
             PedalParameterValue::Float(value) => value.to_bits().hash(state),
             PedalParameterValue::String(value) => value.hash(state),
             PedalParameterValue::Bool(value) => value.hash(state),
-            PedalParameterValue::Int(value) => value.hash(state)
+            PedalParameterValue::Int(value) => value.hash(state),
+            PedalParameterValue::Oscillator(osc) => osc.hash(state),
         }
     }
 }
@@ -157,6 +163,13 @@ impl PedalParameterValue {
     pub fn as_int(&self) -> Option<i16> {
         match self {
             PedalParameterValue::Int(value) => Some(*value),
+            _ => None
+        }
+    }
+
+    pub fn as_oscillator(&self) -> Option<&Oscillator> {
+        match self {
+            PedalParameterValue::Oscillator(osc) => Some(osc),
             _ => None
         }
     }

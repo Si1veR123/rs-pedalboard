@@ -1,5 +1,5 @@
 use crate::dsp_algorithms::variable_delay::VariableDelayLine;
-use crate::dsp_algorithms::oscillator::{Oscillator, self};
+use crate::dsp_algorithms::oscillator::Oscillator;
 use std::iter::Iterator;
 
 #[derive(Clone)]
@@ -8,29 +8,20 @@ pub struct VariableDelayPhaser {
     delay: VariableDelayLine,
     min_delay_samples: usize,
     pub feedback: f32,
-    oscillator: Oscillator,
+    pub oscillator: Oscillator,
 }
 
 
 impl VariableDelayPhaser {
-    fn oscillator_from_selection(selection: u16, sample_rate: f32, frequency: f32) -> Oscillator {
-        match selection {
-            0 => Oscillator::Sine(oscillator::Sine::new(sample_rate, frequency)),
-            1 => Oscillator::Square(oscillator::Square::new(sample_rate, frequency)),
-            2 => Oscillator::Sawtooth(oscillator::Sawtooth::new(sample_rate, frequency)),
-            3 => Oscillator::Triangle(oscillator::Triangle::new(sample_rate, frequency)),
-            _ => panic!("Invalid selection")
-        }
-    }
-
-    pub fn new(depth_min_ms: f32, depth_max_ms: f32, rate_hz: f32, mix: f32, oscillator_selection: usize, feedback: f32) -> Self {
+    pub fn new(depth_min_ms: f32, depth_max_ms: f32, mix: f32, oscillator: Oscillator, feedback: f32) -> Self {
         let depth_samples = ((depth_max_ms / 1000.0) * 48000.0) as usize;
+
         VariableDelayPhaser {
             mix,
             min_delay_samples: ((depth_min_ms / 1000.0) * 48000.0) as usize,
             delay: VariableDelayLine::new(depth_samples),
             feedback,
-            oscillator: Self::oscillator_from_selection(oscillator_selection as u16, 48000.0, rate_hz)
+            oscillator
         }
     }
 
@@ -63,9 +54,5 @@ impl VariableDelayPhaser {
     pub fn set_max_depth(&mut self, depth_ms: f32) {
         let depth_samples = ((depth_ms / 1000.0) * 48000.0) as usize;
         self.delay = VariableDelayLine::new(depth_samples);
-    }
-
-    pub fn set_oscillator(&mut self, selection: u16) {
-        self.oscillator = Self::oscillator_from_selection(selection, 48000.0, self.oscillator.get_frequency());
     }
 }
