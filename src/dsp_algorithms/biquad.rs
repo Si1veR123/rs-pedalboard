@@ -2,8 +2,8 @@ use num_complex::Complex64;
 
 #[derive(Debug, Clone, Copy)]
 pub struct BiquadFilter {
-    y: [f32; 2],
-    x: [f32; 2],
+    pub y: [f32; 2],
+    pub x: [f32; 2],
     b: [f32; 3],
     a: [f32; 2]
 }

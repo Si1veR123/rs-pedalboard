@@ -35,6 +35,10 @@ mod vibrato;
 pub use vibrato::Vibrato;
 mod tremolo;
 pub use tremolo::Tremolo;
+mod autowah;
+pub use autowah::AutoWah;
+mod wah;
+pub use wah::Wah;
 
 mod ui;
 
@@ -230,6 +234,8 @@ pub enum Pedal {
     Reverb(Reverb),
     Vibrato(Vibrato),
     Tremolo(Tremolo),
+    AutoWah(AutoWah),
+    Wah(Wah)
 }
 
 impl PedalDiscriminants {
@@ -249,6 +255,8 @@ impl PedalDiscriminants {
             PedalDiscriminants::Reverb => Pedal::Reverb(Reverb::new()),
             PedalDiscriminants::Vibrato => Pedal::Vibrato(Vibrato::new()),
             PedalDiscriminants::Tremolo => Pedal::Tremolo(Tremolo::new()),
+            PedalDiscriminants::AutoWah => Pedal::AutoWah(AutoWah::new()),
+            PedalDiscriminants::Wah => Pedal::Wah(Wah::new())
         }
     }
 }
