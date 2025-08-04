@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{PedalParameter, PedalParameterValue, PedalTrait};
 
-use crate::{dsp_algorithms::{eq::{self, Equalizer}, frequency_analysis::FrequencyAnalyser}, pedals::ui::pedal_knob, unique_time_id};
+use crate::{dsp_algorithms::{eq::{self, Equalizer}, frequency_analysis::FrequencyAnalyser}, pedals::ui::pedal_knob, unique_time_id, DEFAULT_REFRESH_DURATION};
 
 const PLOT_POINTS: usize = 80;
 const LIVE_FREQUENCY_UPDATE_MS: usize = 100;
@@ -328,7 +328,7 @@ impl PedalTrait for GraphicEq7 {
                 prev.y = prev.y * (1.0 - smooth_factor) + target.y * smooth_factor;
             }
 
-            ui.ctx().request_repaint();
+            ui.ctx().request_repaint_after(DEFAULT_REFRESH_DURATION);
         }
 
         if message_buffer.len() > 0 {

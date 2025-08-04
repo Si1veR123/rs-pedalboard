@@ -15,9 +15,6 @@ use crate::{stage::volume_monitor_ui::VolumeMonitorWidget, state::State};
 /// Repaint duration for pedalboard stage for stats, time etc.
 const STATS_STAGE_REPAINT_DURATION: std::time::Duration = Duration::from_secs(1);
 
-/// Repaint duration for pedalboard stage when volume monitor is enabled
-const VOLUME_MONITOR_STAGE_REPAINT_DURATION: std::time::Duration = Duration::from_millis(33); // 30 FPS
-
 /// Duration after which the clipping state is reset if no clipping occurs
 pub const CLIPPING_STATE_DURATION: Duration = Duration::from_secs(2);
 pub enum CurrentAction {
@@ -211,7 +208,7 @@ impl Widget for &mut PedalboardStageScreen {
 
         if self.state.client_settings.borrow().show_volume_monitor {
             self.update_volume_monitors_from_commands();
-            ui.ctx().request_repaint_after(VOLUME_MONITOR_STAGE_REPAINT_DURATION);
+            ui.ctx().request_repaint_after(rs_pedalboard::DEFAULT_REFRESH_DURATION);
         }
 
         self.update_xrun_from_commands();

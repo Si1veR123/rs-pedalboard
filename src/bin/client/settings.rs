@@ -428,7 +428,7 @@ impl Widget for &mut SettingsScreen {
                     match self.server_launch_state {
                         ServerLaunchState::StartError => { ui.label(RichText::new("Failed to start server. Check the logs for more details.").color(Color32::RED)); },
                         ServerLaunchState::KillError => { ui.label(RichText::new("Failed to stop server. Check the logs for more details.").color(Color32::RED)); },
-                        ServerLaunchState::AwaitingKill(_) | ServerLaunchState::AwaitingStart { .. } => { ui.ctx().request_repaint(); }
+                        ServerLaunchState::AwaitingKill(_) | ServerLaunchState::AwaitingStart { .. } => { ui.ctx().request_repaint_after(rs_pedalboard::DEFAULT_REFRESH_DURATION); }
                         ServerLaunchState::None => {}
                     }
                     ui.add_space(20.0);

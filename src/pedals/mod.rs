@@ -39,6 +39,8 @@ mod autowah;
 pub use autowah::AutoWah;
 mod wah;
 pub use wah::Wah;
+mod compressor;
+pub use compressor::Compressor;
 
 mod ui;
 
@@ -235,7 +237,8 @@ pub enum Pedal {
     Vibrato(Vibrato),
     Tremolo(Tremolo),
     AutoWah(AutoWah),
-    Wah(Wah)
+    Wah(Wah),
+    Compressor(Compressor),
 }
 
 impl PedalDiscriminants {
@@ -256,7 +259,8 @@ impl PedalDiscriminants {
             PedalDiscriminants::Vibrato => Pedal::Vibrato(Vibrato::new()),
             PedalDiscriminants::Tremolo => Pedal::Tremolo(Tremolo::new()),
             PedalDiscriminants::AutoWah => Pedal::AutoWah(AutoWah::new()),
-            PedalDiscriminants::Wah => Pedal::Wah(Wah::new())
+            PedalDiscriminants::Wah => Pedal::Wah(Wah::new()),
+            PedalDiscriminants::Compressor => Pedal::Compressor(Compressor::new()),
         }
     }
 }

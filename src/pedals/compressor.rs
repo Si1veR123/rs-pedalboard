@@ -1,0 +1,336 @@
+// make threshold 0-1
+// add soft knee
+use std::collections::HashMap;
+use std::hash::Hash;
+use std::time::{Duration, Instant};
+use crate::DEFAULT_REFRESH_DURATION;
+
+use super::{PedalTrait, PedalParameter, PedalParameterValue};
+use super::ui::pedal_knob;
+use eframe::egui::{self, include_image, UiBuilder, Vec2};
+use serde::{ser::SerializeMap, Deserialize, Serialize};
+
+const ENVELOPE_UPDATE_RATE: Duration = Duration::from_millis(100);
+
+#[derive(Clone)]
+pub struct Compressor {
+    parameters: HashMap<String, PedalParameter>,
+    sample_rate: Option<f32>,
+    envelope: f32,
+
+    // Client only, used for smoothing
+    current_envelope: f32,
+
+    // Server only
+    envelope_last_sent: Instant
+}
+
+impl Serialize for Compressor {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut ser_map = serializer.serialize_map(Some(self.parameters.len()))?;
+        for (key, value) in &self.parameters {
+            ser_map.serialize_entry(key, value)?;
+        }
+        ser_map.end()
+    }
+}
+
+impl<'a> Deserialize<'a> for Compressor {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'a>,
+    {
+        let parameters = HashMap::<String, PedalParameter>::deserialize(deserializer)?;
+        Ok(Compressor {
+            parameters,
+            sample_rate: None,
+            envelope: 0.0,
+            current_envelope: 0.0,
+            envelope_last_sent: Instant::now(),
+        })
+    }
+}
+
+impl Hash for Compressor {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.parameters.values().map(|p| &p.value).for_each(|v| v.hash(state));
+    }
+}
+
+impl Compressor {
+    pub fn new() -> Self {
+        let mut parameters = HashMap::new();
+
+        parameters.insert("threshold".into(), PedalParameter {
+            value: PedalParameterValue::Float(0.75),
+            min: Some(PedalParameterValue::Float(0.0)),
+            max: Some(PedalParameterValue::Float(1.0)),
+            step: None,
+        });
+        parameters.insert("attack".into(), PedalParameter {
+            value: PedalParameterValue::Float(10.0),
+            min: Some(PedalParameterValue::Float(1.0)),
+            max: Some(PedalParameterValue::Float(50.0)),
+            step: None,
+        });
+        parameters.insert("release".into(), PedalParameter {
+            value: PedalParameterValue::Float(100.0),
+            min: Some(PedalParameterValue::Float(5.0)),
+            max: Some(PedalParameterValue::Float(300.0)),
+            step: None,
+        });
+        parameters.insert("level".into(), PedalParameter {
+            value: PedalParameterValue::Float(1.0),
+            min: Some(PedalParameterValue::Float(0.0)),
+            max: Some(PedalParameterValue::Float(5.0)),
+            step: None,
+        });
+        parameters.insert("ratio".into(), PedalParameter {
+            value: PedalParameterValue::Float(5.0),
+            min: Some(PedalParameterValue::Float(1.0)),
+            max: Some(PedalParameterValue::Float(20.0)),
+            step: None,
+        });
+        parameters.insert("dry_wet".into(), PedalParameter {
+            value: PedalParameterValue::Float(1.0),
+            min: Some(PedalParameterValue::Float(0.0)),
+            max: Some(PedalParameterValue::Float(1.0)),
+            step: None,
+        });
+        parameters.insert("soft_knee".into(), PedalParameter {
+            value: PedalParameterValue::Float(0.0),
+            min: Some(PedalParameterValue::Float(0.0)),
+            max: Some(PedalParameterValue::Float(1.0)),
+            step: None,
+        });
+
+        Compressor {
+            parameters,
+            envelope: 0.0,
+            current_envelope: 0.0,
+            sample_rate: None,
+            envelope_last_sent: Instant::now(),
+        }
+    }
+}
+
+impl PedalTrait for Compressor {
+    fn set_config(&mut self, _buffer_size: usize, sample_rate: u32) {
+        self.sample_rate = Some(sample_rate as f32);
+    }
+
+    fn process_audio(&mut self, buffer: &mut [f32], messages: &mut Vec<String>) {
+        let sample_rate = match self.sample_rate {
+            Some(rate) => rate,
+            None => {
+                log::warn!("Compressor: Call set_config before processing.");
+                return;
+            }
+        };
+
+        let threshold_lin = self.parameters["threshold"].value.as_float().unwrap();
+        let attack = self.parameters["attack"].value.as_float().unwrap();
+        let release = self.parameters["release"].value.as_float().unwrap();
+        let level = self.parameters["level"].value.as_float().unwrap();
+        let ratio = self.parameters["ratio"].value.as_float().unwrap();
+        let blend = self.parameters["dry_wet"].value.as_float().unwrap();
+        let soft_knee = self.parameters["soft_knee"].value.as_float().unwrap();
+
+        // Sample rate independent
+        let attack_coeff = (-1.0 / (attack / 1000.0 * sample_rate)).exp();
+        let release_coeff = (-1.0 / (release / 1000.0 * sample_rate)).exp();
+
+        for sample in buffer.iter_mut() {
+            // Envelope follower
+            self.envelope = if sample.abs() > self.envelope {
+                attack_coeff * (self.envelope - sample.abs()) + sample.abs()
+            } else {
+                release_coeff * (self.envelope - sample.abs()) + sample.abs()
+            };
+
+            // Compression gain
+            let gain = if self.envelope <= threshold_lin - soft_knee / 2.0 {
+                1.0
+            } else if self.envelope >= threshold_lin + soft_knee / 2.0 {
+                // Fully in compression region
+                let excess = self.envelope - threshold_lin;
+                let compressed_excess = excess / ratio;
+                (compressed_excess + threshold_lin) / self.envelope
+            } else {
+                // Soft knee region
+                let knee_start = threshold_lin - soft_knee / 2.0;
+                let delta = self.envelope - knee_start;
+                let gain_output = self.envelope + ((1.0 / ratio - 1.0) * delta * delta) / (2.0 * soft_knee);
+                gain_output / self.envelope
+            };
+
+            let compressed_sample = *sample * gain * level;
+
+            // Blend dry + compressed
+            *sample = *sample * (1.0 - blend) + compressed_sample * blend;
+        }
+
+        if self.envelope_last_sent.elapsed() >= ENVELOPE_UPDATE_RATE {
+            let envelope_round = (self.envelope * 100.0).round() / 100.0;
+            messages.push(format!("{:?}", envelope_round));
+            self.envelope_last_sent = Instant::now();
+        }
+    }
+
+    fn get_parameters(&self) -> &HashMap<String, PedalParameter> {
+        &self.parameters
+    }
+
+    fn get_parameters_mut(&mut self) -> &mut HashMap<String, PedalParameter> {
+        &mut self.parameters
+    }
+    
+    fn set_parameter_value(&mut self,name: &str,value:PedalParameterValue){
+        let parameters = self.get_parameters_mut();
+        if let Some(parameter) = parameters.get_mut(name){
+            if parameter.is_valid(&value){
+                parameter.value = value;
+            } else {
+                log::warn!("Attempted to set invalid value for parameter {}: {:?}",name,value);
+            }
+        }
+    }
+    
+    fn ui(&mut self, ui: &mut eframe::egui::Ui, message_buffer: &[String]) -> Option<(String,PedalParameterValue)> {
+        ui.ctx().request_repaint_after(DEFAULT_REFRESH_DURATION);
+
+        if message_buffer.len() > 0 {
+            // Update envelope from message buffer
+            if let Ok(envelope) = message_buffer[0].parse::<f32>() {
+                self.envelope = envelope;
+            } else {
+                log::warn!("Compressor: Invalid envelope value in message buffer: {}", message_buffer[0]);
+            }
+        }
+
+        // Smooth current_envelope to envelope
+        let smoothing_factor = 0.5; // based on refresh rate and envelope update rate
+        self.current_envelope = self.current_envelope * (1.0 - smoothing_factor) + self.envelope * smoothing_factor;
+
+        let pedal_rect = ui.available_rect_before_wrap();
+        ui.add(egui::Image::new(include_image!("images/compressor_bg.png")));
+
+        let mut to_change = None;
+        let ratio_param = self.get_parameters().get("ratio").unwrap();
+        if let Some(value) = pedal_knob(ui, "", ratio_param, egui::Vec2::new(0.0625, 0.03), 0.25) {
+            to_change = Some(("ratio".to_string(), value));
+        }
+
+        let threshold_param = self.get_parameters().get("threshold").unwrap();
+        if let Some(value) = pedal_knob(ui, "", threshold_param, egui::Vec2::new(0.375, 0.014), 0.25) {
+            to_change = Some(("threshold".to_string(), value));
+        }
+
+        let level_param = self.get_parameters().get("level").unwrap();
+        if let Some(value) = pedal_knob(ui, "", level_param, egui::Vec2::new(0.6875, 0.03), 0.25) {
+            to_change = Some(("level".to_string(), value));
+        }
+
+        let attack_param = self.get_parameters().get("attack").unwrap();
+        if let Some(value) = pedal_knob(ui, "", attack_param, egui::Vec2::new(0.09, 0.207), 0.2) {
+            to_change = Some(("attack".to_string(), value));
+        }
+
+        let release_param = self.get_parameters().get("release").unwrap();
+        if let Some(value) = pedal_knob(ui, "", release_param, egui::Vec2::new(0.3, 0.207), 0.2) {
+            to_change = Some(("release".to_string(), value));
+        }
+
+        let soft_knee_param = self.get_parameters().get("soft_knee").unwrap();
+        if let Some(value) = pedal_knob(ui, "", soft_knee_param, egui::Vec2::new(0.50, 0.207), 0.2) {
+            to_change = Some(("soft_knee".to_string(), value));
+        }
+
+        let dry_wet_param = self.get_parameters().get("dry_wet").unwrap();
+        if let Some(value) = pedal_knob(ui, "", dry_wet_param, egui::Vec2::new(0.71, 0.207), 0.2) {
+            to_change = Some(("dry_wet".to_string(), value));
+        }
+
+        let compressor_graph_rect = egui::Rect::from_min_size(
+            pedal_rect.min + Vec2::new(0.2*pedal_rect.width(), 0.36*pedal_rect.height()),
+            Vec2::new(0.6*pedal_rect.width(), 0.365*pedal_rect.height())
+        );
+        let mut graph_ui = ui.new_child(UiBuilder::new().max_rect(compressor_graph_rect));
+
+        draw_compressor_graph(
+            &mut graph_ui,
+            self.current_envelope,
+            self.parameters["threshold"].value.as_float().unwrap(),
+            self.parameters["ratio"].value.as_float().unwrap(),
+            self.parameters["soft_knee"].value.as_float().unwrap(),
+        );
+
+        to_change
+    }
+}
+
+fn draw_compressor_graph(
+    ui: &mut egui::Ui,
+    envelope: f32,
+    threshold: f32,
+    ratio: f32,
+    soft_knee: f32,
+) {
+    let available = ui.available_rect_before_wrap();
+    let size = available.width().min(available.height());
+
+    // Center the square inside the available rect
+    let x_offset = (available.width() - size) / 2.0;
+    let y_offset = (available.height() - size) / 2.0;
+
+    let graph_rect = egui::Rect::from_min_size(
+        egui::pos2(available.min.x + x_offset, available.min.y + y_offset),
+        egui::vec2(size, size),
+    );
+    ui.allocate_rect(graph_rect, egui::Sense::hover());
+
+    ui.painter().rect_filled(graph_rect, 2.0, egui::Color32::from_black_alpha(50));
+
+    let mut points = vec![];
+    let mut envelope_pos: Option<egui::Pos2> = None;
+
+    let step = 0.01;
+    let knee_start = threshold - soft_knee / 2.0;
+    let knee_end = threshold + soft_knee / 2.0;
+
+    for x in (0..=100).map(|i| i as f32 * step) {
+        let y = if x < knee_start {
+            x
+        } else if x > knee_end {
+            (x - threshold) / ratio + threshold
+        } else {
+            // Smooth soft knee
+            let delta = x - (threshold - soft_knee / 2.0);
+            let k = soft_knee;
+            x + ((1.0 / ratio - 1.0) * delta * delta) / (2.0 * k)
+        };
+
+        let screen_x = graph_rect.left() + x * graph_rect.width();
+        let screen_y = graph_rect.bottom() - y * graph_rect.height();
+        points.push(egui::pos2(screen_x, screen_y));
+
+        // If this x is near the envelope, save the screen position
+        if (x - envelope).abs() < step / 2.0 && envelope_pos.is_none() {
+            envelope_pos = Some(egui::pos2(screen_x, screen_y));
+        }
+    }
+
+    // Draw compression curve
+    ui.painter().add(egui::Shape::line(
+        points,
+        egui::Stroke::new(1.0, egui::Color32::WHITE),
+    ));
+
+    // Draw envelope indicator
+    if let Some(pos) = envelope_pos {
+        ui.painter().add(egui::Shape::circle_filled(pos, 3.0, egui::Color32::RED));
+    }
+}
