@@ -1,16 +1,18 @@
 use std::{collections::HashMap, hash::Hash};
-
 use eframe::egui::{self, include_image, Color32, RichText};
 use serde::{ser::SerializeMap, Deserialize, Serialize};
 
-use super::{ui::{pedal_knob, pedal_label_rect}, PedalParameter, PedalParameterValue, PedalTrait};
+use super::{
+    ui::{pedal_knob, pedal_label_rect},
+    PedalParameter, PedalParameterValue, PedalTrait,
+};
 
 #[derive(Clone)]
 pub struct NoiseGate {
     parameters: HashMap<String, PedalParameter>,
-
     gain: f32,
-    is_open: bool,
+    level: f32,
+    sample_rate: Option<f32>
 }
 
 impl Serialize for NoiseGate {
@@ -32,11 +34,13 @@ impl<'de> Deserialize<'de> for NoiseGate {
         D: serde::Deserializer<'de>,
     {
         let parameters = HashMap::<String, PedalParameter>::deserialize(deserializer)?;
-
-        let mut noise_gate = Self::new();
-        noise_gate.parameters = parameters;
-
-        Ok(noise_gate)
+        
+        Ok(Self {
+            parameters,
+            gain: 1.0,
+            level: 0.0,
+            sample_rate: None,
+        })
     }
 }
 
@@ -44,48 +48,54 @@ impl NoiseGate {
     pub fn new() -> Self {
         let mut parameters = HashMap::new();
 
-        let init_threshold_open = 0.05;
-        let init_threshold_close = 0.01;
-        let init_release = 0.0001;
-
         parameters.insert(
-            "threshold_open".to_string(),
+            "threshold_db".to_string(),
             PedalParameter {
-                value: PedalParameterValue::Float(init_threshold_open),
-                min: Some(PedalParameterValue::Float(0.0)),
-                max: Some(PedalParameterValue::Float(0.8)),
-                step: Some(PedalParameterValue::Float(0.001)),
+                value: PedalParameterValue::Float(-20.0),
+                min: Some(PedalParameterValue::Float(-60.0)),
+                max: Some(PedalParameterValue::Float(0.0)),
+                step: None,
             },
         );
 
         parameters.insert(
-            "threshold_close".to_string(),
+            "reduction".to_string(),
             PedalParameter {
-                value: PedalParameterValue::Float(init_threshold_close),
-                min: Some(PedalParameterValue::Float(0.0)),
-                max: Some(PedalParameterValue::Float(0.8)),
-                step: Some(PedalParameterValue::Float(0.001)),
+                value: PedalParameterValue::Float(10.0),
+                min: Some(PedalParameterValue::Float(1.0)),
+                max: Some(PedalParameterValue::Float(20.0)),
+                step: None,
+            },
+        );
+
+        parameters.insert(
+            "attack".to_string(),
+            PedalParameter {
+                value: PedalParameterValue::Float(5.0),
+                min: Some(PedalParameterValue::Float(1.0)),
+                max: Some(PedalParameterValue::Float(500.0)),
+                step: None,
             },
         );
 
         parameters.insert(
             "release".to_string(),
             PedalParameter {
-                value: PedalParameterValue::Float(init_release),
-                min: Some(PedalParameterValue::Float(0.0)),
-                max: Some(PedalParameterValue::Float(0.001)),
-                step: Some(PedalParameterValue::Float(0.00001)),
+                value: PedalParameterValue::Float(100.0),
+                min: Some(PedalParameterValue::Float(5.0)),
+                max: Some(PedalParameterValue::Float(1000.0)),
+                step: None,
             },
         );
 
         Self {
             parameters,
             gain: 1.0,
-            is_open: false,
+            level: 0.0,
+            sample_rate: None,
         }
     }
 }
-
 
 impl Hash for NoiseGate {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
@@ -94,34 +104,54 @@ impl Hash for NoiseGate {
 }
 
 impl PedalTrait for NoiseGate {
+    fn set_config(&mut self,_buffer_size:usize, sample_rate:u32) {
+        self.sample_rate = Some(sample_rate as f32);
+    }
+
     fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
-        let threshold_open = self.parameters.get("threshold_open").unwrap().value.as_float().unwrap();
-        let threshold_close = self.parameters.get("threshold_close").unwrap().value.as_float().unwrap();
-        let release = self.parameters.get("release").unwrap().value.as_float().unwrap();
+        if self.sample_rate.is_none() {
+            log::warn!("NoiseGate: Sample rate not set. Call set_config first.");
+            return;
+        }
+
+        let threshold_db = self.parameters["threshold_db"].value.as_float().unwrap();
+        let reduction_ratio = self.parameters["reduction"].value.as_float().unwrap();
+        let attack_ms = self.parameters["attack"].value.as_float().unwrap();
+        let release_ms = self.parameters["release"].value.as_float().unwrap();
+
+        // per sample smoothing coefficients (sample rate independent)
+        let attack_coeff = (-1.0 / ((attack_ms / 1000.0) * self.sample_rate.unwrap())).exp();
+        let release_coeff = (-1.0 / ((release_ms / 1000.0) * self.sample_rate.unwrap())).exp();
+
+        let alpha = 0.99; // Smoothing for level estimation (RMS approximation)
+        let mut level = self.level;
 
         for sample in buffer.iter_mut() {
-            if self.is_open {
-                if sample.abs() < threshold_close {
-                    self.is_open = false;
-                }
-            } else {
-                if sample.abs() > threshold_open {
-                    self.is_open = true;
-                }
+            let x = *sample;
+
+            // Estimate signal power (RMS-like)
+            level = alpha * level + (1.0 - alpha) * (x * x);
+            let power_db = 10.0 * level.max(1e-12).log10();
+
+            // Compute gain target based on threshold and ratio
+            let mut gain_target = 1.0;
+            if power_db < threshold_db {
+                let diff = threshold_db - power_db;
+                let reduction_db = diff * reduction_ratio;
+                gain_target = 10f32.powf(-reduction_db / 20.0);
             }
 
-            if self.is_open {
-                self.gain = 1.0;
+            // Smoothly approach gain_target using attack/release
+            if gain_target > self.gain {
+                self.gain = attack_coeff * (self.gain - gain_target) + gain_target;
             } else {
-                self.gain -= release;
-                if self.gain < 0.0 {
-                    self.gain = 0.0;
-                }
+                self.gain = release_coeff * (self.gain - gain_target) + gain_target;
             }
 
-            *sample *= self.gain
-        }   
-        
+            *sample *= self.gain;
+        }
+
+        self.level = level;
     }
 
     fn get_parameters(&self) -> &HashMap<String, PedalParameter> {
@@ -132,56 +162,28 @@ impl PedalTrait for NoiseGate {
         &mut self.parameters
     }
 
-    fn set_parameter_value(&mut self, name: &str, value:PedalParameterValue) {
-        if !self.parameters.contains_key(name) || !self.parameters.get(name).unwrap().is_valid(&value) {
-            return;
-        }
-
-        match name {
-            "threshold_open" => {
-                if let PedalParameterValue::Float(val) = value {
-                    self.parameters.get_mut(name).unwrap().value = PedalParameterValue::Float(val);
-
-                    let threshold_close = self.parameters.get_mut("threshold_close").unwrap();
-                    if val < threshold_close.value.as_float().unwrap() {
-                        threshold_close.value = PedalParameterValue::Float(val);
-                    }
-                }
-            }
-            "threshold_close" => {
-                if let PedalParameterValue::Float(val) = value {
-                    self.parameters.get_mut(name).unwrap().value = PedalParameterValue::Float(val);
-
-                    let threshold_open = self.parameters.get_mut("threshold_open").unwrap();
-                    if val > threshold_open.value.as_float().unwrap() {
-                        threshold_open.value = PedalParameterValue::Float(val);
-                    }
-                }
-            }
-            _ => {
-                self.parameters.get_mut(name).unwrap().value = value;
-            }
-        }
-        
-    }
-
     fn ui(&mut self, ui: &mut egui::Ui, _message_buffer: &[String]) -> Option<(String,PedalParameterValue)> {
         ui.add(egui::Image::new(include_image!("images/pedal_base.png")));
 
         let mut to_change = None;
 
-        let threshold_open_param = self.get_parameters().get("threshold_open").unwrap();
-        if let Some(value) = pedal_knob(ui, RichText::new("Threshold Open").color(Color32::BLACK).size(8.0), threshold_open_param, egui::Vec2::new(0.025, 0.06), 0.3) {
-            to_change = Some(("threshold_open".to_string(), value));
+        let threshold_db_param = self.get_parameters().get("threshold_db").unwrap();
+        if let Some(value) = pedal_knob(ui, RichText::new("Threshold").color(Color32::BLACK).size(8.0), threshold_db_param, egui::Vec2::new(0.12, 0.01), 0.25) {
+            to_change = Some(("threshold_db".to_string(), value));
         }
 
-        let threshold_close_param = self.get_parameters().get("threshold_close").unwrap();
-        if let Some(value) = pedal_knob(ui, RichText::new("Threshold Close").color(Color32::BLACK).size(8.0), threshold_close_param, egui::Vec2::new(0.35, 0.06), 0.3) {
-            to_change = Some(("threshold_close".to_string(), value));
+        let reduction_param = self.get_parameters().get("reduction").unwrap();
+        if let Some(value) = pedal_knob(ui, RichText::new("Reduction").color(Color32::BLACK).size(8.0), reduction_param, egui::Vec2::new(0.47, 0.01), 0.25) {
+            to_change = Some(("reduction".to_string(), value));
+        }
+
+        let attack_param = self.get_parameters().get("attack").unwrap();
+        if let Some(value) = pedal_knob(ui, RichText::new("Attack").color(Color32::BLACK).size(7.0), attack_param, egui::Vec2::new(0.3, 0.17), 0.25) {
+            to_change = Some(("attack".to_string(), value));
         }
 
         let release_param = self.get_parameters().get("release").unwrap();
-        if let Some(value) = pedal_knob(ui, RichText::new("Release").color(Color32::BLACK).size(8.0), release_param, egui::Vec2::new(0.675, 0.06), 0.3) {
+        if let Some(value) = pedal_knob(ui, RichText::new("Release").color(Color32::BLACK).size(7.0), release_param, egui::Vec2::new(0.64, 0.17), 0.25) {
             to_change = Some(("release".to_string(), value));
         }
 
