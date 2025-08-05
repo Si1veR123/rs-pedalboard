@@ -11,6 +11,7 @@ use eframe::egui::{self, include_image, UiBuilder, Vec2};
 use serde::{ser::SerializeMap, Deserialize, Serialize};
 
 const ENVELOPE_UPDATE_RATE: Duration = Duration::from_millis(100);
+const EPS: f32 = 1e-8;
 
 #[derive(Clone)]
 pub struct Compressor {
@@ -64,12 +65,15 @@ impl Compressor {
     pub fn new() -> Self {
         let mut parameters = HashMap::new();
 
-        parameters.insert("threshold".into(), PedalParameter {
-            value: PedalParameterValue::Float(0.75),
-            min: Some(PedalParameterValue::Float(0.0)),
-            max: Some(PedalParameterValue::Float(1.0)),
-            step: None,
-        });
+        parameters.insert(
+            "threshold".into(),
+            PedalParameter {
+                value: PedalParameterValue::Float(-6.0),
+                min: Some(PedalParameterValue::Float(-30.0)),
+                max: Some(PedalParameterValue::Float(0.0)),
+                step: None,
+            },
+        );
         parameters.insert("attack".into(), PedalParameter {
             value: PedalParameterValue::Float(10.0),
             min: Some(PedalParameterValue::Float(1.0)),
@@ -100,12 +104,15 @@ impl Compressor {
             max: Some(PedalParameterValue::Float(1.0)),
             step: None,
         });
-        parameters.insert("soft_knee".into(), PedalParameter {
-            value: PedalParameterValue::Float(0.0),
-            min: Some(PedalParameterValue::Float(0.0)),
-            max: Some(PedalParameterValue::Float(1.0)),
-            step: None,
-        });
+        parameters.insert(
+            "soft_knee".into(),
+            PedalParameter {
+                value: PedalParameterValue::Float(0.0),
+                min: Some(PedalParameterValue::Float(0.0)),
+                max: Some(PedalParameterValue::Float(12.0)),
+                step: None,
+            },
+        );
 
         Compressor {
             parameters,
@@ -131,13 +138,13 @@ impl PedalTrait for Compressor {
             }
         };
 
-        let threshold_lin = self.parameters["threshold"].value.as_float().unwrap();
+        let threshold_db = self.parameters["threshold"].value.as_float().unwrap();
         let attack = self.parameters["attack"].value.as_float().unwrap();
         let release = self.parameters["release"].value.as_float().unwrap();
         let level = self.parameters["level"].value.as_float().unwrap();
         let ratio = self.parameters["ratio"].value.as_float().unwrap();
         let blend = self.parameters["dry_wet"].value.as_float().unwrap();
-        let soft_knee = self.parameters["soft_knee"].value.as_float().unwrap();
+        let soft_knee_db = self.parameters["soft_knee"].value.as_float().unwrap();
 
         // Sample rate independent
         let attack_coeff = (-1.0 / (attack / 1000.0 * sample_rate)).exp();
@@ -151,23 +158,28 @@ impl PedalTrait for Compressor {
                 release_coeff * (self.envelope - sample.abs()) + sample.abs()
             };
 
+            // Convert envelope to dB
+            let env_lin = (self.envelope).max(EPS);
+            let env_db = 20.0 * env_lin.log10();
+
+            let knee_start = threshold_db - soft_knee_db / 2.0;
+            let knee_end = threshold_db + soft_knee_db / 2.0;
+
             // Compression gain
-            let gain = if self.envelope <= threshold_lin - soft_knee / 2.0 {
-                1.0
-            } else if self.envelope >= threshold_lin + soft_knee / 2.0 {
-                // Fully in compression region
-                let excess = self.envelope - threshold_lin;
-                let compressed_excess = excess / ratio;
-                (compressed_excess + threshold_lin) / self.envelope
+            let out_db = if env_db <= knee_start {
+                env_db
+            } else if env_db >= knee_end {
+                threshold_db + (env_db - threshold_db) / ratio
             } else {
-                // Soft knee region
-                let knee_start = threshold_lin - soft_knee / 2.0;
-                let delta = self.envelope - knee_start;
-                let gain_output = self.envelope + ((1.0 / ratio - 1.0) * delta * delta) / (2.0 * soft_knee);
-                gain_output / self.envelope
+                let delta = env_db - knee_start;
+                env_db + ((1.0 / ratio - 1.0) * delta * delta) / (2.0 * soft_knee_db.max(EPS))
             };
 
-            let compressed_sample = *sample * gain * level;
+            // gain in dB to apply = out_db - env_db (usually <= 0)
+            let gain_db = out_db - env_db;
+            let gain_lin = 10f32.powf(gain_db / 20.0);
+
+            let compressed_sample = *sample * gain_lin * level;
 
             // Blend dry + compressed
             *sample = *sample * (1.0 - blend) + compressed_sample * blend;
@@ -262,7 +274,7 @@ impl PedalTrait for Compressor {
 
         draw_compressor_graph(
             &mut graph_ui,
-            self.current_envelope,
+            20.0*self.current_envelope.log10(), // dB conversion
             self.parameters["threshold"].value.as_float().unwrap(),
             self.parameters["ratio"].value.as_float().unwrap(),
             self.parameters["soft_knee"].value.as_float().unwrap(),
@@ -272,6 +284,7 @@ impl PedalTrait for Compressor {
     }
 }
 
+/// Parameters are in db
 fn draw_compressor_graph(
     ui: &mut egui::Ui,
     envelope: f32,
@@ -295,32 +308,34 @@ fn draw_compressor_graph(
     ui.painter().rect_filled(graph_rect, 2.0, egui::Color32::from_black_alpha(50));
 
     let mut points = vec![];
-    let mut envelope_pos: Option<egui::Pos2> = None;
 
     let step = 0.01;
-    let knee_start = threshold - soft_knee / 2.0;
-    let knee_end = threshold + soft_knee / 2.0;
+    let knee_start_db = threshold - soft_knee / 2.0;
+    let knee_end_db = threshold + soft_knee / 2.0;
 
-    for x in (0..=100).map(|i| i as f32 * step) {
-        let y = if x < knee_start {
-            x
-        } else if x > knee_end {
-            (x - threshold) / ratio + threshold
+    // Apply compressor to a dB value
+    let x_db_to_y_db = |x_db: f32| -> f32 {
+        if x_db <= knee_start_db {
+            x_db
+        } else if x_db >= knee_end_db {
+            threshold + (x_db - threshold) / ratio
         } else {
-            // Smooth soft knee
-            let delta = x - (threshold - soft_knee / 2.0);
-            let k = soft_knee;
-            x + ((1.0 / ratio - 1.0) * delta * delta) / (2.0 * k)
-        };
+            let delta = x_db - knee_start_db;
+            x_db + ((1.0 / ratio - 1.0) * delta * delta) / (2.0 * soft_knee.max(EPS))
+        }
+    };
+
+    // x_db goes from -30 dB to 0 dB
+    for x_db in (0..=100).map(|i| (i as f32 * step * 30.0)-30.0) {
+        let y_db = x_db_to_y_db(x_db);
+
+        // convert back to linear for plotting
+        let x = (x_db + 30.0) / 30.0;
+        let y = (y_db + 30.0) / 30.0;
 
         let screen_x = graph_rect.left() + x * graph_rect.width();
         let screen_y = graph_rect.bottom() - y * graph_rect.height();
         points.push(egui::pos2(screen_x, screen_y));
-
-        // If this x is near the envelope, save the screen position
-        if (x - envelope).abs() < step / 2.0 && envelope_pos.is_none() {
-            envelope_pos = Some(egui::pos2(screen_x, screen_y));
-        }
     }
 
     // Draw compression curve
@@ -330,7 +345,12 @@ fn draw_compressor_graph(
     ));
 
     // Draw envelope indicator
-    if let Some(pos) = envelope_pos {
-        ui.painter().add(egui::Shape::circle_filled(pos, 3.0, egui::Color32::RED));
-    }
+    let envelope_y_db = x_db_to_y_db(envelope);
+    let envelope_x_scaled = ((envelope + 30.0) / 30.0).clamp(0.0, 1.0);
+    let envelope_y_scaled = ((envelope_y_db + 30.0) / 30.0).clamp(0.0, 1.0);
+    let envelope_screen_x = graph_rect.left() + envelope_x_scaled * graph_rect.width();
+    let envelope_screen_y = graph_rect.bottom() - envelope_y_scaled * graph_rect.height();
+    let pos = egui::pos2(envelope_screen_x, envelope_screen_y);
+
+    ui.painter().add(egui::Shape::circle_filled(pos, 3.0, egui::Color32::RED));
 }

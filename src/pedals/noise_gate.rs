@@ -53,7 +53,7 @@ impl NoiseGate {
             PedalParameter {
                 value: PedalParameterValue::Float(init_threshold_open),
                 min: Some(PedalParameterValue::Float(0.0)),
-                max: Some(PedalParameterValue::Float(0.1)),
+                max: Some(PedalParameterValue::Float(0.8)),
                 step: Some(PedalParameterValue::Float(0.001)),
             },
         );
@@ -63,7 +63,7 @@ impl NoiseGate {
             PedalParameter {
                 value: PedalParameterValue::Float(init_threshold_close),
                 min: Some(PedalParameterValue::Float(0.0)),
-                max: Some(PedalParameterValue::Float(0.1)),
+                max: Some(PedalParameterValue::Float(0.8)),
                 step: Some(PedalParameterValue::Float(0.001)),
             },
         );

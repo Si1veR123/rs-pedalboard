@@ -181,7 +181,12 @@ impl ClientSocket {
 
     pub fn kill(&mut self) {
         log::info!("Sending kill command to server.");
+        
         self.send("kill\n");
+        if let Some(stream) = &mut self.stream {
+            let _ = stream.flush();
+            let _ = stream.shutdown(std::net::Shutdown::Both);
+        }
         self.stream.take();
         self.command_receiver.reset();
     }
