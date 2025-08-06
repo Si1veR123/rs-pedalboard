@@ -109,7 +109,7 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
                     ui.add_space(20.0);
 
                     ui.columns_const(|[ui_1, ui_2, ui_3, ui_4, ui_5]| {
-                        if screen.state.socket.borrow().is_connected() {
+                        if screen.state.socket.borrow_mut().is_connected() {
                             // XRun monitor
                             ui_1.allocate_ui_with_layout(
                                 ui_1.available_size(),
@@ -176,7 +176,7 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
 
     // Available rect for the pedalboard itself
     let available_rect = ui.available_rect_before_wrap();
-    let drawing_volume_monitor = screen.state.client_settings.borrow().show_volume_monitor && screen.state.socket.borrow().is_connected();
+    let drawing_volume_monitor = screen.state.client_settings.borrow().show_volume_monitor && screen.state.socket.borrow_mut().is_connected();
     let volume_monitor_width = 5.0;
     let volume_monitor_inside_padding = 0.0;
     let volume_monitor_outside_padding = 5.0;

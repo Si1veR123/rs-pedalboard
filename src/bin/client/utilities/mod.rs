@@ -23,7 +23,7 @@ impl UtilitiesScreen {
 
 impl Widget for &mut UtilitiesScreen {
     fn ui(self, ui: &mut egui::Ui) -> egui::Response {
-        if !self.state.socket.borrow().is_connected() {
+        if !self.state.socket.borrow_mut().is_connected() {
             return ui.centered_and_justified(|ui| {
                 ui.label(RichText::from("Not connected to server")
                     .color(Color32::from_gray(130))

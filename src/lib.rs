@@ -16,7 +16,7 @@ pub const DEFAULT_VOLUME_MONITOR_UPDATE_RATE: Duration = Duration::from_millis(1
 // For pedals such as EQ/Compressor, or when volume monitors are active, how often to update the UI
 pub const DEFAULT_REFRESH_DURATION: Duration = Duration::from_millis(33); // 30 FPS
 
-pub(crate) fn unique_time_id() -> usize {
+pub fn unique_time_id() -> usize {
     let now = SystemTime::now();
     let duration = now.duration_since(UNIX_EPOCH).unwrap();
     let nanoseconds = duration.subsec_nanos() as usize;

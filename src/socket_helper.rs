@@ -12,7 +12,7 @@ impl CommandReceiver {
         }
     }
 
-    /// Reads from the nonblocking stream, collects complete newline-terminated commands into `into`.
+    /// Reads from the stream, collects complete newline-terminated commands into `into`.
     /// Returns Ok(true) if connection closed, Ok(false) otherwise.
     pub fn receive_commands(
         &mut self,
