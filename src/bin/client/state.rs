@@ -4,7 +4,7 @@ use crate::{saved_pedalboards::SavedPedalboards, settings::ClientSettings, socke
 
 pub struct State {
     pub pedalboards: SavedPedalboards,
-    pub socket: RefCell<ClientSocket>,
+    socket: RefCell<ClientSocket>,
 
     pub client_settings: RefCell<ClientSettings>,
     pub server_settings: RefCell<ServerSettingsSave>
@@ -343,6 +343,22 @@ impl State {
             }
         }
         Ok(())
+    }
+
+    /// Requires a lock on socket
+    pub fn is_connected(&self) -> bool {
+        self.socket.borrow_mut().is_connected()
+    }
+
+    /// Requires a lock on socket
+    pub fn is_server_available(&self) -> bool {
+        self.socket.borrow_mut().is_server_available()
+    }
+
+    /// Requires a lock on socket
+    pub fn kill_server(&self) {
+        let mut socket = self.socket.borrow_mut();
+        socket.kill();
     }
 }
 

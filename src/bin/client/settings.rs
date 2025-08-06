@@ -172,7 +172,7 @@ impl SettingsScreen {
     /// Must be able to get a lock on socket and server_settings
     pub fn handle_server_launch(&mut self) {
         // Remove error state if now connected
-        if self.state.socket.borrow_mut().is_connected() {
+        if self.state.is_connected() {
             if matches!(self.server_launch_state, ServerLaunchState::KillError | ServerLaunchState::StartError) {
                 self.server_launch_state = ServerLaunchState::None;
             }
@@ -183,7 +183,7 @@ impl SettingsScreen {
                 log::error!("Failed to stop server");
                 self.server_launch_state = ServerLaunchState::KillError;
             } else if start_time.elapsed().as_secs() > 1 {
-                if !self.state.socket.borrow_mut().is_server_available() {
+                if !self.state.is_server_available() {
                     if let Some(process) = start_server_process(&self.state.server_settings.borrow()) {
                         self.server_launch_state = ServerLaunchState::AwaitingStart {
                             start_time: Instant::now(),
@@ -377,7 +377,7 @@ impl Widget for &mut SettingsScreen {
                     let mut connect_button: Option<Response> = None;
 
                     ui.allocate_ui_with_layout(Vec2::new(ui.available_width(), button_size.y), Layout::left_to_right(egui::Align::Center), |ui| {
-                        let is_connected = self.state.socket.borrow_mut().is_connected();
+                        let is_connected = self.state.is_connected();
                         // If not connected, make spacing for 2 buttons. Else make spacing for 1.
                         let button_horizontal_space = if is_connected {
                             ui.available_width()/2.0-button_size.x/2.0
@@ -386,7 +386,7 @@ impl Widget for &mut SettingsScreen {
                         };
                         ui.add_space(button_horizontal_space);
 
-                        let currently_connected = self.state.socket.borrow_mut().is_connected();
+                        let currently_connected = self.state.is_connected();
                         let button_text = if currently_connected {
                             "Restart Server"
                         } else {
@@ -400,7 +400,7 @@ impl Widget for &mut SettingsScreen {
                         ).clicked() {
                             ui.ctx().request_repaint();
                             if currently_connected {
-                                self.state.socket.borrow_mut().kill();
+                                self.state.kill_server();
                                 self.server_launch_state = ServerLaunchState::AwaitingKill(Instant::now());
                             } else {
                                 if let Some(process) = start_server_process(&server_settings) {

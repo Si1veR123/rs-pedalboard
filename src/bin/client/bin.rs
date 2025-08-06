@@ -153,7 +153,7 @@ impl PedalboardClientApp {
 
         let no_server_start_arg = std::env::args().any(|arg| arg == "--no-server");
         // Start up the server process if configured to do so, not already connected and not running with the `--no-server` argument
-        if leaked_state.client_settings.borrow().startup_server && !leaked_state.socket.borrow_mut().is_connected() && !no_server_start_arg {
+        if leaked_state.client_settings.borrow().startup_server && !leaked_state.is_connected() && !no_server_start_arg {
             log::info!("Starting server on startup");
             if settings_screen.ready_to_start_server(&leaked_state.server_settings.borrow()) {
                 match server_process::start_server_process(&leaked_state.server_settings.borrow()) {
@@ -266,7 +266,7 @@ impl eframe::App for PedalboardClientApp {
                     let settings_button_outline = if self.selected_screen == 4 {
                         button_outline[4]
                     } else {
-                        if self.state.socket.borrow_mut().is_connected() {
+                        if self.state.is_connected() {
                             button_outline[4]
                         } else {
                             egui::Stroke::new(2.5, Color32::RED)
@@ -324,7 +324,7 @@ impl eframe::App for PedalboardClientApp {
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
         if self.state.client_settings.borrow().kill_server_on_close {
             log::info!("Killing server on exit");
-            self.state.socket.borrow_mut().kill();
+            self.state.kill_server();
         }
     }
 }
