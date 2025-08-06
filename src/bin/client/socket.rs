@@ -2,10 +2,6 @@ use std::io::Write;
 use std::net::TcpStream;
 use std::net::Ipv4Addr;
 
-use rs_pedalboard::pedalboard::Pedalboard;
-use rs_pedalboard::pedalboard_set::PedalboardSet;
-use rs_pedalboard::pedals::Pedal;
-use rs_pedalboard::pedals::PedalParameterValue;
 use rs_pedalboard::socket_helper::CommandReceiver;
 
 pub struct ClientSocket {
@@ -95,88 +91,6 @@ impl ClientSocket {
             }
         }
         Ok(())
-    }
-
-    pub fn set_tuner(&mut self, active: bool) {
-        let message = format!("tuner {}\n", if active { "on" } else { "off" });
-        self.send(&message);
-    }
-
-    pub fn set_metronome(&mut self, active: bool, bpm: u32, volume: f32) {
-        let message = format!("metronome {} {} {}\n", if active { "on" } else { "off" }, bpm, volume);
-        self.send(&message);
-    }
-
-    pub fn set_volume_monitor(&mut self, active: bool) {
-        let message = format!("volumemonitor {}\n", if active { "on" } else { "off" });
-        self.send(&message);
-    }
-
-    pub fn set_volume_normalization(&mut self, mode: crate::settings::VolumeNormalizationMode, auto_decay: f32) {
-        match mode {
-            crate::settings::VolumeNormalizationMode::None => self.send("volumenormalization none\n"),
-            crate::settings::VolumeNormalizationMode::Manual => self.send("volumenormalization manual\n"),
-            crate::settings::VolumeNormalizationMode::Automatic => self.send(&format!("volumenormalization automatic {}\n", auto_decay)),
-        };
-    }
-
-    pub fn reset_volume_normalization_peak(&mut self) {
-        self.send("volumenormalization reset\n");
-    }
-
-    pub fn set_parameter(&mut self, pedalboard_index: usize, pedal_index: usize, name: &str, parameter_value: &PedalParameterValue) {
-        let message = format!("setparameter {} {} {} {}\n", pedalboard_index, pedal_index, name, serde_json::to_string(parameter_value).unwrap());
-        self.send(&message);
-    }
-
-    pub fn move_pedalboard(&mut self, src_index: usize, dest_index: usize) {
-        let message = format!("movepedalboard {} {}\n", src_index, dest_index);
-        self.send(&message);
-    }
-
-    pub fn add_pedalboard(&mut self, pedalboard: &Pedalboard) {
-        let message = format!("addpedalboard {}\n", serde_json::to_string(pedalboard).unwrap());
-        self.send(&message);
-    }
-
-    pub fn delete_pedalboard(&mut self, pedalboard_index: usize) {
-        let message = format!("deletepedalboard {}\n", pedalboard_index);
-        self.send(&message);
-    }
-
-    pub fn add_pedal(&mut self, pedalboard_index: usize, pedal: &Pedal) {
-        let message = format!("addpedal {} {}\n", pedalboard_index, serde_json::to_string(pedal).unwrap());
-        self.send(&message);
-    }
-
-    pub fn delete_pedal(&mut self, pedalboard_index: usize, pedal_index: usize) {
-        let message = format!("deletepedal {} {}\n", pedalboard_index, pedal_index);
-        self.send(&message);
-    }
-
-    pub fn move_pedal(&mut self, pedalboard_index: usize, src_index: usize, dest_index: usize) {
-        let message = format!("movepedal {} {} {}\n", pedalboard_index, src_index, dest_index);
-        self.send(&message);
-    }
-
-    pub fn load_set(&mut self, pedalboard_set: &PedalboardSet) {
-        let message = format!("loadset {}\n", serde_json::to_string(pedalboard_set).unwrap());
-        self.send(&message);
-    }
-
-    pub fn play(&mut self, pedalboard_index: usize) {
-        let message = format!("play {}\n", pedalboard_index);
-        self.send(&message);
-    }
-
-    pub fn master_in(&mut self, volume: f32) {
-        let message = format!("masterin {}\n", volume);
-        self.send(&message);
-    }
-
-    pub fn master_out(&mut self, volume: f32) {
-        let message = format!("masterout {}\n", volume);
-        self.send(&message);
     }
 
     pub fn kill(&mut self) {

@@ -486,7 +486,7 @@ impl Widget for &mut SettingsScreen {
                                             .show_value(true)
                                             .fixed_decimals(2)
                                     ).changed() {
-                                        self.state.socket.borrow_mut().master_in(client_settings.input_volume);
+                                        self.state.master_in_server(client_settings.input_volume);
                                     };
                                     ui.end_row();
                                 },
@@ -498,7 +498,7 @@ impl Widget for &mut SettingsScreen {
                                         Vec2::new(ui.available_width()*0.5, ui.available_height()*0.75),
                                         egui::Button::new("Reset Peak")
                                     ).on_hover_text("Reset the current peak used to normalize volume.").clicked() {
-                                        self.state.socket.borrow_mut().reset_volume_normalization_peak();
+                                        self.state.reset_volume_normalization_peak();
                                     };
                                     ui.end_row();
                                 }

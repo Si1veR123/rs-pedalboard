@@ -28,7 +28,8 @@ impl State {
             pedalboard_set.active_pedalboard -= 1;
         }
 
-        self.socket.borrow_mut().delete_pedalboard(index);
+        let delete_message = format!("deletepedalboard {}\n", index);
+        self.socket.borrow_mut().send(&delete_message);
     }
 
     /// Move a pedalboard in the active pedalboard stage
@@ -38,7 +39,8 @@ impl State {
         let mut pedalboard_set = self.pedalboards.active_pedalboardstage.borrow_mut();
         egui_dnd::utils::shift_vec(src_index, dest_index, &mut pedalboard_set.pedalboards);
 
-        self.socket.borrow_mut().move_pedalboard(src_index, dest_index);
+        let message = format!("movepedalboard {} {}\n", src_index, dest_index);
+        self.socket.borrow_mut().send(&message);
     }
 
     /// Add a pedalboard to the active pedalboard stage
@@ -48,7 +50,9 @@ impl State {
         let mut pedalboard_set = self.pedalboards.active_pedalboardstage.borrow_mut();
         let mut socket = self.socket.borrow_mut();
 
-        socket.add_pedalboard(&pedalboard);
+        let message = format!("addpedalboard {}\n", serde_json::to_string(&pedalboard).unwrap());
+        socket.send(&message);
+
         pedalboard_set.pedalboards.push(pedalboard);
     }
 
@@ -61,8 +65,10 @@ impl State {
         let new_pedalboard = pedalboard.clone();
 
         let mut socket = self.socket.borrow_mut();
-        socket.add_pedalboard(&pedalboard);
-        socket.move_pedalboard(pedalboard_set.pedalboards.len()-1, index+1);
+        let add_message = format!("addpedalboard {}\n", serde_json::to_string(pedalboard).unwrap());
+        socket.send(&add_message);
+        let move_message = format!("movepedalboard {} {}\n", pedalboard_set.pedalboards.len()-1, index+1);
+        socket.send(&move_message);
 
         pedalboard_set.pedalboards.insert(index+1, new_pedalboard);
     }
@@ -83,8 +89,10 @@ impl State {
         let pedalboard = &pedalboard_set.pedalboards[index];
 
         let mut socket = self.socket.borrow_mut();
-        socket.add_pedalboard(&pedalboard);
-        socket.move_pedalboard(pedalboard_set.pedalboards.len()-1, index+1);
+        let add_message = format!("addpedalboard {}\n", serde_json::to_string(pedalboard).unwrap());
+        socket.send(&add_message);
+        let move_message = format!("movepedalboard {} {}\n", pedalboard_set.pedalboards.len()-1, index+1);
+        socket.send(&move_message);
 
         pedalboard_set.pedalboards.insert(index+1, new_pedalboard);
     }
@@ -111,7 +119,8 @@ impl State {
         for (i, pedalboard) in active_pedalboardstage.pedalboards.iter_mut().enumerate() {
             if pedalboard.name == *active_pedalboard_name {
                 pedalboard.pedals.push(pedal.clone());
-                socket.add_pedal(i, &pedal);
+                let message = format!("addpedal {} {}\n", i, serde_json::to_string(pedal).unwrap());
+                socket.send(&message);
             }
         }
     }
@@ -132,10 +141,12 @@ impl State {
         }
 
         // Move in all matching pedalboards in active pedalboard stage
+        let mut socket = self.socket.borrow_mut();
         for (i, pedalboard) in active_pedalboardstage.pedalboards.iter_mut().enumerate() {
             if pedalboard.name == *active_pedalboard_name {
                 egui_dnd::utils::shift_vec(src_index, dest_index, &mut pedalboard.pedals);
-                self.socket.borrow_mut().move_pedal(i, src_index, dest_index);
+                let message = format!("movepedal {} {} {}\n", i, src_index, dest_index);
+                socket.send(&message);
             }
         }
     }
@@ -156,10 +167,12 @@ impl State {
         }
 
         // Remove in all matching pedalboards in active pedalboard stage
+        let mut socket = self.socket.borrow_mut();
         for (i, pedalboard) in active_pedalboardstage.pedalboards.iter_mut().enumerate() {
             if pedalboard.name == *active_pedalboard_name {
                 pedalboard.pedals.remove(pedal_index);
-                self.socket.borrow_mut().delete_pedal(i, pedal_index);
+                let message = format!("deletepedal {} {}\n", i, pedal_index);
+                socket.send(&message);
             }
         }
     }
@@ -173,7 +186,8 @@ impl State {
         // Set parameter on pedalboard stage
         for (i, pedalboard) in self.pedalboards.active_pedalboardstage.borrow_mut().pedalboards.iter_mut().enumerate() {
             if pedalboard.name == pedalboard_name {
-                socket.set_parameter(i, pedal_index, name, parameter_value);
+                let message = format!("setparameter {} {} {} {}\n", i, pedal_index, name, serde_json::to_string(parameter_value).unwrap());
+                socket.send(&message);
                 pedalboard.pedals[pedal_index].set_parameter_value(name, parameter_value.clone());
             }
         }
@@ -191,7 +205,8 @@ impl State {
     /// Requires a lock on active_pedalboardstage and socket
     pub fn load_set(&self, pedalboard_set: PedalboardSet) {
         let mut socket = self.socket.borrow_mut();
-        socket.load_set(&pedalboard_set);
+        let message = format!("loadset {}\n", serde_json::to_string(&pedalboard_set).unwrap());
+        socket.send(&message);
 
         *self.pedalboards.active_pedalboardstage.borrow_mut() = pedalboard_set;
     }
@@ -200,7 +215,8 @@ impl State {
     pub fn load_active_set(&self) {
         let mut socket = self.socket.borrow_mut();
         let active_pedalboardstage = self.pedalboards.active_pedalboardstage.borrow();
-        socket.load_set(&active_pedalboardstage);
+        let message = format!("loadset {}\n", serde_json::to_string(&*active_pedalboardstage).unwrap());
+        socket.send(&message);
     }
 
     /// Play a pedalboard from the active stage
@@ -208,7 +224,8 @@ impl State {
     /// Requires a lock on active_pedalboardstage and socket
     pub fn play(&self, pedalboard_index: usize) {
         let mut socket = self.socket.borrow_mut();
-        socket.play(pedalboard_index);
+        let message = format!("play {}\n", pedalboard_index);
+        socket.send(&message);
         self.pedalboards.active_pedalboardstage.borrow_mut().set_active_pedalboard(pedalboard_index);
     }
 
@@ -236,7 +253,8 @@ impl State {
     /// Requires a lock on socket.
     pub fn set_tuner_active_server(&self, active: bool) {
         let mut socket = self.socket.borrow_mut();
-        socket.set_tuner(active);
+        let message = format!("tuner {}\n", if active { "on" } else { "off" });
+        socket.send(&message);
     }
 
     /// Set the metronome settings on the server.
@@ -245,7 +263,8 @@ impl State {
     pub fn set_metronome_server(&self, active: bool, bpm: u32, volume: f32) {
         let mut socket = self.socket.borrow_mut();
         let rounded_volume = (volume * 100.0).round() / 100.0;
-        socket.set_metronome(active, bpm, rounded_volume);
+        let message = format!("metronome {} {} {}\n", if active { "on" } else { "off" }, bpm, rounded_volume);
+        socket.send(&message);
     }
 
     /// Set whether the volume monitor is active on the server.
@@ -253,13 +272,37 @@ impl State {
     /// Requires a lock on socket.
     pub fn set_volume_monitor_active_server(&self, active: bool) {
         let mut socket = self.socket.borrow_mut();
-        socket.set_volume_monitor(active);
+        let message = format!("volumemonitor {}\n", if active { "on" } else { "off" });
+        socket.send(&message);
     }
 
     pub fn set_volume_normalization_server(&self, mode: crate::settings::VolumeNormalizationMode, auto_decay: f32) {
         let mut socket = self.socket.borrow_mut();
         let rounded_auto_decay = (auto_decay * 1000.0).round() / 1000.0;
-        socket.set_volume_normalization(mode, rounded_auto_decay);
+        match mode {
+            crate::settings::VolumeNormalizationMode::None => socket.send("volumenormalization none\n"),
+            crate::settings::VolumeNormalizationMode::Manual => socket.send("volumenormalization manual\n"),
+            crate::settings::VolumeNormalizationMode::Automatic => socket.send(&format!("volumenormalization automatic {}\n", rounded_auto_decay)),
+        };
+    }
+
+    pub fn reset_volume_normalization_peak(&self) {
+        let mut socket = self.socket.borrow_mut();
+        socket.send("volumenormalization reset\n");
+    }
+
+    pub fn master_in_server(&self, volume: f32) {
+        let mut socket = self.socket.borrow_mut();
+        let rounded_volume = (volume * 100.0).round() / 100.0;
+        let message = format!("masterin {}\n", rounded_volume);
+        socket.send(&message);
+    }
+
+    pub fn master_out_server(&self, volume: f32) {
+        let mut socket = self.socket.borrow_mut();
+        let rounded_volume = (volume * 100.0).round() / 100.0;
+        let message = format!("masterout {}\n", rounded_volume);
+        socket.send(&message);
     }
 
     pub fn load_state() -> Result<State, std::io::Error> {
@@ -292,7 +335,7 @@ impl State {
                 let client_settings = self.client_settings.borrow();
                 self.set_volume_monitor_active_server(client_settings.show_volume_monitor);
                 self.set_volume_normalization_server(client_settings.volume_normalization, client_settings.auto_volume_normalization_decay);
-                self.socket.borrow_mut().master_in(client_settings.input_volume);
+                self.master_in_server(client_settings.input_volume);
                 self.load_active_set();
 
                 self.socket.borrow_mut().send("requestsr\n");

@@ -202,7 +202,7 @@ impl PedalTrait for Compressor {
         if self.envelope_last_sent_time.elapsed() >= ENVELOPE_UPDATE_RATE {
             let envelope_round = (self.envelope * 100.0).round() / 100.0;
 
-            if (envelope_round - self.envelope_last_sent_value).abs() > EPS {
+            if (envelope_round - self.envelope_last_sent_value).abs() >= 0.005 {
                 messages.push(format!("{:?}", envelope_round));
                 self.envelope_last_sent_value = envelope_round;
             }
