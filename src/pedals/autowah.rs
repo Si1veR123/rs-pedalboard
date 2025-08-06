@@ -3,9 +3,9 @@ use std::hash::Hash;
 
 use crate::dsp_algorithms::moving_bangpass::MovingBandPass;
 use crate::pedals::{PedalParameter, PedalParameterValue, PedalTrait};
-use super::ui::{pedal_label_rect, pedal_knob};
+use super::ui::pedal_knob;
 
-use eframe::egui::{self, include_image, Color32, RichText};
+use eframe::egui::{self, include_image};
 use serde::{Serialize, Deserialize, ser::SerializeMap};
 
 #[derive(Clone)]
@@ -87,6 +87,15 @@ impl AutoWah {
                 step: None,
             },
         );
+        parameters.insert(
+            "dry_wet".to_string(),
+            PedalParameter {
+                value: PedalParameterValue::Float(1.0),
+                min: Some(PedalParameterValue::Float(0.0)),
+                max: Some(PedalParameterValue::Float(1.0)),
+                step: None,
+            },
+        );
 
         AutoWah {
             parameters,
@@ -106,13 +115,15 @@ impl PedalTrait for AutoWah {
         let sensitivity = self.parameters["sensitivity"].value.as_float().unwrap();
         let base_freq = self.parameters["base_freq"].value.as_float().unwrap();
         let envelope_smoothing = self.parameters["envelope_smoothing"].value.as_float().unwrap();
+        let dry_wet = self.parameters["dry_wet"].value.as_float().unwrap();
+
         for sample in buffer.iter_mut() {
             self.envelope = envelope_smoothing * self.envelope.max(sample.abs()) + (1.0 - envelope_smoothing) * sample.abs();
             
             let freq = base_freq + self.envelope * sensitivity;
             filter.set_freq(freq);
 
-            *sample = filter.process(*sample);
+            *sample = filter.process(*sample) * dry_wet + *sample * (1.0 - dry_wet);
         }
     }
 
@@ -156,35 +167,29 @@ impl PedalTrait for AutoWah {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _message_buffer: &[String]) -> Option<(String, PedalParameterValue)> {
-        ui.add(egui::Image::new(include_image!("images/pedal_base.png")));
+        ui.add(egui::Image::new(include_image!("images/autowah.png")));
 
         let mut to_change = None;
 
-        let width_param = self.get_parameters().get("width").unwrap();
-        if let Some(value) = pedal_knob(ui, RichText::new("Width").color(Color32::BLACK).size(8.0), width_param, egui::Vec2::new(0.12, 0.01), 0.25) {
-            to_change = Some(("width".to_string(), value));
-        }
-
-        let sensitivity_param = self.get_parameters().get("sensitivity").unwrap();
-        if let Some(value) = pedal_knob(ui, RichText::new("Sensitivity").color(Color32::BLACK).size(8.0), sensitivity_param, egui::Vec2::new(0.47, 0.01), 0.25) {
-            to_change = Some(("sensitivity".to_string(), value));
-        }
-
         let base_freq_param = self.get_parameters().get("base_freq").unwrap();
-        if let Some(value) = pedal_knob(ui, RichText::new("Base Freq").color(Color32::BLACK).size(8.0), base_freq_param, egui::Vec2::new(0.3, 0.17), 0.25) {
+        if let Some(value) = pedal_knob(ui, "", base_freq_param, egui::Vec2::new(0.68, 0.045), 0.25) {
             to_change = Some(("base_freq".to_string(), value));
         }
 
-        let envelope_smoothing_param = self.get_parameters().get("envelope_smoothing").unwrap();
-        if let Some(value) = pedal_knob(ui, RichText::new("Env. Smoothing").color(Color32::BLACK).size(8.0), envelope_smoothing_param, egui::Vec2::new(0.64, 0.17), 0.25) {
-            to_change = Some(("envelope_smoothing".to_string(), value));
+        let sensitivity_param = self.get_parameters().get("sensitivity").unwrap();
+        if let Some(value) = pedal_knob(ui, "", sensitivity_param, egui::Vec2::new(0.68, 0.17), 0.25) {
+            to_change = Some(("sensitivity".to_string(), value));
         }
 
-        let pedal_rect = ui.max_rect();
-        ui.put(pedal_label_rect(pedal_rect), egui::Label::new(
-            egui::RichText::new("Autowah")
-                .color(egui::Color32::from_black_alpha(200))
-        ));
+        let width_param = self.get_parameters().get("width").unwrap();
+        if let Some(value) = pedal_knob(ui, "", width_param, egui::Vec2::new(0.68, 0.295), 0.25) {
+            to_change = Some(("width".to_string(), value));
+        }
+
+        let envelope_smoothing_param = self.get_parameters().get("envelope_smoothing").unwrap();
+        if let Some(value) = pedal_knob(ui, "", envelope_smoothing_param, egui::Vec2::new(0.68, 0.425), 0.25) {
+            to_change = Some(("envelope_smoothing".to_string(), value));
+        }
 
         to_change
     }

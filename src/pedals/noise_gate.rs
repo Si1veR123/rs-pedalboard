@@ -1,9 +1,9 @@
 use std::{collections::HashMap, hash::Hash};
-use eframe::egui::{self, include_image, Color32, RichText};
+use eframe::egui::{self, include_image};
 use serde::{ser::SerializeMap, Deserialize, Serialize};
 
 use super::{
-    ui::{pedal_knob, pedal_label_rect},
+    ui::pedal_knob,
     PedalParameter, PedalParameterValue, PedalTrait,
 };
 
@@ -88,6 +88,16 @@ impl NoiseGate {
             },
         );
 
+        parameters.insert(
+            "dry_wet".to_string(),
+            PedalParameter {
+                value: PedalParameterValue::Float(1.0),
+                min: Some(PedalParameterValue::Float(0.0)),
+                max: Some(PedalParameterValue::Float(1.0)),
+                step: None,
+            },
+        );
+
         Self {
             parameters,
             gain: 1.0,
@@ -118,6 +128,7 @@ impl PedalTrait for NoiseGate {
         let reduction_ratio = self.parameters["reduction"].value.as_float().unwrap();
         let attack_ms = self.parameters["attack"].value.as_float().unwrap();
         let release_ms = self.parameters["release"].value.as_float().unwrap();
+        let dry_wet = self.parameters["dry_wet"].value.as_float().unwrap();
 
         // per sample smoothing coefficients (sample rate independent)
         let attack_coeff = (-1.0 / ((attack_ms / 1000.0) * self.sample_rate.unwrap())).exp();
@@ -148,7 +159,7 @@ impl PedalTrait for NoiseGate {
                 self.gain = release_coeff * (self.gain - gain_target) + gain_target;
             }
 
-            *sample *= self.gain;
+            *sample *= self.gain * dry_wet + x * (1.0 - dry_wet);
         }
 
         self.level = level;
@@ -163,35 +174,29 @@ impl PedalTrait for NoiseGate {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _message_buffer: &[String]) -> Option<(String,PedalParameterValue)> {
-        ui.add(egui::Image::new(include_image!("images/pedal_base.png")));
+        ui.add(egui::Image::new(include_image!("images/noise_gate.png")));
 
         let mut to_change = None;
 
         let threshold_db_param = self.get_parameters().get("threshold_db").unwrap();
-        if let Some(value) = pedal_knob(ui, RichText::new("Threshold").color(Color32::BLACK).size(8.0), threshold_db_param, egui::Vec2::new(0.12, 0.01), 0.25) {
+        if let Some(value) = pedal_knob(ui, "", threshold_db_param, egui::Vec2::new(0.08, 0.03), 0.35) {
             to_change = Some(("threshold_db".to_string(), value));
         }
 
         let reduction_param = self.get_parameters().get("reduction").unwrap();
-        if let Some(value) = pedal_knob(ui, RichText::new("Reduction").color(Color32::BLACK).size(8.0), reduction_param, egui::Vec2::new(0.47, 0.01), 0.25) {
+        if let Some(value) = pedal_knob(ui, "", reduction_param, egui::Vec2::new(0.57, 0.03), 0.35) {
             to_change = Some(("reduction".to_string(), value));
         }
 
         let attack_param = self.get_parameters().get("attack").unwrap();
-        if let Some(value) = pedal_knob(ui, RichText::new("Attack").color(Color32::BLACK).size(7.0), attack_param, egui::Vec2::new(0.3, 0.17), 0.25) {
+        if let Some(value) = pedal_knob(ui, "", attack_param, egui::Vec2::new(0.08, 0.34), 0.35) {
             to_change = Some(("attack".to_string(), value));
         }
 
         let release_param = self.get_parameters().get("release").unwrap();
-        if let Some(value) = pedal_knob(ui, RichText::new("Release").color(Color32::BLACK).size(7.0), release_param, egui::Vec2::new(0.64, 0.17), 0.25) {
+        if let Some(value) = pedal_knob(ui, "", release_param, egui::Vec2::new(0.57, 0.34), 0.35) {
             to_change = Some(("release".to_string(), value));
         }
-
-        let pedal_rect = ui.max_rect();
-        ui.put(pedal_label_rect(pedal_rect), egui::Label::new(
-            egui::RichText::new("Noise Gate")
-                .color(egui::Color32::from_black_alpha(200))
-        ));
 
         to_change
     }

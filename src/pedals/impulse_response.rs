@@ -5,7 +5,7 @@ use std::hash::Hash;
 use crate::dsp_algorithms::impluse_response::{IRConvolver, load_ir};
 use crate::{unique_time_id, SAVE_DIR};
 use serde::{ser::SerializeMap, Deserialize, Serialize};
-use eframe::egui::{self, include_image, Color32, Layout, RichText, UiBuilder, Vec2};
+use eframe::egui::{self, include_image, Vec2};
 
 use super::{ui::pedal_knob, PedalParameter, PedalParameterValue, PedalTrait};
 
@@ -223,12 +223,9 @@ impl PedalTrait for ImpulseResponse {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _message_buffer: &[String]) -> Option<(String,PedalParameterValue)> {
-        let mut img_ui = ui.new_child(
-            UiBuilder::new()
-                .max_rect(ui.available_rect_before_wrap())
-        );
+        let pedal_rect = ui.available_rect_before_wrap();
 
-        img_ui.add(egui::Image::new(include_image!("images/ir_pedal_gradient.png")).tint(Color32::from_rgb(70, 70, 70)));
+        ui.add(egui::Image::new(include_image!("images/ir.png")));
 
         let selected = PathBuf::from(self.parameters.get("ir").unwrap().value.as_str().unwrap());
 
@@ -238,34 +235,33 @@ impl PedalTrait for ImpulseResponse {
         
         let mut knob_to_change = None;
 
-        ui.allocate_ui_with_layout(Vec2::new(ui.available_width()*0.95, ui.available_height()), Layout::top_down(egui::Align::Center), |ui| {
-            ui.add_space(33.0);
-            
-            ui.label(egui::RichText::new("Impulse\nResponse").size(19.0));
+        let combo_box_rect = pedal_rect
+            .scale_from_center2(
+                Vec2::new(0.9, 0.1)
+            ).translate(
+                Vec2::new(0.0, -0.08*pedal_rect.height())
+            );
+        let mut combo_ui = ui.new_child(
+            egui::UiBuilder::new()
+                .max_rect(combo_box_rect)
+        );
 
-            ui.add_space(5.0);
+        egui::ComboBox::from_id_salt(self.id)
+            .selected_text(selected_file_name)
+            .width(combo_ui.available_width())
+            .wrap_mode(egui::TextWrapMode::Truncate)
+            .show_ui(&mut combo_ui, |ui| {
+                ui.selectable_value(&mut selected_str, String::new(), "Empty");
+                for file in &self.saved_ir_files {
+                    let name = file.file_name().unwrap().to_string_lossy();
 
-            egui::ComboBox::from_id_salt(self.id)
-                .selected_text(selected_file_name)
-                .width(ui.available_width())
-                .wrap_mode(egui::TextWrapMode::Truncate)
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut selected_str, String::new(), "Empty");
-                    for file in &self.saved_ir_files {
-                        let name = file.file_name().unwrap().to_string_lossy();
-
-                        ui.selectable_value(&mut selected_str, file.to_string_lossy().to_string(), &name[..name.len()-4]); // remove .wav extension
-                    }
-                });
-
-            ui.add_space(5.0);
-
-            ui.allocate_ui_with_layout(Vec2::new(ui.available_width(), ui.available_width()*0.25), Layout::left_to_right(egui::Align::Center), |ui| {
-                if let Some(value) = pedal_knob(ui, RichText::new("Dry/Wet").color(Color32::WHITE).size(8.0), self.parameters.get("dry_wet").unwrap(), Vec2::new(0.325, 0.0), 0.35) {
-                    knob_to_change = Some(("dry_wet".to_string(), value));
+                    ui.selectable_value(&mut selected_str, file.to_string_lossy().to_string(), &name[..name.len()-4]); // remove .wav extension
                 }
             });
-        });
+        
+        if let Some(value) = pedal_knob(ui, "", self.parameters.get("dry_wet").unwrap(), Vec2::new(0.325, 0.08), 0.35) {
+            knob_to_change = Some(("dry_wet".to_string(), value));
+        }
 
         if selected_str != old {
             Some((String::from("ir"), PedalParameterValue::String(selected_str)))

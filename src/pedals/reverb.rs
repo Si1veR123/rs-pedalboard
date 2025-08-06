@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::hash::Hash;
-use super::{PedalTrait, PedalParameter, PedalParameterValue, ui::{pedal_knob, pedal_label_rect}};
-use eframe::egui::{self, include_image, Color32, RichText};
+use super::{PedalTrait, PedalParameter, PedalParameterValue, ui::pedal_knob};
+use eframe::egui::{self, include_image};
 use serde::{Serialize, Deserialize};
 use freeverb::Freeverb;
 
@@ -85,7 +85,7 @@ impl Reverb {
         });
 
         parameters.insert("dry_wet".into(), PedalParameter {
-            value: PedalParameterValue::Float(0.33),
+            value: PedalParameterValue::Float(0.5),
             min: Some(PedalParameterValue::Float(0.0)),
             max: Some(PedalParameterValue::Float(1.0)),
             step: None,
@@ -163,34 +163,28 @@ impl PedalTrait for Reverb {
     }
 
     fn ui(&mut self, ui: &mut eframe::egui::Ui, _message_buffer: &[String]) -> Option<(String, PedalParameterValue)> {
-        ui.add(egui::Image::new(include_image!("images/pedal_base.png")));
+        ui.add(egui::Image::new(include_image!("images/reverb.png")));
 
         let mut to_change = None;
         let room_size_param = self.get_parameters().get("room_size").unwrap();
-        if let Some(value) = pedal_knob(ui, RichText::new("Delay").color(Color32::BLACK).size(8.0), room_size_param, egui::Vec2::new(0.12, 0.01), 0.25) {
+        if let Some(value) = pedal_knob(ui, "", room_size_param, egui::Vec2::new(0.05, 0.022), 0.3) {
             to_change = Some(("room_size".to_string(), value));
         }
 
-        let dampening_param = self.get_parameters().get("dampening").unwrap();
-        if let Some(value) = pedal_knob(ui, RichText::new("Dampening").color(Color32::BLACK).size(8.0), dampening_param, egui::Vec2::new(0.47, 0.01), 0.25) {
-            to_change = Some(("dampening".to_string(), value));
-        }
-
         let width_param = self.get_parameters().get("width").unwrap();
-        if let Some(value) = pedal_knob(ui, RichText::new("Width").color(Color32::BLACK).size(8.0), width_param, egui::Vec2::new(0.3, 0.17), 0.25) {
+        if let Some(value) = pedal_knob(ui, "", width_param, egui::Vec2::new(0.05, 0.171), 0.3) {
             to_change = Some(("width".to_string(), value));
         }
 
-        let dry_wet_param = self.get_parameters().get("dry_wet").unwrap();
-        if let Some(value) = pedal_knob(ui, RichText::new("Dry/Wet").color(Color32::BLACK).size(8.0), dry_wet_param, egui::Vec2::new(0.64, 0.17), 0.25) {
-            to_change = Some(("dry_wet".to_string(), value));
+        let dampening_param = self.get_parameters().get("dampening").unwrap();
+        if let Some(value) = pedal_knob(ui, "", dampening_param, egui::Vec2::new(0.05, 0.32), 0.3) {
+            to_change = Some(("dampening".to_string(), value));
         }
 
-        let pedal_rect = ui.max_rect();
-        ui.put(pedal_label_rect(pedal_rect), egui::Label::new(
-            egui::RichText::new("Reverb")
-                .color(egui::Color32::from_black_alpha(200))
-        ));
+        let dry_wet_param = self.get_parameters().get("dry_wet").unwrap();
+        if let Some(value) = pedal_knob(ui, "", dry_wet_param, egui::Vec2::new(0.05, 0.469), 0.3) {
+            to_change = Some(("dry_wet".to_string(), value));
+        }
 
         to_change
     }

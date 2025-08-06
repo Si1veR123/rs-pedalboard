@@ -222,23 +222,23 @@ pub trait PedalTrait: Hash {
 #[strum_discriminants(derive(EnumIter))]
 #[enum_dispatch(PedalTrait)]
 pub enum Pedal {
-    Volume(Volume),
-    Fuzz(Fuzz),
-    PitchShift(PitchShift),
-    Chorus(Chorus),
-    Flanger(Flanger),
-    Delay(Delay),
-    GraphicEq7(GraphicEq7),
-    Nam(Nam),
-    ImpulseResponse(ImpulseResponse),
-    NoiseGate(NoiseGate),
-    Vst2(Vst2),
-    Reverb(Reverb),
-    Vibrato(Vibrato),
-    Tremolo(Tremolo),
     AutoWah(AutoWah),
-    Wah(Wah),
+    Chorus(Chorus),
     Compressor(Compressor),
+    Delay(Delay),
+    Flanger(Flanger),
+    Fuzz(Fuzz),
+    GraphicEq7(GraphicEq7),
+    ImpulseResponse(ImpulseResponse),
+    Nam(Nam),
+    NoiseGate(NoiseGate),
+    PitchShift(PitchShift),
+    Reverb(Reverb),
+    Tremolo(Tremolo),
+    Vibrato(Vibrato),
+    Volume(Volume),
+    Vst2(Vst2),
+    Wah(Wah),
 }
 
 impl PedalDiscriminants {

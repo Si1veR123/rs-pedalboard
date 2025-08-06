@@ -23,6 +23,7 @@ impl ServerSocket {
     }
 
     pub fn start(&mut self) -> std::io::Result<()> {
+        log::info!("Starting server on port {}", self.port);
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, self.port))?;
         log::info!("Server listening on port {}", self.port);
 

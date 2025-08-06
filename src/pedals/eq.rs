@@ -1,7 +1,7 @@
 use std::{collections::HashMap, time::Instant};
 use std::hash::Hash;
 
-use eframe::egui::{self, include_image, Color32, Image, ImageButton, RichText, UiBuilder, Vec2};
+use eframe::egui::{self, include_image, Color32, Image, ImageButton, UiBuilder, Vec2};
 use egui_plot::{HLine, Line, Plot, PlotPoint, VLine};
 use serde::{Deserialize, Serialize};
 
@@ -182,6 +182,16 @@ impl GraphicEq7 {
             },
         );
 
+        parameters.insert(
+            "dry_wet".to_string(),
+            PedalParameter {
+                value: PedalParameterValue::Float(1.0),
+                min: Some(PedalParameterValue::Float(0.0)),
+                max: Some(PedalParameterValue::Float(1.0)),
+                step: None
+            },
+        );
+
         let eq = Self::build_eq([init_bandwidth; 7], [init_gain; 7], true, false, 48000.0);
 
         GraphicEq7 {
@@ -252,8 +262,9 @@ impl GraphicEq7 {
 
 impl PedalTrait for GraphicEq7 {
     fn process_audio(&mut self, buffer: &mut [f32], message_buffer: &mut Vec<String>) {
+        let dry_wet = self.parameters.get("dry_wet").unwrap().value.as_float().unwrap();
         for sample in buffer.iter_mut() {
-            *sample = self.eq.process(*sample);
+            *sample = self.eq.process(*sample) * dry_wet + *sample * (1.0 - dry_wet);
         }
 
         if self.parameters.get("live_frequency_plot").unwrap().value.as_bool().unwrap() {
@@ -362,14 +373,14 @@ impl PedalTrait for GraphicEq7 {
                 .max_rect(ui.available_rect_before_wrap())
         );
 
-        img_ui.add(Image::new(include_image!("images/pedal_gradient.png")).tint(Color32::from_rgb(208, 76, 40)));
+        img_ui.add(Image::new(include_image!("images/eq.png")));
 
         // Title row with shelf buttons
         ui.add_space(2.0);
         ui.horizontal(|ui| {
             ui.style_mut().visuals.widgets.inactive.weak_bg_fill = Color32::from_black_alpha(50);
             ui.style_mut().visuals.widgets.hovered.weak_bg_fill = Color32::from_black_alpha(80);
-            ui.columns_const(|[col1, col2, col3]| {
+            ui.columns_const(|[col1, _col2, col3]| {
                 let high_shelf_enabled = self.parameters.get("high_shelf").unwrap().value.as_float().unwrap() > 0.0;
                 let low_shelf_enabled = self.parameters.get("low_shelf").unwrap().value.as_float().unwrap() > 0.0;
 
@@ -385,9 +396,6 @@ impl PedalTrait for GraphicEq7 {
                         changed_param = Some(("low_shelf".to_string(), PedalParameterValue::Float(new_value)));
                     }
                 });
-                
-
-                col2.centered_and_justified(|ui| ui.label("EQ"));
 
                 col3.centered_and_justified(|ui| {
                     if ui.add(
@@ -413,25 +421,25 @@ impl PedalTrait for GraphicEq7 {
             ui.add_space(spacing/2.0);
 
             let mut changed_eq_param = None;
-            if let Some(change) = eq_knob(ui, "100hz", self.parameters.get("gain1").unwrap(), self.parameters.get("bandwidth1").unwrap(), width) {
+            if let Some(change) = eq_knob(ui, self.parameters.get("gain1").unwrap(), self.parameters.get("bandwidth1").unwrap(), width) {
                 changed_eq_param = Some((1, change));
             }
-            if let Some(change) = eq_knob(ui, "200hz", self.parameters.get("gain2").unwrap(), self.parameters.get("bandwidth2").unwrap(), width) {
+            if let Some(change) = eq_knob(ui, self.parameters.get("gain2").unwrap(), self.parameters.get("bandwidth2").unwrap(), width) {
                 changed_eq_param = Some((2, change));
             }
-            if let Some(change) = eq_knob(ui, "400hz", self.parameters.get("gain3").unwrap(), self.parameters.get("bandwidth3").unwrap(), width) {
+            if let Some(change) = eq_knob(ui, self.parameters.get("gain3").unwrap(), self.parameters.get("bandwidth3").unwrap(), width) {
                 changed_eq_param = Some((3, change));
             }
-            if let Some(change) = eq_knob(ui, "800hz", self.parameters.get("gain4").unwrap(), self.parameters.get("bandwidth4").unwrap(), width) {
+            if let Some(change) = eq_knob(ui, self.parameters.get("gain4").unwrap(), self.parameters.get("bandwidth4").unwrap(), width) {
                 changed_eq_param = Some((4, change));
             }
-            if let Some(change) = eq_knob(ui, "1.6khz", self.parameters.get("gain5").unwrap(), self.parameters.get("bandwidth5").unwrap(), width) {
+            if let Some(change) = eq_knob(ui, self.parameters.get("gain5").unwrap(), self.parameters.get("bandwidth5").unwrap(), width) {
                 changed_eq_param = Some((5, change));
             }
-            if let Some(change) = eq_knob(ui, "3.2khz", self.parameters.get("gain6").unwrap(), self.parameters.get("bandwidth6").unwrap(), width) {
+            if let Some(change) = eq_knob(ui, self.parameters.get("gain6").unwrap(), self.parameters.get("bandwidth6").unwrap(), width) {
                 changed_eq_param = Some((6, change));
             }
-            if let Some(change) = eq_knob(ui, "6.4khz", self.parameters.get("gain7").unwrap(), self.parameters.get("bandwidth7").unwrap(), width) {
+            if let Some(change) = eq_knob(ui, self.parameters.get("gain7").unwrap(), self.parameters.get("bandwidth7").unwrap(), width) {
                 changed_eq_param = Some((7, change));
             }
 
@@ -525,7 +533,7 @@ enum EqChange {
     Bandwidth(f32),
 }
 
-fn eq_knob(ui: &mut eframe::egui::Ui, label: &str, param: &PedalParameter, bandwidth_param: &PedalParameter, width: f32) -> Option<EqChange> {
+fn eq_knob(ui: &mut eframe::egui::Ui, param: &PedalParameter, bandwidth_param: &PedalParameter, width: f32) -> Option<EqChange> {
     ui.vertical(|ui| {
         let mut changed_param = None;
 
@@ -563,7 +571,7 @@ fn eq_knob(ui: &mut eframe::egui::Ui, label: &str, param: &PedalParameter, bandw
             changed_param = Some(EqChange::Gain(clamped_value));
         }
 
-        ui.label(RichText::new(label).size(3.0));
+        ui.add_space(7.0);
 
         // Allocate space for bandwidth knob
         // Using allocate_ui_with_layout doesn't seem to allocate the correct space so this is a hack

@@ -268,11 +268,12 @@ impl PedalTrait for Vst2 {
             None => return
         }
 
+        let dry_wet = self.parameters.get("dry_wet").unwrap().value.as_float().unwrap();
+
         if let Some(instance) = self.instance.as_mut() {
             instance.process(buffer, &mut self.output_buffer[..buffer.len()]);
 
             // Mix using dry/wet
-            let dry_wet = self.parameters.get("dry_wet").unwrap().value.as_float().unwrap();
             for (output_sample, processed_sample) in buffer.iter_mut().zip(self.output_buffer.iter()) {
                 *output_sample = *output_sample * (1.0 - dry_wet) + processed_sample * dry_wet;
             }

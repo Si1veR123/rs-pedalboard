@@ -3,7 +3,7 @@ use std::hash::Hash;
 use eframe::egui::{self, include_image, Color32, RichText, Vec2};
 use serde::{ser::SerializeMap, Deserialize, Serialize};
 use super::{PedalTrait, PedalParameter, PedalParameterValue};
-use crate::{dsp_algorithms::{oscillator::{Oscillator, Sine}, variable_delay::VariableDelayLine}, pedals::ui::{oscillator_selection_window, pedal_knob, pedal_label_rect}};
+use crate::{dsp_algorithms::{oscillator::{Oscillator, Sine}, variable_delay::VariableDelayLine}, pedals::ui::{oscillator_selection_window, pedal_knob}};
 
 #[derive(Clone)]
 pub struct Vibrato {
@@ -70,6 +70,15 @@ impl Vibrato {
                 step: None,
             },
         );
+        parameters.insert(
+            "dry_wet".to_string(),
+            PedalParameter {
+                value: PedalParameterValue::Float(1.0),
+                min: Some(PedalParameterValue::Float(0.0)),
+                max: Some(PedalParameterValue::Float(1.0)),
+                step: None,
+            },
+        );
 
         Self {
             delay_line: None,
@@ -86,8 +95,8 @@ impl PedalTrait for Vibrato {
             return;
         }
 
+        let dry_wet = self.parameters.get("dry_wet").unwrap().value.as_float().unwrap();
         let oscillator = self.parameters.get_mut("oscillator").unwrap().value.as_oscillator_mut().unwrap();
-    
         let delay_line = self.delay_line.as_mut().unwrap();
 
         for sample in buffer.iter_mut() {
@@ -100,7 +109,7 @@ impl PedalTrait for Vibrato {
     
             let delayed_sample = delay_line.get_sample(current_delay);
     
-            *sample = delayed_sample;
+            *sample = delayed_sample * dry_wet + *sample * (1.0 - dry_wet);
         }
     }
 
@@ -113,27 +122,30 @@ impl PedalTrait for Vibrato {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _message_buffer: &[String]) -> Option<(String, PedalParameterValue)> {
-        ui.add(egui::Image::new(include_image!("images/pedal_base.png")));
+        let pedal_width = ui.available_width();
+        let pedal_height = ui.available_height();
+
+        ui.add(egui::Image::new(include_image!("images/vibrato.png")));
 
         let mut to_change = None;
 
         let depth_param = self.get_parameters().get("depth").unwrap();
-        if let Some(value) = pedal_knob(ui, RichText::new("Depth").color(Color32::BLACK).size(8.0), depth_param, egui::Vec2::new(0.38, 0.02), 0.25) {
+        if let Some(value) = pedal_knob(ui, "", depth_param, egui::Vec2::new(0.3, 0.11), 0.4) {
             to_change =  Some(("depth".to_string(), value));
         }
 
-        let offset_x = 0.2 * ui.available_width();
-        let offset_y = 0.3 * ui.available_height();
+        let offset_x = 0.15 * pedal_width;
+        let offset_y = 0.43 * pedal_height;
 
         let oscillator_button_rect = egui::Rect::from_min_size(
             ui.max_rect().min + Vec2::new(offset_x, offset_y),
-            Vec2::new(0.6 * ui.available_width(), 0.1 * ui.available_height())
+            Vec2::new(0.7 * ui.available_width(), 0.15 * ui.available_height())
         );
 
         if ui.put(oscillator_button_rect, egui::Button::new(
             RichText::new("Oscillator")
                 .color(Color32::WHITE)
-                .size(9.0)
+                .size(13.0)
         )).clicked() {
             self.oscillator_open = !self.oscillator_open;
         };
@@ -149,12 +161,6 @@ impl PedalTrait for Vibrato {
                 to_change = Some(("oscillator".to_string(), PedalParameterValue::Oscillator(osc)));
             }
         }
-
-        let pedal_rect = ui.max_rect();
-        ui.put(pedal_label_rect(pedal_rect), egui::Label::new(
-            egui::RichText::new("Vibrato")
-                .color(egui::Color32::from_black_alpha(200))
-        ));
 
         to_change
     }

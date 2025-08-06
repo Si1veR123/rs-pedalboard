@@ -4,7 +4,7 @@ use eframe::egui::{self, Vec2, Color32, RichText, include_image};
 use serde::{Serialize, Deserialize};
 use crate::dsp_algorithms::oscillator::{Oscillator, Sine};
 use super::{PedalTrait, PedalParameter, PedalParameterValue};
-use super::ui::{oscillator_selection_window, pedal_knob, pedal_label_rect};
+use super::ui::{oscillator_selection_window, pedal_knob};
 
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -75,27 +75,30 @@ impl PedalTrait for Tremolo {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _message_buffer: &[String]) -> Option<(String, PedalParameterValue)> {
-        ui.add(egui::Image::new(include_image!("images/pedal_base.png")));
+        let pedal_width = ui.available_width();
+        let pedal_height = ui.available_height();
+
+        ui.add(egui::Image::new(include_image!("images/tremolo.png")));
 
         let mut to_change = None;
 
         let depth_param = self.get_parameters().get("depth").unwrap();
-        if let Some(value) = pedal_knob(ui, RichText::new("Depth").color(Color32::BLACK).size(8.0), depth_param, egui::Vec2::new(0.38, 0.02), 0.25) {
+        if let Some(value) = pedal_knob(ui, "", depth_param, egui::Vec2::new(0.3, 0.11), 0.4) {
             to_change =  Some(("depth".to_string(), value));
         }
 
-        let offset_x = 0.2 * ui.available_width();
-        let offset_y = 0.3 * ui.available_height();
+        let offset_x = 0.15 * pedal_width;
+        let offset_y = 0.43 * pedal_height;
 
         let oscillator_button_rect = egui::Rect::from_min_size(
             ui.max_rect().min + Vec2::new(offset_x, offset_y),
-            Vec2::new(0.6 * ui.available_width(), 0.1 * ui.available_height())
+            Vec2::new(0.7 * ui.available_width(), 0.15 * ui.available_height())
         );
 
         if ui.put(oscillator_button_rect, egui::Button::new(
             RichText::new("Oscillator")
                 .color(Color32::WHITE)
-                .size(9.0)
+                .size(13.0)
         )).clicked() {
             self.oscillator_open = !self.oscillator_open;
         };
@@ -111,12 +114,6 @@ impl PedalTrait for Tremolo {
                 to_change = Some(("oscillator".to_string(), PedalParameterValue::Oscillator(osc)));
             }
         }
-
-        let pedal_rect = ui.max_rect();
-        ui.put(pedal_label_rect(pedal_rect), egui::Label::new(
-            egui::RichText::new("Tremolo")
-                .color(egui::Color32::from_black_alpha(200))
-        ));
 
         to_change
     }

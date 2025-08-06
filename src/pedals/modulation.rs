@@ -3,13 +3,13 @@ use std::hash::Hash;
 use crate::dsp_algorithms::variable_delay_phaser::VariableDelayPhaser;
 use crate::dsp_algorithms::oscillator::{Oscillator, Sine};
 use super::{PedalTrait, PedalParameter, PedalParameterValue};
-use super::ui::{pedal_knob, pedal_label_rect, oscillator_selection_window};
+use super::ui::{pedal_knob, oscillator_selection_window};
 use eframe::egui::{self, Color32, include_image, RichText, Vec2};
 use serde::{Serialize, Deserialize, ser::SerializeMap};
 
 
 macro_rules! var_delay_phaser {
-    ($name:ident, ($default_rate:expr, $min_rate:expr, $max_rate:expr), ($default_min_depth:expr, $default_max_depth:expr, $min_depth: expr, $max_depth: expr), ($incl_feedback: expr, $default_feedback:expr, $max_feedback:expr), $default_mix: expr) => {
+    ($name:ident, ($default_rate:expr, $min_rate:expr, $max_rate:expr), ($default_min_depth:expr, $default_max_depth:expr, $min_depth: expr, $max_depth: expr), ($incl_feedback: expr, $default_feedback:expr, $max_feedback:expr), $default_dry_wet: expr) => {
         #[derive(Clone)]
         pub struct $name {
             variable_delay_phaser: Option<VariableDelayPhaser>, // Server only
@@ -58,7 +58,7 @@ macro_rules! var_delay_phaser {
                 let init_rate = $default_rate;
                 let init_min_depth = $default_min_depth;
                 let init_max_depth = $default_max_depth;
-                let init_mix = $default_mix;
+                let init_dry_wet = $default_dry_wet;
                 // Sample rate on oscillators is not used on clients so the hardcoded sample rate is ok
                 let init_oscillator = Oscillator::Sine(Sine::new(48000.0, init_rate, 0.0, 0.0));
 
@@ -81,9 +81,9 @@ macro_rules! var_delay_phaser {
                     },
                 );
                 parameters.insert(
-                    "mix".to_string(),
+                    "dry_wet".to_string(),
                     PedalParameter {
-                        value: PedalParameterValue::Float(init_mix),
+                        value: PedalParameterValue::Float(init_dry_wet),
                         min: Some(PedalParameterValue::Float(0.0)),
                         max: Some(PedalParameterValue::Float(1.0)),
                         step: None
@@ -164,12 +164,12 @@ macro_rules! var_delay_phaser {
                             }
                         }
                     },
-                    "mix" => {
-                        if let PedalParameterValue::Float(mix) = value {
+                    "dry_wet" => {
+                        if let PedalParameterValue::Float(dry_wet) = value {
                             if let Some(variable_delay_phaser) = &mut self.variable_delay_phaser {
-                                variable_delay_phaser.mix = mix;
+                                variable_delay_phaser.mix = dry_wet;
                             }
-                            self.parameters.get_mut(name).unwrap().value = PedalParameterValue::Float(mix);
+                            self.parameters.get_mut(name).unwrap().value = PedalParameterValue::Float(dry_wet);
                         }
                     },
                     "oscillator" => {
@@ -198,39 +198,49 @@ macro_rules! var_delay_phaser {
             }
 
             fn ui(&mut self, ui: &mut egui::Ui, _message_buffer: &[String]) -> Option<(String, PedalParameterValue)> {
-                ui.add(egui::Image::new(include_image!("images/pedal_base.png")));
+                let pedal_width = ui.available_width();
+                let pedal_height = ui.available_height();
 
+                if $incl_feedback {
+                    ui.add(egui::Image::new(include_image!("images/flanger.png")));
+                } else {
+                    ui.add(egui::Image::new(include_image!("images/chorus.png")));
+                }
                 let mut to_change = None;
 
                 let min_depth_param = self.get_parameters().get("min_depth").unwrap();
-                if let Some(value) = pedal_knob(ui, RichText::new("Min Depth").color(Color32::BLACK).size(8.0), min_depth_param, eframe::egui::Vec2::new(0.08, 0.02), 0.25) {
+                if let Some(value) = pedal_knob(ui, "", min_depth_param, eframe::egui::Vec2::new(0.086, 0.035), 0.3) {
                     to_change =  Some(("min_depth".to_string(), value));
                 }
 
                 let max_depth_param = self.get_parameters().get("max_depth").unwrap();
-                if let Some(value) = pedal_knob(ui, RichText::new("Max Depth").color(Color32::BLACK).size(8.0), max_depth_param, eframe::egui::Vec2::new(0.38, 0.02), 0.25) {
+                if let Some(value) = pedal_knob(ui, "", max_depth_param, eframe::egui::Vec2::new(0.61, 0.035), 0.3) {
                     to_change =  Some(("max_depth".to_string(), value));
                 }
 
-                let mix_param = self.get_parameters().get("mix").unwrap();
-                if let Some(value) = pedal_knob(ui, RichText::new("Mix").color(Color32::BLACK).size(8.0), mix_param, eframe::egui::Vec2::new(0.67, 0.02), 0.25) {
-                    to_change =  Some(("mix".to_string(), value));
+                if $incl_feedback {
+                    let feedback_param = self.get_parameters().get("feedback").unwrap();
+                    if let Some(value) = pedal_knob(ui, "", feedback_param, Vec2::new(0.095, 0.39), 0.3) {
+                        to_change = Some(("feedback".to_string(), value));
+                    }
+
+                    let dry_wet_param = self.get_parameters().get("dry_wet").unwrap();
+                    if let Some(value) = pedal_knob(ui, "", dry_wet_param, eframe::egui::Vec2::new(0.605, 0.39), 0.3) {
+                        to_change =  Some(("dry_wet".to_string(), value));
+                    }
+                } else {
+                    let dry_wet_param = self.get_parameters().get("dry_wet").unwrap();
+                    if let Some(value) = pedal_knob(ui, "", dry_wet_param, eframe::egui::Vec2::new(0.35, 0.39), 0.3) {
+                        to_change =  Some(("dry_wet".to_string(), value));
+                    }
                 }
 
-                let offset_x: f32;
-                let offset_y: f32;
-                if $incl_feedback {
-                    offset_x = 0.06 * ui.available_width();
-                    offset_y = 0.3 * ui.available_height();
-                    
-                } else {
-                    offset_x = 0.2 * ui.available_width();
-                    offset_y = 0.3 * ui.available_height();
-                }
+                let offset_x = 0.2 * pedal_width;
+                let offset_y = 0.31 * pedal_height;
 
                 let oscillator_button_rect = egui::Rect::from_min_size(
                     ui.max_rect().min + Vec2::new(offset_x, offset_y),
-                    Vec2::new(0.6 * ui.available_width(), 0.1 * ui.available_height())
+                    Vec2::new(0.6 * ui.available_width(), 0.06 * ui.available_height())
                 );
 
                 if ui.put(oscillator_button_rect, egui::Button::new(
@@ -253,19 +263,6 @@ macro_rules! var_delay_phaser {
                     }
                 }
 
-                if $incl_feedback {
-                    let feedback_param = self.get_parameters().get("feedback").unwrap();
-                    if let Some(value) = pedal_knob(ui, RichText::new("Feedback").color(Color32::BLACK).size(8.0), feedback_param, Vec2::new(0.7, 0.2), 0.25) {
-                        to_change = Some(("feedback".to_string(), value));
-                    }
-                }
-
-                let pedal_rect = ui.max_rect();
-                ui.put(pedal_label_rect(pedal_rect), egui::Label::new(
-                    egui::RichText::new(stringify!($name))
-                        .color(egui::Color32::from_black_alpha(200))
-                ));
-
                 to_change
             }
 
@@ -276,14 +273,14 @@ macro_rules! var_delay_phaser {
 
                 let min_depth = self.parameters.get("min_depth").unwrap().value.as_float().unwrap();
                 let max_depth = self.parameters.get("max_depth").unwrap().value.as_float().unwrap();
-                let mix = self.parameters.get("mix").unwrap().value.as_float().unwrap();
+                let dry_wet = self.parameters.get("dry_wet").unwrap().value.as_float().unwrap();
                 let feedback = if $incl_feedback {
                     self.parameters.get("feedback").unwrap().value.as_float().unwrap()
                 } else {
                     0.0
                 };
 
-                self.variable_delay_phaser = Some(VariableDelayPhaser::new(min_depth, max_depth, mix, variable_delay_phaser_oscillator, feedback, sample_rate as f32));
+                self.variable_delay_phaser = Some(VariableDelayPhaser::new(min_depth, max_depth, dry_wet, variable_delay_phaser_oscillator, feedback, sample_rate as f32));
             }
         }
     };

@@ -16,13 +16,6 @@ pub fn float_round(value: f32, step: f32) -> f32 {
     rounded
 }
 
-pub fn pedal_label_rect(pedal_rect: egui::Rect) -> egui::Rect {
-    egui::Rect {
-        min: egui::Pos2::new(pedal_rect.min.x + 0.1 * pedal_rect.width(), pedal_rect.min.y + 0.45 * pedal_rect.height()),
-        max: egui::Pos2::new(pedal_rect.max.x - 0.1 * pedal_rect.width(), pedal_rect.min.y + 0.55 * pedal_rect.height()),
-    }
-}
-
 pub fn pedal_knob(
     ui: &mut egui::Ui,
     name: impl Into<WidgetText>,

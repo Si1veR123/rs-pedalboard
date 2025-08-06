@@ -4,11 +4,12 @@ use std::hash::Hash;
 use super::PedalTrait;
 use super::PedalParameter;
 use super::PedalParameterValue;
-use super::ui::{pedal_knob, pedal_label_rect};
+use super::ui::pedal_knob;
 
 use eframe::egui::Color32;
+use eframe::egui::Image;
 use eframe::egui::RichText;
-use eframe::egui::{include_image, self};
+use eframe::egui::{include_image, self, Vec2};
 use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -56,19 +57,13 @@ impl PedalTrait for Volume {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _message_buffer: &[String]) -> Option<(String, PedalParameterValue)> {
-        ui.add(eframe::egui::Image::new(include_image!("images/pedal_base.png")).max_height(ui.available_height()));
+        ui.add(Image::new(include_image!("images/volume.png")));
 
         let volume_param = self.get_parameters().get("volume").unwrap();
         let mut changed = None;
-        if let Some(value) = pedal_knob(ui, RichText::new(&format!("{:.2}", volume_param.value.as_float().unwrap())).color(Color32::BLACK).size(10.0), volume_param, eframe::egui::Vec2::new(0.325, 0.07), 0.35) {
+        if let Some(value) = pedal_knob(ui, RichText::new(&format!("{:.2}", volume_param.value.as_float().unwrap())).color(Color32::BLACK).size(10.0), volume_param, Vec2::new(0.3, 0.2), 0.4) {
             changed = Some(("volume".to_string(), value));
         }
-
-        let pedal_rect = ui.max_rect();
-        ui.put(pedal_label_rect(pedal_rect), egui::Label::new(
-            egui::RichText::new("Volume")
-                .color(egui::Color32::from_black_alpha(200))
-        ));
         
         changed
     }
