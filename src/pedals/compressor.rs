@@ -24,7 +24,8 @@ pub struct Compressor {
     current_envelope: f32,
 
     // Server only
-    envelope_last_sent: Instant
+    envelope_last_sent_time: Instant,
+    envelope_last_sent_value: f32
 }
 
 impl Serialize for Compressor {
@@ -51,7 +52,8 @@ impl<'a> Deserialize<'a> for Compressor {
             sample_rate: None,
             envelope: 0.0,
             current_envelope: 0.0,
-            envelope_last_sent: Instant::now(),
+            envelope_last_sent_time: Instant::now(),
+            envelope_last_sent_value: 0.0,
         })
     }
 }
@@ -129,7 +131,8 @@ impl Compressor {
             envelope: 0.0,
             current_envelope: 0.0,
             sample_rate: None,
-            envelope_last_sent: Instant::now(),
+            envelope_last_sent_time: Instant::now(),
+            envelope_last_sent_value: 0.0,
         }
     }
 }
@@ -195,10 +198,16 @@ impl PedalTrait for Compressor {
             *sample = *sample * (1.0 - blend) + compressed_sample * blend;
         }
 
-        if self.envelope_last_sent.elapsed() >= ENVELOPE_UPDATE_RATE {
+        // Send envelope to client
+        if self.envelope_last_sent_time.elapsed() >= ENVELOPE_UPDATE_RATE {
             let envelope_round = (self.envelope * 100.0).round() / 100.0;
-            messages.push(format!("{:?}", envelope_round));
-            self.envelope_last_sent = Instant::now();
+
+            if (envelope_round - self.envelope_last_sent_value).abs() > EPS {
+                messages.push(format!("{:?}", envelope_round));
+                self.envelope_last_sent_value = envelope_round;
+            }
+            
+            self.envelope_last_sent_time = Instant::now();
         }
     }
 
