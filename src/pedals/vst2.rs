@@ -6,6 +6,7 @@ use super::PedalParameter;
 use super::PedalParameterValue;
 use super::ui::pedal_knob;
 
+use crate::pedals::ui::pedal_switch;
 use crate::plugin::vst2::{Vst2Instance, path_from_name, available_plugins};
 use crate::unique_time_id;
 
@@ -141,6 +142,15 @@ impl Vst2 {
                 min: Some(PedalParameterValue::Float(0.0)),
                 max: Some(PedalParameterValue::Float(1.0)),
                 step: None
+            },
+        );
+        parameters.insert(
+            "active".to_string(),
+            PedalParameter {
+                value: PedalParameterValue::Bool(true),
+                min: None,
+                max: None,
+                step: None,
             },
         );
 
@@ -318,7 +328,7 @@ impl PedalTrait for Vst2 {
 
         let mut selected = self.parameters.get("plugin").unwrap().value.as_str().unwrap().to_string();
         let old = selected.clone();
-        let mut knob_to_change = None;
+        let mut to_change = None;
 
         let mut img_ui = ui.new_child(
             UiBuilder::new()
@@ -367,17 +377,22 @@ impl PedalTrait for Vst2 {
                 ui.add_space(5.0);
                     
                 if let Some(value) = pedal_knob(ui, RichText::new("Dry/Wet").color(Color32::WHITE).size(8.0), self.parameters.get("dry_wet").unwrap(), Vec2::new(0.325, 0.55), 0.35) {
-                    knob_to_change = Some(("dry_wet".to_string(), value));
+                    to_change = Some(("dry_wet".to_string(), value));
                 }
             }
         );
+
+        let active_param = self.get_parameters().get("active").unwrap().value.as_bool().unwrap();
+        if let Some(value) = pedal_switch(ui, active_param, egui::Vec2::new(0.33, 0.72), 0.16) {
+            to_change = Some(("active".to_string(), PedalParameterValue::Bool(value)));
+        }
 
         if plugin_param_change.is_some() {
             return plugin_param_change;
         }
 
-        if knob_to_change.is_some() {
-            return knob_to_change;
+        if to_change.is_some() {
+            return to_change;
         }
             
         if selected != old {

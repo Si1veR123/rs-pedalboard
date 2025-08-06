@@ -214,6 +214,15 @@ pub trait PedalTrait: Hash {
 
     /// Call after creating a pedal so that it can set up its internal state
     fn set_config(&mut self, _buffer_size: usize, _sample_rate: u32) {}
+
+    fn is_active(&self) -> bool {
+        if let Some(param) = self.get_parameters().get("active") {
+            if let PedalParameterValue::Bool(active) = &param.value {
+                return *active;
+            }
+        }
+        true
+    }
 }
 
 

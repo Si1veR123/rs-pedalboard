@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::hash::Hash;
 use crate::dsp_algorithms::biquad::BiquadFilter;
 use crate::dsp_algorithms::eq::Equalizer;
+use crate::pedals::ui::pedal_switch;
 
 use super::PedalTrait;
 use super::PedalParameter;
@@ -80,7 +81,7 @@ impl PitchShift {
 
         let init_block_size = 3074 / 128;
         let init_semitones = 0;
-        let init_tonality_limit = 0.5;
+        let init_tonality_limit = 4000.0;
 
         parameters.insert(
             "semitones".to_string(),
@@ -123,6 +124,16 @@ impl PitchShift {
             }
         );
 
+        parameters.insert(
+            "active".to_string(),
+            PedalParameter {
+                value: PedalParameterValue::Bool(true),
+                min: None,
+                max: None,
+                step: None,
+            },
+        );
+
         PitchShift { parameters, signalsmith_stretch: None, eq: None, output_buffer: Vec::new() }
     }
 
@@ -132,12 +143,12 @@ impl PitchShift {
     }
 
     pub fn stretch_from_parameters(parameters: &HashMap<String, PedalParameter>, sample_rate: f32) -> Stretch {
-        let block_size = parameters.get("block_size").unwrap().value.as_int().unwrap() * 128;
+        let block_size = parameters.get("block_size").unwrap().value.as_int().unwrap() as usize * 128;
         let semitones = parameters.get("semitones").unwrap().value.as_int().unwrap();
         let tonality_limit_hz = parameters.get("tonality_limit").unwrap().value.as_float().unwrap();
         let tonality_limit = tonality_limit_hz / sample_rate;
 
-        let mut stretch = Stretch::new(1, block_size as usize, 4);
+        let mut stretch = Stretch::new(1, block_size, block_size/4);
         stretch.set_transpose_factor_semitones(semitones as f32, Some(tonality_limit));
 
         stretch
@@ -223,6 +234,11 @@ impl PedalTrait for PitchShift {
         let presence_param = self.get_parameters().get("presence").unwrap();
         if let Some(value) = pedal_knob(ui, "", presence_param, eframe::egui::Vec2::new(0.05, 0.469), 0.3) {
             to_change =  Some(("presence".to_string(), value));
+        }
+
+        let active_param = self.get_parameters().get("active").unwrap().value.as_bool().unwrap();
+        if let Some(value) = pedal_switch(ui, active_param, egui::Vec2::new(0.33, 0.72), 0.16) {
+            to_change = Some(("active".to_string(), PedalParameterValue::Bool(value)));
         }
 
         to_change

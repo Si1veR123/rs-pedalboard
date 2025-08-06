@@ -3,7 +3,7 @@ use std::hash::Hash;
 use crate::dsp_algorithms::variable_delay_phaser::VariableDelayPhaser;
 use crate::dsp_algorithms::oscillator::{Oscillator, Sine};
 use super::{PedalTrait, PedalParameter, PedalParameterValue};
-use super::ui::{pedal_knob, oscillator_selection_window};
+use super::ui::{pedal_knob, oscillator_selection_window, pedal_switch};
 use eframe::egui::{self, Color32, include_image, RichText, Vec2};
 use serde::{Serialize, Deserialize, ser::SerializeMap};
 
@@ -110,6 +110,16 @@ macro_rules! var_delay_phaser {
                         },
                     );
                 }
+
+                parameters.insert(
+                    "active".to_string(),
+                    PedalParameter {
+                        value: PedalParameterValue::Bool(true),
+                        min: None,
+                        max: None,
+                        step: None,
+                    },
+                );
         
                 Self {
                     variable_delay_phaser: None,
@@ -193,7 +203,13 @@ macro_rules! var_delay_phaser {
                             self.parameters.get_mut(name).unwrap().value = PedalParameterValue::Float(feedback);
                         }
                     },
-                    _ => {}
+                    _ => {
+                        if let Some(parameter) = self.parameters.get_mut(name) {
+                            parameter.value = value;
+                        } else {
+                            log::warn!("Attempted to set unknown parameter: {}", name);
+                        }
+                    }
                 }
             }
 
@@ -209,38 +225,38 @@ macro_rules! var_delay_phaser {
                 let mut to_change = None;
 
                 let min_depth_param = self.get_parameters().get("min_depth").unwrap();
-                if let Some(value) = pedal_knob(ui, "", min_depth_param, eframe::egui::Vec2::new(0.086, 0.035), 0.3) {
+                if let Some(value) = pedal_knob(ui, "", min_depth_param, eframe::egui::Vec2::new(0.086, 0.036), 0.3) {
                     to_change =  Some(("min_depth".to_string(), value));
                 }
 
                 let max_depth_param = self.get_parameters().get("max_depth").unwrap();
-                if let Some(value) = pedal_knob(ui, "", max_depth_param, eframe::egui::Vec2::new(0.61, 0.035), 0.3) {
+                if let Some(value) = pedal_knob(ui, "", max_depth_param, eframe::egui::Vec2::new(0.61, 0.036), 0.3) {
                     to_change =  Some(("max_depth".to_string(), value));
                 }
 
                 if $incl_feedback {
                     let feedback_param = self.get_parameters().get("feedback").unwrap();
-                    if let Some(value) = pedal_knob(ui, "", feedback_param, Vec2::new(0.095, 0.39), 0.3) {
+                    if let Some(value) = pedal_knob(ui, "", feedback_param, Vec2::new(0.095, 0.3), 0.3) {
                         to_change = Some(("feedback".to_string(), value));
                     }
 
                     let dry_wet_param = self.get_parameters().get("dry_wet").unwrap();
-                    if let Some(value) = pedal_knob(ui, "", dry_wet_param, eframe::egui::Vec2::new(0.605, 0.39), 0.3) {
+                    if let Some(value) = pedal_knob(ui, "", dry_wet_param, eframe::egui::Vec2::new(0.605, 0.3), 0.3) {
                         to_change =  Some(("dry_wet".to_string(), value));
                     }
                 } else {
                     let dry_wet_param = self.get_parameters().get("dry_wet").unwrap();
-                    if let Some(value) = pedal_knob(ui, "", dry_wet_param, eframe::egui::Vec2::new(0.35, 0.39), 0.3) {
+                    if let Some(value) = pedal_knob(ui, "", dry_wet_param, eframe::egui::Vec2::new(0.35, 0.3), 0.3) {
                         to_change =  Some(("dry_wet".to_string(), value));
                     }
                 }
 
                 let offset_x = 0.2 * pedal_width;
-                let offset_y = 0.31 * pedal_height;
+                let offset_y = 0.505 * pedal_height;
 
                 let oscillator_button_rect = egui::Rect::from_min_size(
                     ui.max_rect().min + Vec2::new(offset_x, offset_y),
-                    Vec2::new(0.6 * ui.available_width(), 0.06 * ui.available_height())
+                    Vec2::new(0.6 * ui.available_width(), 0.05 * ui.available_height())
                 );
 
                 if ui.put(oscillator_button_rect, egui::Button::new(
@@ -261,6 +277,11 @@ macro_rules! var_delay_phaser {
                     ) {
                         to_change = Some(("oscillator".to_string(), PedalParameterValue::Oscillator(osc)));
                     }
+                }
+
+                let active_param = self.get_parameters().get("active").unwrap().value.as_bool().unwrap();
+                if let Some(value) = pedal_switch(ui, active_param, egui::Vec2::new(0.33, 0.72), 0.16) {
+                    to_change = Some(("active".to_string(), PedalParameterValue::Bool(value)));
                 }
 
                 to_change

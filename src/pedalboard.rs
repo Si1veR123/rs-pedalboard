@@ -49,6 +49,10 @@ impl Pedalboard {
 
     pub fn process_audio(&mut self, buffer: &mut [f32], message_buffer: &mut Vec<String>) {
         self.pedals.iter_mut().enumerate().for_each(|(i, pedal)| {
+            if !pedal.is_active() {
+                return;
+            }
+
             // Clear the message buffer for each pedal
             self.pedal_message_buffer.clear();
             self.prepend_message.clear();

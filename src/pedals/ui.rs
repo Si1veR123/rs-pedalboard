@@ -239,3 +239,34 @@ pub fn oscillator_selection_window(
 
     new_oscillator
 }
+
+pub fn pedal_switch(
+    ui: &mut egui::Ui,
+    active: bool,
+    at: egui::Vec2,
+    height: f32
+) -> Option<bool> {
+    let switch_ratio = 1.5;
+    let height_px = height * ui.max_rect().height();
+    let size = Vec2::new(height_px*switch_ratio, height_px);
+    let switch_rect = egui::Rect::from_min_size(
+        ui.max_rect().min + Vec2::new(at.x * ui.max_rect().width(), at.y * ui.max_rect().height()),
+        size
+    );
+
+    let switch_image = if active {
+        egui::include_image!("images/switch_pressed_edited.png")
+    } else {
+        egui::include_image!("images/switch_edited.png")
+    };
+
+    let switch_response = ui.allocate_rect(switch_rect, egui::Sense::click());
+    egui::Image::new(switch_image)
+        .paint_at(ui, switch_rect);
+
+    if switch_response.clicked() {
+        Some(!active)
+    } else {
+        None
+    }
+}

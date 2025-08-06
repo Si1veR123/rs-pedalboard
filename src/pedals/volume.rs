@@ -4,7 +4,7 @@ use std::hash::Hash;
 use super::PedalTrait;
 use super::PedalParameter;
 use super::PedalParameterValue;
-use super::ui::pedal_knob;
+use super::ui::{pedal_knob, pedal_switch};
 
 use eframe::egui::Color32;
 use eframe::egui::Image;
@@ -32,6 +32,15 @@ impl Volume {
                 value: PedalParameterValue::Float(1.0),
                 min: Some(PedalParameterValue::Float(0.0)),
                 max: Some(PedalParameterValue::Float(5.0)),
+                step: None
+            },
+        );
+        parameters.insert(
+            "active".to_string(),
+            PedalParameter {
+                value: PedalParameterValue::Bool(true),
+                min: None,
+                max: None,
                 step: None
             },
         );
@@ -63,6 +72,10 @@ impl PedalTrait for Volume {
         let mut changed = None;
         if let Some(value) = pedal_knob(ui, RichText::new(&format!("{:.2}", volume_param.value.as_float().unwrap())).color(Color32::BLACK).size(10.0), volume_param, Vec2::new(0.3, 0.2), 0.4) {
             changed = Some(("volume".to_string(), value));
+        }
+        let active_param = self.get_parameters().get("active").unwrap().value.as_bool().unwrap();
+        if let Some(value) = pedal_switch(ui, active_param, Vec2::new(0.33, 0.72), 0.16) {
+            changed = Some(("active".to_string(), PedalParameterValue::Bool(value)));
         }
         
         changed

@@ -7,6 +7,7 @@ use serde::{ser::SerializeMap, Deserialize, Serialize};
 use eframe::egui::{self, include_image, Vec2};
 
 use super::{ui::pedal_knob, PedalParameter, PedalParameterValue, PedalTrait};
+use crate::pedals::ui::pedal_switch;
 use crate::{unique_time_id, SAVE_DIR};
 
 const NAM_SAVE_PATH: &str = r"NAM";
@@ -123,6 +124,16 @@ impl Nam {
                 min: Some(PedalParameterValue::Float(0.0)),
                 max: Some(PedalParameterValue::Float(3.0)),
                 step: Some(PedalParameterValue::Float(0.05)),
+            },
+        );
+
+        parameters.insert(
+            "active".to_string(),
+            PedalParameter {
+                value: PedalParameterValue::Bool(true),
+                min: None,
+                max: None,
+                step: None,
             },
         );
 
@@ -249,7 +260,7 @@ impl PedalTrait for Nam {
         let mut selected_str = selected.to_string_lossy().to_string();
         let old = selected_str.clone();
         
-        let mut knob_to_change = None;
+        let mut to_change = None;
 
         let combo_box_rect = pedal_rect
             .scale_from_center2(
@@ -276,19 +287,24 @@ impl PedalTrait for Nam {
             });
 
         if let Some(value) = pedal_knob(ui, "", self.parameters.get("gain").unwrap(), Vec2::new(0.05, 0.12), 0.25) {
-            knob_to_change = Some(("gain".to_string(), value));
+            to_change = Some(("gain".to_string(), value));
         }
         if let Some(value) = pedal_knob(ui, "", self.parameters.get("dry_wet").unwrap(), Vec2::new(0.375, 0.12), 0.25) {
-            knob_to_change = Some(("dry_wet".to_string(), value));
+            to_change = Some(("dry_wet".to_string(), value));
         }
         if let Some(value) = pedal_knob(ui, "", self.parameters.get("level").unwrap(), Vec2::new(0.7, 0.12), 0.25) {
-            knob_to_change = Some(("level".to_string(), value));
+            to_change = Some(("level".to_string(), value));
+        }
+
+        let active_param = self.get_parameters().get("active").unwrap().value.as_bool().unwrap();
+        if let Some(value) = pedal_switch(ui, active_param, egui::Vec2::new(0.33, 0.72), 0.16) {
+            to_change = Some(("active".to_string(), PedalParameterValue::Bool(value)));
         }
 
         if selected_str != old {
             Some((String::from("model"), PedalParameterValue::String(selected_str)))
         } else {
-            if let Some(to_change) = knob_to_change {
+            if let Some(to_change) = to_change {
                 Some(to_change)
             } else {
                 None

@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::time::{Duration, Instant};
+use crate::pedals::ui::pedal_switch;
 use crate::DEFAULT_REFRESH_DURATION;
 
 use super::{PedalTrait, PedalParameter, PedalParameterValue};
@@ -110,6 +111,15 @@ impl Compressor {
                 value: PedalParameterValue::Float(0.0),
                 min: Some(PedalParameterValue::Float(0.0)),
                 max: Some(PedalParameterValue::Float(12.0)),
+                step: None,
+            },
+        );
+        parameters.insert(
+            "active".to_string(),
+            PedalParameter {
+                value: PedalParameterValue::Bool(true),
+                min: None,
+                max: None,
                 step: None,
             },
         );
@@ -279,6 +289,11 @@ impl PedalTrait for Compressor {
             self.parameters["ratio"].value.as_float().unwrap(),
             self.parameters["soft_knee"].value.as_float().unwrap(),
         );
+
+        let active_param = self.get_parameters().get("active").unwrap().value.as_bool().unwrap();
+        if let Some(value) = pedal_switch(ui, active_param, egui::Vec2::new(0.363, 0.77), 0.12) {
+            to_change = Some(("active".to_string(), PedalParameterValue::Bool(value)));
+        }
 
         to_change
     }

@@ -192,6 +192,16 @@ impl GraphicEq7 {
             },
         );
 
+        parameters.insert(
+            "active".to_string(),
+            PedalParameter {
+                value: PedalParameterValue::Bool(true),
+                min: None,
+                max: None,
+                step: None,
+            },
+        );
+
         let eq = Self::build_eq([init_bandwidth; 7], [init_gain; 7], true, false, 48000.0);
 
         GraphicEq7 {

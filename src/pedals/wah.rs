@@ -3,7 +3,7 @@ use std::hash::Hash;
 
 use super::{PedalTrait, PedalParameter, PedalParameterValue};
 use serde::{ser::SerializeMap, Deserialize, Serialize};
-use crate::dsp_algorithms::moving_bangpass::MovingBandPass;
+use crate::{dsp_algorithms::moving_bangpass::MovingBandPass, pedals::ui::pedal_switch};
 use super::ui::pedal_knob;
 
 use eframe::egui::{self, include_image};
@@ -87,6 +87,16 @@ impl Wah {
             max: Some(PedalParameterValue::Float(1.0)),
             step: None
         });
+        
+        parameters.insert(
+            "active".to_string(),
+            PedalParameter {
+                value: PedalParameterValue::Bool(true),
+                min: None,
+                max: None,
+                step: None,
+            },
+        );
 
         Self {
             parameters,
@@ -175,6 +185,11 @@ impl PedalTrait for Wah {
         let position_param = self.get_parameters().get("position").unwrap();
         if let Some(value) = pedal_knob(ui, "", position_param, egui::Vec2::new(0.68, 0.42), 0.25) {
             to_change = Some(("position".to_string(), value));
+        }
+
+        let active_param = self.get_parameters().get("active").unwrap().value.as_bool().unwrap();
+        if let Some(value) = pedal_switch(ui, active_param, egui::Vec2::new(0.33, 0.72), 0.16) {
+            to_change = Some(("active".to_string(), PedalParameterValue::Bool(value)));
         }
 
         to_change

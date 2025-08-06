@@ -2,6 +2,8 @@ use std::{collections::HashMap, hash::Hash};
 use eframe::egui::{self, include_image};
 use serde::{ser::SerializeMap, Deserialize, Serialize};
 
+use crate::pedals::ui::pedal_switch;
+
 use super::{
     ui::pedal_knob,
     PedalParameter, PedalParameterValue, PedalTrait,
@@ -94,6 +96,16 @@ impl NoiseGate {
                 value: PedalParameterValue::Float(1.0),
                 min: Some(PedalParameterValue::Float(0.0)),
                 max: Some(PedalParameterValue::Float(1.0)),
+                step: None,
+            },
+        );
+
+        parameters.insert(
+            "active".to_string(),
+            PedalParameter {
+                value: PedalParameterValue::Bool(true),
+                min: None,
+                max: None,
                 step: None,
             },
         );
@@ -196,6 +208,11 @@ impl PedalTrait for NoiseGate {
         let release_param = self.get_parameters().get("release").unwrap();
         if let Some(value) = pedal_knob(ui, "", release_param, egui::Vec2::new(0.57, 0.34), 0.35) {
             to_change = Some(("release".to_string(), value));
+        }
+
+        let active_param = self.get_parameters().get("active").unwrap().value.as_bool().unwrap();
+        if let Some(value) = pedal_switch(ui, active_param, egui::Vec2::new(0.33, 0.72), 0.16) {
+            to_change = Some(("active".to_string(), PedalParameterValue::Bool(value)));
         }
 
         to_change

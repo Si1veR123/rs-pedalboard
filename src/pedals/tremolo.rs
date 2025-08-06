@@ -3,6 +3,7 @@ use std::hash::Hash;
 use eframe::egui::{self, Vec2, Color32, RichText, include_image};
 use serde::{Serialize, Deserialize};
 use crate::dsp_algorithms::oscillator::{Oscillator, Sine};
+use crate::pedals::ui::pedal_switch;
 use super::{PedalTrait, PedalParameter, PedalParameterValue};
 use super::ui::{oscillator_selection_window, pedal_knob};
 
@@ -39,6 +40,15 @@ impl Tremolo {
                 value: PedalParameterValue::Float(1.0),
                 min: Some(PedalParameterValue::Float(0.0)),
                 max: Some(PedalParameterValue::Float(1.0)),
+                step: None,
+            },
+        );
+        parameters.insert(
+            "active".to_string(),
+            PedalParameter {
+                value: PedalParameterValue::Bool(true),
+                min: None,
+                max: None,
                 step: None,
             },
         );
@@ -113,6 +123,11 @@ impl PedalTrait for Tremolo {
             ) {
                 to_change = Some(("oscillator".to_string(), PedalParameterValue::Oscillator(osc)));
             }
+        }
+
+        let active_param = self.get_parameters().get("active").unwrap().value.as_bool().unwrap();
+        if let Some(value) = pedal_switch(ui, active_param, egui::Vec2::new(0.33, 0.72), 0.16) {
+            to_change = Some(("active".to_string(), PedalParameterValue::Bool(value)));
         }
 
         to_change

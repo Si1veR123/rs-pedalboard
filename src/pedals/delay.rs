@@ -3,6 +3,7 @@ use std::iter;
 use std::hash::Hash;
 
 use crate::dsp_algorithms::{biquad, eq};
+use crate::pedals::ui::pedal_switch;
 use super::ui::pedal_knob;
 use super::{PedalParameter, PedalParameterValue, PedalTrait};
 
@@ -91,6 +92,15 @@ impl Delay {
                 min: Some(PedalParameterValue::Float(0.0)),
                 max: Some(PedalParameterValue::Float(1.0)),
                 step: None
+            },
+        );
+        parameters.insert(
+            "active".to_string(),
+            PedalParameter {
+                value: PedalParameterValue::Bool(true),
+                min: None,
+                max: None,
+                step: None,
             },
         );
 
@@ -200,6 +210,11 @@ impl PedalTrait for Delay {
         let dry_wet_param = self.get_parameters().get("dry_wet").unwrap();
         if let Some(value) = pedal_knob(ui, "", dry_wet_param, egui::Vec2::new(0.58, 0.365), 0.3) {
             to_change = Some(("dry_wet".to_string(), value));
+        }
+
+        let active_param = self.get_parameters().get("active").unwrap().value.as_bool().unwrap();
+        if let Some(value) = pedal_switch(ui, active_param, egui::Vec2::new(0.33, 0.72), 0.16) {
+            to_change = Some(("active".to_string(), PedalParameterValue::Bool(value)));
         }
 
         to_change
