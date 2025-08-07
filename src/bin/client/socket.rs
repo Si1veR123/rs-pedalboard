@@ -296,7 +296,7 @@ impl ClientSocketThread {
                     }
                 }
 
-                std::thread::yield_now();
+                std::thread::sleep(Duration::from_millis(1));
             }
         });
 
