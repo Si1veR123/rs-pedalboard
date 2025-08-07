@@ -52,3 +52,5 @@ chrono = { version = "0.4.41", optional = true }
 freeverb = { git = "https://github.com/Si1veR123/freeverb-with-derive.git" }
 ordered-float = { version = "5.0.0", features = ["serde"] }
 rubato = "0.16.2"
+smol = { version = "2.0.2" }
+futures = { version = "0.3.31" }

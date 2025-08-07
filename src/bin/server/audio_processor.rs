@@ -1,5 +1,6 @@
 use std::{sync::{atomic::AtomicBool, Arc}, time::Instant};
-use crossbeam::channel::{Receiver, Sender};
+use smol::channel::{Receiver as SmolReceiver, Sender as SmolSender};
+use crossbeam::channel::Receiver;
 use ringbuf::{traits::{Producer, Split}, HeapProd, HeapRb};
 
 use rs_pedalboard::{
@@ -14,8 +15,8 @@ use crate::{
 
 pub struct AudioProcessor {
     pub pedalboard_set: PedalboardSet,
-    pub command_receiver: Receiver<Box<str>>,
-    pub command_sender: Sender<Box<str>>,
+    pub command_receiver: SmolReceiver<Box<str>>,
+    pub command_sender: SmolSender<Box<str>>,
     pub writer: HeapProd<f32>,
     pub processing_buffer: Vec<f32>,
     pub pedal_command_to_client_buffer: Vec<String>,
@@ -59,7 +60,7 @@ impl AudioProcessor {
                 match frequency_channel_recv.recv() {
                     Ok(frequency) => {
                         let command = format!("tuner {:.2}\n", frequency);
-                        if self.command_sender.send(command.into()).is_err() {
+                        if self.command_sender.try_send(command.into()).is_err() {
                             log::error!("Failed to send tuner command to client");
                         }
                     },
@@ -95,7 +96,7 @@ impl AudioProcessor {
         let written = self.writer.push_slice(&self.processing_buffer);
         if written != self.processing_buffer.len() {
             // XRun occurred
-            if let Err(e) = self.command_sender.send("xrun\n".into()) {
+            if let Err(e) = self.command_sender.try_send("xrun\n".into()) {
                 log::error!("Failed to send xrun command: {}", e);
             }
             log::error!("Failed to write all processed data. Output is behind.")
@@ -116,7 +117,7 @@ impl AudioProcessor {
                 let eps = 5e-3;
                 if !((self.volume_monitor.2.0 - in_peak_round).abs() < eps && (self.volume_monitor.2.1 - out_peak_round).abs() < eps) {
                     let command = format!("volumemonitor {} {}\n", in_peak_round, out_peak_round); 
-                    if self.command_sender.send(command.into()).is_err() {
+                    if self.command_sender.try_send(command.into()).is_err() {
                         log::error!("Failed to send volume monitor command to client");
                     }
                 }
@@ -128,7 +129,7 @@ impl AudioProcessor {
         // Send any commands from pedals to client
         for mut command in self.pedal_command_to_client_buffer.drain(..) {
             command.push('\n');
-            if self.command_sender.send(command.into()).is_err() {
+            if self.command_sender.try_send(command.into()).is_err() {
                 log::error!("Failed to send pedal command to client");
             }
         }
@@ -349,7 +350,7 @@ impl AudioProcessor {
                 }
             },
             "requestsr" => {
-                if self.command_sender.send(format!("sr {}\n", self.used_sample_rate).into()).is_err() {
+                if self.command_sender.try_send(format!("sr {}\n", self.used_sample_rate).into()).is_err() {
                     log::error!("Failed to send sample rate to client");
                 }
             }

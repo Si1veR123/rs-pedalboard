@@ -23,7 +23,7 @@ mod settings;
 use settings::{ServerSettings, ServerArguments};
 
 use cpal::traits::StreamTrait;
-use crossbeam::channel::bounded;
+use smol::channel::bounded;
 use simplelog::*;
 use clap::Parser;
 use std::{fs::{File, OpenOptions}, io::Write};

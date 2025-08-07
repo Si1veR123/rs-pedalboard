@@ -3,7 +3,7 @@ use std::cell::UnsafeCell;
 use std::time::Instant;
 use cpal::{BuildStreamError, InputCallbackInfo, OutputCallbackInfo, StreamConfig, SupportedStreamConfig};
 use cpal::{traits::DeviceTrait, Device, Stream};
-use crossbeam::channel::{Receiver, Sender};
+use smol::channel::{Receiver, Sender};
 use ringbuf::traits::Split;
 use ringbuf::{traits::Consumer, HeapRb};
 use rs_pedalboard::pedalboard_set::PedalboardSet;
@@ -39,7 +39,7 @@ fn clip_f32_samples(samples: &mut [f32]) -> bool {
 fn handle_clipped_f32_samples(samples: &mut [f32], command_sender: &Sender<Box<str>>) {
     if clip_f32_samples(samples) {
         log::warn!("Output samples clipped");
-        if let Err(e) = command_sender.send("clipped\n".into()) {
+        if let Err(e) = command_sender.try_send("clipped\n".into()) {
             log::error!("Failed to send clipped command: {}", e);
         }
     }
@@ -300,7 +300,7 @@ pub fn create_linked_streams(
 
                     let read = audio_buffer_reader.pop_slice(&mut mono_buffer);
                     if read != frame_count {
-                        if let Err(e) = command_sender.send("xrun".into()) {
+                        if let Err(e) = command_sender.try_send("xrun".into()) {
                             log::error!("Failed to send xrun command: {}", e);
                         }
                         log::error!("Failed to provide a full buffer to output device. Input is behind.");
