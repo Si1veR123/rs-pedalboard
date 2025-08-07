@@ -188,6 +188,8 @@ impl PedalboardClientApp {
 
 impl eframe::App for PedalboardClientApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.state.update_socket_responses();
+
         let mut sr_buf = Vec::new();
         self.state.get_commands("sr", &mut sr_buf);
         if !sr_buf.is_empty() {

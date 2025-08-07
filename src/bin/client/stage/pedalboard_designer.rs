@@ -313,19 +313,18 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
         
     });
     
-    let pedalboard_name = {
-        let mut pedalboard_set = screen.state.pedalboards.active_pedalboardstage.borrow_mut();
-        let active_index = pedalboard_set.active_pedalboard;
-        let pedalboard = pedalboard_set.pedalboards.get_mut(active_index).unwrap();
-        pedalboard.name.clone()
+    let active_index = {
+        let pedalboard_set = screen.state.pedalboards.active_pedalboardstage.borrow_mut();
+        pedalboard_set.active_pedalboard
     };
 
     if let Some((pedal_index, (name, value))) = changed {
         screen.state.set_parameter(
-            &pedalboard_name,
+            active_index,
             pedal_index,
             &name,
-            &value
+            &value,
+            false
         );
     }
 

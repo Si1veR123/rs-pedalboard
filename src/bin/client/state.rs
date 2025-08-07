@@ -180,15 +180,22 @@ impl State {
     /// Set a parameter on all pedalboards, on stage and in library, with the same name
     /// 
     /// Requires a lock on active_pedalboardstage, pedalboard_library and socket
-    pub fn set_parameter(&self, pedalboard_name: &str, pedal_index: usize, name: &str, parameter_value: &PedalParameterValue) {
+    pub fn set_parameter(&self, pedalboard_index: usize, pedal_index: usize, name: &str, parameter_value: &PedalParameterValue, local: bool) {
         let mut socket = self.socket.borrow_mut();
+
+        let pedalboard_name = {
+            let active_pedalboardstage = self.pedalboards.active_pedalboardstage.borrow();
+            let pedalboard = active_pedalboardstage.pedalboards.get(pedalboard_index).unwrap();
+            pedalboard.name.clone()
+        };
 
         // Set parameter on pedalboard stage
         for (i, pedalboard) in self.pedalboards.active_pedalboardstage.borrow_mut().pedalboards.iter_mut().enumerate() {
             if pedalboard.name == pedalboard_name {
-                let message = format!("setparameter {} {} {} {}\n", i, pedal_index, name, serde_json::to_string(parameter_value).unwrap());
-                socket.send(message);
                 pedalboard.pedals[pedal_index].set_parameter_value(name, parameter_value.clone());
+                if !local {
+                    socket.send_parameter_update(i, pedal_index, name.to_string(), parameter_value.clone());
+                }
             }
         }
 
@@ -229,12 +236,19 @@ impl State {
         self.pedalboards.active_pedalboardstage.borrow_mut().set_active_pedalboard(pedalboard_index);
     }
 
+    /// Update the received messages from the socket thread.
+    /// 
+    /// Requires a lock on socket.
+    pub fn update_socket_responses(&self) {
+        let mut socket = self.socket.borrow_mut();
+        socket.update_socket_responses();
+    }
+
     /// Get a received command from the server, beginning with the given prefix.
     /// 
     /// Requires a lock on socket
     pub fn get_commands(&self, prefix: &str, into: &mut Vec<String>) {
         let mut socket = self.socket.borrow_mut();
-        socket.update_recv();
 
         // TODO: remove cloning with nightly `drain_filter`? 
         socket.received_commands.retain(|cmd| {
@@ -359,6 +373,16 @@ impl State {
     pub fn kill_server(&self) {
         let mut socket = self.socket.borrow_mut();
         socket.kill();
+    }
+
+    /// Apply parameter updates that other threads have sent to the server (oscillators, etc)
+    /// 
+    /// Requires a lock on socket, active_pedalboardstage
+    pub fn apply_parameter_updates(&self) {
+        let mut socket = self.socket.borrow_mut();
+        for ((pedalboard_index, pedal_index, parameter_name), new_value) in socket.parameter_updates.drain() {
+            self.set_parameter(pedalboard_index, pedal_index, &parameter_name, &new_value, true);
+        }
     }
 }
 
