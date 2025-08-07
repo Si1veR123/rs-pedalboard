@@ -4,6 +4,7 @@ use std::hash::Hash;
 
 use crate::dsp_algorithms::{biquad, eq};
 use crate::pedals::ui::pedal_switch;
+use crate::unique_time_id;
 use super::ui::pedal_knob;
 use super::{PedalParameter, PedalParameterValue, PedalTrait};
 
@@ -11,13 +12,25 @@ use eframe::egui::{self, include_image};
 use serde::ser::SerializeMap;
 use serde::{Serialize, Deserialize};
 
-#[derive(Clone)]
 pub struct Delay {
     pub parameters: HashMap<String, PedalParameter>,
     // Server only
     delay_buffer: Option<VecDeque<f32>>,
     tone_eq: Option<eq::Equalizer>,
     sample_rate: Option<f32>,
+    id: u32,
+}
+
+impl Clone for Delay {
+    fn clone(&self) -> Self {
+        Delay {
+            parameters: self.parameters.clone(),
+            delay_buffer: self.delay_buffer.clone(),
+            tone_eq: self.tone_eq.clone(),
+            sample_rate: self.sample_rate,
+            id: unique_time_id(),
+        }
+    }
 }
 
 impl Hash for Delay {
@@ -46,7 +59,7 @@ impl<'a> Deserialize<'a> for Delay {
         D: serde::Deserializer<'a>,
     {
         let parameters: HashMap<String, PedalParameter> = HashMap::deserialize(deserializer)?;
-        Ok(Delay { parameters, delay_buffer: None, tone_eq: None, sample_rate: None })
+        Ok(Delay { parameters, delay_buffer: None, tone_eq: None, sample_rate: None, id: unique_time_id() })
     }
 }
 
@@ -104,7 +117,13 @@ impl Delay {
             },
         );
 
-        Delay { parameters, delay_buffer: None, tone_eq: None, sample_rate: None }
+        Delay {
+            parameters,
+            delay_buffer: None,
+            tone_eq: None,
+            sample_rate: None,
+            id: unique_time_id(),
+        }
     }
 
     pub fn eq_from_warmth(tone: f32, sample_rate: f32) -> eq::Equalizer {
@@ -115,6 +134,10 @@ impl Delay {
 }
 
 impl PedalTrait for Delay {
+    fn get_id(&self) -> u32 {
+        self.id
+    }
+
     fn set_config(&mut self, _buffer_size: usize, sample_rate: u32) {
         self.tone_eq = Some(
             Self::eq_from_warmth(self.parameters.get("warmth").unwrap().value.as_float().unwrap(), sample_rate as f32)

@@ -57,7 +57,7 @@ pub struct Vst2Instance {
     pub info: Info,
     in_buffers: Vec<Vec<f32>>,
     out_buffers: Vec<Vec<f32>>,
-    id: usize,
+    id: u32,
     pub ui_open: bool,
     dll_path: PathBuf,
     sample_rate: f32,

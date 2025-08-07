@@ -14,7 +14,6 @@ use serde::{ser::SerializeMap, Deserialize, Serialize};
 const ENVELOPE_UPDATE_RATE: Duration = Duration::from_millis(100);
 const EPS: f32 = 1e-8;
 
-#[derive(Clone)]
 pub struct Compressor {
     parameters: HashMap<String, PedalParameter>,
     sample_rate: Option<f32>,
@@ -25,7 +24,23 @@ pub struct Compressor {
 
     // Server only
     envelope_last_sent_time: Instant,
-    envelope_last_sent_value: f32
+    envelope_last_sent_value: f32,
+
+    id: u32,
+}
+
+impl Clone for Compressor {
+    fn clone(&self) -> Self {
+        Compressor {
+            parameters: self.parameters.clone(),
+            sample_rate: self.sample_rate,
+            envelope: self.envelope,
+            current_envelope: self.current_envelope,
+            envelope_last_sent_time: self.envelope_last_sent_time,
+            envelope_last_sent_value: self.envelope_last_sent_value,
+            id: crate::unique_time_id(),
+        }
+    }
 }
 
 impl Serialize for Compressor {
@@ -54,6 +69,7 @@ impl<'a> Deserialize<'a> for Compressor {
             current_envelope: 0.0,
             envelope_last_sent_time: Instant::now(),
             envelope_last_sent_value: 0.0,
+            id: crate::unique_time_id(),
         })
     }
 }
@@ -133,11 +149,16 @@ impl Compressor {
             sample_rate: None,
             envelope_last_sent_time: Instant::now(),
             envelope_last_sent_value: 0.0,
+            id: crate::unique_time_id(),
         }
     }
 }
 
 impl PedalTrait for Compressor {
+    fn get_id(&self) -> u32 {
+        self.id
+    }
+
     fn set_config(&mut self, _buffer_size: usize, sample_rate: u32) {
         self.sample_rate = Some(sample_rate as f32);
     }

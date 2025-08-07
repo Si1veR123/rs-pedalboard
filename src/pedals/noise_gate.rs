@@ -9,12 +9,24 @@ use super::{
     PedalParameter, PedalParameterValue, PedalTrait,
 };
 
-#[derive(Clone)]
 pub struct NoiseGate {
     parameters: HashMap<String, PedalParameter>,
     gain: f32,
     level: f32,
-    sample_rate: Option<f32>
+    sample_rate: Option<f32>,
+    id: u32,
+}
+
+impl Clone for NoiseGate {
+    fn clone(&self) -> Self {
+        NoiseGate {
+            parameters: self.parameters.clone(),
+            gain: self.gain,
+            level: self.level,
+            sample_rate: self.sample_rate,
+            id: crate::unique_time_id()
+        }
+    }
 }
 
 impl Serialize for NoiseGate {
@@ -42,6 +54,7 @@ impl<'de> Deserialize<'de> for NoiseGate {
             gain: 1.0,
             level: 0.0,
             sample_rate: None,
+            id: crate::unique_time_id()
         })
     }
 }
@@ -115,6 +128,7 @@ impl NoiseGate {
             gain: 1.0,
             level: 0.0,
             sample_rate: None,
+            id: crate::unique_time_id()
         }
     }
 }
@@ -126,6 +140,10 @@ impl Hash for NoiseGate {
 }
 
 impl PedalTrait for NoiseGate {
+    fn get_id(&self) -> u32 {
+        self.id
+    }
+
     fn set_config(&mut self,_buffer_size:usize, sample_rate:u32) {
         self.sample_rate = Some(sample_rate as f32);
     }

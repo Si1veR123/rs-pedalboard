@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::hash::Hash;
 use crate::pedals::ui::pedal_switch;
+use crate::unique_time_id;
 
 use super::PedalTrait;
 use super::PedalParameter;
@@ -11,9 +12,41 @@ use eframe::egui;
 use eframe::egui::include_image;
 use eframe::egui::Vec2;
 use serde::{Serialize, Deserialize};
-#[derive(Serialize, Deserialize, Clone)]
+
 pub struct Fuzz {
     parameters: HashMap<String, PedalParameter>,
+    id: u32
+}
+
+impl Clone for Fuzz {
+    fn clone(&self) -> Self {
+        Fuzz {
+            parameters: self.parameters.clone(),
+            id: unique_time_id()
+        }
+    }
+}
+
+impl Serialize for Fuzz {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.collect_map(self.parameters.iter())
+    }
+}
+
+impl<'a> Deserialize<'a> for Fuzz {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'a>,
+    {
+        let parameters = HashMap::<String, PedalParameter>::deserialize(deserializer)?;
+        Ok(Fuzz {
+            parameters,
+            id: unique_time_id()
+        })
+    }
 }
 
 impl Hash for Fuzz {
@@ -70,11 +103,15 @@ impl Fuzz {
                 step: None,
             },
         );
-        Fuzz { parameters }
+        Fuzz { parameters, id: unique_time_id()}
     }
 }
 
 impl PedalTrait for Fuzz {
+    fn get_id(&self) -> u32 {
+        self.id
+    }
+
     fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
 
         let gain = self.parameters.get("gain").unwrap().value.as_float().unwrap();

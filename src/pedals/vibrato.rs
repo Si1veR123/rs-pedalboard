@@ -1,15 +1,29 @@
 use std::collections::HashMap;
 use std::hash::Hash;
-use eframe::egui::{self, include_image, Color32, RichText, Vec2};
+use eframe::egui::{self, include_image};
 use serde::{ser::SerializeMap, Deserialize, Serialize};
 use super::{PedalTrait, PedalParameter, PedalParameterValue};
-use crate::{dsp_algorithms::{oscillator::{Oscillator, Sine}, variable_delay::VariableDelayLine}, pedals::ui::{oscillator_selection_window, pedal_knob, pedal_switch}};
+use crate::{
+    dsp_algorithms::{oscillator::{Oscillator, Sine},
+    variable_delay::VariableDelayLine},
+    pedals::ui::{pedal_knob, pedal_switch},
+    unique_time_id
+};
 
-#[derive(Clone)]
 pub struct Vibrato {
     delay_line: Option<VariableDelayLine>,
     parameters: HashMap<String, PedalParameter>,
-    oscillator_open: bool,
+    id: u32
+}
+
+impl Clone for Vibrato {
+    fn clone(&self) -> Self {
+        Vibrato {
+            delay_line: self.delay_line.clone(),
+            parameters: self.parameters.clone(),
+            id: unique_time_id()
+        }
+    }
 }
 
 impl Hash for Vibrato {
@@ -41,7 +55,7 @@ impl<'a> Deserialize<'a> for Vibrato {
         Ok(Self {
             delay_line: None,
             parameters: parameters.clone(),
-            oscillator_open: false,
+            id: unique_time_id()
         })
     }
 }
@@ -65,8 +79,8 @@ impl Vibrato {
             "oscillator".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Oscillator(oscillator),
-                min: None,
-                max: None,
+                min: Some(PedalParameterValue::Float(0.1)),
+                max: Some(PedalParameterValue::Float(20.0)),
                 step: None,
             },
         );
@@ -92,12 +106,16 @@ impl Vibrato {
         Self {
             delay_line: None,
             parameters,
-            oscillator_open: false,
+            id: unique_time_id()
         }
     }
 }
 
 impl PedalTrait for Vibrato {
+    fn get_id(&self) -> u32 {
+        self.id
+    }
+
     fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
         if self.delay_line.is_none() {
             log::warn!("Vibrato pedal not initialized. Call set_config before processing audio.");
@@ -131,9 +149,6 @@ impl PedalTrait for Vibrato {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _message_buffer: &[String]) -> Option<(String, PedalParameterValue)> {
-        let pedal_width = ui.available_width();
-        let pedal_height = ui.available_height();
-
         ui.add(egui::Image::new(include_image!("images/vibrato.png")));
 
         let mut to_change = None;
@@ -141,34 +156,6 @@ impl PedalTrait for Vibrato {
         let depth_param = self.get_parameters().get("depth").unwrap();
         if let Some(value) = pedal_knob(ui, "", depth_param, egui::Vec2::new(0.3, 0.11), 0.4) {
             to_change =  Some(("depth".to_string(), value));
-        }
-
-        let offset_x = 0.15 * pedal_width;
-        let offset_y = 0.43 * pedal_height;
-
-        let oscillator_button_rect = egui::Rect::from_min_size(
-            ui.max_rect().min + Vec2::new(offset_x, offset_y),
-            Vec2::new(0.7 * ui.available_width(), 0.15 * ui.available_height())
-        );
-
-        if ui.put(oscillator_button_rect, egui::Button::new(
-            RichText::new("Oscillator")
-                .color(Color32::WHITE)
-                .size(13.0)
-        )).clicked() {
-            self.oscillator_open = !self.oscillator_open;
-        };
-
-        if self.oscillator_open {
-            if let Some(osc) = oscillator_selection_window(
-                ui,
-                self.parameters.get("oscillator").unwrap().value.as_oscillator().unwrap(),
-                &mut self.oscillator_open,
-                false,
-                Some(0.1..=20.0)
-            ) {
-                to_change = Some(("oscillator".to_string(), PedalParameterValue::Oscillator(osc)));
-            }
         }
 
         let active_param = self.get_parameters().get("active").unwrap().value.as_bool().unwrap();

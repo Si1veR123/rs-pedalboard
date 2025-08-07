@@ -15,7 +15,6 @@ use eframe::egui::{self, Button, Color32, Layout, UiBuilder, Vec2, include_image
 use serde::ser::SerializeMap;
 use serde::{Serialize, Deserialize};
 
-#[derive(Clone)]
 pub struct Vst2 {
     instance: Option<Vst2Instance>,
     // buffer size, sample rate
@@ -25,7 +24,21 @@ pub struct Vst2 {
     param_index_map: HashMap<String, usize>,
     output_buffer: Vec<f32>,
     available_plugins: Vec<String>,
-    id: usize
+    id: u32
+}
+
+impl Clone for Vst2 {
+    fn clone(&self) -> Self {
+        Vst2 {
+            instance: self.instance.clone(),
+            config: self.config,
+            parameters: self.parameters.clone(),
+            param_index_map: self.param_index_map.clone(),
+            output_buffer: self.output_buffer.clone(),
+            available_plugins: self.available_plugins.clone(),
+            id: unique_time_id()
+        }
+    }
 }
 
 impl Serialize for Vst2 {
@@ -262,6 +275,10 @@ impl Vst2 {
 }
 
 impl PedalTrait for Vst2 {
+    fn get_id(&self) -> u32 {
+        self.id
+    }
+
     fn set_config(&mut self, buffer_size: usize, sample_rate: u32) {
         if let Some(instance) = self.instance.as_mut() {
             instance.set_config(buffer_size, sample_rate);

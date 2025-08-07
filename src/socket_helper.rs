@@ -19,7 +19,7 @@ impl CommandReceiver {
         self.partial_buffer.extend_from_slice(chunk);
 
         while let Some(pos) = self.partial_buffer.iter().position(|&b| b == b'\n') {
-            // Allocation is ok since it is converted to a String and moved into `into`
+            // Allocation is ok since it is converted to a String and moved into buffer
             let line_bytes = self.partial_buffer.drain(..=pos).collect::<Vec<u8>>();
 
             let line = match String::from_utf8(line_bytes) {

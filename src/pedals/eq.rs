@@ -40,12 +40,12 @@ pub fn deserialize_plot_points(data: &str) -> serde_json::Result<Vec<PlotPoint>>
     Ok(plot_points)
 }
 
-#[derive(Clone)]
+
 pub struct GraphicEq7 {
     parameters: HashMap<String, PedalParameter>,
     eq: eq::Equalizer,
     sample_rate: f32,
-    id: usize,
+    id: u32,
     response_plot: Vec<PlotPoint>,
 
     // Only exists on server
@@ -59,6 +59,24 @@ pub struct GraphicEq7 {
 
     // Used to clamp the live frequency plot values
     dynamic_max: f32
+}
+
+impl Clone for GraphicEq7 {
+    fn clone(&self) -> Self {
+        GraphicEq7 {
+            parameters: self.parameters.clone(),
+            eq: self.eq.clone(),
+            sample_rate: self.sample_rate,
+            id: unique_time_id(),
+            response_plot: self.response_plot.clone(),
+            frequency_analyser: None,
+            last_frequencies_sent: Instant::now(),
+            prev_live_frequency_plot: Vec::with_capacity(PLOT_POINTS),
+            target_live_frequency_plot: Vec::with_capacity(PLOT_POINTS),
+            last_frame: Instant::now(),
+            dynamic_max: 0.0
+        }
+    }
 }
 
 impl Hash for GraphicEq7 {
@@ -271,6 +289,10 @@ impl GraphicEq7 {
 
 
 impl PedalTrait for GraphicEq7 {
+    fn get_id(&self) -> u32 {
+        self.id
+    }
+
     fn process_audio(&mut self, buffer: &mut [f32], message_buffer: &mut Vec<String>) {
         let dry_wet = self.parameters.get("dry_wet").unwrap().value.as_float().unwrap();
         for sample in buffer.iter_mut() {

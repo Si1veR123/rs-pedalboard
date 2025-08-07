@@ -3,17 +3,29 @@ use std::hash::Hash;
 
 use super::{PedalTrait, PedalParameter, PedalParameterValue};
 use serde::{ser::SerializeMap, Deserialize, Serialize};
-use crate::{dsp_algorithms::moving_bangpass::MovingBandPass, pedals::ui::pedal_switch};
+use crate::{dsp_algorithms::moving_bangpass::MovingBandPass, pedals::ui::pedal_switch, unique_time_id};
 use super::ui::pedal_knob;
 
 use eframe::egui::{self, include_image};
 
-#[derive(Clone)]
 pub struct Wah {
     parameters: HashMap<String, PedalParameter>,
     // Server only
     sample_rate: Option<f32>,
-    moving_bandpass_filter: Option<MovingBandPass>
+    moving_bandpass_filter: Option<MovingBandPass>,
+
+    id: u32,
+}
+
+impl Clone for Wah {
+    fn clone(&self) -> Self {
+        Wah {
+            parameters: self.parameters.clone(),
+            sample_rate: self.sample_rate,
+            moving_bandpass_filter: self.moving_bandpass_filter.clone(),
+            id: unique_time_id(),
+        }
+    }
 }
 
 impl Hash for Wah {
@@ -44,7 +56,8 @@ impl<'a> Deserialize<'a> for Wah {
         Ok(Wah {
             parameters,
             sample_rate: None,
-            moving_bandpass_filter: None
+            moving_bandpass_filter: None,
+            id: unique_time_id(),
         })
     }
 }
@@ -102,11 +115,16 @@ impl Wah {
             parameters,
             sample_rate: None,
             moving_bandpass_filter: None,
+            id: unique_time_id(),
         }
     }
 }
 
 impl PedalTrait for Wah {
+    fn get_id(&self) -> u32 {
+        self.id
+    }
+
     fn set_config(&mut self, _buffer_size: usize, sample_rate: u32) {
         self.sample_rate = Some(sample_rate as f32);
 

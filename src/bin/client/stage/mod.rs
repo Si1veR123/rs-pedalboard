@@ -8,6 +8,8 @@ use pedalboard_designer::pedalboard_designer;
 
 mod volume_monitor_ui;
 
+mod parameter_window;
+
 use eframe::egui::{self, Layout, Rect, Vec2, Widget};
 use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
 use crate::{stage::volume_monitor_ui::VolumeMonitorWidget, state::State};

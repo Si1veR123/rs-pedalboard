@@ -19,7 +19,7 @@ pub struct Nam {
     dry_buffer: Vec<f32>,
     saved_nam_files: Vec<PathBuf>,
     // Used to generate a unique ID for the drop down menu
-    id: usize
+    id: u32
 }
 
 impl Clone for Nam {
@@ -198,6 +198,10 @@ impl Nam {
 }
 
 impl PedalTrait for Nam {
+    fn get_id(&self) -> u32 {
+        self.id
+    }
+
     fn set_config(&mut self, buffer_size: usize, sample_rate: u32) {
         self.modeler.set_maximum_buffer_size(buffer_size);
         let expected_sample_rate = self.modeler.expected_sample_rate() as u32;

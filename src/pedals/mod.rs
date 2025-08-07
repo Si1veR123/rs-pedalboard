@@ -49,12 +49,12 @@ pub struct PedalParameter {
     pub value: PedalParameterValue,
     // min and max are used for floats and selections
     #[serde(skip_serializing_if = "Option::is_none")]
-    min: Option<PedalParameterValue>,
+    pub min: Option<PedalParameterValue>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    max: Option<PedalParameterValue>,
+    pub max: Option<PedalParameterValue>,
     // For floats only
     #[serde(skip_serializing_if = "Option::is_none")]
-    step: Option<PedalParameterValue>
+    pub step: Option<PedalParameterValue>
 }
 
 impl PedalParameter {
@@ -223,6 +223,8 @@ pub trait PedalTrait: Hash {
         }
         true
     }
+
+    fn get_id(&self) -> u32;
 }
 
 
@@ -270,6 +272,28 @@ impl PedalDiscriminants {
             PedalDiscriminants::AutoWah => Pedal::AutoWah(AutoWah::new()),
             PedalDiscriminants::Wah => Pedal::Wah(Wah::new()),
             PedalDiscriminants::Compressor => Pedal::Compressor(Compressor::new()),
+        }
+    }
+
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            PedalDiscriminants::Volume => "Volume",
+            PedalDiscriminants::Fuzz => "Fuzz",
+            PedalDiscriminants::PitchShift => "Pitch Shift",
+            PedalDiscriminants::Chorus => "Chorus",
+            PedalDiscriminants::Flanger => "Flanger",
+            PedalDiscriminants::Delay => "Delay",
+            PedalDiscriminants::GraphicEq7 => "Graphic EQ",
+            PedalDiscriminants::Nam => "Neural Amp Modeler",
+            PedalDiscriminants::ImpulseResponse => "Impulse Response",
+            PedalDiscriminants::NoiseGate => "Noise Gate",
+            PedalDiscriminants::Vst2 => "VST2 Plugin",
+            PedalDiscriminants::Reverb => "Reverb",
+            PedalDiscriminants::Vibrato => "Vibrato",
+            PedalDiscriminants::Tremolo => "Tremolo",
+            PedalDiscriminants::AutoWah => "Auto Wah",
+            PedalDiscriminants::Wah => "Wah",
+            PedalDiscriminants::Compressor => "Compressor"
         }
     }
 }

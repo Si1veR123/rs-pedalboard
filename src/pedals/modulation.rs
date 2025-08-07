@@ -3,18 +3,27 @@ use std::hash::Hash;
 use crate::dsp_algorithms::variable_delay_phaser::VariableDelayPhaser;
 use crate::dsp_algorithms::oscillator::{Oscillator, Sine};
 use super::{PedalTrait, PedalParameter, PedalParameterValue};
-use super::ui::{pedal_knob, oscillator_selection_window, pedal_switch};
-use eframe::egui::{self, Color32, include_image, RichText, Vec2};
+use super::ui::{pedal_knob, pedal_switch};
+use eframe::egui::{self, include_image, Vec2};
 use serde::{Serialize, Deserialize, ser::SerializeMap};
 
 
 macro_rules! var_delay_phaser {
     ($name:ident, ($default_rate:expr, $min_rate:expr, $max_rate:expr), ($default_min_depth:expr, $default_max_depth:expr, $min_depth: expr, $max_depth: expr), ($incl_feedback: expr, $default_feedback:expr, $max_feedback:expr), $default_dry_wet: expr) => {
-        #[derive(Clone)]
         pub struct $name {
             variable_delay_phaser: Option<VariableDelayPhaser>, // Server only
             parameters: HashMap<String, PedalParameter>,
-            oscillator_open: bool
+            id: u32,
+        }
+
+        impl Clone for $name {
+            fn clone(&self) -> Self {
+                Self {
+                    variable_delay_phaser: self.variable_delay_phaser.clone(),
+                    parameters: self.parameters.clone(),
+                    id: crate::unique_time_id()
+                }
+            }
         }
 
         impl Hash for $name {
@@ -46,7 +55,7 @@ macro_rules! var_delay_phaser {
                 Ok(Self {
                     variable_delay_phaser: None,
                     parameters,
-                    oscillator_open: false
+                    id: crate::unique_time_id()
                 })
             }
         }
@@ -93,8 +102,8 @@ macro_rules! var_delay_phaser {
                     "oscillator".to_string(),
                     PedalParameter {
                         value: PedalParameterValue::Oscillator(init_oscillator.clone()),
-                        min: None,
-                        max: None,
+                        min: Some(PedalParameterValue::Float($min_rate)),
+                        max: Some(PedalParameterValue::Float($max_rate)),
                         step: None
                     },
                 );
@@ -124,12 +133,16 @@ macro_rules! var_delay_phaser {
                 Self {
                     variable_delay_phaser: None,
                     parameters,
-                    oscillator_open: false
+                    id: crate::unique_time_id()
                 }
             }
         }
         
         impl PedalTrait for $name {
+            fn get_id(&self) -> u32 {
+                self.id
+            }
+
             fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
                 if self.variable_delay_phaser.is_none() {
                     log::error!("{}: VariableDelayPhaser is not initialized. Call set_config() first.", stringify!($name));
@@ -214,9 +227,6 @@ macro_rules! var_delay_phaser {
             }
 
             fn ui(&mut self, ui: &mut egui::Ui, _message_buffer: &[String]) -> Option<(String, PedalParameterValue)> {
-                let pedal_width = ui.available_width();
-                let pedal_height = ui.available_height();
-
                 if $incl_feedback {
                     ui.add(egui::Image::new(include_image!("images/flanger.png")));
                 } else {
@@ -248,34 +258,6 @@ macro_rules! var_delay_phaser {
                     let dry_wet_param = self.get_parameters().get("dry_wet").unwrap();
                     if let Some(value) = pedal_knob(ui, "", dry_wet_param, eframe::egui::Vec2::new(0.35, 0.3), 0.3) {
                         to_change =  Some(("dry_wet".to_string(), value));
-                    }
-                }
-
-                let offset_x = 0.2 * pedal_width;
-                let offset_y = 0.505 * pedal_height;
-
-                let oscillator_button_rect = egui::Rect::from_min_size(
-                    ui.max_rect().min + Vec2::new(offset_x, offset_y),
-                    Vec2::new(0.6 * ui.available_width(), 0.05 * ui.available_height())
-                );
-
-                if ui.put(oscillator_button_rect, egui::Button::new(
-                    RichText::new("Oscillator")
-                        .color(Color32::WHITE)
-                        .size(9.0)
-                )).clicked() {
-                    self.oscillator_open = !self.oscillator_open;
-                };
-
-                if self.oscillator_open {
-                    if let Some(osc) = oscillator_selection_window(
-                        ui,
-                        &self.parameters.get("oscillator").unwrap().value.as_oscillator().unwrap(),
-                        &mut self.oscillator_open,
-                        false,
-                        Some($min_rate..=$max_rate)
-                    ) {
-                        to_change = Some(("oscillator".to_string(), PedalParameterValue::Oscillator(osc)));
                     }
                 }
 

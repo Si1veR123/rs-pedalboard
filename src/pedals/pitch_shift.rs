@@ -3,6 +3,7 @@ use std::hash::Hash;
 use crate::dsp_algorithms::biquad::BiquadFilter;
 use crate::dsp_algorithms::eq::Equalizer;
 use crate::pedals::ui::pedal_switch;
+use crate::unique_time_id;
 
 use super::PedalTrait;
 use super::PedalParameter;
@@ -22,6 +23,7 @@ pub struct PitchShift {
     // (eq, sample rate)
     eq: Option<(Equalizer, u32)>,
     output_buffer: Vec<f32>,
+    id: u32,
 }
 
 impl Hash for PitchShift {
@@ -38,6 +40,7 @@ impl Clone for PitchShift {
                 signalsmith_stretch: Some(Self::stretch_from_parameters(&self.parameters, *sample_rate as f32)),
                 eq: self.eq.clone(),
                 output_buffer: self.output_buffer.clone(),
+                id: unique_time_id()
             }
         } else {
             PitchShift {
@@ -45,6 +48,7 @@ impl Clone for PitchShift {
                 signalsmith_stretch: None,
                 eq: None,
                 output_buffer: self.output_buffer.clone(),
+                id: unique_time_id()
             }
         }
     }
@@ -71,6 +75,7 @@ impl<'a> Deserialize<'a> for PitchShift {
             signalsmith_stretch: None,
             eq: None,
             output_buffer: Vec::new(),
+            id: crate::unique_time_id(),
         })
     }
 }
@@ -134,7 +139,7 @@ impl PitchShift {
             },
         );
 
-        PitchShift { parameters, signalsmith_stretch: None, eq: None, output_buffer: Vec::new() }
+        PitchShift { parameters, signalsmith_stretch: None, eq: None, output_buffer: Vec::new(), id: unique_time_id() }
     }
 
     pub fn eq_from_presence(presence: f32, sample_rate: f32) -> Equalizer {
@@ -157,6 +162,10 @@ impl PitchShift {
 
 
 impl PedalTrait for PitchShift {
+    fn get_id(&self) -> u32 {
+        self.id
+    }
+
     fn set_config(&mut self,_buffer_size:usize, sample_rate:u32) {
         // Set eq
         let eq = Self::eq_from_presence(self.parameters.get("presence").unwrap().value.as_float().unwrap(), sample_rate as f32);

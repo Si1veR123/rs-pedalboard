@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::hash::Hash;
 
+use crate::unique_time_id;
+
 use super::PedalTrait;
 use super::PedalParameter;
 use super::PedalParameterValue;
@@ -12,9 +14,41 @@ use eframe::egui::RichText;
 use eframe::egui::{include_image, self, Vec2};
 use serde::{Serialize, Deserialize};
 
-#[derive(Serialize, Deserialize, Clone)]
+
 pub struct Volume {
     parameters: HashMap<String, PedalParameter>,
+    id: u32,
+}
+
+impl Clone for Volume {
+    fn clone(&self) -> Self {
+        Volume {
+            parameters: self.parameters.clone(),
+            id: unique_time_id()
+        }
+    }
+}
+
+impl Serialize for Volume {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.collect_map(self.parameters.iter())
+    }
+}
+
+impl<'a> Deserialize<'a> for Volume {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'a>,
+    {
+        let parameters = HashMap::<String, PedalParameter>::deserialize(deserializer)?;
+        Ok(Volume {
+            parameters,
+            id: unique_time_id()
+        })
+    }
 }
 
 impl Hash for Volume {
@@ -44,11 +78,15 @@ impl Volume {
                 step: None
             },
         );
-        Volume { parameters }
+        Volume { parameters, id: unique_time_id() }
     }
 }
 
 impl PedalTrait for Volume {
+    fn get_id(&self) -> u32 {
+        self.id
+    }
+
     fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
         let volume = self.parameters.get("volume").unwrap().value.as_float().unwrap();
         

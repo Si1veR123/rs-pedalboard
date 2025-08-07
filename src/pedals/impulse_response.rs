@@ -17,7 +17,7 @@ pub struct ImpulseResponse {
 
     saved_ir_files: Vec<PathBuf>,
     // Used to generate a unique ID for the drop down menu
-    id: usize,
+    id: u32,
 
     // Server only
     // IRConvolver requires block size. This is set on the server after being created, and not set on client at all.
@@ -174,6 +174,10 @@ impl ImpulseResponse {
 }
 
 impl PedalTrait for ImpulseResponse {
+    fn get_id(&self) -> u32 {
+        self.id
+    }
+
     /// If `ir` parameter is set, but `ir` is None, this will set the IR as it is assumed that we are waiting on knowing the max buffer size and sample rate (on server).
     fn set_config(&mut self, buffer_size: usize, sample_rate: u32) {
         self.max_buffer_size = buffer_size;

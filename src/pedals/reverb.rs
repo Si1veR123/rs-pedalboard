@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::hash::Hash;
-use crate::pedals::ui::pedal_switch;
+use crate::{pedals::ui::pedal_switch, unique_time_id};
 
 use super::{PedalTrait, PedalParameter, PedalParameterValue, ui::pedal_knob};
 use eframe::egui::{self, include_image};
@@ -11,7 +11,8 @@ pub struct Reverb {
     // Freeverb instance, Sample rate
     // None if sample rate not yet set
     reverb: Option<(Freeverb, u32)>,
-    parameters: HashMap<String, PedalParameter>
+    parameters: HashMap<String, PedalParameter>,
+    id: u32
 }
 
 impl Hash for Reverb {
@@ -35,7 +36,7 @@ impl<'a> Deserialize<'a> for Reverb {
         D: serde::Deserializer<'a>,
     {
         let parameters: HashMap<String, PedalParameter> = HashMap::deserialize(deserializer)?;
-        Ok(Reverb { reverb: None, parameters })
+        Ok(Reverb { reverb: None, parameters, id: unique_time_id() })
     }
 }
 
@@ -47,7 +48,8 @@ impl Clone for Reverb {
         let cloned_parameters = self.parameters.clone();
         let mut cloned_pedal = Self {
             reverb: cloned_reverb,
-            parameters: cloned_parameters
+            parameters: cloned_parameters,
+            id: unique_time_id()
         };
         cloned_pedal.sync_parameters();
         cloned_pedal
@@ -105,7 +107,8 @@ impl Reverb {
 
         let pedal = Self {
             reverb: None,
-            parameters
+            parameters,
+            id: unique_time_id()
         };
 
         pedal
@@ -130,6 +133,10 @@ impl Reverb {
 }
 
 impl PedalTrait for Reverb {
+    fn get_id(&self) -> u32 {
+        self.id
+    }
+
     fn set_config(&mut self,_buffer_size:usize, sample_rate:u32) {
         if self.reverb.is_none() {
             let reverb = Freeverb::new(sample_rate as usize);
