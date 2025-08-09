@@ -2,7 +2,6 @@ use std::{process::Child, time::Instant, path::PathBuf};
 
 use cpal::{Host, HostId};
 use eframe::egui::{self, Color32, Layout, Response, RichText, Vec2, Widget};
-#[cfg(target_os = "windows")]
 use rs_pedalboard::server_settings::ServerSettingsSave;
 use serde::{Deserialize, Serialize};
 use strum::{IntoEnumIterator};
@@ -146,8 +145,8 @@ impl SettingsScreen {
     }
 
     #[cfg(target_os = "linux")]
-    pub fn ready_to_start_server(&self) -> bool {
-        self.server_settings.input_device.is_some() && self.server_settings.output_device.is_some() &&
+    pub fn ready_to_start_server(&self, server_settings: &ServerSettingsSave) -> bool {
+        server_settings.input_device.is_some() && server_settings.output_device.is_some() &&
         matches!(
             self.server_launch_state,
             ServerLaunchState::None | ServerLaunchState::StartError | ServerLaunchState::KillError
@@ -353,11 +352,11 @@ impl Widget for &mut SettingsScreen {
                             egui::ComboBox::from_id_salt("preferred_sample_rate_dropdown")
                                 .selected_text(match server_settings.preferred_sample_rate {
                                     Some(rate) => format!("{rate}hz"),
-                                    None => "Default (Maximum)".to_string()
+                                    None => "Default".to_string()
                                 })
                                 .wrap_mode(egui::TextWrapMode::Truncate)
                                 .show_ui(ui, |ui| {
-                                    let mut response = ui.selectable_value(&mut server_settings.preferred_sample_rate, None, "Default (Maximum)");
+                                    let mut response = ui.selectable_value(&mut server_settings.preferred_sample_rate, None, "Default");
                                     response |= ui.selectable_value(&mut server_settings.preferred_sample_rate, Some(44100), "44100hz");
                                     response |= ui.selectable_value(&mut server_settings.preferred_sample_rate, Some(48000), "48000hz");
                                     response |= ui.selectable_value(&mut server_settings.preferred_sample_rate, Some(88200), "88200hz");

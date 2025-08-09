@@ -1852,7 +1852,8 @@ dependencies = [
 [[package]]
 name = "freeverb"
 version = "0.1.0"
-source = "git+https://github.com/Si1veR123/freeverb-with-derive.git#d89365ce8381751bea6b0e85294b7f6da3ad98ef"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68732b37b380a5009de482bc6ad5707dbd98fad8b132ba452d84519bf4b8343e"
 
 [[package]]
 name = "fuchsia-cprng"

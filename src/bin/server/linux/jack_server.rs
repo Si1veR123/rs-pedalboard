@@ -1,9 +1,8 @@
-use cpal::{traits::{DeviceTrait, HostTrait}, Host, Device};
+use cpal::{traits::{DeviceTrait, HostTrait}, Host, Device, HostId};
 use std::{fs::File, io, process::{Child, Command, Stdio}};
-use rs_pedalboard::audio_devices::get_host;
 
 pub fn get_jack_host() -> (Host, Device, Device) {
-    let jack_host = get_host().expect("Failed to get JACK host");
+    let jack_host = cpal::host_from_id(HostId::Jack).expect("Failed to get JACK host");
 
     if jack_host.devices().unwrap().count() == 0 {
         panic!("Failed to initialise JACK client");

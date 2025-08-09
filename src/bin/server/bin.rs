@@ -78,6 +78,8 @@ fn main() {
         &settings
     );
 
+    
+
     let (socket_command_sender, audio_command_receiver) = bounded(12);
     let (audio_command_sender, socket_command_receiver) = bounded(12);
 

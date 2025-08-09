@@ -14,7 +14,7 @@ use crate::audio_processor::AudioProcessor;
 use crate::metronome_player::MetronomePlayer;
 use crate::sample_conversion::*;
 use crate::settings::ServerSettings;
-use crate::stream_config::{get_compatible_configs};
+use crate::stream_config::get_compatible_configs;
 use crate::volume_monitor::PeakVolumeMonitor;
 
 pub fn ring_buffer_size(buffer_size: usize, latency: f32, sample_rate: f32) -> usize {

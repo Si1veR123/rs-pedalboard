@@ -75,11 +75,11 @@ fn get_hw_devices() -> Result<Vec<String>, AudioDeviceError> {
 
 // On linux, we list all input and output devices for both input and output
 #[cfg(target_os = "linux")]
-pub fn get_input_devices(_host: Option<Host>) -> Result<Vec<String>> {
+pub fn get_input_devices(_host: Option<&Host>) -> Result<Vec<String>, AudioDeviceError> {
     get_hw_devices()
 }
 
 #[cfg(target_os = "linux")]
-pub fn get_output_devices(_host: Option<Host>) -> Result<Vec<String>> {
+pub fn get_output_devices(_host: Option<&Host>) -> Result<Vec<String>, AudioDeviceError> {
     get_hw_devices()
 }
