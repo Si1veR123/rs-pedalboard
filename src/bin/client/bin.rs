@@ -13,6 +13,7 @@ use utilities::UtilitiesScreen;
 mod settings;
 use settings::{SettingsScreen, ServerLaunchState};
 mod server_process;
+mod midi;
 
 use eframe::egui::{self, include_image, Button, Color32, FontId, Id, ImageButton, RichText, Vec2};
 use rs_pedalboard::SAVE_DIR;

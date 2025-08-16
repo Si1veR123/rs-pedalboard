@@ -261,7 +261,7 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
                                         ui,
                                         ui.available_size(),
                                         |ui| {
-                                            if ui.add_sized(ui.available_size(), Button::new("Drag").sense(egui::Sense::click())).clicked() {
+                                            if ui.add_sized(ui.available_size(), Button::new("Click/Drag").sense(egui::Sense::click())).clicked() {
                                                 // Open the parameter window
                                                 let window_open_id = super::parameter_window::get_window_open_id(item);
                                                 ui.ctx().data_mut(
