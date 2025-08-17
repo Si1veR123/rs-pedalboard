@@ -130,17 +130,16 @@ pub enum SocketThreadMessage {
     // pedalboard index, pedal index, parameter name, value
     ParameterUpdate(usize, usize, String, PedalParameterValue),
     ThreadAliveTest,
-    KillServer
+    KillServer,
+    SubscribeToResponses(Sender<SocketThreadResponse>)
 }
 
+#[derive(Clone, Debug)]
 pub enum SocketThreadResponse {
     Command(String),
     ParameterUpdate(usize, usize, String, PedalParameterValue),
 }
 
-/// Handle doesn't ID any messages. This means if there are multiple handles waiting on a response at the same time, they could get mixed up.
-/// This isn't a problem in this case as only the UI thread requires responses.
-#[derive(Clone)]
 pub struct ClientSocketThreadHandle {
     message_sender: Sender<SocketThreadMessage>,
     response_receiver: Receiver<SocketThreadResponse>
@@ -210,6 +209,17 @@ impl ClientSocketThreadHandle {
     }
 }
 
+impl Clone for ClientSocketThreadHandle {
+    fn clone(&self) -> Self {
+        let (new_sender, new_receiver) = smol::channel::unbounded();
+        let _ = smol::block_on(self.message_sender.send(SocketThreadMessage::SubscribeToResponses(new_sender)));
+        ClientSocketThreadHandle {
+            message_sender: self.message_sender.clone(),
+            response_receiver: new_receiver
+        }
+    }
+}
+
 pub fn new_client_socket_thread(port: u16) -> std::io::Result<ClientSocketThreadHandle> {
     let (message_sender, message_receiver) = smol::channel::unbounded();
     let (response_sender, response_receiver) = smol::channel::unbounded();
@@ -232,7 +242,7 @@ pub fn new_client_socket_thread(port: u16) -> std::io::Result<ClientSocketThread
 
             log::info!("Connected to server on port {}", port);
             match connected_status_oneshot_sender.send(Ok(())) {
-                Ok(_) => client_socket_event_loop(stream, message_receiver, response_sender).await,
+                Ok(_) => client_socket_event_loop(stream, message_receiver, vec![response_sender]).await,
                 Err(e) => {
                     log::error!("Failed to send connection status: {}", e);
                     return;
@@ -257,10 +267,23 @@ pub fn new_client_socket_thread(port: u16) -> std::io::Result<ClientSocketThread
     }
 }
 
+async fn send_to_all<T: Clone>(
+    senders: &[Sender<T>],
+    message: T,
+) -> bool {
+    for sender in senders {
+        if sender.send(message.clone()).await.is_err() {
+            log::error!("Failed to send message to one of the response channels");
+            return true;
+        }
+    }
+    false
+}
+
 async fn client_socket_event_loop(
     stream: TcpStream,
     message_receiver: Receiver<SocketThreadMessage>,
-    response_sender: Sender<SocketThreadResponse>,
+    mut response_senders: Vec<Sender<SocketThreadResponse>>,
 ) {
     let mut command_receiver = CommandReceiver::new();
     // 128 is large but it is only storing String, which is small
@@ -292,7 +315,7 @@ async fn client_socket_event_loop(
                     }
                     Ok(false) => {
                         for command in received_commands_reader.pop_iter() {
-                            if response_sender.send(SocketThreadResponse::Command(command)).await.is_err() {
+                            if send_to_all(&response_senders, SocketThreadResponse::Command(command)).await {
                                 log::error!("Failed to send command to response channel");
                                 break;
                             }
@@ -323,13 +346,15 @@ async fn client_socket_event_loop(
                             serde_json::to_string(&value).expect("Failed to serialize parameter value")
                         );
 
-                        if let Err(e) = response_sender.send(SocketThreadResponse::ParameterUpdate(pedalboard_index, pedal_index, parameter_name.clone(), value.clone())).await {
-                            log::error!("Failed to send parameter update response: {}", e);
+                        if send_to_all(&response_senders, SocketThreadResponse::ParameterUpdate(pedalboard_index, pedal_index, parameter_name.clone(), value.clone())).await {
                             break;
                         }
                         if socket_send(&mut stream_writer, &message).await {
                             break;
                         }
+                    },
+                    Ok(SocketThreadMessage::SubscribeToResponses(sender)) => {
+                        response_senders.push(sender);
                     },
                     Ok(SocketThreadMessage::ThreadAliveTest) => { },
                     Err(_) => {

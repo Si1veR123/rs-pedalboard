@@ -4,18 +4,22 @@ use serde::{Serialize, Deserialize};
 use eframe::egui;
 use crossbeam::channel::{Receiver, Sender};
 
+use crate::socket::ClientSocketThreadHandle;
+
 pub struct MidiState {
     settings: MidiSettings,
     input_connections: Vec<(String, MidiInputConnection<String>)>,
     available_input_ports: MidiInputPorts,
     receiver: Receiver<(u64, [u8; 16], String)>,
-    sender: Sender<(u64, [u8; 16], String)>
+    sender: Sender<(u64, [u8; 16], String)>,
+
 }
 
 impl MidiState {
     fn create_midi_input() -> MidiInput {
         MidiInput::new("Pedalboard MIDI Input").expect("Failed to create MIDI input")
     }
+    
 
     pub fn new(settings: MidiSettings) -> Self {
         let available_input_ports = Self::create_midi_input().ports();
@@ -30,7 +34,7 @@ impl MidiState {
         }
     }
 
-    pub fn connect_to_port(&mut self, id: &str) {
+    pub fn connect_to_port(&mut self, id: &str, client_socket: ClientSocketThreadHandle) {
         if let Some(port) = self.available_input_ports.iter().find(|p| p.id() == id) {
             if !self.input_connections.iter().any(|(name, _c) | name == id) {
                 let sender = self.sender.clone();
