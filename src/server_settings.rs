@@ -98,17 +98,35 @@ impl ServerSettingsSave {
         Some(homedir::my_home().ok()??.join(SAVE_DIR).join(SAVE_NAME))
     }
 
-    pub fn load_or_default() -> Result<Self, std::io::Error> {
-        let save_path = Self::get_save_path().expect("Failed to get client settings save path");
+    pub fn load_or_default() -> Self {
+        let save_path = match Self::get_save_path() {
+            Some(path) => path,
+            None => {
+                log::error!("Failed to get server settings save path, using default");
+                return Default::default();
+            }
+        };
 
         if !save_path.exists() {
             log::info!("Server settings save file not found, using default");
-            return Ok(Self::default());
+            return Default::default();
         }
 
-        let data = std::fs::read_to_string(save_path)?;
+        let data = match std::fs::read_to_string(&save_path) {
+            Ok(d) => d,
+            Err(e) => {
+                log::error!("Failed to read server settings from {:?}: {e}, using default", save_path);
+                return Default::default();
+            }
+        };
 
-        Ok(serde_json::from_str(&data).expect("Failed to deserialize server settings"))
+        match serde_json::from_str(&data) {
+            Ok(settings) => settings,
+            Err(e) => {
+                log::error!("Failed to deserialize server settings from {:?}: {e}, using default", save_path);
+                Default::default()
+            }
+        }
     }
 
     pub fn save(&self) -> Result<(), std::io::Error> {

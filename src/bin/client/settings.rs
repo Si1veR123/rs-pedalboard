@@ -39,17 +39,33 @@ impl ClientSettings {
         Some(homedir::my_home().ok()??.join(SAVE_DIR).join(CLIENT_SAVE_NAME))
     }
 
-    pub fn load_or_default() -> Result<Self, std::io::Error> {
-        let save_path = Self::get_save_path().expect("Failed to get client settings save path");
+    pub fn load_or_default() -> Self {
+        let save_path = match Self::get_save_path() {
+            Some(path) => path,
+            None => {
+                log::error!("Failed to get client settings save path, using default");
+                return Self::default();
+            }
+        };
 
         if !save_path.exists() {
             log::info!("Client settings save file not found, using default");
-            return Ok(Self::default());
+            return Self::default();
         }
 
-        let data = std::fs::read_to_string(save_path)?;
-
-        Ok(serde_json::from_str(&data).expect("Failed to deserialize client settings"))
+        match std::fs::read_to_string(&save_path) {
+            Ok(data) => match serde_json::from_str::<Self>(&data) {
+                Ok(state) => state,
+                Err(e) => {
+                    log::error!("Failed to deserialize client settings from {:?}: {e}, using default", save_path);
+                    Self::default()
+                }
+            },
+            Err(e) => {
+                log::error!("Failed to read client settings from {:?}: {e}, using default", save_path);
+                Self::default()
+            }
+        }
     }
 
     pub fn save(&self) -> Result<(), std::io::Error> {
@@ -422,6 +438,7 @@ impl Widget for &mut SettingsScreen {
                             ));
                         }
                     });
+
                     ui.add_space(15.0);
 
                     match self.server_launch_state {
@@ -522,6 +539,10 @@ impl Widget for &mut SettingsScreen {
                             }
                             ui.end_row();
                         });
+                    
+                    ui.heading("MIDI");
+                    ui.separator();
+                    self.state.midi_state.borrow_mut().midi_port_device_settings_ui(ui);
 
                     if connect_button.is_some_and(|r| r.clicked()) {
                         drop(client_settings);

@@ -1,13 +1,15 @@
 use std::cell::RefCell;
+use ringbuf::storage::Ref;
 use rs_pedalboard::{pedalboard::Pedalboard, pedalboard_set::PedalboardSet, pedals::{Pedal, PedalParameterValue, PedalTrait}, server_settings::ServerSettingsSave};
-use crate::{saved_pedalboards::SavedPedalboards, settings::ClientSettings, socket::ClientSocket};
+use crate::{midi::{MidiSettings, MidiState}, saved_pedalboards::SavedPedalboards, settings::ClientSettings, socket::ClientSocket};
 
 pub struct State {
     pub pedalboards: SavedPedalboards,
     socket: RefCell<ClientSocket>,
 
     pub client_settings: RefCell<ClientSettings>,
-    pub server_settings: RefCell<ServerSettingsSave>
+    pub server_settings: RefCell<ServerSettingsSave>,
+    pub midi_state: RefCell<MidiState>
 }
 
 impl State {
@@ -320,24 +322,27 @@ impl State {
         socket.send(message);
     }
 
-    pub fn load_state() -> Result<State, std::io::Error> {
-        let pedalboards = SavedPedalboards::load_or_default()?;
+    pub fn load_state(egui_ctx: eframe::egui::Context) -> Self {
+        let pedalboards = SavedPedalboards::load_or_default();
         let socket = ClientSocket::new(crate::SERVER_PORT);
-        let client_settings = ClientSettings::load_or_default()?;
-        let server_settings = ServerSettingsSave::load_or_default()?;
-        
-        Ok(State {
+        let client_settings = ClientSettings::load_or_default();
+        let server_settings = ServerSettingsSave::load_or_default();
+        let midi_settings = MidiSettings::load_or_default();
+
+        State {
             pedalboards,
             socket: RefCell::new(socket),
             client_settings: RefCell::new(client_settings),
             server_settings: RefCell::new(server_settings),
-        })
+            midi_state: RefCell::new(MidiState::new(midi_settings, egui_ctx))
+        }
     }
 
     pub fn save_state(&self) -> Result<(), std::io::Error> {
         self.pedalboards.save()?;
         self.client_settings.borrow().save()?;
         self.server_settings.borrow().save()?;
+        self.midi_state.borrow().save_settings()?;
         Ok(())
     }
 
@@ -384,17 +389,16 @@ impl State {
             self.set_parameter(pedalboard_index, pedal_index, &parameter_name, &new_value, true);
         }
     }
-}
 
-impl Default for State {
-    fn default() -> Self {
+    pub fn default_with_context(egui_ctx: eframe::egui::Context) -> Self {
         let socket = ClientSocket::new(crate::SERVER_PORT);
-
-        State {
+        let midi_state = MidiState::new(MidiSettings::default(), egui_ctx);
+        Self {
             pedalboards: SavedPedalboards::default(),
             socket: RefCell::new(socket),
             client_settings: RefCell::new(ClientSettings::default()),
             server_settings: RefCell::new(ServerSettingsSave::default()),
+            midi_state: RefCell::new(midi_state)
         }
     }
 }

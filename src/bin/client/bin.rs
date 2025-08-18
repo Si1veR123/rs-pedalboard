@@ -140,14 +140,9 @@ pub struct PedalboardClientApp {
 }
 
 impl PedalboardClientApp {
-    pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
-        let loaded_state = State::load_state();
-        let leaked_state = if let Err(e) = loaded_state {
-            log::error!("Failed to load state. Using default state. Error: {}", e);
-            Box::leak(Box::new(State::default()))
-        } else {
-            Box::leak(Box::new(loaded_state.unwrap()))
-        };
+    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        let loaded_state = State::load_state(cc.egui_ctx.clone());
+        let leaked_state = Box::leak(Box::new(loaded_state));
         let _ = leaked_state.connect_to_server();
 
         let mut settings_screen = SettingsScreen::new(leaked_state);
