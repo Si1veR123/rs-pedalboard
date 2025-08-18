@@ -1,7 +1,8 @@
-use std::{collections::HashMap, sync::{Arc, Mutex, RwLock}};
+use std::{collections::HashMap, sync::{Arc, Mutex}};
 use midir::{MidiInput, MidiInputConnection, MidiInputPorts};
 use serde::{Serialize, Deserialize, Serializer, Deserializer, ser::SerializeStruct};
-use eframe::egui;
+use eframe::egui::{self, Id, Rangef, Response};
+use egui_extras::{Size, StripBuilder};
 use crossbeam::channel::{Receiver, Sender};
 use strum_macros::EnumDiscriminants;
 
@@ -170,116 +171,155 @@ impl MidiState {
 
         ui.label("Connected MIDI Ports:");
         ui.separator();
+
+        let mut settings_lock = self.settings.lock().expect("MidiState: Mutex poisoned.");
+        
+        let row_count = {
+            let mut row_count = self.input_connections.len();
+            for (port_name, _connection) in &self.input_connections {
+                if let Some(devices) = settings_lock.port_devices.get(port_name) {
+                    row_count += devices.len();
+                }
+            }
+            row_count
+        };
+
         let mut disconnect: Option<String> = None;
-        egui::Grid::new("connected_midi_ports_grid")
-            .num_columns(2)
-            .min_row_height(row_height)
-            .show(ui, |ui| {
-                let mut settings_lock = self.settings.lock().expect("MidiState: Mutex poisoned.");
+        let row_height = 60.0;
+        StripBuilder::new(ui)
+            .sizes(Size::Absolute { initial: row_height, range: Rangef::new(0.0, row_height) }, row_count)
+            .vertical(|mut strip| {
+                for (port_name, _connection) in &self.input_connections {
+                    // Port summary
+                    strip.cell(|ui| {
+                        ui.painter().rect_filled(ui.available_rect_before_wrap(), 5.0, crate::LIGHT_BACKGROUND_COLOR);
+                        StripBuilder::new(ui)
+                            .sizes(Size::remainder(), 2)
+                            .horizontal(|mut strip| {
+                                strip.cell(|ui| { ui.horizontal_centered(|ui| ui.label(port_name)); });
+                                strip.cell(|ui| {
+                                    if ui.horizontal_centered(|ui| ui.button("Disconnect")).inner.clicked() {
+                                        disconnect = Some(port_name.clone());
+                                    }
+                                });
+                            });
+                    });
 
-                for (port_name, connection) in &self.input_connections {
-                    // Lighter background for port rows
-                    ui.painter().rect_filled(ui.available_rect_before_wrap(), 5.0, crate::LIGHT_BACKGROUND_COLOR);
-                    ui.label(port_name);
-                    if ui.button("Disconnect").clicked() {
-                        disconnect = Some(port_name.clone());
-                    }
+                    // Device rows for this port
+                    if let Some(device_settings) = settings_lock.port_devices.get_mut(port_name) {
+                        let mut forget: Option<(u8, u8)> = None;
 
-                    ui.end_row();
-                    
-                    // Show the device settings for this port
-                    egui::Grid::new(format!("midi_port_{}_devices_grid", port_name))
-                        .num_columns(6)
-                        .striped(true)
-                        .show(ui, |ui| {
-                            let mut forget: Option<(u8, u8)> = None;
-                            let device_settings = settings_lock.port_devices.get_mut(port_name).expect("Connected ports should always be in MidiSettings HashMap");
-                            for ((cc, channel), device) in device_settings {
-                                // Device row
-                                ui.label(&device.name);
-                                ui.label(format!("CC {}", cc));
-                                ui.label(format!("Ch {}", channel));
-                                ui.label(device.device_type.get_name());
-                                ui.label(format!("{:.2}", device.current_value));
-
-                                ui.collapsing("", |ui| {
-                                    ui.horizontal(|ui| {
-                                        if ui.button("Forget").clicked() {
-                                            forget = Some((*cc, *channel));
-                                        }
-                                        ui.label("Rename:");
-                                        ui.text_edit_singleline(&mut device.name);
-                                    });
-
-                                    // Device type selection
-                                    egui::ComboBox::from_label("Device Type")
-                                        .selected_text(device.device_type.get_name())
-                                        .show_ui(ui, |ui| {
-                                            if ui
-                                                .selectable_label(
-                                                    matches!(device.device_type, MidiDeviceType::RelativeEncoder { .. }),
-                                                    "Relative Encoder",
-                                                )
-                                                .clicked()
-                                            {
-                                                device.device_type = MidiDeviceType::RelativeEncoder {
-                                                    sensitivity: 0.1,
-                                                    increment_value: 0,
-                                                    decrement_value: 127,
-                                                };
-                                            }
-                                            if ui
-                                                .selectable_label(
-                                                    matches!(device.device_type, MidiDeviceType::AbsoluteEncoder { .. }),
-                                                    "Absolute Encoder",
-                                                )
-                                                .clicked()
-                                            {
-                                                device.device_type = MidiDeviceType::AbsoluteEncoder {
-                                                    min_value: 0,
-                                                    max_value: 127,
-                                                };
-                                            }
-                                            if ui
-                                                .selectable_label(
-                                                    matches!(device.device_type, MidiDeviceType::LatchingFootswitch { .. }),
-                                                    "Latching Footswitch",
-                                                )
-                                                .clicked()
-                                            {
-                                                device.device_type = MidiDeviceType::LatchingFootswitch {
-                                                    on_value: 127,
-                                                };
-                                            }
-                                            if ui
-                                                .selectable_label(
-                                                    matches!(device.device_type, MidiDeviceType::MomentaryFootswitch { .. }),
-                                                    "Momentary Footswitch",
-                                                )
-                                                .clicked()
-                                            {
-                                                device.device_type = MidiDeviceType::MomentaryFootswitch {
-                                                    on_value: 127,
-                                                    use_as_latching: false,
-                                                };
-                                            }
+                        for (i, ((cc, channel), device)) in device_settings.iter_mut().enumerate() {
+                            // Device summary row
+                            strip.cell(|ui| {
+                                // Use the rect saved in the last frame to paint the background
+                                let mut rect = ui.ctx().memory(|m| m.data.get_temp::<egui::Rect>(Id::new("device_rect").with(i)).unwrap_or(ui.available_rect_before_wrap()));
+                                rect.set_width(ui.available_width());
+                                if i % 2 == 0 {
+                                    ui.painter().rect_filled(rect, 5.0, crate::LIGHT_BACKGROUND_COLOR.gamma_multiply(0.6));
+                                }
+                                StripBuilder::new(ui)
+                                    .sizes(Size::Absolute { initial: row_height/2.0, range: Rangef::new(0.0, row_height/2.0) }, 2)
+                                    .vertical(|mut strip| {
+                                        strip.strip(|builder| {
+                                            builder.sizes(Size::remainder(), 6)
+                                                .horizontal(|mut strip| {
+                                                    strip.cell(|ui| { ui.horizontal_centered(|ui| ui.label(&device.name)); });
+                                                    strip.cell(|ui| { ui.horizontal_centered(|ui| ui.label(format!("CC {}", cc))); });
+                                                    strip.cell(|ui| { ui.horizontal_centered(|ui| ui.label(format!("Ch {}", channel))); });
+                                                    strip.cell(|ui| { ui.horizontal_centered(|ui| ui.label(device.device_type.get_name())); });
+                                                    strip.cell(|ui| { ui.horizontal_centered(|ui| ui.label(format!("{:.2}", device.current_value))); });
+                                                    strip.cell(|ui| {
+                                                        ui.horizontal_centered(|ui| {
+                                                            if ui.button("Forget").clicked() {
+                                                                forget = Some((*cc, *channel));
+                                                            }
+                                                        });
+                                                    });
+                                                });
                                         });
 
-                                    // Variant-specific settings
-                                    device.device_type.settings_ui(ui);
+                                        // Full-width row for collapsible details/settings
+                                        strip.cell(|ui| {
+                                            ui.push_id((port_name, cc, channel), |ui| {
+                                                ui.collapsing("Settings", |ui| {
+                                                    ui.horizontal(|ui| {
+                                                        ui.label("Rename:");
+                                                        ui.text_edit_singleline(&mut device.name);
+                                                    });
+
+                                                    egui::ComboBox::from_label("Device Type")
+                                                        .selected_text(device.device_type.get_name())
+                                                        .show_ui(ui, |ui| {
+                                                            if ui
+                                                                .selectable_label(
+                                                                    matches!(device.device_type, MidiDeviceType::RelativeEncoder { .. }),
+                                                                    "Relative Encoder",
+                                                                )
+                                                                .clicked()
+                                                            {
+                                                                device.device_type = MidiDeviceType::RelativeEncoder {
+                                                                    sensitivity: 0.1,
+                                                                    increment_value: 0,
+                                                                    decrement_value: 127,
+                                                                };
+                                                            }
+                                                            if ui
+                                                                .selectable_label(
+                                                                    matches!(device.device_type, MidiDeviceType::AbsoluteEncoder { .. }),
+                                                                    "Absolute Encoder",
+                                                                )
+                                                                .clicked()
+                                                            {
+                                                                device.device_type = MidiDeviceType::AbsoluteEncoder {
+                                                                    min_value: 0,
+                                                                    max_value: 127,
+                                                                };
+                                                            }
+                                                            if ui
+                                                                .selectable_label(
+                                                                    matches!(device.device_type, MidiDeviceType::LatchingFootswitch { .. }),
+                                                                    "Latching Footswitch",
+                                                                )
+                                                                .clicked()
+                                                            {
+                                                                device.device_type = MidiDeviceType::LatchingFootswitch {
+                                                                    on_value: 127,
+                                                                };
+                                                            }
+                                                            if ui
+                                                                .selectable_label(
+                                                                    matches!(device.device_type, MidiDeviceType::MomentaryFootswitch { .. }),
+                                                                    "Momentary Footswitch",
+                                                                )
+                                                                .clicked()
+                                                            {
+                                                                device.device_type = MidiDeviceType::MomentaryFootswitch {
+                                                                    on_value: 127,
+                                                                    use_as_latching: false,
+                                                                };
+                                                            }
+                                                        });
+
+                                                    device.device_type.settings_ui(ui);
+                                                });
+                                            });
+                                        });
+                                    });
+                                let min_rect = ui.min_rect();
+                                ui.ctx().memory_mut(|m| {
+                                    m.data.insert_temp(Id::new("device_rect").with(i), min_rect);
                                 });
+                            });
+                        }
 
-                                ui.end_row();
-                            }
-
-                            if let Some((cc, channel)) = forget {
-                                if let Some(port_devices) = settings_lock.port_devices.get_mut(port_name) {
-                                    port_devices.remove(&(cc, channel));
-                                }
-                            }
-                        });
+                        if let Some((cc, channel)) = forget {
+                            device_settings.remove(&(cc, channel));
+                        }
+                    }
                 }
             });
+        drop(settings_lock);
         
         if let Some(port_name) = disconnect {
             self.disconnect_from_port(&port_name);

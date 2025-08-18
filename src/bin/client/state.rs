@@ -1,5 +1,4 @@
 use std::cell::RefCell;
-use ringbuf::storage::Ref;
 use rs_pedalboard::{pedalboard::Pedalboard, pedalboard_set::PedalboardSet, pedals::{Pedal, PedalParameterValue, PedalTrait}, server_settings::ServerSettingsSave};
 use crate::{midi::{MidiSettings, MidiState}, saved_pedalboards::SavedPedalboards, settings::ClientSettings, socket::ClientSocket};
 
