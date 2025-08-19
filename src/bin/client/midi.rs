@@ -4,6 +4,7 @@ use serde::{Serialize, Deserialize, Serializer, Deserializer, ser::SerializeStru
 use eframe::egui::{self, Id, Rangef, Response};
 use egui_extras::{Size, StripBuilder};
 use crossbeam::channel::{Receiver, Sender};
+use smol::fs::write;
 use strum_macros::EnumDiscriminants;
 
 use crate::socket::ClientSocketThreadHandle;
@@ -49,8 +50,8 @@ impl MidiState {
     }
 
     fn device_settings_mut<'a>(settings: &'a mut MidiSettings, port_name: &str, cc: u8, channel: u8) -> Option<&'a mut MidiDevice> {
-        if let Some(devices) = settings.port_devices.get_mut(port_name) {
-            Some(devices.entry((cc, channel)).or_insert_with(|| MidiDevice {
+        if let Some(settings) = settings.port_settings.get_mut(port_name) {
+            Some(settings.devices.entry((cc, channel)).or_insert_with(|| MidiDevice {
                 name: "New Device".to_string(),
                 device_type: MidiDeviceType::AbsoluteEncoder { min_value: 0, max_value: 127 },
                 current_value: 0.5,
@@ -72,15 +73,13 @@ impl MidiState {
         if let Some(device) = Self::device_settings_mut(&mut settings_lock, port_name, cc, channel) {
             let old_value = device.current_value;
             device.update_with_midi_value(value);
+            egui_ctx.request_repaint();
             if device.current_value != old_value {
                 // Activate any MIDI functions for this device
                 if device.current_value == 1.0 {
                     for function in &device.functions {
                         // If this fails the channel is dead -> the client is dead
                         let _ = sender.send(function.clone());
-                    }
-                    if device.functions.len() > 0 {
-                        egui_ctx.request_repaint();
                     }
                 }
             }
@@ -91,14 +90,30 @@ impl MidiState {
         let available_input_ports = Self::create_midi_input().ports();
         let (sender, receiver) = crossbeam::channel::unbounded();
 
-        Self {
+        let auto_connect_ports: Vec<String> = settings.port_settings.iter()
+            .filter_map(|(port_name, port_settings)| {
+                if port_settings.auto_connect {
+                    Some(port_name.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let mut state = Self {
             settings: Arc::new(Mutex::new(settings)),
             available_input_ports,
             input_connections: Vec::new(),
             receiver,
             sender,
             egui_ctx
+        };
+
+        for port in auto_connect_ports {
+            state.connect_to_port(&port);
         }
+
+        state
     }
 
     pub fn connect_to_port(&mut self, id: &str) {
@@ -120,7 +135,7 @@ impl MidiState {
                         self.input_connections.push((id.to_string(), connection));
                         log::info!("Connected to MIDI port: {}", id);
                         self.available_input_ports.retain(|p| p.id() != id);
-                        self.settings.lock().expect("MidiState: Mutex poisoned.").port_devices.entry(id.to_string()).or_default();
+                        self.settings.lock().expect("MidiState: Mutex poisoned.").port_settings.entry(id.to_string()).or_default();
                     }
                     Err(e) => {
                         log::error!("Failed to connect to MIDI port {}: {}", id, e);
@@ -177,8 +192,8 @@ impl MidiState {
         let row_count = {
             let mut row_count = self.input_connections.len();
             for (port_name, _connection) in &self.input_connections {
-                if let Some(devices) = settings_lock.port_devices.get(port_name) {
-                    row_count += devices.len();
+                if let Some(settings) = settings_lock.port_settings.get(port_name) {
+                    row_count += settings.devices.len();
                 }
             }
             row_count
@@ -189,27 +204,34 @@ impl MidiState {
         StripBuilder::new(ui)
             .sizes(Size::Absolute { initial: row_height, range: Rangef::new(0.0, row_height) }, row_count)
             .vertical(|mut strip| {
-                for (port_name, _connection) in &self.input_connections {
+                for (port_name, _connection) in &mut self.input_connections {
                     // Port summary
                     strip.cell(|ui| {
                         ui.painter().rect_filled(ui.available_rect_before_wrap(), 5.0, crate::LIGHT_BACKGROUND_COLOR);
+                        let width = ui.available_width();
                         StripBuilder::new(ui)
-                            .sizes(Size::remainder(), 2)
+                            .size(Size::Absolute { initial: width*0.7, range: Rangef::new(0.0, width*0.35) })
+                            .size(Size::Absolute { initial: width*0.15, range: Rangef::new(0.0, width*0.15) })
+                            .size(Size::Absolute { initial: width*0.15, range: Rangef::new(0.0, width*0.15) })
                             .horizontal(|mut strip| {
-                                strip.cell(|ui| { ui.horizontal_centered(|ui| ui.label(port_name)); });
+                                strip.cell(|ui| { ui.horizontal_centered(|ui| ui.label(port_name.as_str())); });
                                 strip.cell(|ui| {
                                     if ui.horizontal_centered(|ui| ui.button("Disconnect")).inner.clicked() {
                                         disconnect = Some(port_name.clone());
                                     }
                                 });
+                                strip.cell(|ui| {
+                                    let mut port_settings = settings_lock.port_settings.get_mut(port_name).expect("Any connected port should have an entry in port settings.");
+                                    ui.horizontal_centered(|ui| ui.checkbox(&mut port_settings.auto_connect, "Auto-Connect"));
+                                });
                             });
                     });
 
                     // Device rows for this port
-                    if let Some(device_settings) = settings_lock.port_devices.get_mut(port_name) {
+                    if let Some(device_settings) = settings_lock.port_settings.get_mut(port_name) {
                         let mut forget: Option<(u8, u8)> = None;
 
-                        for (i, ((cc, channel), device)) in device_settings.iter_mut().enumerate() {
+                        for (i, ((cc, channel), device)) in device_settings.devices.iter_mut().enumerate() {
                             // Device summary row
                             strip.cell(|ui| {
                                 // Use the rect saved in the last frame to paint the background
@@ -222,13 +244,17 @@ impl MidiState {
                                     .sizes(Size::Absolute { initial: row_height/2.0, range: Rangef::new(0.0, row_height/2.0) }, 2)
                                     .vertical(|mut strip| {
                                         strip.strip(|builder| {
-                                            builder.sizes(Size::remainder(), 6)
+                                            builder.size(Size::Absolute { initial: rect.width()*0.35, range: Rangef::new(0.0, rect.width()*0.35) })
+                                                .sizes(Size::Absolute { initial: rect.width()*0.08, range: Rangef::new(0.0, rect.width()*0.08) }, 2)
+                                                .size(Size::Absolute { initial: rect.width()*0.25, range: Rangef::new(0.0, rect.width()*0.25) })
+                                                .size(Size::Absolute { initial: rect.width()*0.08, range: Rangef::new(0.0, rect.width()*0.08) })
+                                                .size(Size::Absolute { initial: rect.width()*0.16, range: Rangef::new(0.0, rect.width()*0.16) })
                                                 .horizontal(|mut strip| {
-                                                    strip.cell(|ui| { ui.horizontal_centered(|ui| ui.label(&device.name)); });
-                                                    strip.cell(|ui| { ui.horizontal_centered(|ui| ui.label(format!("CC {}", cc))); });
-                                                    strip.cell(|ui| { ui.horizontal_centered(|ui| ui.label(format!("Ch {}", channel))); });
-                                                    strip.cell(|ui| { ui.horizontal_centered(|ui| ui.label(device.device_type.get_name())); });
-                                                    strip.cell(|ui| { ui.horizontal_centered(|ui| ui.label(format!("{:.2}", device.current_value))); });
+                                                    strip.cell(|ui| {ui.horizontal_centered(|ui| ui.label(&device.name)); });
+                                                    strip.cell(|ui| {ui.horizontal_centered(|ui| ui.label(format!("CC {}", cc))); });
+                                                    strip.cell(|ui| {ui.horizontal_centered(|ui| ui.label(format!("Ch {}", channel))); });
+                                                    strip.cell(|ui| {ui.horizontal_centered(|ui| ui.label(device.device_type.get_name())); });
+                                                    strip.cell(|ui| {ui.horizontal_centered(|ui| ui.label(device.display_value_string())); });
                                                     strip.cell(|ui| {
                                                         ui.horizontal_centered(|ui| {
                                                             if ui.button("Forget").clicked() {
@@ -241,7 +267,7 @@ impl MidiState {
 
                                         // Full-width row for collapsible details/settings
                                         strip.cell(|ui| {
-                                            ui.push_id((port_name, cc, channel), |ui| {
+                                            ui.push_id((port_name.as_str(), cc, channel), |ui| {
                                                 ui.collapsing("Settings", |ui| {
                                                     ui.horizontal(|ui| {
                                                         ui.label("Rename:");
@@ -314,7 +340,7 @@ impl MidiState {
                         }
 
                         if let Some((cc, channel)) = forget {
-                            device_settings.remove(&(cc, channel));
+                            device_settings.devices.remove(&(cc, channel));
                         }
                     }
                 }
@@ -327,65 +353,75 @@ impl MidiState {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct MidiSettings {
-    //                       port name       CC, channel
-    pub port_devices: HashMap<String, HashMap<(u8, u8), MidiDevice>>
+    pub port_settings: HashMap<String, MidiPortSettings>
 }
 
-impl Serialize for MidiSettings {
+#[derive(Debug, Clone, Default)]
+pub struct MidiPortSettings {
+    // (cc, channel)
+    pub devices: HashMap<(u8, u8), MidiDevice>,
+    pub auto_connect: bool,
+}
+
+impl Serialize for MidiPortSettings {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        // Convert the inner HashMap<(cc, ch), MidiDevice> into HashMap<String, &MidiDevice>
-        let converted: HashMap<&String, HashMap<String, &MidiDevice>> = self
-            .port_devices
+        // Convert the HashMap<(cc, ch), MidiDevice> into HashMap<String, &MidiDevice>
+        let converted: HashMap<String, &MidiDevice> = self
+            .devices
             .iter()
             .map(|(port, inner)| {
-                let inner_map: HashMap<String, &MidiDevice> = inner
-                    .iter()
-                    .map(|(&(cc, ch), dev)| (format!("{cc}:{ch}"), dev))
-                    .collect();
-                (port, inner_map)
+                let key = format!("{}:{}", port.0, port.1);
+                (key, inner)
             })
             .collect();
 
-        // Serialize the HashMap directly, no wrapper field
-        converted.serialize(serializer)
+        let mut struct_serializer = serializer.serialize_struct("Port", 2)?;
+        struct_serializer.serialize_field("devices", &converted)?;
+        struct_serializer.serialize_field("auto_connect", &self.auto_connect)?;
+
+        struct_serializer.end()
     }
 }
 
-impl<'de> Deserialize<'de> for MidiSettings {
+impl<'de> Deserialize<'de> for MidiPortSettings {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        // first deserialize into HashMap<String, HashMap<String, MidiDevice>>
-        let raw: HashMap<String, HashMap<String, MidiDevice>> =
-            Deserialize::deserialize(deserializer)?;
-
-        let mut port_devices = HashMap::new();
-        for (port, inner) in raw {
-            let mut inner_map = HashMap::new();
-            for (key, dev) in inner {
-                let mut parts = key.split(':');
-                let cc = parts
-                    .next()
-                    .ok_or_else(|| serde::de::Error::custom("missing cc"))?
-                    .parse::<u8>()
-                    .map_err(serde::de::Error::custom)?;
-                let ch = parts
-                    .next()
-                    .ok_or_else(|| serde::de::Error::custom("missing channel"))?
-                    .parse::<u8>()
-                    .map_err(serde::de::Error::custom)?;
-                inner_map.insert((cc, ch), dev);
-            }
-            port_devices.insert(port, inner_map);
+        #[derive(Deserialize)]
+        struct Port {
+            devices: HashMap<String, MidiDevice>,
+            auto_connect: bool,
         }
 
-        Ok(MidiSettings { port_devices })
+        // first deserialize into HashMap<String, HashMap<String, MidiDevice>>
+        let raw: Port = Deserialize::deserialize(deserializer)?;
+
+        let mut actual_map = HashMap::new();
+        for (key, dev) in raw.devices {
+            let mut parts = key.split(':');
+            let cc = parts
+                .next()
+                .ok_or_else(|| serde::de::Error::custom("missing cc"))?
+                .parse::<u8>()
+                .map_err(serde::de::Error::custom)?;
+            let ch = parts
+                .next()
+                .ok_or_else(|| serde::de::Error::custom("missing channel"))?
+                .parse::<u8>()
+                .map_err(serde::de::Error::custom)?;
+            actual_map.insert((cc, ch), dev);
+        }
+
+        Ok(MidiPortSettings {
+            devices: actual_map,
+            auto_connect: raw.auto_connect,
+        })
     }
 }
 
@@ -490,6 +526,21 @@ impl MidiDevice {
                     } else {
                         0.0
                     }
+                }
+            }
+        }
+    }
+
+    pub fn display_value_string(&self) -> String {
+        match &self.device_type {
+            MidiDeviceType::RelativeEncoder { .. } | MidiDeviceType::AbsoluteEncoder { .. } => {
+                format!("{:.2}", self.current_value)
+            },
+            MidiDeviceType::LatchingFootswitch { .. } | MidiDeviceType::MomentaryFootswitch { .. } => {
+                if self.current_value == 1.0 {
+                    "On".into()
+                } else {
+                    "Off".into()
                 }
             }
         }
