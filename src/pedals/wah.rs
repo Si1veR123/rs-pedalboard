@@ -3,7 +3,7 @@ use std::hash::Hash;
 
 use super::{PedalTrait, PedalParameter, PedalParameterValue};
 use serde::{ser::SerializeMap, Deserialize, Serialize};
-use crate::{dsp_algorithms::moving_bangpass::MovingBandPass, pedals::ui::pedal_switch, unique_time_id};
+use crate::{dsp_algorithms::moving_bandpass::MovingBandPass, pedals::ui::pedal_switch, unique_time_id};
 use super::ui::pedal_knob;
 
 use eframe::egui::{self, include_image};

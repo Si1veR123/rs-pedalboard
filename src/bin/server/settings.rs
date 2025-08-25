@@ -40,6 +40,8 @@ pub struct ServerArguments {
     pub output_device: Option<String>,
     #[arg(long, help="Preferred sample rate for the audio host. Uses highest if not available. (default: 48000)")]
     pub preferred_sample_rate: Option<u32>,
+    #[arg(long, help="Number of 2x upsample passes to apply before processing (default: 0)")]
+    pub upsample_passes: Option<u32>,
     #[arg(long, default_value_t=false, help="Ignore saved settings - use command line arguments/default")]
     pub ignore_save: bool
 }
@@ -58,6 +60,7 @@ pub struct ServerSettings {
     pub input_device: Option<String>,
     pub output_device: Option<String>,
     pub preferred_sample_rate: Option<u32>,
+    pub upsample_passes: u32
 }
 
 impl ServerSettings {
@@ -118,6 +121,13 @@ impl ServerSettings {
             saved.as_ref().and_then(|s| s.preferred_sample_rate)
         });
 
+        let upsample_passes = args.upsample_passes.unwrap_or_else(|| {
+            saved.as_ref().map_or_else(
+                || 0,
+                |s| s.upsample_passes
+            )
+        });
+
         ServerSettings {
             host,
             frames_per_period,
@@ -129,7 +139,12 @@ impl ServerSettings {
             input_device,
             output_device,
             preferred_sample_rate,
+            upsample_passes
         }
+    }
+
+    pub fn frames_per_period_after_upsample(&self) -> usize {
+        self.frames_per_period * 2_usize.pow(self.upsample_passes)
     }
 }
 
@@ -144,6 +159,7 @@ impl From<ServerSettings> for ServerSettingsSave {
             input_device: value.input_device,
             output_device: value.output_device,
             preferred_sample_rate: value.preferred_sample_rate,
+            upsample_passes: value.upsample_passes
         }
     }
 }

@@ -54,8 +54,27 @@ pub fn load_ir(ir_path: &str, sample_rate: f32) -> Result<Vec<Vec<f32>>, String>
 
         let channel_refs: Vec<&[f32]> = channels.iter().map(|ch| ch.as_slice()).collect();
 
-        resampler.process(&channel_refs, None)
-            .map_err(|e| e.to_string())
+        let mut resampled_channels = resampler.process(&channel_refs, None)
+            .map_err(|e| e.to_string())?;
+
+        // Normalize IR by RMS
+        let rms = resampled_channels
+            .iter()
+            .flat_map(|ch| ch.iter())
+            .map(|&x| x * x)
+            .sum::<f32>()
+            .sqrt();
+
+        if rms > 1e-12 {
+            let scale = 1.0 / rms;
+            for ch in &mut resampled_channels {
+                for s in ch.iter_mut() {
+                    *s *= scale;
+                }
+            }
+        }
+
+        Ok(resampled_channels)
     })
 }
 

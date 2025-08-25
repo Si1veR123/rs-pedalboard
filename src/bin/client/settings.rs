@@ -381,6 +381,27 @@ impl Widget for &mut SettingsScreen {
                                     response |= ui.selectable_value(&mut server_settings.preferred_sample_rate, Some(192000), "192000hz");
                                     response
                                 });
+                            ui.end_row();
+                            
+                            // Upsample Passes
+                            ui.label("Upsample");
+                            egui::ComboBox::from_id_salt("upsample_dropdown")
+                                .selected_text(match server_settings.upsample_passes {
+                                    0 => "None",
+                                    1 => "2x",
+                                    2 => "4x",
+                                    3 => "8x",
+                                    _ => "Error"
+                                })
+                                .wrap_mode(egui::TextWrapMode::Truncate)
+                                .show_ui(ui, |ui| {
+                                    let mut response = ui.selectable_value(&mut server_settings.upsample_passes, 0, "None");
+                                    response |= ui.selectable_value(&mut server_settings.upsample_passes, 1, "2x");
+                                    response |= ui.selectable_value(&mut server_settings.upsample_passes, 2, "4x");
+                                    response |= ui.selectable_value(&mut server_settings.upsample_passes, 3, "8x");
+                                    response
+                                });
+
                             ui.end_row()
                         });
                     

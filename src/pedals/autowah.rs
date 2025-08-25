@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::hash::Hash;
 
-use crate::dsp_algorithms::moving_bangpass::MovingBandPass;
+use crate::dsp_algorithms::moving_bandpass::MovingBandPass;
 use crate::pedals::ui::pedal_switch;
 use crate::pedals::{PedalParameter, PedalParameterValue, PedalTrait};
 use super::ui::pedal_knob;

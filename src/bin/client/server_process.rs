@@ -28,6 +28,7 @@ pub fn start_server_process(settings: &ServerSettingsSave) -> Option<Child> {
                 .arg("--periods-per-buffer").arg(settings.periods_per_buffer.to_string())
                 .arg("--buffer-latency").arg(settings.latency.to_string())
                 .arg("--tuner-periods").arg(settings.tuner_periods.to_string())
+                .arg("--upsample-passes").arg(settings.upsample_passes.to_string())
                 .stdin(std::process::Stdio::null())
                 .stdout(std::process::Stdio::null())
                 .stderr(std::process::Stdio::null());

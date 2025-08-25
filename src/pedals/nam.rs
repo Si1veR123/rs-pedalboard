@@ -69,7 +69,16 @@ impl<'a> Deserialize<'a> for Nam {
     {
         let parameters: HashMap<String, PedalParameter> = HashMap::deserialize(deserializer)?;
         let model = parameters.get("model").unwrap().value.as_str().unwrap();
-        let mut pedal = Self::new();
+        // Default buffer size, can be changed later with `set_config`
+        let modeler = NeuralAmpModeler::new_with_maximum_buffer_size(512).expect("Failed to create neural amp modeler");
+
+        let mut pedal = Nam {
+            modeler,
+            parameters: parameters.clone(),
+            dry_buffer: vec![0.0; 512],
+            saved_nam_files: Self::saved_nam_files(),
+            id: unique_time_id()
+        };
 
         pedal.set_model(model);
         
@@ -208,6 +217,7 @@ impl PedalTrait for Nam {
         if expected_sample_rate != 0 && expected_sample_rate != sample_rate {
             log::warn!("NeuralAmpModeler expected sample rate {} does not match provided sample rate {}", self.modeler.expected_sample_rate(), sample_rate);
         }
+        self.dry_buffer.resize(buffer_size, 0.0);
     }
 
     fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {

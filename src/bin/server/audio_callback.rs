@@ -3,10 +3,12 @@ use std::cell::UnsafeCell;
 use std::time::Instant;
 use cpal::{BuildStreamError, InputCallbackInfo, OutputCallbackInfo, StreamConfig, SupportedStreamConfig};
 use cpal::{traits::DeviceTrait, Device, Stream};
+use rubato::{FftFixedInOut, Resampler};
 use smol::channel::{Receiver, Sender};
 use ringbuf::traits::Split;
 use ringbuf::{traits::Consumer, HeapRb};
 use rs_pedalboard::pedalboard_set::PedalboardSet;
+
 #[cfg(target_os = "windows")]
 use rs_pedalboard::server_settings::SupportedHost;
 
@@ -205,19 +207,19 @@ pub fn create_linked_streams(
     settings: ServerSettings
 ) -> (Stream, Stream) {
     let in_command_sender = command_sender.clone();
-    let in_settings = settings.clone();
 
     log::info!("Finding a compatible config for input and output devices...");
     let (in_config, out_config) = get_compatible_configs(
         &in_device,
         &out_device,
-        in_settings.preferred_sample_rate,
+        settings.preferred_sample_rate,
         settings.frames_per_period
     );
 
     let used_sample_rate = in_config.sample_rate().0;
+    let processing_sample_rate = used_sample_rate * (1 << settings.upsample_passes);
 
-    let ring_buffer_size = ring_buffer_size(settings.frames_per_period, settings.buffer_latency, used_sample_rate as f32);
+    let ring_buffer_size = ring_buffer_size(settings.frames_per_period, settings.buffer_latency, processing_sample_rate as f32);
     log::info!("Ring buffer size: {}", ring_buffer_size);
     let ring_buffer: HeapRb<f32> = HeapRb::new(ring_buffer_size);
 
@@ -235,6 +237,7 @@ pub fn create_linked_streams(
     }
 
     let mut input_stream_running = false;
+    let settings_clone = settings.clone();
     let stream_in = build_input_stream(
         &in_device,
         in_config,
@@ -255,21 +258,51 @@ pub fn create_linked_streams(
                 let input_processor = unsafe { &mut *ip.get() };
         
                 if input_processor.is_none() {
+                    let resamplers = if settings_clone.upsample_passes > 0 {
+                        // Since we only do 2x, 4x etc, it is guaranteed that output size is input size << upsample_passes
+                        let upsampler = FftFixedInOut::new(
+                            used_sample_rate as usize,
+                            processing_sample_rate as usize,
+                            data.len(),
+                            1
+                        ).expect("Failed to create upsampler");
+                        let downsampler = FftFixedInOut::new(
+                            processing_sample_rate as usize,
+                            used_sample_rate as usize,
+                            data.len() << settings_clone.upsample_passes,
+                            1
+                        ).expect("Failed to create downsampler");
+
+                        assert_eq!(upsampler.input_frames_next(), data.len());
+                        assert_eq!(upsampler.output_frames_next(), data.len() << settings_clone.upsample_passes);
+                        assert_eq!(downsampler.input_frames_next(), data.len() << settings_clone.upsample_passes);
+                        assert_eq!(downsampler.output_frames_next(), data.len());
+
+                        Some((
+                            upsampler,
+                            downsampler
+                        ))
+                    } else {
+                        None
+                    };
+
                     *input_processor = Some(AudioProcessor {
                         pedalboard_set: PedalboardSet::default(),
                         command_receiver: command_receiver.clone(),
                         command_sender: in_command_sender.clone(),
                         writer: maybe_writer.take().expect("Writer moved more than once"),
-                        processing_buffer: Vec::with_capacity(settings.frames_per_period),
+                        data_buffer: Vec::with_capacity(data.len()),
+                        processing_buffer: Vec::with_capacity(data.len() << settings_clone.upsample_passes),
                         master_in_volume: 1.0,
                         master_out_volume: 1.0,
                         tuner_handle: None,
                         pedal_command_to_client_buffer: Vec::with_capacity(12),
-                        settings: in_settings.clone(),
+                        settings: settings_clone.clone(),
                         metronome: (false, MetronomePlayer::new(120, 0.5, used_sample_rate)),
                         volume_monitor: (false, Instant::now(), (0.0, 0.0), PeakVolumeMonitor::new(), PeakVolumeMonitor::new()),
                         volume_normalizer: None,
-                        used_sample_rate
+                        processing_sample_rate,
+                        resamplers
                     });
                 }
                 

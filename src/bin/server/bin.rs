@@ -69,7 +69,7 @@ fn main() {
 
     insert_log_panic_hook();
     
-    let settings = ServerSettings::new(ServerArguments::parse(), ServerSettingsSave::load_or_default().ok());
+    let settings = ServerSettings::new(ServerArguments::parse(), Some(ServerSettingsSave::load_or_default()));
     log::info!("Server settings: {:?}", settings);
 
     let (_host, input, output) = setup(
@@ -77,8 +77,6 @@ fn main() {
         settings.output_device.as_ref().map(|s| s.as_str()),
         &settings
     );
-
-    
 
     let (socket_command_sender, audio_command_receiver) = bounded(12);
     let (audio_command_sender, socket_command_receiver) = bounded(12);
