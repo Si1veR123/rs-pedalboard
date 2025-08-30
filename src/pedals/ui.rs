@@ -48,7 +48,7 @@ pub fn pedal_knob(
         Vec2::new(size_px, size_px+8.0)
     );
 
-    ui.allocate_new_ui(
+    ui.scope_builder(
     egui::UiBuilder::new()
         .max_rect(draw_rect)
         .layout(egui::Layout::top_down(egui::Align::Center))

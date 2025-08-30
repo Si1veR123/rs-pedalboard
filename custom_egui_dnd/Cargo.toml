@@ -12,9 +12,9 @@ license = "MIT"
 
 
 [dependencies]
-egui_animation = "0.8.0"
+egui_animation = "0.9.0"
 simple-easing = "1.0.1"
 
 color-hex = "0.2.0"
-egui = "0.31.1"
-eframe = "0.31.1"
+egui = "0.32.1"
+eframe = "0.32.1"

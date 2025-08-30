@@ -166,6 +166,7 @@ impl PedalboardStageScreen {
             .open(open)
             .show(ui.ctx(), |ui| {
                 ui.add(egui::TextEdit::singleline(input));
+                
                 if ui.button("Save Song").clicked() {
                     saved = true;
                 }
@@ -184,6 +185,7 @@ impl PedalboardStageScreen {
             .open(open)
             .show(ui.ctx(), |ui| {
                 ui.add(egui::TextEdit::singleline(input));
+                
                 if ui.button("Save").clicked() {
                     saved = true;
                 }

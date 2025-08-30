@@ -32,7 +32,7 @@ pub struct MidiState {
 
 impl MidiState {
     pub fn save_settings(&self) -> Result<(), std::io::Error> {
-        self.settings.lock().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, "MIDI settings mutex poisoned"))?.save()
+        self.settings.lock().map_err(|_e| std::io::Error::new(std::io::ErrorKind::Other, "MIDI settings mutex poisoned"))?.save()
     }
 
     fn create_midi_input() -> MidiInput {
@@ -218,7 +218,7 @@ impl MidiState {
                                     }
                                 });
                                 strip.cell(|ui| {
-                                    let mut port_settings = settings_lock.port_settings.get_mut(port_name).expect("Any connected port should have an entry in port settings.");
+                                    let port_settings = settings_lock.port_settings.get_mut(port_name).expect("Any connected port should have an entry in port settings.");
                                     ui.horizontal_centered(|ui| ui.checkbox(&mut port_settings.auto_connect, "Auto-Connect"));
                                 });
                             });

@@ -15,10 +15,12 @@ use settings::{SettingsScreen, ServerLaunchState};
 mod server_process;
 mod midi;
 
+#[cfg(feature = "virtual_keyboard")]
+use egui_keyboard::{Keyboard, layouts::KeyboardLayout};
+
 use eframe::egui::{self, include_image, Button, Color32, FontId, Id, ImageButton, RichText, Vec2};
-use egui_virtual_keyboard::{VirtualKeyboard, Layout, Row};
 use rs_pedalboard::SAVE_DIR;
-use std::{sync::Arc, time::Instant, str::FromStr};
+use std::{sync::Arc, time::Instant};
 use simplelog::*;
 
 const SERVER_PORT: u16 = 29475;
@@ -132,7 +134,8 @@ fn main() {
 pub struct PedalboardClientApp {
     state: &'static State,
 
-    keyboard: VirtualKeyboard,
+    #[cfg(feature = "virtual_keyboard")]
+    keyboard: Keyboard,
 
     selected_screen: usize,
     pedalboard_stage_screen: PedalboardStageScreen,
@@ -173,12 +176,6 @@ impl PedalboardClientApp {
             }
         }
 
-        let layout = Layout::new(String::from("text"))
-            .extend(Row::from_str("[{1}{2}{3}{4}{5}{6}{7}{8}{9}{0}{-}]").unwrap())
-            .extend(Row::from_str("[{q}{w}{e}{r}{t}{y}{u}{i}{o}{p}]").unwrap())
-            .extend(Row::from_str("[{a}{s}{d}{f}{g}{h}{j}{k}{l}]").unwrap())
-            .extend(Row::from_str("[{z}{x}{c}{v}{b}{n}{m}{Space:Key(Space)}]").unwrap());
-
         PedalboardClientApp {
             selected_screen: 0,
             pedalboard_stage_screen: PedalboardStageScreen::new(leaked_state),
@@ -187,13 +184,20 @@ impl PedalboardClientApp {
             utilities_screen: UtilitiesScreen::new(leaked_state),
             settings_screen,
             state: leaked_state,
-            keyboard: VirtualKeyboard::empty().extend(layout),
+            #[cfg(feature = "virtual_keyboard")]
+            keyboard: Keyboard::default().layout(KeyboardLayout::Qwerty),
         }
     }
 }
 
 impl eframe::App for PedalboardClientApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        #[cfg(feature = "virtual_keyboard")]
+        {
+            self.keyboard.pump_events(ctx);
+            self.keyboard.show(ctx);
+        }
+
         self.state.update_socket_responses();
 
         let mut sr_buf = Vec::new();
@@ -318,10 +322,6 @@ impl eframe::App for PedalboardClientApp {
                 }
             };
         });
-    }
-
-    fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
-        self.keyboard.bump_events(ctx, raw_input);
     }
 
     fn save(&mut self, _storage: &mut dyn eframe::Storage) {

@@ -577,7 +577,8 @@ fn eq_knob(ui: &mut eframe::egui::Ui, param: &PedalParameter, bandwidth_param: &
             .max_width(width)
             .sense(egui::Sense::click_and_drag());
 
-        let knob_height = knob.load_and_calc_size(ui, slot_response.rect.size()).expect("File image should load").y;
+        let knob_size = knob.calc_size(slot_response.rect.size(), None);
+        let knob_height = knob_size.y;
         let param_max = param.max.as_ref().unwrap().as_float().unwrap();
         let param_min = param.min.as_ref().unwrap().as_float().unwrap();
         let param_value = param.value.as_float().unwrap();

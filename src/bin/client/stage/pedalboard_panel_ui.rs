@@ -68,16 +68,22 @@ pub fn pedalboard_stage_panel(screen: &mut PedalboardStageScreen, ui: &mut egui:
                             ui.painter().rect_filled(
                                 ui.available_rect_before_wrap(),
                                 5.0,
-                                Color32::from(THEME_COLOUR.linear_multiply(0.05))
+                                Color32::from(THEME_COLOUR.linear_multiply(0.2))
+                            );
+                        } else if i % 2 == 0 {
+                            ui.painter().rect_filled(
+                                ui.available_rect_before_wrap(),
+                                5.0,
+                                crate::LIGHT_BACKGROUND_COLOR.gamma_multiply(1.2)
                             );
                         }
                         
                         ui.columns(2, |columns| {
                             columns[0].horizontal_centered(|ui| {
                                 let (text_color, drag_icon_color) = if active_pedalboards.active_pedalboard == i {
-                                    (Rgba::from_white_alpha(0.9), Color32::from_gray(15).linear_multiply(0.7))
+                                    (Rgba::from_white_alpha(0.9), Color32::from_gray(80))
                                 } else {
-                                    (Rgba::from_white_alpha(0.4), Color32::from_gray(50).linear_multiply(0.7))
+                                    (Rgba::from_white_alpha(0.7), Color32::from_gray(50))
                                 };
 
                                 handle.ui(ui, |ui| {

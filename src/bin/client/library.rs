@@ -68,11 +68,10 @@ impl Widget for &mut PedalboardLibraryScreen {
 
         // === Search bar and new pedalboard button ===
         ui.columns(3, |columns| {
-            columns[1]
-                .add_sized(
-                    [0.0, 40.0],
-                    TextEdit::singleline(&mut self.search_term).hint_text(RichText::new("Search pedalboards...").size(20.0))
-                );
+            columns[1].add_sized(
+                [0.0, 40.0],
+                TextEdit::singleline(&mut self.search_term).hint_text(RichText::new("Search pedalboards...").size(20.0))
+            );
 
 
             columns[0].allocate_ui_with_layout(

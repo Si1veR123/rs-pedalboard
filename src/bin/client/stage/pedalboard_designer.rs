@@ -229,7 +229,7 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
         // Main pedalboard rendering
         ui.allocate_ui(pedalboard_available_rect.size(), |ui| {
             changed = egui::Scene::new().zoom_range(1.0..=3.0).show(ui, &mut screen.pedalboard_rect, |ui| {
-                ui.allocate_new_ui(
+                ui.scope_builder(
                     UiBuilder::new()
                         .max_rect(Rect { min: Pos2::ZERO, max: pedalboard_available_rect.size().to_pos2() })
                         .layout(Layout::left_to_right(egui::Align::Min)),
@@ -256,7 +256,7 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
                                 });
         
                                 let button_rect = whole_pedal_rect.with_min_y(whole_pedal_rect.max.y - 0.05 * whole_pedal_rect.height());
-                                ui.allocate_new_ui(UiBuilder::new().max_rect(button_rect), |ui| {
+                                ui.scope_builder(UiBuilder::new().max_rect(button_rect), |ui| {
                                     handle.sense(egui::Sense::DRAG).ui_sized(
                                         ui,
                                         ui.available_size(),
