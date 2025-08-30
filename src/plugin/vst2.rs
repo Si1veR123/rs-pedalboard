@@ -55,14 +55,10 @@ impl Host for PedalboardVst2Host {
 pub struct Vst2Instance {
     pub instance: PluginInstance,
     pub info: Info,
-    // Guaranteed to have length equal to info.inputs (when configured),
-    // each pointing to a Vec of length buffer_size, and capacity saved in in_buffer_vec_caps
+    in_buffers: Vec<Box<[f32]>>,
+    out_buffers: Vec<Box<[f32]>>,
     in_buffer_ptrs: Vec<*mut f32>,
-    in_buffer_vec_caps: Vec<usize>,
-    // Guaranteed to have length equal to info.outputs (when configured),
-    // each pointing to a Vec of length buffer_size, and capacity saved in out_buffer_vec_caps
     out_buffer_ptrs: Vec<*mut f32>,
-    out_buffer_vec_caps: Vec<usize>,
     id: u32,
     pub ui_open: bool,
     dll_path: PathBuf,
@@ -72,7 +68,7 @@ pub struct Vst2Instance {
 
 impl Vst2Instance {
     pub fn is_configured(&self) -> bool {
-        self.sample_rate > 0.0 && self.buffer_size > 0 && !self.in_buffer_ptrs.is_empty() && !self.out_buffer_ptrs.is_empty()
+        self.sample_rate > 0.0 && self.buffer_size > 0 && !self.in_buffers.is_empty() && !self.out_buffers.is_empty()
     }
 
     pub fn dll_path(&self) -> &Path {
@@ -109,16 +105,16 @@ impl Vst2Instance {
 
         instance.init();
 
-        let in_buffer_ptrs = Vec::with_capacity(info.inputs as usize);
-        let out_buffer_ptrs = Vec::with_capacity(info.outputs as usize);
-        let in_buffer_vec_caps = Vec::with_capacity(info.inputs as usize);
-        let out_buffer_vec_caps = Vec::with_capacity(info.outputs as usize);
+        let in_buffers = Vec::new();
+        let out_buffers = Vec::new();
+        let in_buffer_ptrs = Vec::new();
+        let out_buffer_ptrs = Vec::new();
 
         Ok(Vst2Instance {
+            in_buffers,
+            out_buffers,
             in_buffer_ptrs,
             out_buffer_ptrs,
-            in_buffer_vec_caps,
-            out_buffer_vec_caps,
             info,
             instance: instance,
             id: unique_time_id(),
@@ -136,21 +132,19 @@ impl Vst2Instance {
         self.instance.set_block_size(buffer_size as i64);
         self.instance.set_sample_rate(sample_rate as f32);
 
-        // For each input/output channel, create a buffer of the appropriate size, and save the pointers.
-        // Save the capacity of each buffer for later deallocating.
-        for _ in 0..self.info.inputs {
-            let buf = vec![0.0; buffer_size];
-            self.in_buffer_vec_caps.push(buf.capacity());
-            let ptr = buf.leak();
-            self.in_buffer_ptrs.push(ptr.as_mut_ptr());
-        }
+        self.in_buffers = (0..self.info.inputs)
+            .map(|_| vec![0.0; buffer_size].into_boxed_slice())
+            .collect();
+        self.in_buffer_ptrs = self.in_buffers.iter_mut()
+            .map(|buf| buf.as_mut_ptr())
+            .collect();
 
-        for _ in 0..self.info.outputs {
-            let buf = vec![0.0; buffer_size];
-            self.out_buffer_vec_caps.push(buf.capacity());
-            let ptr = buf.leak();
-            self.out_buffer_ptrs.push(ptr.as_mut_ptr());
-        }
+        self.out_buffers = (0..self.info.outputs)
+            .map(|_| vec![0.0; buffer_size].into_boxed_slice())
+            .collect();
+        self.out_buffer_ptrs = self.out_buffers.iter_mut()
+            .map(|buf| buf.as_mut_ptr())
+            .collect();
     }
 
     pub fn plugin_name(&self) -> String {
@@ -165,15 +159,13 @@ impl Vst2Instance {
 
         for in_buf in &mut self.in_buffer_ptrs {
             // SAFETY: input.len() <= self.buffer_size, and the buffer was allocated with this size in set_config.
-            // The pointer is valid until self is dropped.
+            // All pointers in in_buffer_ptrs point to valid buffers in in_buffers
             unsafe {
                 std::ptr::copy_nonoverlapping(input.as_ptr(), *in_buf, input.len());
             }
         }
 
-        // SAFETY: in_buffer_ptrs and out_buffer_ptrs were allocated in set_config, and have lengths equal to info.inputs and info.outputs respectively.
-        // Each pointer points to a buffer of at least input.len() samples.
-        // All pointers are valid until self is dropped.
+        // SAFETY: in_buffer_ptrs and out_buffer_ptrs were set up in set_config to point to valid buffers of the correct size.
         let mut buffer = unsafe { AudioBuffer::from_raw(
             self.in_buffer_ptrs.len(),
             self.out_buffer_ptrs.len(),
@@ -188,7 +180,7 @@ impl Vst2Instance {
         for out_buf in &self.out_buffer_ptrs {
             for (i, output_sample) in output.iter_mut().enumerate() {
                 // SAFETY: out_buf points to a buffer of output.len() samples, allocated in set_config.
-                // The pointer is valid until self is dropped.
+                // The pointer points to a valid buffer in out_buffers.
                 let channel_output_sample = unsafe { *(*out_buf).add(i) };
                 *output_sample += channel_output_sample / self.out_buffer_ptrs.len() as f32;
             }
@@ -272,30 +264,6 @@ impl Vst2Instance {
             self.instance.set_parameter(index as i32, value);
         } else {
             log::warn!("Attempted to set value for invalid parameter index: {}", index);
-        }
-    }
-}
-
-impl Drop for Vst2Instance {
-    fn drop(&mut self) {
-        // Deallocate the leaked channel buffers
-        for (buf_ptr, cap) in self.in_buffer_ptrs.iter().zip(self.in_buffer_vec_caps.iter().copied()) {
-            if !buf_ptr.is_null() {
-                // SAFETY: buf_ptr was allocated in set_config. The Vec capacity is equal to cap, as it has not been resized.
-                // The length of the Vec is self.buffer_size, as it was allocated with that size and not changed.
-                // The pointer is valid until self is dropped.
-                unsafe {
-                    let _ = Vec::from_raw_parts(*buf_ptr as *mut f32, self.buffer_size, cap);
-                }
-            }
-        }
-        for (buf_ptr, cap) in self.out_buffer_ptrs.iter().zip(self.out_buffer_vec_caps.iter().copied()) {
-            if !buf_ptr.is_null() {
-                // SAFETY: see in_buffer_ptrs above
-                unsafe {
-                    let _ = Vec::from_raw_parts(*buf_ptr, self.buffer_size, cap);
-                }
-            }
         }
     }
 }
