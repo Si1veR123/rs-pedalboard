@@ -16,8 +16,9 @@ mod server_process;
 mod midi;
 
 use eframe::egui::{self, include_image, Button, Color32, FontId, Id, ImageButton, RichText, Vec2};
+use egui_virtual_keyboard::{VirtualKeyboard, Layout, Row};
 use rs_pedalboard::SAVE_DIR;
-use std::{sync::Arc, time::Instant};
+use std::{sync::Arc, time::Instant, str::FromStr};
 use simplelog::*;
 
 const SERVER_PORT: u16 = 29475;
@@ -131,6 +132,8 @@ fn main() {
 pub struct PedalboardClientApp {
     state: &'static State,
 
+    keyboard: VirtualKeyboard,
+
     selected_screen: usize,
     pedalboard_stage_screen: PedalboardStageScreen,
     pedalboard_library_screen: PedalboardLibraryScreen,
@@ -170,6 +173,12 @@ impl PedalboardClientApp {
             }
         }
 
+        let layout = Layout::new(String::from("text"))
+            .extend(Row::from_str("[{1}{2}{3}{4}{5}{6}{7}{8}{9}{0}{-}]").unwrap())
+            .extend(Row::from_str("[{q}{w}{e}{r}{t}{y}{u}{i}{o}{p}]").unwrap())
+            .extend(Row::from_str("[{a}{s}{d}{f}{g}{h}{j}{k}{l}]").unwrap())
+            .extend(Row::from_str("[{z}{x}{c}{v}{b}{n}{m}{Space:Key(Space)}]").unwrap());
+
         PedalboardClientApp {
             selected_screen: 0,
             pedalboard_stage_screen: PedalboardStageScreen::new(leaked_state),
@@ -178,6 +187,7 @@ impl PedalboardClientApp {
             utilities_screen: UtilitiesScreen::new(leaked_state),
             settings_screen,
             state: leaked_state,
+            keyboard: VirtualKeyboard::empty().extend(layout),
         }
     }
 }
@@ -308,6 +318,10 @@ impl eframe::App for PedalboardClientApp {
                 }
             };
         });
+    }
+
+    fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
+        self.keyboard.bump_events(ctx, raw_input);
     }
 
     fn save(&mut self, _storage: &mut dyn eframe::Storage) {

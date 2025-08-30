@@ -33,7 +33,7 @@ fn get_compatible_buffer_size_configs(
         .collect()
 }
 
-/// Find config matching the buffer size, and return a list of compatible configs sorted by preferred settings.
+/// Find config matching the buffer size, and return a list of compatible configs sorted by channel count (prefer min) then sample format preference.
 pub fn get_input_config_candidates(device: &Device, buffer_size: usize) -> Vec<SupportedStreamConfigRange> {
     let input_supported_configs = device.supported_input_configs()
         .expect("Failed to get supported input configs")
@@ -50,9 +50,13 @@ pub fn get_input_config_candidates(device: &Device, buffer_size: usize) -> Vec<S
         panic!("No compatible input configs found for buffer size={}", buffer_size);
     }
 
-    // Prioritise configs based on sample format
+    // Prioritise configs based on channels (prefer min) then sample format
     buffer_size_compatible_configs.sort_by(|a, b| {
-        sample_format_sort_function(&a.sample_format(), &b.sample_format())
+        if a.channels() != b.channels() {
+            a.channels().cmp(&b.channels())
+        } else {
+            sample_format_sort_function(&a.sample_format(), &b.sample_format())
+        }
     });
 
     log::debug!("Sorted compatible buffer size input configs: {:?}", buffer_size_compatible_configs);
@@ -60,7 +64,7 @@ pub fn get_input_config_candidates(device: &Device, buffer_size: usize) -> Vec<S
     buffer_size_compatible_configs
 }
 
-/// Find output configs matching the buffer size, and return a list of compatible configs sorted by preferred settings.
+/// Find output configs matching the buffer size, and return a list of compatible configs sorted by channel count (prefer max) then sample format preference.
 pub fn get_output_config_candidates(device: &Device, buffer_size: usize) -> Vec<SupportedStreamConfigRange> {
     let supported_output_configs = device.supported_output_configs()
         .expect("Failed to get supported output configs")
@@ -77,7 +81,7 @@ pub fn get_output_config_candidates(device: &Device, buffer_size: usize) -> Vec<
         panic!("No compatible output configs found for buffer size={}", buffer_size);
     }
 
-    // Prioritise configs based on first channel count (prefer stereo) then sample format
+    // Prioritise configs based on first channel count (prefer max) then sample format
     buffer_size_compatible_configs.sort_by(|a, b| {
         if a.channels() != b.channels() {
             b.channels().cmp(&a.channels())
@@ -91,13 +95,17 @@ pub fn get_output_config_candidates(device: &Device, buffer_size: usize) -> Vec<
     buffer_size_compatible_configs
 }
 
-
+// Returns a list of compatible input and output configs that support the same sample rate
+// in order of format and channel preference
 pub fn get_compatible_configs(
     input: &Device,
     output: &Device,
     preferred_sample_rate: Option<u32>,
     buffer_size: usize,
-) -> (SupportedStreamConfig, SupportedStreamConfig) {
+) -> (Vec<SupportedStreamConfig>, Vec<SupportedStreamConfig>) {
+    log::debug!("Input device default config: {:?}", input.default_input_config());
+    log::debug!("Output device default config: {:?}", output.default_output_config());
+
     let input_configs = get_input_config_candidates(input, buffer_size);
     let output_configs = get_output_config_candidates(output, buffer_size);
 
@@ -136,25 +144,24 @@ pub fn get_compatible_configs(
         max_sample_rate
     };
 
-    // Find the first matching input and output config that supports the chosen rate
-    let mut input_config = None;
+    // Find the all configs that support the chosen sample rate
+    let mut input_configs_with_sr = Vec::new();
     for input_config_range in input_configs {
         if let Some(config) = input_config_range.try_with_sample_rate(cpal::SampleRate(chosen_rate)) {
-            input_config = Some(config);
-            break;
+            input_configs_with_sr.push(config);
         }
     }
 
-    let mut output_config = None;
+    let mut output_configs_with_sr = Vec::new();
     for output_config_range in output_configs {
         if let Some(config) = output_config_range.try_with_sample_rate(cpal::SampleRate(chosen_rate)) {
-            output_config = Some(config);
-            break;
+            output_configs_with_sr.push(config);
         }
     }
 
-    log::info!("Using configs: Input: {:?}, Output: {:?}", input_config, output_config);
+    log::info!("Valid configs in order of preference:");
+    log::info!("Input configs: {:?}", input_configs_with_sr);
+    log::info!("Output configs: {:?}", output_configs_with_sr);
 
-    (input_config.unwrap(), output_config.unwrap())
+    (input_configs_with_sr, output_configs_with_sr)
 }
-

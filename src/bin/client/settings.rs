@@ -338,7 +338,7 @@ impl Widget for &mut SettingsScreen {
                                 Vec2::new(ui.available_width(), 45.0),
                                 egui::Slider::new(&mut server_settings.latency, 0.0..=25.0)
                                     .show_value(false)
-                            );
+                            ).on_hover_text("Internal buffer latency. Increase latency if you experience X Runs (in this app)");
                             ui.end_row();
 
                             // Periods per Buffer (JACK/Linux)

@@ -1,13 +1,10 @@
 use std::{collections::HashMap, sync::{Arc, Mutex}};
 use midir::{MidiInput, MidiInputConnection, MidiInputPorts};
 use serde::{Serialize, Deserialize, Serializer, Deserializer, ser::SerializeStruct};
-use eframe::egui::{self, Id, Rangef, Response};
+use eframe::egui::{self, Id, Rangef};
 use egui_extras::{Size, StripBuilder};
 use crossbeam::channel::{Receiver, Sender};
-use smol::fs::write;
-use strum_macros::EnumDiscriminants;
 
-use crate::socket::ClientSocketThreadHandle;
 use crate::SAVE_DIR;
 
 pub const MIDI_SETTINGS_SAVE_NAME: &'static str = "midi_settings.json";
