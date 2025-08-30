@@ -36,7 +36,7 @@ impl Clone for Nam {
         };
 
         if let Some(model_path) = self.modeler.get_model_path() {
-            new_nam.set_model(model_path);
+            new_nam.set_model(model_path.to_path_buf());
         }
         new_nam
     }
@@ -80,7 +80,10 @@ impl<'a> Deserialize<'a> for Nam {
             id: unique_time_id()
         };
 
-        pedal.set_model(model);
+        match PathBuf::from(model).canonicalize() {
+            Ok(model) => pedal.set_model(model),
+            Err(e) => log::warn!("Failed to set model path during deserialization: {}", e),
+        };
         
         Ok(pedal)
     }
@@ -95,11 +98,10 @@ impl Nam {
     pub fn new_with_maximum_buffer_size(buffer_size: usize) -> Self {
         let mut parameters = HashMap::new();
 
-        let init_model = r"";
         parameters.insert(
             "model".to_string(),
             PedalParameter {
-                value: PedalParameterValue::String(init_model.to_string()),
+                value: PedalParameterValue::String("".to_string()),
                 min: None,
                 max: None,
                 step: None,
@@ -148,31 +150,33 @@ impl Nam {
 
         let modeler = NeuralAmpModeler::new_with_maximum_buffer_size(buffer_size).expect("Failed to create neural amp modeler");
 
-        let mut modeler_pedal = Nam {
+        Nam {
             modeler,
             parameters: parameters.clone(),
             dry_buffer: vec![0.0; buffer_size],
             saved_nam_files: Self::saved_nam_files(),
             id: unique_time_id()
-        };
-
-        if !init_model.is_empty() {
-            modeler_pedal.set_model(init_model);
         }
-
-        modeler_pedal
     }
 
-    pub fn set_model(&mut self, model_path: &str) {
-        if model_path.is_empty() {
+    pub fn set_model(&mut self, model_path: PathBuf) {
+        if model_path.as_os_str().is_empty() {
             self.remove_model();
             return;
         }
         
+        let string_path = match model_path.to_str() {
+            Some(s) => s.to_string(),
+            None => {
+                log::warn!("Model path is not valid unicode");
+                return;
+            }
+        };
+
         if let Err(e) = self.modeler.set_model(model_path) {
             log::error!("Failed to set model: {}", e);
         } else {
-            self.parameters.get_mut("model").unwrap().value = PedalParameterValue::String(model_path.to_string());
+            self.parameters.get_mut("model").unwrap().value = PedalParameterValue::String(string_path);
         }
     }
 
@@ -247,7 +251,7 @@ impl PedalTrait for Nam {
         &mut self.parameters
     }
 
-    fn set_parameter_value(&mut self,name: &str, value:PedalParameterValue) {
+    fn set_parameter_value(&mut self,name: &str, value: PedalParameterValue) {
         if !self.parameters.get(name).unwrap().is_valid(&value) {
             log::warn!("Attempted to set invalid value for parameter {}: {:?}", name, value);
             return;
@@ -255,7 +259,16 @@ impl PedalTrait for Nam {
 
         if let Some(param) = self.parameters.get_mut(name) {
             if name == "model" {
-                self.set_model(value.as_str().unwrap());
+                let value_str = value.as_str().unwrap();
+
+                if value_str.is_empty() {
+                    self.remove_model();
+                } else {
+                    match PathBuf::try_from(value_str) {
+                        Ok(model_path) => self.set_model(model_path),
+                        Err(e) => log::error!("Failed to set model path: {}", e),
+                    }
+                }
             } else {
                 param.value = value;
             }
@@ -268,13 +281,8 @@ impl PedalTrait for Nam {
         let pedal_rect = ui.available_rect_before_wrap();
         ui.add(egui::Image::new(include_image!("images/nam.png")));
 
-        // ew, TODO: make NeuralAmpModeler::get_model_path() return a PathBuf instead of a String
-        let selected = PathBuf::from(self.modeler.get_model_path().unwrap_or_default());
-        let selected_file_name = selected.file_name().unwrap_or_default().to_string_lossy();
-        let mut selected_str = selected.to_string_lossy().to_string();
-        let old = selected_str.clone();
-        
-        let mut to_change = None;
+        let mut selected = self.modeler.get_model_path().map(|p| p.to_path_buf());
+        let old = selected.clone();
 
         let combo_box_rect = pedal_rect
             .scale_from_center2(
@@ -288,17 +296,22 @@ impl PedalTrait for Nam {
         );
 
         egui::ComboBox::from_id_salt(self.id)
-            .selected_text(selected_file_name)
+            .selected_text(match &selected {
+                Some(path) => path.file_name().unwrap().to_string_lossy(),
+                None => "Empty".into()
+            })
             .width(combo_ui.available_width())
             .wrap_mode(egui::TextWrapMode::Truncate)
             .show_ui(&mut combo_ui, |ui| {
-                ui.selectable_value(&mut selected_str, String::new(), "Empty");
+                ui.selectable_value(&mut selected, None, "Empty");
                 for file in &self.saved_nam_files {
                     let name = file.file_name().unwrap().to_string_lossy();
 
-                    ui.selectable_value(&mut selected_str, file.to_string_lossy().to_string(), &name[..name.len()-4]); // remove the .nam extension
+                    ui.selectable_value(&mut selected, Some(file.clone()), &name[..name.len()-4]); // remove the .nam extension
                 }
             });
+
+        let mut to_change = None;
 
         if let Some(value) = pedal_knob(ui, "", self.parameters.get("gain").unwrap(), Vec2::new(0.05, 0.12), 0.25) {
             to_change = Some(("gain".to_string(), value));
@@ -315,14 +328,18 @@ impl PedalTrait for Nam {
             to_change = Some(("active".to_string(), PedalParameterValue::Bool(value)));
         }
 
-        if selected_str != old {
-            Some((String::from("model"), PedalParameterValue::String(selected_str)))
-        } else {
-            if let Some(to_change) = to_change {
-                Some(to_change)
-            } else {
-                None
+        if selected != old {
+            match &selected {
+                Some(path) => {
+                    let selected_str = path.to_str().unwrap().to_string();
+                    Some((String::from("model"), PedalParameterValue::String(selected_str)))
+                },
+                None => {
+                    Some((String::from("model"), PedalParameterValue::String("".to_string())))
+                }
             }
+        } else {
+            to_change
         }
     }
 }

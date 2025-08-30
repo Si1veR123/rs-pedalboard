@@ -2896,7 +2896,7 @@ dependencies = [
 [[package]]
 name = "neural-amp-modeler-core-bindgen"
 version = "0.1.0"
-source = "git+https://github.com/Si1veR123/rs-neural-amp-modeler-core.git#6a14cc6ea0a182c336de19b925ad0dd30adeb08a"
+source = "git+https://github.com/Si1veR123/rs-neural-amp-modeler-core.git#aea37612a77c9cd2c397c1833116c4138714d8bd"
 dependencies = [
  "bindgen 0.71.1",
  "cc",

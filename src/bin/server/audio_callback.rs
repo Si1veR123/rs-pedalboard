@@ -1,17 +1,13 @@
 use core::panic;
 use std::cell::UnsafeCell;
 use std::time::Instant;
-use cpal::{BuildStreamError, InputCallbackInfo, OutputCallbackInfo, StreamConfig, SupportedStreamConfig};
+use cpal::{InputCallbackInfo, OutputCallbackInfo, StreamConfig, SupportedStreamConfig};
 use cpal::{traits::DeviceTrait, Device, Stream};
-use crossbeam::channel;
 use rubato::{FftFixedInOut, Resampler};
 use smol::channel::{Receiver, Sender};
 use ringbuf::traits::Split;
 use ringbuf::{traits::Consumer, HeapRb};
 use rs_pedalboard::pedalboard_set::PedalboardSet;
-
-#[cfg(target_os = "windows")]
-use rs_pedalboard::server_settings::SupportedHost;
 
 use crate::audio_processor::AudioProcessor;
 use crate::metronome_player::MetronomePlayer;
