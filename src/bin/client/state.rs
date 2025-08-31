@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use rs_pedalboard::{pedalboard::Pedalboard, pedalboard_set::PedalboardSet, pedals::{Pedal, PedalParameterValue, PedalTrait}, server_settings::ServerSettingsSave};
 use crate::{midi::{MidiSettings, MidiState}, saved_pedalboards::SavedPedalboards, settings::ClientSettings, socket::ClientSocket};
+use eframe::egui;
 
 pub struct State {
     pub pedalboards: SavedPedalboards,
@@ -325,6 +326,23 @@ impl State {
         let pedalboards = SavedPedalboards::load_or_default();
         let socket = ClientSocket::new(crate::SERVER_PORT);
         let client_settings = ClientSettings::load_or_default();
+
+        // Set NAM folders and IR folders in ctx memory so pedals can access
+        let nam_root_nodes: Vec<_> = client_settings.nam_folders.iter().map(|p| {
+            egui_directory_combobox::DirectoryNode::from_path(p)
+        }).collect();
+
+        let ir_root_nodes: Vec<_> = client_settings.ir_folders.iter().map(|p| {
+            egui_directory_combobox::DirectoryNode::from_path(p)
+        }).collect();
+
+        egui_ctx.memory_mut(|writer| {
+            writer.data.insert_temp(egui::Id::new("nam_folders_state"), 1u32);
+            writer.data.insert_temp(egui::Id::new("nam_folders"), nam_root_nodes);
+            writer.data.insert_temp(egui::Id::new("ir_folders_state"), 1u32);
+            writer.data.insert_temp(egui::Id::new("ir_folders"), ir_root_nodes);
+        });
+
         let server_settings = ServerSettingsSave::load_or_default();
         let midi_settings = MidiSettings::load_or_default();
 

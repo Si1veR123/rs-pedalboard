@@ -1,9 +1,9 @@
 use realfft::{ComplexToReal, RealFftPlanner, RealToComplex};
 use num_complex::Complex;
 use rubato::{Resampler, SincFixedIn, SincInterpolationParameters};
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
-pub fn load_ir(ir_path: &str, sample_rate: f32) -> Result<Vec<Vec<f32>>, String> {
+pub fn load_ir<P: AsRef<Path>>(ir_path: P, sample_rate: f32) -> Result<Vec<Vec<f32>>, String> {
     let mut reader = hound::WavReader::open(ir_path).unwrap();
     
     let spec = reader.spec();

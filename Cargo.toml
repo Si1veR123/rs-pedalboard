@@ -5,7 +5,7 @@ edition = "2021"
 
 [features]
 server = ["dep:clap"]
-client = ["dep:egui_extras", "dep:image", "dep:egui_dnd", "dep:which", "dep:sysinfo", "dep:chrono"]
+client = ["dep:egui_extras", "dep:image", "dep:egui_dnd", "dep:which", "dep:sysinfo", "dep:chrono", "dep:egui_file"]
 virtual_keyboard = ["dep:egui_keyboard"]
 log_full_commands = []
 
@@ -57,3 +57,5 @@ smol = { version = "2.0.2" }
 futures = { version = "0.3.31" }
 midir = { version = "0.10.2", features = ["jack"] }
 egui_keyboard = { git = "https://github.com/Si1veR123/egui_keyboard.git", optional = true }
+egui_directory_combobox = { git = "https://github.com/Si1veR123/egui-directory-combobox.git" }
+egui_file = { version = "0.23.1", optional = true }

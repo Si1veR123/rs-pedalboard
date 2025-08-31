@@ -657,9 +657,9 @@ dependencies = [
 
 [[package]]
 name = "bindgen"
-version = "0.72.0"
+version = "0.72.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4f72209734318d0b619a5e0f5129918b848c416e122a3c4ce054e03cb87b726f"
+checksum = "993776b509cfb49c750f11b8f07a46fa23e0a1386ffc01fb1e7d343efc387895"
 dependencies = [
  "bitflags 2.9.3",
  "cexpr",
@@ -1090,7 +1090,7 @@ version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ceec7a6067e62d6f931a2baf6f3a751f4a892595bcec1461a3c94ef9949864b6"
 dependencies = [
- "bindgen 0.72.0",
+ "bindgen 0.72.1",
 ]
 
 [[package]]
@@ -1409,6 +1409,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
 
 [[package]]
+name = "dyn-clone"
+version = "1.0.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
+
+[[package]]
 name = "ecolor"
 version = "0.32.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1531,6 +1537,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "egui_directory_combobox"
+version = "0.1.0"
+source = "git+https://github.com/Si1veR123/egui-directory-combobox.git#2c9ee3e113d4c82b7966d33c3a7ae9530b226fbb"
+dependencies = [
+ "egui",
+]
+
+[[package]]
 name = "egui_dnd"
 version = "0.12.0"
 dependencies = [
@@ -1554,6 +1568,16 @@ dependencies = [
  "log 0.4.27",
  "mime_guess2",
  "profiling",
+]
+
+[[package]]
+name = "egui_file"
+version = "0.23.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "548e80ac8b00f7cc85b49899d9775ca784fe500e1507d40107823f24ad98c993"
+dependencies = [
+ "dyn-clone",
+ "egui",
 ]
 
 [[package]]
@@ -3967,8 +3991,10 @@ dependencies = [
  "cpal",
  "crossbeam",
  "eframe",
+ "egui_directory_combobox",
  "egui_dnd",
  "egui_extras",
+ "egui_file",
  "egui_keyboard",
  "egui_plot",
  "enum_dispatch",

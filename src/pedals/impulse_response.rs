@@ -1,10 +1,12 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::collections::HashMap;
 use std::hash::Hash;
+use std::sync::Arc;
 
 use crate::dsp_algorithms::impluse_response::{IRConvolver, load_ir};
 use crate::pedals::ui::pedal_switch;
 use crate::{unique_time_id, SAVE_DIR};
+use egui_directory_combobox::{DirectoryComboBox, DirectoryNode};
 use serde::{ser::SerializeMap, Deserialize, Serialize};
 use eframe::egui::{self, include_image, Vec2};
 
@@ -15,8 +17,8 @@ const IR_SAVE_PATH: &str = r"IR";
 pub struct ImpulseResponse {
     parameters: HashMap<String, PedalParameter>,
 
-    saved_ir_files: Vec<PathBuf>,
-    // Used to generate a unique ID for the drop down menu
+    combobox_widget: DirectoryComboBox,
+    folders_state: u32,
     id: u32,
 
     // Server only
@@ -29,13 +31,18 @@ pub struct ImpulseResponse {
 
 impl Clone for ImpulseResponse {
     fn clone(&self) -> Self {
+        let new_id = unique_time_id();
+        let mut new_combobox = Self::get_empty_directory_combo_box(new_id);
+        new_combobox.roots = self.combobox_widget.roots.clone();
+
         Self {
             ir: self.ir.clone(),
             max_buffer_size: self.max_buffer_size,
             parameters: self.parameters.clone(),
             dry_buffer: Vec::new(),
-            saved_ir_files: Self::saved_ir_files(),
-            id: unique_time_id(),
+            combobox_widget: new_combobox,
+            folders_state: self.folders_state,
+            id: new_id,
             sample_rate: self.sample_rate,
         }
     }
@@ -67,14 +74,16 @@ impl<'a> Deserialize<'a> for ImpulseResponse {
     {
         // The ir convolver is set when the config is set on the server, as it requires the max buffer size.
         let parameters = HashMap::<String, PedalParameter>::deserialize(deserializer)?;
+        let id = unique_time_id();
 
         Ok(Self {
             ir: None,
             parameters,
-            dry_buffer: Vec::new(),
-            saved_ir_files: Self::saved_ir_files(),
+            dry_buffer: vec![0.0; 512],
+            combobox_widget: Self::get_empty_directory_combo_box(id),
+            folders_state: 0,
             max_buffer_size: 0,
-            id: unique_time_id(),
+            id,
             sample_rate: None,
         })
     }
@@ -115,27 +124,51 @@ impl ImpulseResponse {
             },
         );
 
+        let id = unique_time_id();
+
         Self {
             ir: None,
             parameters,
             dry_buffer: Vec::new(),
-            saved_ir_files: Self::saved_ir_files(),
+            combobox_widget: Self::get_empty_directory_combo_box(id),
+            folders_state: 0,
             max_buffer_size: 0,
-            id: unique_time_id(),
+            id,
             sample_rate: None,
         }
     }
 
+    fn get_empty_directory_combo_box(id: impl std::hash::Hash) -> DirectoryComboBox {
+        DirectoryComboBox::new_from_nodes(vec![])
+            .with_id(egui::Id::new("ir_combobox").with(id))
+            .with_wrap_mode(egui::TextWrapMode::Truncate)
+            .show_extensions(false)
+            .select_files_only(true)
+            .with_filter(Arc::new(|path: &std::path::Path| {
+                if path.is_dir() {
+                    true
+                } else if let Some(ext) = path.extension() {
+                    ext == "wav"
+                } else {
+                    false
+                }
+            }))
+    }
+
     /// Ensure max_buffer_size is set before setting the IR.
-    pub fn set_ir_convolver(&mut self, ir_path: &str, sample_rate: f32) {
-        if ir_path.is_empty() {
-            self.remove_ir();
-            return;
-        }
+    pub fn set_ir_convolver<P: AsRef<Path>>(&mut self, ir_path: P, sample_rate: f32) {
+        let string_path = match ir_path.as_ref().to_str() {
+            Some(s) => s.to_string(),
+            None => {
+                log::warn!("IR path is not valid unicode");
+                return;
+            }
+        };
 
         match load_ir(ir_path, sample_rate) {
             Ok(ir) => {
                 self.ir = Some(IRConvolver::new(ir.first().expect("IR has no channels").as_slice(), self.max_buffer_size));
+                self.parameters.get_mut("ir").unwrap().value = PedalParameterValue::String(string_path);
             },
             Err(e) => {
                 log::error!("Failed to load IR: {}", e);
@@ -152,25 +185,6 @@ impl ImpulseResponse {
     pub fn get_save_directory() -> Option<PathBuf> {
         Some(homedir::my_home().ok()??.join(SAVE_DIR).join(IR_SAVE_PATH))
     }
-
-    pub fn saved_ir_files() -> Vec<PathBuf> {
-        let mut files = Vec::new();
-        if let Some(dir) = Self::get_save_directory() {
-            if dir.exists() {
-                for entry in std::fs::read_dir(dir).unwrap() {
-                    let entry = entry.unwrap();
-                    if entry.path().extension().map_or(false, |ext| ext == "wav") {
-                        files.push(entry.path());
-                    }
-                }
-            } else {
-                std::fs::create_dir_all(&dir).unwrap();
-            }
-        } else {
-            log::error!("Failed to get IR save directory");
-        }
-        files
-    }
 }
 
 impl PedalTrait for ImpulseResponse {
@@ -181,6 +195,7 @@ impl PedalTrait for ImpulseResponse {
     /// If `ir` parameter is set, but `ir` is None, this will set the IR as it is assumed that we are waiting on knowing the max buffer size and sample rate (on server).
     fn set_config(&mut self, buffer_size: usize, sample_rate: u32) {
         self.max_buffer_size = buffer_size;
+        self.dry_buffer.resize(buffer_size, 0.0);
         self.sample_rate = Some(sample_rate as f32);
 
         let ir_path = self.parameters.get("ir").unwrap().value.as_str().unwrap().to_string();
@@ -221,8 +236,14 @@ impl PedalTrait for ImpulseResponse {
         if name == "ir" {
             // If sample rate is not set we are not on server, so don't need to set the IR convolver.
             if let Some(sample_rate) = self.sample_rate {
-                self.set_ir_convolver(value.as_str().unwrap(), sample_rate);
+                let path = value.as_str().unwrap();
+                if path.is_empty() {
+                    self.remove_ir();
+                } else {
+                    self.set_ir_convolver(path, sample_rate);
+                }
             }
+            return;
         }
 
         if !self.parameters.get(name).unwrap().is_valid(&value) {
@@ -238,15 +259,41 @@ impl PedalTrait for ImpulseResponse {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _message_buffer: &[String]) -> Option<(String,PedalParameterValue)> {
+        // Refresh the list of root directories if it has changed
+        let new_root_directories: Option<Vec<DirectoryNode>> = ui.ctx().memory_mut(|m| {
+            let state = m.data.get_temp_mut_or("ir_folders_state".into(), 1u32);
+            if *state != self.folders_state {
+                self.folders_state = *state;
+                m.data.get_temp("ir_folders".into()).as_ref().cloned()
+            } else {
+                None
+            }            
+        });
+
+        if let Some(mut roots) = new_root_directories {
+            if let Some(main_save_dir) = Self::get_save_directory() {
+                roots.push(DirectoryNode::from_path(&main_save_dir));
+            } else {
+                log::warn!("Failed to get main save directory");
+            }
+            self.combobox_widget = Self::get_empty_directory_combo_box(self.id);
+
+            // If there is only one root directory, use its children as the roots
+            if roots.len() == 1 {
+                match roots.pop().unwrap() {
+                    DirectoryNode::Directory(_, children) => {
+                        self.combobox_widget.roots = children;
+                    },
+                    _ => self.combobox_widget.roots = roots
+                }
+            } else {
+                self.combobox_widget.roots = roots;
+            }
+        }
+        
         let pedal_rect = ui.available_rect_before_wrap();
 
         ui.add(egui::Image::new(include_image!("images/ir.png")));
-
-        let selected = PathBuf::from(self.parameters.get("ir").unwrap().value.as_str().unwrap());
-
-        let selected_file_name = selected.file_name().unwrap_or_default().to_string_lossy();
-        let mut selected_str = selected.to_string_lossy().to_string();
-        let old = selected_str.clone();
         
         let mut to_change = None;
 
@@ -260,20 +307,29 @@ impl PedalTrait for ImpulseResponse {
             egui::UiBuilder::new()
                 .max_rect(combo_box_rect)
         );
-
-        egui::ComboBox::from_id_salt(self.id)
-            .selected_text(selected_file_name)
-            .width(combo_ui.available_width())
-            .wrap_mode(egui::TextWrapMode::Truncate)
-            .show_ui(&mut combo_ui, |ui| {
-                ui.selectable_value(&mut selected_str, String::new(), "Empty");
-                for file in &self.saved_ir_files {
-                    let name = file.file_name().unwrap().to_string_lossy();
-
-                    ui.selectable_value(&mut selected_str, file.to_string_lossy().to_string(), &name[..name.len()-4]); // remove .wav extension
-                }
-            });
         
+        let old = self.combobox_widget.selected().map(|p| p.to_path_buf());
+        combo_ui.spacing_mut().combo_width = combo_ui.available_width();
+        combo_ui.add_sized(Vec2::new(combo_ui.available_width(), 15.0), &mut self.combobox_widget);
+        if old.as_ref().map(|p| p.as_path()) != self.combobox_widget.selected() {
+            match self.combobox_widget.selected() {
+                Some(path) => {
+                    match path.to_str() {
+                        Some(s) => {
+                            let selected_str = s.to_string();
+                            to_change = Some((String::from("ir"), PedalParameterValue::String(selected_str)));
+                        },
+                        None => {
+                            log::warn!("Selected IR path is not valid unicode");
+                        }
+                    }
+                },
+                None => {
+                    to_change = Some((String::from("ir"), PedalParameterValue::String("".to_string())));
+                }
+            }
+        }
+
         if let Some(value) = pedal_knob(ui, "", self.parameters.get("dry_wet").unwrap(), Vec2::new(0.325, 0.08), 0.35) {
             to_change = Some(("dry_wet".to_string(), value));
         }
@@ -283,14 +339,6 @@ impl PedalTrait for ImpulseResponse {
             to_change = Some(("active".to_string(), PedalParameterValue::Bool(value)));
         }
 
-        if selected_str != old {
-            Some((String::from("ir"), PedalParameterValue::String(selected_str)))
-        } else {
-            if let Some(to_change) = to_change {
-                Some(to_change)
-            } else {
-                None
-            }
-        }
+        to_change
     }
 }

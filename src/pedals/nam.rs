@@ -1,10 +1,12 @@
 use std::{path::PathBuf, vec};
 use std::collections::HashMap;
 use std::hash::Hash;
+use std::sync::Arc;
 
 use neural_amp_modeler::NeuralAmpModeler;
 use serde::{ser::SerializeMap, Deserialize, Serialize};
 use eframe::egui::{self, include_image, Vec2};
+use egui_directory_combobox::DirectoryComboBox;
 
 use super::{ui::pedal_knob, PedalParameter, PedalParameterValue, PedalTrait};
 use crate::pedals::ui::pedal_switch;
@@ -17,8 +19,9 @@ pub struct Nam {
     parameters: HashMap<String, PedalParameter>,
 
     dry_buffer: Vec<f32>,
-    saved_nam_files: Vec<PathBuf>,
-    // Used to generate a unique ID for the drop down menu
+
+    combobox_widget: DirectoryComboBox,
+    folders_state: u32, // Used to track changes in the root directories settings
     id: u32
 }
 
@@ -27,12 +30,17 @@ impl Clone for Nam {
         let buf_size = self.modeler.get_maximum_buffer_size();
         let new_modeler = NeuralAmpModeler::new_with_maximum_buffer_size(buf_size).expect("Failed to create neural amp modeler");
 
+        let new_id = unique_time_id();
+        let mut new_combobox = Self::get_empty_directory_combo_box(new_id);
+        new_combobox.roots = self.combobox_widget.roots.clone();
+
         let mut new_nam = Nam {
             modeler: new_modeler,
             parameters: self.parameters.clone(),
             dry_buffer: vec![0.0; buf_size],
-            saved_nam_files: Self::saved_nam_files(),
-            id: unique_time_id()
+            combobox_widget: new_combobox,
+            folders_state: self.folders_state,
+            id: new_id
         };
 
         if let Some(model_path) = self.modeler.get_model_path() {
@@ -72,17 +80,19 @@ impl<'a> Deserialize<'a> for Nam {
         // Default buffer size, can be changed later with `set_config`
         let modeler = NeuralAmpModeler::new_with_maximum_buffer_size(512).expect("Failed to create neural amp modeler");
 
+        let id = unique_time_id();
         let mut pedal = Nam {
             modeler,
             parameters: parameters.clone(),
             dry_buffer: vec![0.0; 512],
-            saved_nam_files: Self::saved_nam_files(),
-            id: unique_time_id()
+            folders_state: 0,
+            combobox_widget: Self::get_empty_directory_combo_box(id),
+            id
         };
 
         match PathBuf::from(model).canonicalize() {
             Ok(model) => pedal.set_model(model),
-            Err(e) => log::warn!("Failed to set model path during deserialization: {}", e),
+            Err(e) => log::warn!("Failed to set model path ({model}) during deserialization: {e}"),
         };
         
         Ok(pedal)
@@ -150,14 +160,35 @@ impl Nam {
 
         let modeler = NeuralAmpModeler::new_with_maximum_buffer_size(buffer_size).expect("Failed to create neural amp modeler");
 
+        let id = unique_time_id();
         Nam {
             modeler,
             parameters: parameters.clone(),
             dry_buffer: vec![0.0; buffer_size],
-            saved_nam_files: Self::saved_nam_files(),
-            id: unique_time_id()
+            folders_state: 0,
+            combobox_widget: Self::get_empty_directory_combo_box(id),
+            id
         }
     }
+
+
+    fn get_empty_directory_combo_box(id: impl std::hash::Hash) -> DirectoryComboBox {
+        DirectoryComboBox::new_from_nodes(vec![])
+            .with_id(egui::Id::new("nam_combobox").with(id))
+            .with_wrap_mode(egui::TextWrapMode::Truncate)
+            .show_extensions(false)
+            .select_files_only(true)
+            .with_filter(Arc::new(|path: &std::path::Path| {
+                if path.is_dir() {
+                    true
+                } else if let Some(ext) = path.extension() {
+                    ext == "nam"
+                } else {
+                    false
+                }
+            }))
+    }
+
 
     pub fn set_model(&mut self, model_path: PathBuf) {
         if model_path.as_os_str().is_empty() {
@@ -188,25 +219,6 @@ impl Nam {
 
     pub fn get_save_directory() -> Option<PathBuf> {
         Some(homedir::my_home().ok()??.join(SAVE_DIR).join(NAM_SAVE_PATH))
-    }
-
-    pub fn saved_nam_files() -> Vec<PathBuf> {
-        let mut files = Vec::new();
-        if let Some(dir) = Self::get_save_directory() {
-            if dir.exists() {
-                for entry in std::fs::read_dir(dir).unwrap() {
-                    let entry = entry.unwrap();
-                    if entry.path().extension().map_or(false, |ext| ext == "nam") {
-                        files.push(entry.path());
-                    }
-                }
-            } else {
-                std::fs::create_dir_all(&dir).unwrap();
-            }
-        } else {
-            log::error!("Failed to get NAM save directory");
-        }
-        files
     }
 }
 
@@ -264,10 +276,7 @@ impl PedalTrait for Nam {
                 if value_str.is_empty() {
                     self.remove_model();
                 } else {
-                    match PathBuf::try_from(value_str) {
-                        Ok(model_path) => self.set_model(model_path),
-                        Err(e) => log::error!("Failed to set model path: {}", e),
-                    }
+                    self.set_model(PathBuf::from(value_str));
                 }
             } else {
                 param.value = value;
@@ -278,11 +287,40 @@ impl PedalTrait for Nam {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _message_buffer: &[String]) -> Option<(String,PedalParameterValue)> {
+        // Refresh the list of root directories if it has changed
+        let new_root_directories: Option<Vec<egui_directory_combobox::DirectoryNode>> = ui.ctx().memory_mut(|m| {
+            let state = m.data.get_temp_mut_or("nam_folders_state".into(), 1u32);
+            if *state != self.folders_state {
+                self.folders_state = *state;
+                m.data.get_temp("nam_folders".into()).as_ref().cloned()
+            } else {
+                None
+            }            
+        });
+
+        if let Some(mut roots) = new_root_directories {
+            if let Some(main_save_dir) = Self::get_save_directory() {
+                roots.push(egui_directory_combobox::DirectoryNode::from_path(&main_save_dir));
+            } else {
+                log::warn!("Failed to get main save directory");
+            }
+            self.combobox_widget = Self::get_empty_directory_combo_box(self.id);
+
+            // If there is only one root directory, use its children as the roots
+            if roots.len() == 1 {
+                match roots.pop().unwrap() {
+                    egui_directory_combobox::DirectoryNode::Directory(_, children) => {
+                        self.combobox_widget.roots = children;
+                    },
+                    _ => self.combobox_widget.roots = roots
+                }
+            } else {
+                self.combobox_widget.roots = roots;
+            }
+        }
+
         let pedal_rect = ui.available_rect_before_wrap();
         ui.add(egui::Image::new(include_image!("images/nam.png")));
-
-        let mut selected = self.modeler.get_model_path().map(|p| p.to_path_buf());
-        let old = selected.clone();
 
         let combo_box_rect = pedal_rect
             .scale_from_center2(
@@ -290,28 +328,35 @@ impl PedalTrait for Nam {
             ).translate(
                 Vec2::new(0.0, -0.08*pedal_rect.height())
             );
+
         let mut combo_ui = ui.new_child(
             egui::UiBuilder::new()
                 .max_rect(combo_box_rect)
         );
 
-        egui::ComboBox::from_id_salt(self.id)
-            .selected_text(match &selected {
-                Some(path) => path.file_name().unwrap().to_string_lossy(),
-                None => "Empty".into()
-            })
-            .width(combo_ui.available_width())
-            .wrap_mode(egui::TextWrapMode::Truncate)
-            .show_ui(&mut combo_ui, |ui| {
-                ui.selectable_value(&mut selected, None, "Empty");
-                for file in &self.saved_nam_files {
-                    let name = file.file_name().unwrap().to_string_lossy();
-
-                    ui.selectable_value(&mut selected, Some(file.clone()), &name[..name.len()-4]); // remove the .nam extension
-                }
-            });
-
         let mut to_change = None;
+
+        let old = self.combobox_widget.selected().map(|p| p.to_path_buf());
+        combo_ui.spacing_mut().combo_width = combo_ui.available_width();
+        combo_ui.add_sized(Vec2::new(combo_ui.available_width(), 15.0), &mut self.combobox_widget);
+        if old.as_ref().map(|p| p.as_path()) != self.combobox_widget.selected() {
+            match self.combobox_widget.selected() {
+                Some(path) => {
+                    match path.to_str() {
+                        Some(s) => {
+                            let selected_str = s.to_string();
+                            to_change = Some((String::from("model"), PedalParameterValue::String(selected_str)));
+                        },
+                        None => {
+                            log::warn!("Selected model path is not valid unicode");
+                        }
+                    }
+                },
+                None => {
+                    to_change = Some((String::from("model"), PedalParameterValue::String("".to_string())));
+                }
+            }
+        }
 
         if let Some(value) = pedal_knob(ui, "", self.parameters.get("gain").unwrap(), Vec2::new(0.05, 0.12), 0.25) {
             to_change = Some(("gain".to_string(), value));
@@ -328,18 +373,6 @@ impl PedalTrait for Nam {
             to_change = Some(("active".to_string(), PedalParameterValue::Bool(value)));
         }
 
-        if selected != old {
-            match &selected {
-                Some(path) => {
-                    let selected_str = path.to_str().unwrap().to_string();
-                    Some((String::from("model"), PedalParameterValue::String(selected_str)))
-                },
-                None => {
-                    Some((String::from("model"), PedalParameterValue::String("".to_string())))
-                }
-            }
-        } else {
-            to_change
-        }
+        to_change
     }
 }

@@ -181,7 +181,7 @@ impl Vst2 {
     /// Update the pedal's parameters to the parameters of the current plugin instance
     pub fn sync_instance_to_parameters(&mut self) {
         if let Some(instance) = self.instance.as_mut() {
-            self.parameters.retain(|k, _| k == "dry_wet");
+            self.parameters.retain(|k, _| k == "dry_wet" || k == "active");
 
             let plugin_file_name = instance.dll_path().file_name().expect("Instance dll path should have file name").to_string_lossy().to_string();
             self.parameters.insert(

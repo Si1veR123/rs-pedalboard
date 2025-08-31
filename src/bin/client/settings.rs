@@ -31,7 +31,9 @@ pub struct ClientSettings {
     // Only used if volume_normalization is set to Automatic
     pub auto_volume_normalization_decay: f32,
     // Only used if volume_normalization is set to None
-    pub input_volume: f32
+    pub input_volume: f32,
+    pub nam_folders: Vec<PathBuf>,
+    pub ir_folders: Vec<PathBuf>
 }
 
 impl ClientSettings {
@@ -83,7 +85,9 @@ impl Default for ClientSettings {
             show_volume_monitor: true,
             volume_normalization: VolumeNormalizationMode::None,
             auto_volume_normalization_decay: 0.95,
-            input_volume: 1.0
+            input_volume: 1.0,
+            nam_folders: vec![],
+            ir_folders: vec![]
         }
     }
 }
@@ -149,6 +153,9 @@ pub struct SettingsScreen {
     state: &'static State,
     pub server_launch_state: ServerLaunchState,
     audio_devices: AudioDevices,
+
+    nam_file_dialog: egui_file::FileDialog,
+    ir_file_dialog: egui_file::FileDialog,
 }
 
 impl SettingsScreen {
@@ -157,6 +164,8 @@ impl SettingsScreen {
             audio_devices: AudioDevices::new(state.server_settings.borrow().host.into()),
             state,
             server_launch_state: ServerLaunchState::None,
+            nam_file_dialog: egui_file::FileDialog::select_folder(None),
+            ir_file_dialog: egui_file::FileDialog::select_folder(None),
         }
     }
 
@@ -235,7 +244,7 @@ impl Widget for &mut SettingsScreen {
         ui.add_space(ui.available_height()*0.05);
         ui.allocate_ui_with_layout(ui.available_size(), Layout::left_to_right(egui::Align::Center), |ui| {
             ui.add_space(ui.available_width()*0.05);
-            ui.allocate_ui_with_layout(ui.available_size()*Vec2::new(0.9, 0.9), Layout::top_down(egui::Align::Min), |ui| {
+            ui.allocate_ui_with_layout(ui.available_size()*Vec2::new(0.9, 0.95), Layout::top_down(egui::Align::Min), |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     ui.style_mut().spacing.slider_width = ui.available_width()*0.4;
 
@@ -561,6 +570,36 @@ impl Widget for &mut SettingsScreen {
                             ui.end_row();
                         });
                     
+                    ui.heading("Neural Amp Modeler Folders");
+                    ui.separator();
+                    if multiple_directories_select_ui(ui, &mut client_settings.nam_folders, "nam_folders", &mut self.nam_file_dialog) {
+                        let nam_root_nodes: Vec<_> = client_settings.nam_folders.iter().map(|p| {
+                            egui_directory_combobox::DirectoryNode::from_path(p)
+                        }).collect();
+
+                        ui.ctx().memory_mut(|writer| {
+                            let nam_state = writer.data.get_temp_mut_or(egui::Id::new("nam_folders_state"), 1u32);
+                            *nam_state += 1;
+                            writer.data.insert_temp(egui::Id::new("nam_folders"), nam_root_nodes);
+                        });
+                    }
+                    ui.add_space(10.0);
+
+                    ui.heading("Impulse Response Folders");
+                    ui.separator();
+                    if multiple_directories_select_ui(ui, &mut client_settings.ir_folders, "ir_folders", &mut self.ir_file_dialog) {
+                        let ir_root_nodes: Vec<_> = client_settings.ir_folders.iter().map(|p| {
+                            egui_directory_combobox::DirectoryNode::from_path(p)
+                        }).collect();
+
+                        ui.ctx().memory_mut(|writer| {
+                            let ir_state = writer.data.get_temp_mut_or(egui::Id::new("ir_folders_state"), 1u32);
+                            *ir_state += 1;
+                            writer.data.insert_temp(egui::Id::new("ir_folders"), ir_root_nodes);
+                        });
+                    }
+                    ui.add_space(10.0);
+
                     ui.heading("MIDI");
                     ui.separator();
                     self.state.midi_state.borrow_mut().midi_port_device_settings_ui(ui);
@@ -573,4 +612,61 @@ impl Widget for &mut SettingsScreen {
             });
         }).response
     }
+}
+
+fn multiple_directories_select_ui(ui: &mut egui::Ui, paths: &mut Vec<PathBuf>, id: &str, file_dialog: &mut egui_file::FileDialog) -> bool {
+    let mut changed = false;
+    let available_width = ui.available_width();
+
+    if ui.button("Add Directory").clicked() {
+        file_dialog.open();
+    }
+
+    file_dialog.show(ui.ctx());
+
+    if file_dialog.selected() {
+        if let Some(path) = file_dialog.path() {
+            let path = path.to_path_buf().canonicalize();
+            match path {
+                Ok(path) => {
+                    if path.is_dir() && !paths.contains(&path) {
+                        paths.push(path);
+                        changed = true;
+                    }
+                },
+                Err(e) => {
+                    log::error!("Failed to canonicalize path: {e}");
+                    return false;
+                }
+            }
+        }
+    }
+
+    egui::Grid::new(id)
+        .num_columns(2)
+        .min_col_width(available_width/2.0)
+        .striped(true)
+        .show(ui, |ui| {
+            if paths.is_empty() {
+                ui.label("No directories selected");
+            } else {
+                let mut to_remove = None;
+
+                for path in paths.iter() {
+                    let file_name = path.file_name().map(|s| s.to_string_lossy()).unwrap_or_else(|| "Invalid Path".into());
+                    ui.label(file_name);
+                    if ui.button("Remove").clicked() {
+                        to_remove = Some(path.clone());
+                        changed = true;
+                    }
+                    ui.end_row();
+                }
+
+                if let Some(to_remove) = to_remove {
+                    paths.retain(|p| p != &to_remove);
+                }
+            }
+        });
+    
+    changed
 }
