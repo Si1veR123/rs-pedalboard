@@ -6,11 +6,11 @@ use eframe::egui::{self, Id};
 use vst::{buffer::AudioBuffer, host::{Host, PluginInstance, PluginLoader}, plugin::{Info, Plugin}};
 
 #[cfg(target_os = "windows")]
-const VST2_PLUGIN_PATH: &str = r"C:\Program Files\Steinberg\VSTPlugins";
+pub const VST2_PLUGIN_PATH: &str = r"C:\Program Files\Steinberg\VSTPlugins";
 #[cfg(target_os = "linux")]
-const VST2_PLUGIN_PATH: &str = "/usr/lib/vst";
+pub const VST2_PLUGIN_PATH: &str = "/usr/lib/vst";
 #[cfg(target_os = "macos")]
-const VST2_PLUGIN_PATH: &str = "/Library/Audio/Plug-Ins/VST";
+pub const VST2_PLUGIN_PATH: &str = "/Library/Audio/Plug-Ins/VST";
 
 fn get_global_host() -> Arc<Mutex<PedalboardVst2Host>> {
     static HOST: OnceLock<Arc<Mutex<PedalboardVst2Host>>> = OnceLock::new();

@@ -327,7 +327,7 @@ impl State {
         let socket = ClientSocket::new(crate::SERVER_PORT);
         let client_settings = ClientSettings::load_or_default();
 
-        // Set NAM folders and IR folders in ctx memory so pedals can access
+        // Set NAM folders, IR folders and VST2 in ctx memory so pedals can access
         let nam_root_nodes: Vec<_> = client_settings.nam_folders.iter().map(|p| {
             egui_directory_combobox::DirectoryNode::from_path(p)
         }).collect();
@@ -336,11 +336,17 @@ impl State {
             egui_directory_combobox::DirectoryNode::from_path(p)
         }).collect();
 
+        let vst2_root_nodes: Vec<_> = client_settings.vst2_folders.iter().map(|p| {
+            egui_directory_combobox::DirectoryNode::from_path(p)
+        }).collect();
+
         egui_ctx.memory_mut(|writer| {
             writer.data.insert_temp(egui::Id::new("nam_folders_state"), 1u32);
             writer.data.insert_temp(egui::Id::new("nam_folders"), nam_root_nodes);
             writer.data.insert_temp(egui::Id::new("ir_folders_state"), 1u32);
             writer.data.insert_temp(egui::Id::new("ir_folders"), ir_root_nodes);
+            writer.data.insert_temp(egui::Id::new("vst2_folders_state"), 1u32);
+            writer.data.insert_temp(egui::Id::new("vst2_folders"), vst2_root_nodes);
         });
 
         let server_settings = ServerSettingsSave::load_or_default();

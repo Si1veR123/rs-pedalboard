@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 use std::hash::Hash;
+use std::path::Path;
+use std::sync::Arc;
 
 use super::PedalTrait;
 use super::PedalParameter;
@@ -7,13 +9,14 @@ use super::PedalParameterValue;
 use super::ui::pedal_knob;
 
 use crate::pedals::ui::pedal_switch;
-use crate::plugin::vst2::{Vst2Instance, path_from_name, available_plugins};
+use crate::plugin::vst2::{Vst2Instance, path_from_name, VST2_PLUGIN_PATH};
 use crate::unique_time_id;
 
 use eframe::egui::RichText;
 use eframe::egui::{self, Button, Color32, Layout, UiBuilder, Vec2, include_image};
 use serde::ser::SerializeMap;
 use serde::{Serialize, Deserialize};
+use egui_directory_combobox::{DirectoryComboBox, DirectoryNode};
 
 pub struct Vst2 {
     instance: Option<Vst2Instance>,
@@ -23,20 +26,26 @@ pub struct Vst2 {
     // Map of parameter names to their index in the plugin instance
     param_index_map: HashMap<String, usize>,
     output_buffer: Vec<f32>,
-    available_plugins: Vec<String>,
+    combobox_widget: DirectoryComboBox,
+    folders_state: u32,
     id: u32
 }
 
 impl Clone for Vst2 {
     fn clone(&self) -> Self {
+        let new_id = unique_time_id();
+        let mut new_combobox = Self::get_empty_directory_combo_box(new_id);
+        new_combobox.roots = self.combobox_widget.roots.clone();
+
         Vst2 {
             instance: self.instance.clone(),
             config: self.config,
             parameters: self.parameters.clone(),
             param_index_map: self.param_index_map.clone(),
             output_buffer: self.output_buffer.clone(),
-            available_plugins: self.available_plugins.clone(),
-            id: unique_time_id()
+            combobox_widget: new_combobox,
+            folders_state: self.folders_state,
+            id: new_id
         }
     }
 }
@@ -63,6 +72,7 @@ impl<'a> Deserialize<'a> for Vst2 {
         let parameters_with_idx: HashMap<String, (Option<usize>, PedalParameter)> = HashMap::deserialize(deserializer)?;
         let name = parameters_with_idx.get("plugin").unwrap().1.value.as_str().unwrap().to_string();
         let dry_wet = parameters_with_idx.get("dry_wet").unwrap().1.value.as_float().unwrap_or(1.0);
+        let active = parameters_with_idx.get("active").unwrap().1.value.as_bool().unwrap_or(true);
 
         let mut parameters = HashMap::new();
         parameters.insert(String::from("plugin"), PedalParameter {
@@ -77,6 +87,12 @@ impl<'a> Deserialize<'a> for Vst2 {
             max: Some(PedalParameterValue::Float(1.0)),
             step: None
         });
+        parameters.insert(String::from("active"), PedalParameter {
+            value: PedalParameterValue::Bool(active),
+            min: None,
+            max: None,
+            step: None
+        });
 
         let mut param_index_map = HashMap::new();
         if !name.is_empty() {
@@ -89,15 +105,17 @@ impl<'a> Deserialize<'a> for Vst2 {
             }
         }
 
-        let available_plugins = available_plugins();
+        let id = unique_time_id();
+
         let mut empty_vst = Vst2 {
             instance: None,
             config: None,
             parameters,
             param_index_map,
             output_buffer: Vec::new(),
-            available_plugins,
-            id: unique_time_id()
+            combobox_widget: Self::get_empty_directory_combo_box(id),
+            folders_state: 0,
+            id
         };
         if name.is_empty() {
             Ok(empty_vst)
@@ -167,15 +185,37 @@ impl Vst2 {
             },
         );
 
+        let id = unique_time_id();
         Vst2 {
             instance: None,
             config: None,
             parameters,
             param_index_map: HashMap::new(),
             output_buffer: Vec::new(),
-            available_plugins: available_plugins(),
-            id: unique_time_id()
+            combobox_widget: Self::get_empty_directory_combo_box(id),
+            folders_state: 0,
+            id
         }
+    }
+
+    fn get_empty_directory_combo_box(id: impl std::hash::Hash) -> DirectoryComboBox {
+        DirectoryComboBox::new_from_nodes(vec![])
+            .with_id(egui::Id::new("vst2_combobox").with(id))
+            .with_wrap_mode(egui::TextWrapMode::Truncate)
+            .show_extensions(false)
+            .select_files_only(true)
+            .with_filter(Arc::new(|path: &std::path::Path| {
+                if path.is_dir() {
+                    true
+                } else if let Some(ext) = path.extension() {
+                    ext == "vst"
+                        || (cfg!(target_os = "windows") && ext == "dll")
+                        || (cfg!(target_os = "linux") && ext == "so")
+                        || (cfg!(target_os = "macos") && ext == "dll")
+                } else {
+                    false
+                }
+            }))
     }
 
     /// Update the pedal's parameters to the parameters of the current plugin instance
@@ -183,16 +223,34 @@ impl Vst2 {
         if let Some(instance) = self.instance.as_mut() {
             self.parameters.retain(|k, _| k == "dry_wet" || k == "active");
 
-            let plugin_file_name = instance.dll_path().file_name().expect("Instance dll path should have file name").to_string_lossy().to_string();
-            self.parameters.insert(
-                "plugin".to_string(),
-                PedalParameter {
-                    value: PedalParameterValue::String(plugin_file_name),
-                    min: None,
-                    max: None,
-                    step: None
+            match instance.dll_path().to_str() {
+                Some(path) => {
+                    self.parameters.insert(
+                        "plugin".to_string(),
+                        PedalParameter {
+                            value: PedalParameterValue::String(path.to_string()),
+                            min: None,
+                            max: None,
+                            step: None
+                        },
+                    );
                 },
-            );
+                None => {
+                    log::warn!("Plugin path is not valid unicode, removing plugin instance.");
+                    self.parameters.insert(
+                        "plugin".to_string(),
+                        PedalParameter {
+                            value: PedalParameterValue::String("".to_string()),
+                            min: None,
+                            max: None,
+                            step: None
+                        },
+                    );
+                    self.instance = None;
+                    self.param_index_map.clear();
+                    return;
+                }
+            }
 
             for i in 0..instance.parameter_count() {
                 let name = instance.parameter_name(i);
@@ -228,8 +286,8 @@ impl Vst2 {
     pub fn sync_parameters_to_instance(&mut self) {
         if let Some(instance) = self.instance.as_mut() {
             for (name, param) in &self.parameters {
-                if name == "plugin" || name == "dry_wet" {
-                    continue; // Skip the plugin name parameter
+                if name == "plugin" || name == "dry_wet" || name == "active" {
+                    continue;
                 }
                 if let Some(&index) = self.param_index_map.get(name) {
                     instance.set_parameter_value(index, param.value.as_float().unwrap());
@@ -242,21 +300,8 @@ impl Vst2 {
         }
     }
 
-    /// `plugin_name` should be the file name of the plugin including '.dll' extension
-    pub fn set_plugin(&mut self, plugin_name: &str) {
-        if plugin_name.is_empty() {
-            self.instance = None;
-            self.sync_instance_to_parameters();
-            return;
-        }
-
-        let path = path_from_name(plugin_name);
-        if path.is_none() {
-            log::error!("Plugin {} not found", plugin_name);
-            return;
-        }
-        
-        let new_plugin_instance = Vst2Instance::load(path.unwrap());
+    pub fn set_plugin<P: AsRef<Path>>(&mut self, plugin_path: P) {
+        let new_plugin_instance = Vst2Instance::load(plugin_path.as_ref());
         match new_plugin_instance {
             Ok(mut instance) => {
                 if let Some((bs, sr)) = self.config {
@@ -266,7 +311,7 @@ impl Vst2 {
                 self.sync_instance_to_parameters();
             },
             Err(_) => {
-                log::error!("Failed to load plugin: {}", plugin_name);
+                log::error!("Failed to load plugin: {}", plugin_path.as_ref().display());
                 self.instance = None;
                 self.sync_instance_to_parameters();
             }
@@ -317,8 +362,14 @@ impl PedalTrait for Vst2 {
 
     fn set_parameter_value(&mut self, name: &str, value: PedalParameterValue) {
         if name == "plugin" {
-            if let PedalParameterValue::String(plugin_name) = value {
-                self.set_plugin(&plugin_name);
+            if let PedalParameterValue::String(plugin_path) = value {
+                if plugin_path.is_empty() {
+                    self.instance = None;
+                    self.sync_instance_to_parameters();
+                    return;
+                } else {
+                    self.set_plugin(plugin_path);
+                }
             }
             return;
         }
@@ -338,13 +389,43 @@ impl PedalTrait for Vst2 {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _message_buffer: &[String]) -> Option<(String, PedalParameterValue)> {
+        // Refresh the list of root directories if it has changed
+        let new_root_directories: Option<Vec<DirectoryNode>> = ui.ctx().memory_mut(|m| {
+            let state = m.data.get_temp_mut_or("vst2_folders_state".into(), 1u32);
+            if *state != self.folders_state {
+                self.folders_state = *state;
+                m.data.get_temp("vst2_folders".into()).as_ref().cloned()
+            } else {
+                None
+            }            
+        });
+
+        if let Some(mut roots) = new_root_directories {
+            if let Some(node) = DirectoryNode::try_from_path(VST2_PLUGIN_PATH) {
+                roots.push(node);
+            } else {
+                log::warn!("Failed to get default VST2 save directory: {}", VST2_PLUGIN_PATH);
+            }
+            self.combobox_widget = Self::get_empty_directory_combo_box(self.id);
+
+            // If there is only one root directory, use its children as the roots
+            if roots.len() == 1 {
+                match roots.pop().unwrap() {
+                    DirectoryNode::Directory(_, children) => {
+                        self.combobox_widget.roots = children;
+                    },
+                    _ => self.combobox_widget.roots = roots
+                }
+            } else {
+                self.combobox_widget.roots = roots;
+            }
+        }
+        
         let mut plugin_param_change = None;
         if let Some(i) = self.instance.as_mut() {
             plugin_param_change = i.ui_frame(ui);
         }
 
-        let mut selected = self.parameters.get("plugin").unwrap().value.as_str().unwrap().to_string();
-        let old = selected.clone();
         let mut to_change = None;
 
         let mut img_ui = ui.new_child(
@@ -365,17 +446,28 @@ impl PedalTrait for Vst2 {
 
                 ui.add_space(5.0);
 
-                egui::ComboBox::from_id_salt(self.id)
-                    .selected_text(&selected)
-                    .width(ui.available_width())
-                    .wrap_mode(egui::TextWrapMode::Truncate)
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut selected, String::new(), "Empty");
-                        for plugin in &self.available_plugins {
-                            ui.selectable_value(&mut selected, plugin.clone(), &plugin[..plugin.len()-4]); // Remove the ".dll" extension
+                let old = self.combobox_widget.selected().map(|p| p.to_path_buf());
+                ui.spacing_mut().combo_width = ui.available_width();
+                ui.add_sized(Vec2::new(ui.available_width(), 15.0), &mut self.combobox_widget);
+                if old.as_ref().map(|p| p.as_path()) != self.combobox_widget.selected() {
+                    match self.combobox_widget.selected() {
+                        Some(path) => {
+                            match path.to_str() {
+                                Some(s) => {
+                                    let selected_str = s.to_string();
+                                    to_change = Some((String::from("plugin"), PedalParameterValue::String(selected_str)));
+                                },
+                                None => {
+                                    log::warn!("Selected VST2 path is not valid unicode");
+                                }
+                            }
+                        },
+                        None => {
+                            to_change = Some((String::from("plugin"), PedalParameterValue::String("".to_string())));
                         }
-                    });
-                
+                    }
+                }
+
                 ui.add_space(5.0);
 
                 if ui.add_enabled(
@@ -408,14 +500,6 @@ impl PedalTrait for Vst2 {
             return plugin_param_change;
         }
 
-        if to_change.is_some() {
-            return to_change;
-        }
-            
-        if selected != old {
-            Some(("plugin".to_string(), PedalParameterValue::String(selected)))
-        } else {
-            None
-        }
+        to_change
     }
 }

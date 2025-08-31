@@ -33,7 +33,8 @@ pub struct ClientSettings {
     // Only used if volume_normalization is set to None
     pub input_volume: f32,
     pub nam_folders: Vec<PathBuf>,
-    pub ir_folders: Vec<PathBuf>
+    pub ir_folders: Vec<PathBuf>,
+    pub vst2_folders: Vec<PathBuf>,
 }
 
 impl ClientSettings {
@@ -87,7 +88,8 @@ impl Default for ClientSettings {
             auto_volume_normalization_decay: 0.95,
             input_volume: 1.0,
             nam_folders: vec![],
-            ir_folders: vec![]
+            ir_folders: vec![],
+            vst2_folders: vec![],
         }
     }
 }
@@ -156,6 +158,7 @@ pub struct SettingsScreen {
 
     nam_file_dialog: egui_file::FileDialog,
     ir_file_dialog: egui_file::FileDialog,
+    vst2_file_dialog: egui_file::FileDialog,
 }
 
 impl SettingsScreen {
@@ -166,6 +169,7 @@ impl SettingsScreen {
             server_launch_state: ServerLaunchState::None,
             nam_file_dialog: egui_file::FileDialog::select_folder(None),
             ir_file_dialog: egui_file::FileDialog::select_folder(None),
+            vst2_file_dialog: egui_file::FileDialog::select_folder(None),
         }
     }
 
@@ -569,7 +573,8 @@ impl Widget for &mut SettingsScreen {
                             }
                             ui.end_row();
                         });
-                    
+
+                    ui.add_space(20.0);
                     ui.heading("Neural Amp Modeler Folders");
                     ui.separator();
                     if multiple_directories_select_ui(ui, &mut client_settings.nam_folders, "nam_folders", &mut self.nam_file_dialog) {
@@ -583,7 +588,7 @@ impl Widget for &mut SettingsScreen {
                             writer.data.insert_temp(egui::Id::new("nam_folders"), nam_root_nodes);
                         });
                     }
-                    ui.add_space(10.0);
+                    ui.add_space(20.0);
 
                     ui.heading("Impulse Response Folders");
                     ui.separator();
@@ -598,7 +603,22 @@ impl Widget for &mut SettingsScreen {
                             writer.data.insert_temp(egui::Id::new("ir_folders"), ir_root_nodes);
                         });
                     }
-                    ui.add_space(10.0);
+                    ui.add_space(20.0);
+
+                    ui.heading("VST2 Plugin Folders");
+                    ui.separator();
+                    if multiple_directories_select_ui(ui, &mut client_settings.vst2_folders, "vst2_folders", &mut self.vst2_file_dialog) {
+                        let vst2_root_nodes: Vec<_> = client_settings.vst2_folders.iter().map(|p| {
+                            egui_directory_combobox::DirectoryNode::from_path(p)
+                        }).collect();
+
+                        ui.ctx().memory_mut(|writer| {
+                            let vst2_state = writer.data.get_temp_mut_or(egui::Id::new("vst2_folders_state"), 1u32);
+                            *vst2_state += 1;
+                            writer.data.insert_temp(egui::Id::new("vst2_folders"), vst2_root_nodes);
+                        });
+                    }
+                    ui.add_space(20.0);
 
                     ui.heading("MIDI");
                     ui.separator();

@@ -1539,7 +1539,7 @@ dependencies = [
 [[package]]
 name = "egui_directory_combobox"
 version = "0.1.0"
-source = "git+https://github.com/Si1veR123/egui-directory-combobox.git#2c9ee3e113d4c82b7966d33c3a7ae9530b226fbb"
+source = "git+https://github.com/Si1veR123/egui-directory-combobox.git#00139c6bb1b30cc71fab6bb77cef47f0c664815f"
 dependencies = [
  "egui",
 ]
