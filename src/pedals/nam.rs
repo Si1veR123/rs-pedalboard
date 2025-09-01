@@ -91,7 +91,9 @@ impl<'a> Deserialize<'a> for Nam {
         };
 
         match PathBuf::from(model).canonicalize() {
-            Ok(model) => pedal.set_model(model),
+            Ok(model) => {
+                pedal.set_model(model);
+            },
             Err(e) => log::warn!("Failed to set model path ({model}) during deserialization: {e}"),
         };
         
@@ -304,7 +306,12 @@ impl PedalTrait for Nam {
             } else {
                 log::warn!("Failed to get main save directory");
             }
+            let model_path = self.parameters.get("model").unwrap().value.as_str().unwrap();
             self.combobox_widget = Self::get_empty_directory_combo_box(self.id);
+            self.combobox_widget.set_selection(match model_path {
+                s if s.is_empty() => None,
+                s => Some(s)
+            });
 
             // If there is only one root directory, use its children as the roots
             if roots.len() == 1 {

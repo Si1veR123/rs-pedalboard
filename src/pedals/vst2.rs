@@ -406,7 +406,12 @@ impl PedalTrait for Vst2 {
             } else {
                 log::warn!("Failed to get default VST2 save directory: {}", VST2_PLUGIN_PATH);
             }
+            let current_vst = self.parameters.get("plugin").unwrap().value.as_str().unwrap();
             self.combobox_widget = Self::get_empty_directory_combo_box(self.id);
+            self.combobox_widget.set_selection(match current_vst {
+                s if s.is_empty() => None,
+                s => Some(s)
+            });
 
             // If there is only one root directory, use its children as the roots
             if roots.len() == 1 {

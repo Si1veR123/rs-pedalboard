@@ -1,6 +1,3 @@
-/// Currently, for example, parameters are set on both client and server,
-/// even though client doesnt process audio.
-
 use std::collections::HashMap;
 use std::hash::Hash;
 use crate::dsp_algorithms::oscillator::Oscillator;
@@ -41,10 +38,14 @@ mod wah;
 pub use wah::Wah;
 mod compressor;
 pub use compressor::Compressor;
+mod overdrive;
+pub use overdrive::Overdrive;
+mod distortion;
+pub use distortion::Distortion;
 
 mod ui;
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PedalParameter {
     pub value: PedalParameterValue,
     // min and max are used for floats and selections
@@ -237,12 +238,14 @@ pub enum Pedal {
     Chorus(Chorus),
     Compressor(Compressor),
     Delay(Delay),
+    Distortion(Distortion),
     Flanger(Flanger),
     Fuzz(Fuzz),
     GraphicEq7(GraphicEq7),
     ImpulseResponse(ImpulseResponse),
     Nam(Nam),
     NoiseGate(NoiseGate),
+    Overdrive(Overdrive),
     PitchShift(PitchShift),
     Reverb(Reverb),
     Tremolo(Tremolo),
@@ -272,6 +275,8 @@ impl PedalDiscriminants {
             PedalDiscriminants::AutoWah => Pedal::AutoWah(AutoWah::new()),
             PedalDiscriminants::Wah => Pedal::Wah(Wah::new()),
             PedalDiscriminants::Compressor => Pedal::Compressor(Compressor::new()),
+            PedalDiscriminants::Overdrive => Pedal::Overdrive(Overdrive::new()),
+            PedalDiscriminants::Distortion => Pedal::Distortion(Distortion::new()),
         }
     }
 
@@ -293,7 +298,9 @@ impl PedalDiscriminants {
             PedalDiscriminants::Tremolo => "Tremolo",
             PedalDiscriminants::AutoWah => "Auto Wah",
             PedalDiscriminants::Wah => "Wah",
-            PedalDiscriminants::Compressor => "Compressor"
+            PedalDiscriminants::Compressor => "Compressor",
+            PedalDiscriminants::Overdrive => "Overdrive",
+            PedalDiscriminants::Distortion => "Distortion",
         }
     }
 }

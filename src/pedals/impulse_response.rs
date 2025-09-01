@@ -76,11 +76,13 @@ impl<'a> Deserialize<'a> for ImpulseResponse {
         let parameters = HashMap::<String, PedalParameter>::deserialize(deserializer)?;
         let id = unique_time_id();
 
+        let combobox_widget = Self::get_empty_directory_combo_box(id);
+
         Ok(Self {
             ir: None,
             parameters,
             dry_buffer: vec![0.0; 512],
-            combobox_widget: Self::get_empty_directory_combo_box(id),
+            combobox_widget,
             folders_state: 0,
             max_buffer_size: 0,
             id,
@@ -165,7 +167,7 @@ impl ImpulseResponse {
             }
         };
 
-        match load_ir(ir_path, sample_rate) {
+        match load_ir(ir_path.as_ref(), sample_rate) {
             Ok(ir) => {
                 self.ir = Some(IRConvolver::new(ir.first().expect("IR has no channels").as_slice(), self.max_buffer_size));
                 self.parameters.get_mut("ir").unwrap().value = PedalParameterValue::String(string_path);
@@ -199,7 +201,8 @@ impl PedalTrait for ImpulseResponse {
         self.sample_rate = Some(sample_rate as f32);
 
         let ir_path = self.parameters.get("ir").unwrap().value.as_str().unwrap().to_string();
-        if !ir_path.is_empty() && self.ir.is_none() {
+        log::info!("Setting IR convolver with path: {}", ir_path);
+        if !ir_path.is_empty() {
             self.set_ir_convolver(&ir_path, sample_rate as f32);
         } else {
             self.ir = None;
@@ -207,8 +210,12 @@ impl PedalTrait for ImpulseResponse {
     }
 
     fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
-        if self.ir.is_none() {
+        if self.sample_rate.is_none() {
             log::warn!("ImpulseResponse: Call set_config before processing.");
+            return;
+        }
+
+        if self.ir.is_none() {
             return;
         }
 
@@ -235,15 +242,20 @@ impl PedalTrait for ImpulseResponse {
     fn set_parameter_value(&mut self, name: &str, value: PedalParameterValue) {
         if name == "ir" {
             // If sample rate is not set we are not on server, so don't need to set the IR convolver.
+            let path = value.as_str().unwrap();
             if let Some(sample_rate) = self.sample_rate {
-                let path = value.as_str().unwrap();
                 if path.is_empty() {
                     self.remove_ir();
                 } else {
                     self.set_ir_convolver(path, sample_rate);
                 }
+                return;
             }
-            return;
+            if !path.is_empty() {
+                self.combobox_widget.set_selection(Some(path));
+            } else {
+                self.combobox_widget.set_selection::<&str>(None);
+            }
         }
 
         if !self.parameters.get(name).unwrap().is_valid(&value) {
@@ -277,6 +289,11 @@ impl PedalTrait for ImpulseResponse {
                 log::warn!("Failed to get main save directory");
             }
             self.combobox_widget = Self::get_empty_directory_combo_box(self.id);
+            let ir_path = self.parameters.get("ir").unwrap().value.as_str().unwrap();
+            self.combobox_widget.set_selection(match ir_path {
+                s if s.is_empty() => None,
+                s => Some(s)
+            });
 
             // If there is only one root directory, use its children as the roots
             if roots.len() == 1 {
