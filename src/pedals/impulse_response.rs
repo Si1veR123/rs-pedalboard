@@ -318,7 +318,7 @@ impl PedalTrait for ImpulseResponse {
             .scale_from_center2(
                 Vec2::new(0.9, 0.1)
             ).translate(
-                Vec2::new(0.0, -0.08*pedal_rect.height())
+                Vec2::new(0.0, -0.15*pedal_rect.height())
             );
         let mut combo_ui = ui.new_child(
             egui::UiBuilder::new()
@@ -347,7 +347,41 @@ impl PedalTrait for ImpulseResponse {
             }
         }
 
-        if let Some(value) = pedal_knob(ui, "", self.parameters.get("dry_wet").unwrap(), Vec2::new(0.325, 0.08), 0.35) {
+        let button_rect = combo_box_rect.translate(Vec2::new(0.0, combo_box_rect.height() + 0.02*pedal_rect.height()));
+        let mut button_ui = ui.new_child(
+            egui::UiBuilder::new()
+                .max_rect(button_rect)
+                .layout(egui::Layout::left_to_right(egui::Align::Min))
+        );
+        if button_ui.add_sized(
+            Vec2::new(button_rect.width()*0.47, button_rect.height()),
+            egui::Button::new("<")
+        ).clicked() {
+            self.combobox_widget.select_previous_file();
+            if let Some(path) = self.combobox_widget.selected() {
+                if let Some(s) = path.to_str() {
+                    to_change = Some((String::from("ir"), PedalParameterValue::String(s.to_string())));
+                } else {
+                    log::warn!("Selected IR path is not valid unicode");
+                }
+            }
+        };
+        button_ui.add_space(button_rect.width()*0.06);
+        if button_ui.add_sized(
+            Vec2::new(button_rect.width()*0.47, button_rect.height()),
+            egui::Button::new(">")
+        ).clicked() {
+            self.combobox_widget.select_next_file();
+            if let Some(path) = self.combobox_widget.selected() {
+                if let Some(s) = path.to_str() {
+                    to_change = Some((String::from("ir"), PedalParameterValue::String(s.to_string())));
+                } else {
+                    log::warn!("Selected IR path is not valid unicode");
+                }
+            }
+        };
+
+        if let Some(value) = pedal_knob(ui, "", self.parameters.get("dry_wet").unwrap(), Vec2::new(0.325, 0.037), 0.35) {
             to_change = Some(("dry_wet".to_string(), value));
         }
 
