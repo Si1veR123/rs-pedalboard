@@ -1,5 +1,3 @@
-/// WIP
-
 pub struct Resampler {
     stages: Vec<HalfBandFilter>,
     scratch: Vec<f32>,
@@ -18,6 +16,12 @@ impl Resampler {
 
     pub fn upsample(&mut self, input: &[f32], output: &mut [f32]) {
         let mut cur_len = input.len();
+
+        if self.scratch.len() < (input.len() << self.stages.len()) {
+            log::warn!("Resampler: input size exceeds maximum block size, resizing scratch buffer.");
+            self.scratch.resize(input.len() << self.stages.len(), 0.0);
+        }
+
         self.scratch[..cur_len].copy_from_slice(input);
         let mut use_output = true;
 
@@ -58,14 +62,19 @@ impl Resampler {
         }
     }
 
-    pub fn output_buffer_size(&self, input_size: usize) -> usize {
+    /// Calculate the output buffer size for upsampling
+    pub fn upsample_output_buffer_size(&self, input_size: usize) -> usize {
         input_size << self.stages.len()
+    }
+
+    /// Calculate the output buffer size for downsampling
+    pub fn downsample_output_buffer_size(&self, input_size: usize) -> usize {
+        input_size >> self.stages.len()
     }
 }
 
 pub struct HalfBandFilter {
-    // even-phase taps: h[0], h[2], h[4], ... (center tap is at an odd index for odd-length filter)
-    phase_even: Vec<f32>,
+    h_even: Vec<f32>,
     center_tap: f32,
     delay: Vec<f32>,
     pos: usize,
@@ -74,22 +83,22 @@ pub struct HalfBandFilter {
 }
 
 impl HalfBandFilter {
-    /// Create a true halfband filter with alternating zero taps
     pub fn new(length: usize) -> Self {
-        assert!(length % 2 == 1, "Halfband filter length must be odd");
+        assert!(length % 2 == 1, "length must be odd");
         let mid = length / 2;
+        let mut taps = vec![0.0f32; length];
 
-        // Ideal halfband (cutoff 0.25)
-        let mut taps = vec![0.0; length];
+        // ideal halfband prototype
         for n in 0..length {
             let k = n as isize - mid as isize;
             if k == 0 {
-                taps[n] = 0.5; // center tap = 0.5
+                taps[n] = 0.5;
             } else if k % 2 == 0 {
-                let x = std::f32::consts::PI * k as f32 / 2.0;
-                taps[n] = 0.5 * x.sin() / x;
+                let kf = k as f32;
+                taps[n] = (std::f32::consts::PI * 0.5 * kf).sin() /
+                          (std::f32::consts::PI * kf);
             } else {
-                taps[n] = 0.0; // odd taps other than center are zero
+                taps[n] = 0.0; // exact zeros for odd indices
             }
         }
 
@@ -101,104 +110,257 @@ impl HalfBandFilter {
             taps[n] *= w;
         }
 
-        // Normalize DC gain to 1
+        // Normalize DC gain
         let sum: f32 = taps.iter().sum();
-        for t in taps.iter_mut() {
-            *t /= sum;
-        }
+        for v in taps.iter_mut() { *v /= sum; }
 
         Self::new_from_taps(taps)
     }
 
     pub fn new_from_taps(taps: Vec<f32>) -> Self {
-        assert!(taps.len() % 2 == 1, "Halfband filter must have odd length");
         let len = taps.len();
+        assert!(len % 2 == 1, "taps length must be odd");
         let mid = len / 2;
-        let center_tap = taps[mid];
 
-        // store only even-index taps (k = 0,2,4,...) – center tap is at an odd index for odd len, so excluded here
-        let phase_even: Vec<f32> = taps
-            .iter()
-            .enumerate()
-            .filter(|(i, _)| i % 2 == 0)
-            .map(|(_, &c)| c)
-            .collect();
-
-        let delay = vec![0.0; len];
-        Self {
-            phase_even,
-            center_tap,
-            delay,
-            pos: 0,
-            len,
-            mid,
+        // keep only nonzero even taps
+        let mut h_even = Vec::new();
+        for (i, &c) in taps.iter().enumerate() {
+            if i % 2 == 0 && i != mid {
+                h_even.push(c);
+            }
         }
+
+        let center_tap = taps[mid];
+        let delay = vec![0.0f32; len];
+
+        Self { h_even, center_tap, delay, pos: 0, len, mid }
     }
 
-    #[inline]
-    fn delay_idx(&self, back: usize) -> usize {
-        (self.pos + self.len - (back % self.len)) % self.len
+    fn idx(&self, base: usize, offset: usize) -> usize {
+        if base >= offset { base - offset } else { base + self.len - offset }
     }
 
     pub fn upsample(&mut self, input: &[f32], output: &mut [f32]) {
-        assert_eq!(output.len(), input.len() * 2, "upsample: wrong output size");
-        // For each x[n] written at pos, y[2n] = sum h[2m] x[n - m]; y[2n+1] = h[mid] x[n - mid/??]
-        // Since the center tap index is `mid` (odd), the odd output is simply center * x[n - mid],
-        // which we fetch from the delay.
+        assert_eq!(output.len(), input.len() * 2);
+
         for (i, &x) in input.iter().enumerate() {
-            // write current sample
             self.delay[self.pos] = x;
+            let base = if self.pos == 0 { self.len - 1 } else { self.pos - 1 };
 
-            // Even output: sum over even taps (k = 2m)
+            // y[2n] = convolution with even taps
             let mut even_out = 0.0;
-            for (m, &c) in self.phase_even.iter().enumerate() {
-                let k = 2 * m; // original tap index
-                let idx = self.delay_idx(k);
-                even_out += c * self.delay[idx];
+            for (k, &c) in self.h_even.iter().enumerate() {
+                let d1 = self.idx(base, 2*k);
+                let d2 = self.idx(base, self.len - 1 - 2*k);
+                even_out += c * (self.delay[d1] + self.delay[d2]);
             }
+            even_out += self.center_tap * self.delay[self.idx(base, self.mid)];
 
-            // Odd output: only center tap contributes (all other odd taps are zero)
-            let odd_idx = self.delay_idx(self.mid);
-            let odd_out = self.center_tap * self.delay[odd_idx];
+            // y[2n+1] = center_tap * newest sample
+            let odd_out = self.center_tap * self.delay[self.pos];
 
-            output[2 * i] = even_out;
-            output[2 * i + 1] = odd_out;
+            output[2*i]   = even_out;
+            output[2*i+1] = odd_out;
 
-            // advance circular pointer
             self.pos = (self.pos + 1) % self.len;
         }
     }
 
     pub fn downsample(&mut self, input: &[f32], output: &mut [f32]) {
-        assert_eq!(input.len(), output.len() * 2, "downsample: wrong input/output sizes");
+        assert_eq!(input.len(), output.len() * 2);
 
-        // Push samples one by one; emit an output after every 2 pushes.
-        let mut out_i = 0usize;
-        let mut parity = 0u8;
-
-        for &s in input {
-            self.delay[self.pos] = s;
+        for (i, chunk) in input.chunks_exact(2).enumerate() {
+            self.delay[self.pos] = chunk[0];
+            self.pos = (self.pos + 1) % self.len;
+            self.delay[self.pos] = chunk[1];
             self.pos = (self.pos + 1) % self.len;
 
-            parity ^= 1;
-            if parity == 0 {
-                // We have just consumed an even+odd pair -> produce one output.
-                let mut acc = 0.0;
+            let base = if self.pos == 0 { self.len - 1 } else { self.pos - 1 };
 
-                // Even-tap branch
-                for (m, &c) in self.phase_even.iter().enumerate() {
-                    let k = 2 * m; // original tap index
-                    let idx = self.delay_idx(k);
-                    acc += c * self.delay[idx];
-                }
-
-                // Center tap contribution (only non-zero odd tap)
-                let cidx = self.delay_idx(self.mid);
-                acc += self.center_tap * self.delay[cidx];
-
-                output[out_i] = acc;
-                out_i += 1;
+            let mut acc = 0.0;
+            for (k, &c) in self.h_even.iter().enumerate() {
+                let d1 = self.idx(base, 2*k);
+                let d2 = self.idx(base, self.len - 1 - 2*k);
+                acc += c * (self.delay[d1] + self.delay[d2]);
             }
+            acc += self.center_tap * self.delay[self.idx(base, self.mid)];
+
+            output[i] = acc;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use hound::{WavReader, WavWriter};
+    use std::io::{self, Write};
+
+    fn samples_from_file(path: &std::path::Path) -> (Vec<f32>, hound::WavSpec) {
+        let mut reader = WavReader::open(path).expect("Failed to open test WAV");
+        let spec = reader.spec();
+        let channels = spec.channels;
+
+        let float_samples = match spec.sample_format {
+            hound::SampleFormat::Float => {
+                let ir_samples: Result<Vec<f32>, _> = reader.into_samples().collect();
+                ir_samples.map_err(|e| e.to_string())
+            },
+            hound::SampleFormat::Int => {
+                let max_amplitude = (1i64 << (spec.bits_per_sample - 1)) as f32;
+                let ir_samples: Result<Vec<f32>, _> = reader.samples::<i32>()
+                    .map(|s| s.and_then(|s| Ok(s as f32 / max_amplitude)))
+                    .collect();
+                ir_samples.map_err(|e| e.to_string())
+            }
+        }.expect("Failed to read samples");
+
+        (
+            float_samples.into_iter()
+            .enumerate()
+            .filter_map(|(i, s)| if i as u16 % channels == 0 { Some(s) } else { None })
+            .collect::<Vec<f32>>(),
+            spec
+        )
+    }
+
+    fn create_resampled_files(path: &std::path::Path, resampler: &mut Resampler) {
+        let (input_first_channel, spec) = samples_from_file(path);
+
+        let out_size = resampler.upsample_output_buffer_size(input_first_channel.len());
+        let mut output = vec![0.0; out_size];
+        resampler.upsample(&input_first_channel, &mut output);
+        let out_spec = hound::WavSpec {
+            channels: 1,
+            sample_rate: spec.sample_rate * 2_usize.pow(resampler.stages.len() as u32) as u32,
+            bits_per_sample: 32,
+            sample_format: hound::SampleFormat::Float,
+        };
+        let mut writer = WavWriter::create(path.with_file_name("upsampled.wav"), out_spec).expect("Failed to create output WAV");
+        
+        for &s in &output {
+            writer.write_sample(s).unwrap();
+        }
+
+        writer.finalize().unwrap();
+
+        // Now downsample
+        let down_out_size = resampler.downsample_output_buffer_size(output.len());
+        let mut down_output = vec![0.0; down_out_size];
+        resampler.downsample(&output, &mut down_output);
+        let down_spec = hound::WavSpec {
+            channels: 1,
+            sample_rate: spec.sample_rate,
+            bits_per_sample: 32,
+            sample_format: hound::SampleFormat::Float,
+        };
+        let mut down_writer = WavWriter::create(path.with_file_name("downsampled.wav"), down_spec).expect("Failed to create downsampled WAV");
+        for &s in &down_output {
+            down_writer.write_sample(s).unwrap();
+        }
+        down_writer.finalize().unwrap();
+    }
+
+    fn create_resampled_files_block(path: &std::path::Path, resampler: &mut Resampler) {
+        let (input_first_channel, spec) = samples_from_file(path);
+
+        let block_size = 256;
+
+        //
+        // Upsampling in blocks
+        //
+        let mut upsampled = Vec::new();
+        let mut block = vec![0.0; block_size];
+
+        for chunk in input_first_channel.chunks(block_size) {
+            // Copy into fixed-size block (pad last one with zeros if needed)
+            block[..chunk.len()].copy_from_slice(chunk);
+            if chunk.len() < block_size {
+                block[chunk.len()..].fill(0.0);
+            }
+
+            let out_size = resampler.upsample_output_buffer_size(chunk.len());
+            let mut out_block = vec![0.0; out_size];
+            resampler.upsample(&block[..chunk.len()], &mut out_block);
+
+            upsampled.extend_from_slice(&out_block);
+        }
+
+        let out_spec = hound::WavSpec {
+            channels: 1,
+            sample_rate: spec.sample_rate * 2_usize.pow(resampler.stages.len() as u32) as u32,
+            bits_per_sample: 32,
+            sample_format: hound::SampleFormat::Float,
+        };
+        let mut writer = WavWriter::create(path.with_file_name("upsampled_block.wav"), out_spec)
+            .expect("Failed to create output WAV");
+
+        for &s in &upsampled {
+            writer.write_sample(s).unwrap();
+        }
+        writer.finalize().unwrap();
+
+        //
+        // Downsampling in blocks
+        //
+        let mut downsampled = Vec::new();
+        let mut block = vec![0.0; block_size];
+
+        for chunk in upsampled.chunks(block_size) {
+            block[..chunk.len()].copy_from_slice(chunk);
+            if chunk.len() < block_size {
+                block[chunk.len()..].fill(0.0);
+            }
+
+            let out_size = resampler.downsample_output_buffer_size(chunk.len());
+            let mut out_block = vec![0.0; out_size];
+            resampler.downsample(&block[..chunk.len()], &mut out_block);
+
+            downsampled.extend_from_slice(&out_block);
+        }
+
+        let down_spec = hound::WavSpec {
+            channels: 1,
+            sample_rate: spec.sample_rate,
+            bits_per_sample: 32,
+            sample_format: hound::SampleFormat::Float,
+        };
+        let mut down_writer =
+            WavWriter::create(path.with_file_name("downsampled_block.wav"), down_spec)
+                .expect("Failed to create downsampled WAV");
+
+        for &s in &downsampled {
+            down_writer.write_sample(s).unwrap();
+        }
+        down_writer.finalize().unwrap();
+    }
+
+    #[test]
+    fn test_resampler() {
+        let mut resampler = Resampler::new(1, 100);
+
+        // Enter wav file to upsample
+        print!("Enter a path to upsample: ");
+        io::stdout().flush().unwrap();
+        let mut input_string = String::new();
+        io::stdin().read_line(&mut input_string).expect("Failed to read line");
+
+        let test_path = std::path::Path::new(input_string.trim());
+        create_resampled_files(test_path, &mut resampler);
+    }
+
+    #[test]
+    fn test_resampler_block() {
+        let mut resampler = Resampler::new(1, 100);
+
+        // Enter wav file to upsample
+        print!("Enter a path to upsample in blocks: ");
+        io::stdout().flush().unwrap();
+        let mut input_string = String::new();
+        io::stdin().read_line(&mut input_string).expect("Failed to read line");
+
+        let test_path = std::path::Path::new(input_string.trim());
+        create_resampled_files_block(test_path, &mut resampler);
     }
 }

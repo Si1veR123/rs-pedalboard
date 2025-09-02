@@ -201,7 +201,6 @@ impl PedalTrait for ImpulseResponse {
         self.sample_rate = Some(sample_rate as f32);
 
         let ir_path = self.parameters.get("ir").unwrap().value.as_str().unwrap().to_string();
-        log::info!("Setting IR convolver with path: {}", ir_path);
         if !ir_path.is_empty() {
             self.set_ir_convolver(&ir_path, sample_rate as f32);
         } else {

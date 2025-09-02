@@ -3,11 +3,11 @@ use std::cell::UnsafeCell;
 use std::time::Instant;
 use cpal::{InputCallbackInfo, OutputCallbackInfo, StreamConfig, SupportedStreamConfig};
 use cpal::{traits::DeviceTrait, Device, Stream};
-use rubato::{FftFixedInOut, Resampler};
 use smol::channel::{Receiver, Sender};
 use ringbuf::traits::Split;
 use ringbuf::{traits::Consumer, HeapRb};
 use rs_pedalboard::pedalboard_set::PedalboardSet;
+use rs_pedalboard::dsp_algorithms::resampler::Resampler;
 
 use crate::audio_processor::AudioProcessor;
 use crate::metronome_player::MetronomePlayer;
@@ -367,30 +367,8 @@ pub fn create_linked_streams(
                 let input_processor = unsafe { &mut *ip.get() };
         
                 if input_processor.is_none() {
-                    let resamplers = if settings_clone.upsample_passes > 0 {
-                        // Since we only do 2x, 4x etc, it is guaranteed that output size is input size << upsample_passes
-                        let upsampler = FftFixedInOut::new(
-                            used_sample_rate as usize,
-                            processing_sample_rate as usize,
-                            data.len(),
-                            1
-                        ).expect("Failed to create upsampler");
-                        let downsampler = FftFixedInOut::new(
-                            processing_sample_rate as usize,
-                            used_sample_rate as usize,
-                            data.len() << settings_clone.upsample_passes,
-                            1
-                        ).expect("Failed to create downsampler");
-
-                        assert_eq!(upsampler.input_frames_next(), data.len());
-                        assert_eq!(upsampler.output_frames_next(), data.len() << settings_clone.upsample_passes);
-                        assert_eq!(downsampler.input_frames_next(), data.len() << settings_clone.upsample_passes);
-                        assert_eq!(downsampler.output_frames_next(), data.len());
-
-                        Some((
-                            upsampler,
-                            downsampler
-                        ))
+                    let resampler = if settings_clone.upsample_passes > 0 {
+                        Some(Resampler::new(settings_clone.upsample_passes as usize, settings_clone.frames_per_period))
                     } else {
                         None
                     };
@@ -411,7 +389,7 @@ pub fn create_linked_streams(
                         volume_monitor: (false, Instant::now(), (0.0, 0.0), PeakVolumeMonitor::new(), PeakVolumeMonitor::new()),
                         volume_normalizer: None,
                         processing_sample_rate,
-                        resamplers
+                        resampler
                     });
                 }
                 

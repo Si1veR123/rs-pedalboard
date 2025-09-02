@@ -1,11 +1,10 @@
 use std::{sync::{atomic::AtomicBool, Arc}, time::Instant};
-use rubato::{FftFixedInOut, Resampler};
 use smol::channel::{Receiver as SmolReceiver, Sender as SmolSender};
 use crossbeam::channel::Receiver;
 use ringbuf::{traits::{Producer, Split}, HeapProd, HeapRb};
 
 use rs_pedalboard::{
-    dsp_algorithms::yin::Yin, pedalboard_set::PedalboardSet, pedals::{Pedal, PedalParameterValue, PedalTrait}, DEFAULT_VOLUME_MONITOR_UPDATE_RATE
+    dsp_algorithms::{yin::Yin, resampler::Resampler}, pedalboard_set::PedalboardSet, pedals::{Pedal, PedalParameterValue, PedalTrait}, DEFAULT_VOLUME_MONITOR_UPDATE_RATE
 };
 
 use crate::{
@@ -34,7 +33,7 @@ pub struct AudioProcessor {
     pub volume_monitor: (bool, Instant, (f32, f32), PeakVolumeMonitor, PeakVolumeMonitor),
     pub volume_normalizer: Option<PeakNormalizer>,
     pub processing_sample_rate: u32,
-    pub resamplers: Option<(FftFixedInOut<f32>, FftFixedInOut<f32>)>,
+    pub resampler: Option<Resampler>,
 }
 
 impl AudioProcessor {
@@ -55,9 +54,9 @@ impl AudioProcessor {
 
         // Upsample, if needed, into processing buffer
         self.processing_buffer.clear();
-        if let Some((upsampler, _)) = &mut self.resamplers {
-            self.processing_buffer.resize(upsampler.output_frames_next(), 0.0);
-            upsampler.process_into_buffer(&[&self.data_buffer], &mut [&mut self.processing_buffer], None).unwrap();
+        if let Some(resampler) = &mut self.resampler {
+            self.processing_buffer.resize(resampler.upsample_output_buffer_size(self.data_buffer.len()), 0.0);
+            resampler.upsample(&self.data_buffer, self.processing_buffer.as_mut_slice());
         } else {
             self.processing_buffer.extend_from_slice(&self.data_buffer);
         }
@@ -96,9 +95,8 @@ impl AudioProcessor {
         }
 
         // Downsample, if needed, back into data buffer
-        if let Some((_, downsampler)) = &mut self.resamplers {
-            self.data_buffer.resize(downsampler.output_frames_next(), 0.0);
-            downsampler.process_into_buffer(&[&self.processing_buffer], &mut [&mut self.data_buffer], None).unwrap();
+        if let Some(resampler) = &mut self.resampler {
+            resampler.downsample(&self.processing_buffer, self.data_buffer.as_mut_slice());
         } else {
             self.data_buffer.clear();
             self.data_buffer.extend_from_slice(&self.processing_buffer);
