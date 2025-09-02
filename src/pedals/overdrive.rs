@@ -187,21 +187,21 @@ impl PedalTrait for Overdrive {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _message_buffer: &[String]) -> Option<(String, PedalParameterValue)> {
-        ui.add(Image::new(include_image!("images/volume.png")));
+        ui.add(Image::new(include_image!("images/overdrive.png")));
 
         let mut to_change = None;
         let drive_param = self.get_parameters().get("Drive").unwrap();
-        if let Some(value) = pedal_knob(ui, "Drive", drive_param, egui::Vec2::new(0.08, 0.03), 0.35) {
+        if let Some(value) = pedal_knob(ui, "", drive_param, egui::Vec2::new(0.127, 0.085), 0.35) {
             to_change = Some(("Drive".to_string(), value));
         }
 
         let tone_param = self.get_parameters().get("Tone").unwrap();
-        if let Some(value) = pedal_knob(ui, "Tone", tone_param, egui::Vec2::new(0.08, 0.34), 0.35) {
+        if let Some(value) = pedal_knob(ui, "", tone_param, egui::Vec2::new(0.535, 0.085), 0.35) {
             to_change = Some(("Tone".to_string(), value));
         }
 
         let level_param = self.get_parameters().get("Level").unwrap();
-        if let Some(value) = pedal_knob(ui, "Level", level_param, egui::Vec2::new(0.57, 0.34), 0.35) {
+        if let Some(value) = pedal_knob(ui, "", level_param, egui::Vec2::new(0.325, 0.335), 0.35) {
             to_change = Some(("Level".to_string(), value));
         }
 

@@ -68,7 +68,6 @@ pub fn pedal_knob(
             let knob_im_shine_overlay = ui.add(egui::Image::new(egui::include_image!("images/pedal_knob_blender_shine.png"))
                 .max_width(size_px)
                 .sense(egui::Sense::click_and_drag())
-                .tint(Color32::from_white_alpha(100))
             );
 
             
@@ -148,4 +147,25 @@ pub fn pedal_switch(
     } else {
         None
     }
+}
+
+pub fn sideways_arrow(
+    ui: &mut egui::Ui,
+    button_rect: egui::Rect,
+    left: bool
+) {
+    let icon_size = Vec2::splat(ui.spacing().icon_width);
+    let right_arrow_rect = egui::Align2::CENTER_CENTER.align_size_within_rect(icon_size, button_rect);
+    let points = if left {
+        vec![right_arrow_rect.right_top(), right_arrow_rect.right_bottom(), right_arrow_rect.left_center()]
+    } else {
+        vec![right_arrow_rect.left_top(), right_arrow_rect.right_center(), right_arrow_rect.left_bottom()]
+    };
+    ui.painter().add(
+        egui::Shape::convex_polygon(
+            points,
+            Color32::from_gray(200),
+            egui::Stroke::NONE
+        )
+    );
 }

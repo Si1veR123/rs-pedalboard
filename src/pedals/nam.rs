@@ -9,7 +9,7 @@ use eframe::egui::{self, include_image, Vec2};
 use egui_directory_combobox::DirectoryComboBox;
 
 use super::{ui::pedal_knob, PedalParameter, PedalParameterValue, PedalTrait};
-use crate::pedals::ui::pedal_switch;
+use crate::pedals::ui::{pedal_switch, sideways_arrow};
 use crate::{unique_time_id, SAVE_DIR};
 
 const NAM_SAVE_PATH: &str = r"NAM";
@@ -371,10 +371,15 @@ impl PedalTrait for Nam {
                 .max_rect(button_rect)
                 .layout(egui::Layout::left_to_right(egui::Align::Min))
         );
-        if button_ui.add_sized(
-            Vec2::new(button_rect.width()*0.47, button_rect.height()),
-            egui::Button::new("<")
-        ).clicked() {
+        let button_size = Vec2::new(button_rect.width()*0.47, button_rect.height());
+        let left_button_response = button_ui.add_sized(
+            button_size,
+            egui::Button::new("")
+        );
+        
+        sideways_arrow(ui, left_button_response.rect, true);
+
+        if left_button_response.clicked() {
             self.combobox_widget.select_previous_file();
             if let Some(path) = self.combobox_widget.selected() {
                 if let Some(s) = path.to_str() {
@@ -385,10 +390,14 @@ impl PedalTrait for Nam {
             }
         };
         button_ui.add_space(button_rect.width()*0.06);
-        if button_ui.add_sized(
-            Vec2::new(button_rect.width()*0.47, button_rect.height()),
-            egui::Button::new(">")
-        ).clicked() {
+        let right_button_response = button_ui.add_sized(
+            button_size,
+            egui::Button::new("")
+        );
+        
+        sideways_arrow(ui, right_button_response.rect, false);
+
+        if right_button_response.clicked() {
             self.combobox_widget.select_next_file();
             if let Some(path) = self.combobox_widget.selected() {
                 if let Some(s) = path.to_str() {
