@@ -33,7 +33,7 @@ pub struct AudioProcessor {
     pub volume_monitor: (bool, Instant, (f32, f32), PeakVolumeMonitor, PeakVolumeMonitor),
     pub volume_normalizer: Option<PeakNormalizer>,
     pub processing_sample_rate: u32,
-    pub resampler: Option<Resampler>,
+    pub resamplers: Option<(Resampler, Resampler)>,
 }
 
 impl AudioProcessor {
@@ -51,12 +51,12 @@ impl AudioProcessor {
 
         // Update input volume monitor
         self.volume_monitor.3.add_samples(&self.data_buffer);
-
+        
         // Upsample, if needed, into processing buffer
         self.processing_buffer.clear();
-        if let Some(resampler) = &mut self.resampler {
-            self.processing_buffer.resize(resampler.upsample_output_buffer_size(self.data_buffer.len()), 0.0);
-            resampler.upsample(&self.data_buffer, self.processing_buffer.as_mut_slice());
+        if let Some((upsampler, _)) = &mut self.resamplers {
+            self.processing_buffer.resize(upsampler.upsample_output_buffer_size(self.data_buffer.len()), 0.0);
+            upsampler.upsample(&self.data_buffer, self.processing_buffer.as_mut_slice());
         } else {
             self.processing_buffer.extend_from_slice(&self.data_buffer);
         }
@@ -95,8 +95,8 @@ impl AudioProcessor {
         }
 
         // Downsample, if needed, back into data buffer
-        if let Some(resampler) = &mut self.resampler {
-            resampler.downsample(&self.processing_buffer, self.data_buffer.as_mut_slice());
+        if let Some((_, downsampler)) = &mut self.resamplers {
+            downsampler.downsample(&self.processing_buffer, self.data_buffer.as_mut_slice());
         } else {
             self.data_buffer.clear();
             self.data_buffer.extend_from_slice(&self.processing_buffer);

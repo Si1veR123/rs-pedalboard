@@ -1,6 +1,10 @@
+/// A polyphase half band resampler for upsampling and downsampling by powers of two.
+/// 
+/// Each resampler should be used for either upsampling or downsampling.
 pub struct Resampler {
     stages: Vec<HalfBandFilter>,
-    scratch: Vec<f32>,
+    scratch_a: Vec<f32>,
+    scratch_b: Vec<f32>,
 }
 
 impl Resampler {
@@ -10,55 +14,67 @@ impl Resampler {
             stages.push(HalfBandFilter::new(63));
         }
         // scratch buffer must hold the max expanded size
-        let scratch = vec![0.0; max_block << passes];
-        Self { stages, scratch }
+        let scratch_a = vec![0.0; max_block << passes];
+        let scratch_b = scratch_a.clone();
+        Self { stages, scratch_a, scratch_b }
     }
 
     pub fn upsample(&mut self, input: &[f32], output: &mut [f32]) {
         let mut cur_len = input.len();
 
-        if self.scratch.len() < (input.len() << self.stages.len()) {
+        if self.scratch_a.len() < (input.len() << self.stages.len()) {
             log::warn!("Resampler: input size exceeds maximum block size, resizing scratch buffer.");
-            self.scratch.resize(input.len() << self.stages.len(), 0.0);
+            self.scratch_a.resize(input.len() << self.stages.len(), 0.0);
         }
 
-        self.scratch[..cur_len].copy_from_slice(input);
+        self.scratch_a[..cur_len].copy_from_slice(input);
         let mut use_output = true;
 
         for stage in &mut self.stages {
             let next_len = cur_len * 2;
             if use_output {
-                stage.upsample(&self.scratch[..cur_len], &mut output[..next_len]);
+                stage.upsample(&self.scratch_a[..cur_len], &mut output[..next_len]);
             } else {
-                stage.upsample(&output[..cur_len], &mut self.scratch[..next_len]);
+                stage.upsample(&output[..cur_len], &mut self.scratch_a[..next_len]);
             }
             cur_len = next_len;
             use_output = !use_output;
         }
 
         if use_output {
-            output[..cur_len].copy_from_slice(&self.scratch[..cur_len]);
+            output[..cur_len].copy_from_slice(&self.scratch_a[..cur_len]);
         }
     }
 
     pub fn downsample(&mut self, input: &[f32], output: &mut [f32]) {
         let mut cur_len = input.len();
-        self.scratch[..cur_len].copy_from_slice(input);
-        let mut use_output = true;
+
+        if self.scratch_a.len() < (input.len() << self.stages.len()) {
+            log::warn!("Resampler: input size exceeds maximum block size, resizing scratch buffer.");
+            self.scratch_a.resize(input.len() << self.stages.len(), 0.0);
+        }
+        if self.scratch_b.len() < (input.len() << self.stages.len()) {
+            log::warn!("Resampler: input size exceeds maximum block size, resizing scratch buffer.");
+            self.scratch_b.resize(input.len() << self.stages.len(), 0.0);
+        }
+        self.scratch_a[..cur_len].copy_from_slice(input);
+        let mut use_a = true;
 
         for stage in self.stages.iter_mut().rev() {
             let next_len = cur_len / 2;
-            if use_output {
-                stage.downsample(&self.scratch[..cur_len], &mut output[..next_len]);
+            if use_a {
+                stage.downsample(&self.scratch_a[..cur_len], &mut self.scratch_b[..next_len]);
             } else {
-                stage.downsample(&output[..cur_len], &mut self.scratch[..next_len]);
+                stage.downsample(&self.scratch_b[..cur_len], &mut self.scratch_a[..next_len]);
             }
             cur_len = next_len;
-            use_output = !use_output;
+            use_a = !use_a;
         }
 
-        if use_output {
-            output[..cur_len].copy_from_slice(&self.scratch[..cur_len]);
+        if use_a {
+            output[..cur_len].copy_from_slice(&self.scratch_a[..cur_len]);
+        } else {
+            output[..cur_len].copy_from_slice(&self.scratch_b[..cur_len]);
         }
     }
 
@@ -228,6 +244,7 @@ mod tests {
     fn create_resampled_files(path: &std::path::Path, resampler: &mut Resampler) {
         let (input_first_channel, spec) = samples_from_file(path);
 
+        // Upsample
         let out_size = resampler.upsample_output_buffer_size(input_first_channel.len());
         let mut output = vec![0.0; out_size];
         resampler.upsample(&input_first_channel, &mut output);
@@ -267,14 +284,11 @@ mod tests {
 
         let block_size = 256;
 
-        //
         // Upsampling in blocks
-        //
         let mut upsampled = Vec::new();
         let mut block = vec![0.0; block_size];
 
         for chunk in input_first_channel.chunks(block_size) {
-            // Copy into fixed-size block (pad last one with zeros if needed)
             block[..chunk.len()].copy_from_slice(chunk);
             if chunk.len() < block_size {
                 block[chunk.len()..].fill(0.0);
@@ -301,9 +315,7 @@ mod tests {
         }
         writer.finalize().unwrap();
 
-        //
         // Downsampling in blocks
-        //
         let mut downsampled = Vec::new();
         let mut block = vec![0.0; block_size];
 
@@ -338,7 +350,7 @@ mod tests {
 
     #[test]
     fn test_resampler() {
-        let mut resampler = Resampler::new(1, 100);
+        let mut resampler = Resampler::new(2, 100);
 
         // Enter wav file to upsample
         print!("Enter a path to upsample: ");

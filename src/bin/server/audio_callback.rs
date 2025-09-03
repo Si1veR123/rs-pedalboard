@@ -367,8 +367,12 @@ pub fn create_linked_streams(
                 let input_processor = unsafe { &mut *ip.get() };
         
                 if input_processor.is_none() {
-                    let resampler = if settings_clone.upsample_passes > 0 {
-                        Some(Resampler::new(settings_clone.upsample_passes as usize, settings_clone.frames_per_period))
+                    let resamplers = if settings_clone.upsample_passes > 0 {
+                        let max_block = settings_clone.frames_per_period << settings_clone.upsample_passes;
+                        Some((
+                            Resampler::new(settings_clone.upsample_passes as usize, max_block),
+                            Resampler::new(settings_clone.upsample_passes as usize, max_block)
+                        ))
                     } else {
                         None
                     };
@@ -389,7 +393,7 @@ pub fn create_linked_streams(
                         volume_monitor: (false, Instant::now(), (0.0, 0.0), PeakVolumeMonitor::new(), PeakVolumeMonitor::new()),
                         volume_normalizer: None,
                         processing_sample_rate,
-                        resampler
+                        resamplers
                     });
                 }
                 
