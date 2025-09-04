@@ -37,10 +37,9 @@ macro_rules! var_delay_phaser {
             where
                 S: serde::Serializer,
             {
-                let mut ser_map = serializer.serialize_map(Some(self.parameters.len()))?;
-                for (key, value) in &self.parameters {
-                    ser_map.serialize_entry(key, value)?;
-                }
+                let mut ser_map = serializer.serialize_map(Some(2))?;
+                ser_map.serialize_entry("id", &self.id)?;
+                ser_map.serialize_entry("parameters", &self.parameters)?;
                 ser_map.end()
             }
         }
@@ -50,12 +49,18 @@ macro_rules! var_delay_phaser {
             where
                 D: serde::Deserializer<'a>,
             {
-                let parameters = HashMap::<String, PedalParameter>::deserialize(deserializer)?;
+                #[derive(Deserialize)]
+                struct VariableDelayPhaserData {
+                    id: u32,
+                    parameters: HashMap<String, PedalParameter>,
+                }
+
+                let helper = VariableDelayPhaserData::deserialize(deserializer)?;
 
                 Ok(Self {
                     variable_delay_phaser: None,
-                    parameters,
-                    id: crate::unique_time_id()
+                    parameters: helper.parameters,
+                    id: helper.id,
                 })
             }
         }

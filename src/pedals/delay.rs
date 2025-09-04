@@ -45,21 +45,32 @@ impl Serialize for Delay {
     where
         S: serde::Serializer,
     {
-        let mut ser_map = serializer.serialize_map(Some(self.parameters.len()))?;
-        for (key, value) in &self.parameters {
-            ser_map.serialize_entry(key, value)?;
-        }
-        Ok(ser_map.end()?)
+        let mut ser_map = serializer.serialize_map(Some(2))?;
+        ser_map.serialize_entry("id", &self.id)?;
+        ser_map.serialize_entry("parameters", &self.parameters)?;
+        ser_map.end()
     }
 }
 
-impl<'a> Deserialize<'a> for Delay {
+impl<'de> Deserialize<'de> for Delay {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: serde::Deserializer<'a>,
+        D: serde::Deserializer<'de>,
     {
-        let parameters: HashMap<String, PedalParameter> = HashMap::deserialize(deserializer)?;
-        Ok(Delay { parameters, delay_buffer: None, tone_eq: None, sample_rate: None, id: unique_time_id() })
+        #[derive(Deserialize)]
+        struct DelayData {
+            id: u32,
+            parameters: HashMap<String, PedalParameter>,
+        }
+
+        let helper = DelayData::deserialize(deserializer)?;
+        Ok(Delay {
+            id: helper.id,
+            parameters: helper.parameters,
+            delay_buffer: None,
+            tone_eq: None,
+            sample_rate: None,
+        })
     }
 }
 

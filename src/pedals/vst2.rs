@@ -55,11 +55,14 @@ impl Serialize for Vst2 {
     where
         S: serde::Serializer,
     {
-        let mut ser_map = serializer.serialize_map(Some(self.parameters.len()))?;
-        for (key, value) in &self.parameters {
-            let idx = self.param_index_map.get(key).cloned();
-            ser_map.serialize_entry(key, &(idx, value))?;
-        }
+        let parameters_with_idx: HashMap<String, (Option<usize>, PedalParameter)> = self.parameters.iter().map(|(k, v)| {
+            let idx = self.param_index_map.get(k).cloned();
+            (k.clone(), (idx, v.clone()))
+        }).collect();
+
+        let mut ser_map = serializer.serialize_map(Some(2))?;
+        ser_map.serialize_entry("id", &self.id)?;
+        ser_map.serialize_entry("parameters", &parameters_with_idx)?;
         ser_map.end()
     }
 }
@@ -69,7 +72,14 @@ impl<'a> Deserialize<'a> for Vst2 {
     where
         D: serde::Deserializer<'a>,
     {
-        let parameters_with_idx: HashMap<String, (Option<usize>, PedalParameter)> = HashMap::deserialize(deserializer)?;
+        #[derive(Deserialize)]
+        struct Vst2Data {
+            id: u32,
+            parameters_with_idx: HashMap<String, (Option<usize>, PedalParameter)>,
+        }
+        let helper = Vst2Data::deserialize(deserializer)?;
+
+        let parameters_with_idx = helper.parameters_with_idx;
         let name = parameters_with_idx.get("plugin").unwrap().1.value.as_str().unwrap().to_string();
         let dry_wet = parameters_with_idx.get("dry_wet").unwrap().1.value.as_float().unwrap_or(1.0);
         let active = parameters_with_idx.get("active").unwrap().1.value.as_bool().unwrap_or(true);
@@ -105,7 +115,7 @@ impl<'a> Deserialize<'a> for Vst2 {
             }
         }
 
-        let id = unique_time_id();
+        let id = helper.id;
 
         let mut empty_vst = Vst2 {
             instance: None,

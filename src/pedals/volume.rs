@@ -15,6 +15,7 @@ use eframe::egui::{include_image, self, Vec2};
 use serde::{Serialize, Deserialize};
 
 
+#[derive(Serialize, Deserialize)]
 pub struct Volume {
     parameters: HashMap<String, PedalParameter>,
     id: u32,
@@ -26,28 +27,6 @@ impl Clone for Volume {
             parameters: self.parameters.clone(),
             id: unique_time_id()
         }
-    }
-}
-
-impl Serialize for Volume {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.collect_map(self.parameters.iter())
-    }
-}
-
-impl<'a> Deserialize<'a> for Volume {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'a>,
-    {
-        let parameters = HashMap::<String, PedalParameter>::deserialize(deserializer)?;
-        Ok(Volume {
-            parameters,
-            id: unique_time_id()
-        })
     }
 }
 

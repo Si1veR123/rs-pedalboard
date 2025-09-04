@@ -13,6 +13,7 @@ use eframe::egui::include_image;
 use eframe::egui::Vec2;
 use serde::{Serialize, Deserialize};
 
+#[derive(Serialize, Deserialize)]
 pub struct Fuzz {
     parameters: HashMap<String, PedalParameter>,
     id: u32
@@ -27,27 +28,6 @@ impl Clone for Fuzz {
     }
 }
 
-impl Serialize for Fuzz {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.collect_map(self.parameters.iter())
-    }
-}
-
-impl<'a> Deserialize<'a> for Fuzz {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'a>,
-    {
-        let parameters = HashMap::<String, PedalParameter>::deserialize(deserializer)?;
-        Ok(Fuzz {
-            parameters,
-            id: unique_time_id()
-        })
-    }
-}
 
 impl Hash for Fuzz {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {

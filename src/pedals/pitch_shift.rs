@@ -11,6 +11,7 @@ use super::PedalParameterValue;
 use super::ui::pedal_knob;
 
 use eframe::egui::{include_image, self};
+use serde::ser::SerializeMap;
 use serde::{Serialize, Deserialize};
 use signalsmith_stretch::Stretch;
 
@@ -59,7 +60,10 @@ impl Serialize for PitchShift {
     where
         S: serde::Serializer,
     {
-        serializer.collect_map(self.parameters.iter())
+        let mut ser_map = serializer.serialize_map(Some(2))?;
+        ser_map.serialize_entry("id", &self.id)?;
+        ser_map.serialize_entry("parameters", &self.parameters)?;
+        ser_map.end()
     }
 }
 
@@ -68,14 +72,19 @@ impl<'a> Deserialize<'a> for PitchShift {
     where
         D: serde::Deserializer<'a>,
     {
-        let parameters: HashMap<String, PedalParameter> = HashMap::deserialize(deserializer)?;
+        #[derive(Deserialize)]
+        struct PitchShiftData {
+            id: u32,
+            parameters: HashMap<String, PedalParameter>,
+        }
+        let helper = PitchShiftData::deserialize(deserializer)?;
 
         Ok(PitchShift {
-            parameters,
+            parameters: helper.parameters,
             signalsmith_stretch: None,
             eq: None,
             output_buffer: Vec::new(),
-            id: crate::unique_time_id(),
+            id: helper.id
         })
     }
 }

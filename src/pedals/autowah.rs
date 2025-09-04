@@ -32,10 +32,9 @@ impl Serialize for AutoWah {
     where
         S: serde::Serializer,
     {
-        let mut ser_map = serializer.serialize_map(Some(self.parameters.len()))?;
-        for (key, value) in &self.parameters {
-            ser_map.serialize_entry(key, value)?;
-        }
+        let mut ser_map = serializer.serialize_map(Some(2))?;
+        ser_map.serialize_entry("id", &self.id)?;
+        ser_map.serialize_entry("parameters", &self.parameters)?;
         ser_map.end()
     }
 }
@@ -45,12 +44,18 @@ impl<'a> Deserialize<'a> for AutoWah {
     where
         D: serde::Deserializer<'a>,
     {
-        let parameters = HashMap::<String, PedalParameter>::deserialize(deserializer)?;
+        #[derive(Deserialize)]
+        struct AutoWahData {
+            id: u32,
+            parameters: HashMap<String, PedalParameter>,
+        }
+
+        let helper = AutoWahData::deserialize(deserializer)?;
         Ok(AutoWah {
-            parameters,
+            parameters: helper.parameters,
             filter: None,
             envelope: 0.0,
-            id: crate::unique_time_id()
+            id: helper.id
         })
     }
 }

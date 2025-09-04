@@ -14,6 +14,7 @@ use super::ui::{pedal_knob, pedal_switch};
 
 use eframe::egui::Image;
 use eframe::egui::{include_image, self, Vec2};
+use serde::ser::SerializeMap;
 use serde::{Serialize, Deserialize};
 
 
@@ -43,22 +44,31 @@ impl Serialize for Distortion {
     where
         S: serde::Serializer,
     {
-        serializer.collect_map(self.parameters.iter())
+        let mut ser_map = serializer.serialize_map(Some(2))?;
+        ser_map.serialize_entry("id", &self.id)?;
+        ser_map.serialize_entry("parameters", &self.parameters)?;
+        ser_map.end()
     }
 }
 
-impl<'a> Deserialize<'a> for Distortion {
+impl<'de> Deserialize<'de> for Distortion {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: serde::Deserializer<'a>,
+        D: serde::Deserializer<'de>,
     {
-        let parameters = HashMap::<String, PedalParameter>::deserialize(deserializer)?;
+        #[derive(Deserialize)]
+        struct DistortionData {
+            id: u32,
+            parameters: HashMap<String, PedalParameter>,
+        }
+
+        let helper = DistortionData::deserialize(deserializer)?;
         Ok(Distortion {
-            parameters,
+            id: helper.id,
+            parameters: helper.parameters,
             post_eq: None,
             highpass: None,
             sample_rate: None,
-            id: unique_time_id()
         })
     }
 }

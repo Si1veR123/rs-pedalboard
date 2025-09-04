@@ -59,11 +59,10 @@ impl Serialize for ImpulseResponse {
     where
         S: serde::Serializer,
     {
-        let mut ser_map = serializer.serialize_map(Some(self.parameters.len()))?;
-        for (key, value) in &self.parameters {
-            ser_map.serialize_entry(key, value)?;
-        }
-        Ok(ser_map.end()?)
+        let mut ser_map = serializer.serialize_map(Some(2))?;
+        ser_map.serialize_entry("id", &self.id)?;
+        ser_map.serialize_entry("parameters", &self.parameters)?;
+        ser_map.end()
     }
 }
 
@@ -72,15 +71,19 @@ impl<'a> Deserialize<'a> for ImpulseResponse {
     where
         D: serde::Deserializer<'a>,
     {
-        // The ir convolver is set when the config is set on the server, as it requires the max buffer size.
-        let parameters = HashMap::<String, PedalParameter>::deserialize(deserializer)?;
-        let id = unique_time_id();
+        #[derive(Deserialize)]
+        struct ImpulseResponseData {
+            id: u32,
+            parameters: HashMap<String, PedalParameter>,
+        }
 
+        let helper = ImpulseResponseData::deserialize(deserializer)?;
+        let id = helper.id;
         let combobox_widget = Self::get_empty_directory_combo_box(id);
 
         Ok(Self {
             ir: None,
-            parameters,
+            parameters: helper.parameters,
             dry_buffer: vec![0.0; 512],
             combobox_widget,
             folders_state: 0,

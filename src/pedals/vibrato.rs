@@ -37,10 +37,9 @@ impl Serialize for Vibrato {
     where
         S: serde::Serializer,
     {
-        let mut ser_map = serializer.serialize_map(Some(self.parameters.len()))?;
-        for (key, value) in &self.parameters {
-            ser_map.serialize_entry(key, value)?;
-        }
+        let mut ser_map = serializer.serialize_map(Some(2))?;
+        ser_map.serialize_entry("id", &self.id)?;
+        ser_map.serialize_entry("parameters", &self.parameters)?;
         ser_map.end()
     }
 }
@@ -50,12 +49,16 @@ impl<'a> Deserialize<'a> for Vibrato {
     where
         D: serde::Deserializer<'a>,
     {
-        let parameters = HashMap::<String, PedalParameter>::deserialize(deserializer)?;
-
-        Ok(Self {
+        #[derive(Deserialize)]
+        struct VibratoData {
+            id: u32,
+            parameters: HashMap<String, PedalParameter>,
+        }
+        let helper = VibratoData::deserialize(deserializer)?;
+        Ok(Vibrato {
             delay_line: None,
-            parameters: parameters.clone(),
-            id: unique_time_id()
+            parameters: helper.parameters,
+            id: helper.id
         })
     }
 }

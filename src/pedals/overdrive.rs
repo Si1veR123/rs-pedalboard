@@ -13,6 +13,7 @@ use super::ui::{pedal_knob, pedal_switch};
 
 use eframe::egui::Image;
 use eframe::egui::{include_image, self, Vec2};
+use serde::ser::SerializeMap;
 use serde::{Serialize, Deserialize};
 
 
@@ -42,7 +43,10 @@ impl Serialize for Overdrive {
     where
         S: serde::Serializer,
     {
-        serializer.collect_map(self.parameters.iter())
+        let mut ser_map = serializer.serialize_map(Some(2))?;
+        ser_map.serialize_entry("id", &self.id)?;
+        ser_map.serialize_entry("parameters", &self.parameters)?;
+        ser_map.end()
     }
 }
 
@@ -51,13 +55,18 @@ impl<'a> Deserialize<'a> for Overdrive {
     where
         D: serde::Deserializer<'a>,
     {
-        let parameters = HashMap::<String, PedalParameter>::deserialize(deserializer)?;
+        #[derive(Deserialize)]
+        struct OverdriveData {
+            id: u32,
+            parameters: HashMap<String, PedalParameter>,
+        }
+        let helper = OverdriveData::deserialize(deserializer)?;
         Ok(Overdrive {
-            parameters,
+            parameters: helper.parameters,
             lowpass: None,
             highpass: None,
             sample_rate: None,
-            id: unique_time_id()
+            id: helper.id
         })
     }
 }

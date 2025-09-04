@@ -61,11 +61,10 @@ impl Serialize for Nam {
     where
         S: serde::Serializer,
     {
-        let mut ser_map = serializer.serialize_map(Some(self.parameters.len()))?;
-        for (key, value) in &self.parameters {
-            ser_map.serialize_entry(key, value)?;
-        }
-        Ok(ser_map.end()?)
+        let mut ser_map = serializer.serialize_map(Some(2))?;
+        ser_map.serialize_entry("id", &self.id)?;
+        ser_map.serialize_entry("parameters", &self.parameters)?;
+        ser_map.end()
     }
 }
 
@@ -75,19 +74,25 @@ impl<'a> Deserialize<'a> for Nam {
     where
         D: serde::Deserializer<'a>,
     {
-        let parameters: HashMap<String, PedalParameter> = HashMap::deserialize(deserializer)?;
+        #[derive(Deserialize)]
+        struct NamData {
+            id: u32,
+            parameters: HashMap<String, PedalParameter>,
+        }
+        let helper = NamData::deserialize(deserializer)?;
+
+        let parameters = helper.parameters;
         let model = parameters.get("model").unwrap().value.as_str().unwrap();
         // Default buffer size, can be changed later with `set_config`
         let modeler = NeuralAmpModeler::new_with_maximum_buffer_size(512).expect("Failed to create neural amp modeler");
 
-        let id = unique_time_id();
         let mut pedal = Nam {
             modeler,
             parameters: parameters.clone(),
             dry_buffer: vec![0.0; 512],
             folders_state: 0,
-            combobox_widget: Self::get_empty_directory_combo_box(id),
-            id
+            combobox_widget: Self::get_empty_directory_combo_box(helper.id),
+            id: helper.id
         };
 
         match PathBuf::from(model).canonicalize() {

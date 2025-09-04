@@ -4,7 +4,7 @@ use crate::{pedals::ui::pedal_switch, unique_time_id};
 
 use super::{PedalTrait, PedalParameter, PedalParameterValue, ui::pedal_knob};
 use eframe::egui::{self, include_image};
-use serde::{Serialize, Deserialize};
+use serde::{ser::SerializeMap, Deserialize, Serialize};
 use freeverb::Freeverb;
 
 pub struct Reverb {
@@ -26,7 +26,10 @@ impl Serialize for Reverb {
     where
         S: serde::Serializer,
     {
-        serializer.collect_map(self.parameters.iter())
+        let mut ser_map = serializer.serialize_map(Some(2))?;
+        ser_map.serialize_entry("id", &self.id)?;
+        ser_map.serialize_entry("parameters", &self.parameters)?;
+        ser_map.end()
     }
 }
 
@@ -35,8 +38,17 @@ impl<'a> Deserialize<'a> for Reverb {
     where
         D: serde::Deserializer<'a>,
     {
-        let parameters: HashMap<String, PedalParameter> = HashMap::deserialize(deserializer)?;
-        Ok(Reverb { reverb: None, parameters, id: unique_time_id() })
+        #[derive(Deserialize)]
+        struct ReverbData {
+            id: u32,
+            parameters: HashMap<String, PedalParameter>,
+        }
+        let helper = ReverbData::deserialize(deserializer)?;
+        Ok(Reverb {
+            reverb: None,
+            parameters: helper.parameters,
+            id: helper.id
+        })
     }
 }
 

@@ -3,6 +3,7 @@ use std::hash::Hash;
 
 use eframe::egui::{self, include_image, Color32, Image, ImageButton, UiBuilder, Vec2};
 use egui_plot::{HLine, Line, Plot, PlotPoint, VLine};
+use serde::ser::SerializeMap;
 use serde::{Deserialize, Serialize};
 
 use super::{PedalParameter, PedalParameterValue, PedalTrait};
@@ -91,7 +92,10 @@ impl Serialize for GraphicEq7 {
     where
         S: serde::Serializer,
     {
-        serializer.collect_map(self.parameters.iter())
+        let mut ser_map = serializer.serialize_map(Some(2))?;
+        ser_map.serialize_entry("id", &self.id)?;
+        ser_map.serialize_entry("parameters", &self.parameters)?;
+        ser_map.end()
     }
 }
 
@@ -100,9 +104,17 @@ impl<'a> Deserialize<'a> for GraphicEq7 {
     where
         D: serde::Deserializer<'a>,
     {
-        let mut parameters: HashMap<String, PedalParameter> = HashMap::deserialize(deserializer)?;
+        #[derive(Deserialize)]
+        struct GraphicEq7Data {
+            id: u32,
+            parameters: HashMap<String, PedalParameter>,
+        }
 
-        // Set live_frequency_plot to 0 when loading the pedal as it is intensive
+        let helper = GraphicEq7Data::deserialize(deserializer)?;
+
+        let mut parameters = helper.parameters;
+
+        // Set live_frequency_plot to false when loading the pedal as it is intensive
         parameters.entry("live_frequency_plot".to_string())
             .and_modify(|p| p.value = PedalParameterValue::Bool(false))
             .or_insert_with(|| PedalParameter {
@@ -131,7 +143,7 @@ impl<'a> Deserialize<'a> for GraphicEq7 {
             response_plot: Self::amplitude_response_plot(&eq, 48000.0),
             eq,
             sample_rate: 48000.0, // Default sample rate, can be set later
-            id: unique_time_id(),
+            id: helper.id,
             prev_live_frequency_plot: Vec::with_capacity(PLOT_POINTS),
             target_live_frequency_plot: Vec::with_capacity(PLOT_POINTS),
             last_frame: Instant::now(),

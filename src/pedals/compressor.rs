@@ -48,28 +48,33 @@ impl Serialize for Compressor {
     where
         S: serde::Serializer,
     {
-        let mut ser_map = serializer.serialize_map(Some(self.parameters.len()))?;
-        for (key, value) in &self.parameters {
-            ser_map.serialize_entry(key, value)?;
-        }
+        let mut ser_map = serializer.serialize_map(Some(2))?;
+        ser_map.serialize_entry("id", &self.id)?;
+        ser_map.serialize_entry("parameters", &self.parameters)?;
         ser_map.end()
     }
 }
 
-impl<'a> Deserialize<'a> for Compressor {
+impl<'de> Deserialize<'de> for Compressor {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: serde::Deserializer<'a>,
+        D: serde::Deserializer<'de>,
     {
-        let parameters = HashMap::<String, PedalParameter>::deserialize(deserializer)?;
+        #[derive(Deserialize)]
+        struct CompressorData {
+            id: u32,
+            parameters: HashMap<String, PedalParameter>,
+        }
+
+        let helper = CompressorData::deserialize(deserializer)?;
         Ok(Compressor {
-            parameters,
+            id: helper.id,
+            parameters: helper.parameters,
             sample_rate: None,
             envelope: 0.0,
             current_envelope: 0.0,
             envelope_last_sent_time: Instant::now(),
             envelope_last_sent_value: 0.0,
-            id: crate::unique_time_id(),
         })
     }
 }

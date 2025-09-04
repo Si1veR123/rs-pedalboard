@@ -39,10 +39,9 @@ impl Serialize for Wah {
     where
         S: serde::Serializer,
     {
-        let mut ser_map = serializer.serialize_map(Some(self.parameters.len()))?;
-        for (key, value) in &self.parameters {
-            ser_map.serialize_entry(key, value)?;
-        }
+        let mut ser_map = serializer.serialize_map(Some(2))?;
+        ser_map.serialize_entry("id", &self.id)?;
+        ser_map.serialize_entry("parameters", &self.parameters)?;
         ser_map.end()
     }
 }
@@ -52,12 +51,17 @@ impl<'a> Deserialize<'a> for Wah {
     where
         D: serde::Deserializer<'a>,
     {
-        let parameters = HashMap::<String, PedalParameter>::deserialize(deserializer)?;
+        #[derive(Deserialize)]
+        struct WahData {
+            id: u32,
+            parameters: HashMap<String, PedalParameter>,
+        }
+        let helper = WahData::deserialize(deserializer)?;
         Ok(Wah {
-            parameters,
+            parameters: helper.parameters,
             sample_rate: None,
             moving_bandpass_filter: None,
-            id: unique_time_id(),
+            id: helper.id
         })
     }
 }

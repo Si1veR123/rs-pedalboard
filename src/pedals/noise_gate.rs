@@ -34,11 +34,10 @@ impl Serialize for NoiseGate {
     where
         S: serde::Serializer,
     {
-        let mut ser_map = serializer.serialize_map(Some(self.parameters.len()))?;
-        for (key, value) in &self.parameters {
-            ser_map.serialize_entry(key, value)?;
-        }
-        Ok(ser_map.end()?)
+        let mut ser_map = serializer.serialize_map(Some(2))?;
+        ser_map.serialize_entry("id", &self.id)?;
+        ser_map.serialize_entry("parameters", &self.parameters)?;
+        ser_map.end()
     }
 }
 
@@ -47,14 +46,19 @@ impl<'de> Deserialize<'de> for NoiseGate {
     where
         D: serde::Deserializer<'de>,
     {
-        let parameters = HashMap::<String, PedalParameter>::deserialize(deserializer)?;
+        #[derive(Deserialize)]
+        struct NoiseGateData {
+            id: u32,
+            parameters: HashMap<String, PedalParameter>,
+        }
+        let helper = NoiseGateData::deserialize(deserializer)?;
         
-        Ok(Self {
-            parameters,
+        Ok(NoiseGate {
+            parameters: helper.parameters,
             gain: 1.0,
             level: 0.0,
             sample_rate: None,
-            id: crate::unique_time_id()
+            id: helper.id
         })
     }
 }
