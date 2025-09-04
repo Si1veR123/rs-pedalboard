@@ -73,10 +73,15 @@ pub struct ServerSettingsSave {
     // Only used for JACK (linux)
     pub periods_per_buffer: usize,
     pub tuner_periods: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub input_device: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub output_device: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub preferred_sample_rate: Option<u32>,
-    pub upsample_passes: u32
+    pub upsample_passes: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recording_dir: Option<PathBuf>
 }
 
 impl Default for ServerSettingsSave {
@@ -90,7 +95,8 @@ impl Default for ServerSettingsSave {
             input_device: None,
             output_device: None,
             preferred_sample_rate: None,
-            upsample_passes: 0
+            upsample_passes: 0,
+            recording_dir: None
         }
     }
 }

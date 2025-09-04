@@ -5,7 +5,7 @@ edition = "2021"
 
 [features]
 server = ["dep:clap"]
-client = ["dep:egui_extras", "dep:image", "dep:egui_dnd", "dep:which", "dep:sysinfo", "dep:chrono", "dep:egui_file"]
+client = ["dep:egui_extras", "dep:image", "dep:egui_dnd", "dep:which", "dep:sysinfo", "dep:egui_file"]
 virtual_keyboard = ["dep:egui_keyboard"]
 log_full_commands = []
 
@@ -49,7 +49,7 @@ num-complex = "0.4.6"
 clap = { version = "4.5.46", optional=true, features=["derive"] }
 which = { version = "8.0.0", optional=true }
 sysinfo = { version = "0.35.2", optional = true }
-chrono = { version = "0.4.41", optional = true }
+chrono = "0.4.41"
 freeverb = "0.1.0"
 ordered-float = { version = "5.0.0", features = ["serde"] }
 rubato = "0.16.2"

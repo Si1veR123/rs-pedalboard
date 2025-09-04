@@ -244,8 +244,15 @@ impl eframe::App for PedalboardClientApp {
                                 }
                             });
                             column2.horizontal_centered(|ui| {
+                                let recording = self.utilities_screen.recorder.recording_time.is_some();
+                                let text_color = if recording {
+                                    ui.visuals().text_color().lerp_to_gamma(Color32::RED, 0.5)
+                                } else {
+                                    ui.visuals().text_color()
+                                };
+
                                 if ui.add_sized(button_size, Button::new(
-                                    RichText::new("Utilities").size(20.0)
+                                    RichText::new("Utilities").size(20.0).color(text_color)
                                 ).stroke(button_outline[2]).fill(button_bg[2])).clicked() {
                                     self.utilities_screen.tuner.active = true;
                                     self.state.set_tuner_active_server(true);

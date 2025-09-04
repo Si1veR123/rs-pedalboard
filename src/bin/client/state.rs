@@ -322,6 +322,22 @@ impl State {
         socket.send(message);
     }
 
+    pub fn start_recording_server(&self) {
+        let mut socket = self.socket.borrow_mut();
+        socket.send("startrecording\n".to_string());
+    }
+
+    pub fn stop_recording_server(&self) {
+        let mut socket = self.socket.borrow_mut();
+        socket.send("stoprecording\n".to_string());
+    }
+
+    pub fn set_recorder_clean_server(&self, clean: bool) {
+        let mut socket = self.socket.borrow_mut();
+        let message = format!("recordclean {}\n", if clean { "on" } else { "off" });
+        socket.send(message);
+    }
+
     pub fn load_state(egui_ctx: eframe::egui::Context) -> Self {
         let pedalboards = SavedPedalboards::load_or_default();
         let socket = ClientSocket::new(crate::SERVER_PORT);

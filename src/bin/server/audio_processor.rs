@@ -8,9 +8,7 @@ use rs_pedalboard::{
 };
 
 use crate::{
-    metronome_player::MetronomePlayer,
-    settings::ServerSettings,
-    volume_monitor::PeakVolumeMonitor, volume_normalization::{PeakNormalizer}
+    metronome_player::MetronomePlayer, recording::RecordingHandle, settings::ServerSettings, volume_monitor::PeakVolumeMonitor, volume_normalization::PeakNormalizer
 };
 
 pub struct AudioProcessor {
@@ -34,10 +32,21 @@ pub struct AudioProcessor {
     pub volume_normalizer: Option<PeakNormalizer>,
     pub processing_sample_rate: u32,
     pub resamplers: Option<(Resampler, Resampler)>,
+    pub recording: RecordingHandle
 }
 
 impl AudioProcessor {
     pub fn process_audio(&mut self, data: &[f32]) {
+        self.recording.tick();
+        if self.recording.is_recording() {
+            if let Some(producer) = self.recording.clean_recording_producer() {
+                let written = producer.push_slice(data);
+                if written != data.len() {
+                    log::warn!("RecordingHandle: Recording ring buffer full, dropping samples.");
+                }
+            }
+        }
+
         self.data_buffer.clear();
         self.data_buffer.extend_from_slice(data);
         self.pedal_command_to_client_buffer.clear();
@@ -100,6 +109,15 @@ impl AudioProcessor {
         } else {
             self.data_buffer.clear();
             self.data_buffer.extend_from_slice(&self.processing_buffer);
+        }
+
+        if self.recording.is_recording() {
+            if let Some(producer) = self.recording.recording_producer() {
+                let written = producer.push_slice(&self.data_buffer);
+                if written != self.data_buffer.len() {
+                    log::warn!("RecordingHandle: Recording ring buffer full, dropping samples.");
+                }
+            }
         }
 
         // Update output volume monitor
@@ -370,7 +388,37 @@ impl AudioProcessor {
                 if self.command_sender.try_send(format!("sr {}\n", self.processing_sample_rate).into()).is_err() {
                     log::error!("Failed to send sample rate to client");
                 }
-            }
+            },
+            "startrecording" => {
+                self.recording.start_recording();
+            },
+            "stoprecording" => {
+                self.recording.stop_recording();
+            },
+            "recordclean" => {
+                let enable_str = words.next()?;
+                match enable_str {
+                    "on" => {
+                        self.recording.set_clean(true);
+                    },
+                    "off" => {
+                        self.recording.set_clean(false);
+                    },
+                    _ => {
+                        log::error!("Invalid value for recordclean command: expected 'on' or 'off'");
+                        return None;
+                    }
+                }
+            },
+            "setrecordingdir" => {
+                let dir_str = &command[command_name.len() + 1..];
+                let dir_path = std::path::PathBuf::from(dir_str);
+                if dir_path.is_dir() {
+                    self.settings.recording_dir = dir_path;
+                } else {
+                    log::error!("Invalid directory for setrecordingdir command: {dir_path:?}");
+                }
+            },
             _ => return None
         }
 

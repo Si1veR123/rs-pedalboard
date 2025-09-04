@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{path::PathBuf, str::FromStr};
 
 use clap::Parser;
 use rs_pedalboard::server_settings::{ServerSettingsSave, SupportedHost};
@@ -43,7 +43,9 @@ pub struct ServerArguments {
     #[arg(long, help="Number of 2x upsample passes to apply before processing (default: 0)")]
     pub upsample_passes: Option<u32>,
     #[arg(long, default_value_t=false, help="Ignore saved settings - use command line arguments/default")]
-    pub ignore_save: bool
+    pub ignore_save: bool,
+    #[arg(long, help="Directory to save recordings to (default: ~/rs_pedalboard/Recordings)")]
+    pub recording_dir: Option<PathBuf>
 }
 
 /// All server settings, compiled from args, save file and default values.
@@ -60,7 +62,8 @@ pub struct ServerSettings {
     pub input_device: Option<String>,
     pub output_device: Option<String>,
     pub preferred_sample_rate: Option<u32>,
-    pub upsample_passes: u32
+    pub upsample_passes: u32,
+    pub recording_dir: PathBuf
 }
 
 impl ServerSettings {
@@ -139,12 +142,39 @@ impl ServerSettings {
             input_device,
             output_device,
             preferred_sample_rate,
-            upsample_passes
+            upsample_passes,
+            recording_dir: Self::recording_dir(
+                args.recording_dir,
+                saved.as_ref()
+                    .and_then(
+                        |s|
+                        s.recording_dir.as_ref().map(|p| p.as_path())
+                    )
+            )
         }
     }
 
     pub fn frames_per_period_after_upsample(&self) -> usize {
         self.frames_per_period * 2_usize.pow(self.upsample_passes)
+    }
+
+    pub fn default_recording_dir() -> Option<PathBuf> {
+        let dir = homedir::my_home()
+            .ok()
+            .and_then(
+                |p| p.and_then(|p| Some(p.join(rs_pedalboard::SAVE_DIR).join("Recordings")))
+            )?;
+            
+        if !dir.exists() {
+            std::fs::create_dir_all(&dir).ok()?;
+        }
+        Some(dir)
+    }
+
+    pub fn recording_dir(arg: Option<PathBuf>, saved: Option<&std::path::Path>) -> PathBuf {
+        arg.or_else(|| saved.map(|s| s.to_path_buf()))
+            .or_else(|| Self::default_recording_dir())
+            .expect("Failed to get recordings directory")
     }
 }
 
@@ -159,7 +189,8 @@ impl From<ServerSettings> for ServerSettingsSave {
             input_device: value.input_device,
             output_device: value.output_device,
             preferred_sample_rate: value.preferred_sample_rate,
-            upsample_passes: value.upsample_passes
+            upsample_passes: value.upsample_passes,
+            recording_dir: Some(value.recording_dir)
         }
     }
 }

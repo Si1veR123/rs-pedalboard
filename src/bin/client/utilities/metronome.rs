@@ -1,6 +1,6 @@
-use eframe::egui::{self, include_image, Color32, ImageButton, RichText, Vec2, Widget};
+use eframe::egui::{self, Color32, RichText, Vec2, Widget};
 
-use crate::state::State;
+use crate::{state::State, utilities::start_stop_icon};
 
 pub struct MetronomeWidget {
     pub state: &'static State,
@@ -54,16 +54,17 @@ impl Widget for &mut MetronomeWidget {
 
             // Play/Pause button
             ui.add_space(5.0);
-            let image_to_use = if self.active {
-                include_image!("../files/pause.png")
-            } else {
-                include_image!("../files/play.png")
-            };
 
-            if ui.add_sized(Vec2::splat(50.0), ImageButton::new(image_to_use).corner_radius(5.0).tint(crate::TEXT_COLOUR)).clicked() {
+            let button_response = ui.add_sized(
+                Vec2::splat(50.0),
+                egui::Button::new("")
+            );
+            if button_response.clicked() {
                 self.active = !self.active;
                 self.state.set_metronome_server(self.active, self.bpm, self.volume);
             }
+
+            start_stop_icon(ui, true, button_response.rect, 30.0);
 
             ui.add_space(10.0);
         }).response

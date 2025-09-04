@@ -11,6 +11,7 @@ use rs_pedalboard::dsp_algorithms::resampler::Resampler;
 
 use crate::audio_processor::AudioProcessor;
 use crate::metronome_player::MetronomePlayer;
+use crate::recording::RecordingHandle;
 use crate::sample_conversion::*;
 use crate::settings::ServerSettings;
 use crate::stream_config::get_compatible_configs;
@@ -393,7 +394,12 @@ pub fn create_linked_streams(
                         volume_monitor: (false, Instant::now(), (0.0, 0.0), PeakVolumeMonitor::new(), PeakVolumeMonitor::new()),
                         volume_normalizer: None,
                         processing_sample_rate,
-                        resamplers
+                        resamplers,
+                        recording: RecordingHandle::new(
+                            (settings_clone.frames_per_period * 4).max(1024),
+                            settings_clone.recording_dir.clone(),
+                            used_sample_rate as f32
+                        )
                     });
                 }
                 

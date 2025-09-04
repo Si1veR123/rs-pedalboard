@@ -20,6 +20,7 @@ mod metronome_player;
 mod volume_monitor;
 mod volume_normalization;
 mod settings;
+mod recording;
 use settings::{ServerSettings, ServerArguments};
 
 use cpal::traits::StreamTrait;
