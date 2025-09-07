@@ -68,7 +68,7 @@ impl Clone for GraphicEq7 {
             parameters: self.parameters.clone(),
             eq: self.eq.clone(),
             sample_rate: self.sample_rate,
-            id: unique_time_id(),
+            id: self.id,
             response_plot: self.response_plot.clone(),
             frequency_analyser: None,
             last_frequencies_sent: Instant::now(),
@@ -247,6 +247,12 @@ impl GraphicEq7 {
             last_frequencies_sent: Instant::now(),
             dynamic_max: 0.0
         }
+    }
+
+    pub fn clone_with_new_id(&self) -> Self {
+        let mut cloned = self.clone();
+        cloned.id = unique_time_id();
+        cloned
     }
 
     pub fn frequency_analyser(sample_rate: f32) -> FrequencyAnalyser {

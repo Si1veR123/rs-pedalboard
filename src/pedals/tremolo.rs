@@ -8,19 +8,10 @@ use crate::unique_time_id;
 use super::{PedalTrait, PedalParameter, PedalParameterValue};
 use super::ui::pedal_knob;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Tremolo {
     parameters: HashMap<String, PedalParameter>,
     id: u32
-}
-
-impl Clone for Tremolo {
-    fn clone(&self) -> Self {
-        Tremolo {
-            parameters: self.parameters.clone(),
-            id: unique_time_id()
-        }
-    }
 }
 
 impl Hash for Tremolo {
@@ -65,6 +56,12 @@ impl Tremolo {
             parameters,
             id: unique_time_id()
         }
+    }
+
+    pub fn clone_with_new_id(&self) -> Self {
+        let mut cloned = self.clone();
+        cloned.id = unique_time_id();
+        cloned
     }
 }
 

@@ -61,7 +61,7 @@ impl Clone for Reverb {
         let mut cloned_pedal = Self {
             reverb: cloned_reverb,
             parameters: cloned_parameters,
-            id: unique_time_id()
+            id: self.id
         };
         cloned_pedal.sync_parameters();
         cloned_pedal
@@ -124,6 +124,12 @@ impl Reverb {
         };
 
         pedal
+    }
+
+    pub fn clone_with_new_id(&self) -> Self {
+        let mut cloned = self.clone();
+        cloned.id = unique_time_id();
+        cloned
     }
 
     fn sync_parameters(&mut self) {

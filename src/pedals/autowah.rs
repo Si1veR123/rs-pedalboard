@@ -9,22 +9,12 @@ use super::ui::pedal_knob;
 use eframe::egui::{self, include_image};
 use serde::{Serialize, Deserialize, ser::SerializeMap};
 
+#[derive(Clone)]
 pub struct AutoWah {
     parameters: HashMap<String, PedalParameter>,
     filter: Option<(MovingBandPass, u32)>,
     envelope: f32,
     id: u32
-}
-
-impl Clone for AutoWah {
-    fn clone(&self) -> Self {
-        AutoWah {
-            parameters: self.parameters.clone(),
-            filter: self.filter.clone(),
-            envelope: self.envelope,
-            id: crate::unique_time_id()
-        }
-    }
 }
 
 impl Serialize for AutoWah {
@@ -130,6 +120,12 @@ impl AutoWah {
             envelope: 0.0,
             id: crate::unique_time_id()
         }
+    }
+
+    pub fn clone_with_new_id(&self) -> Self {
+        let mut cloned = self.clone();
+        cloned.id = crate::unique_time_id();
+        cloned
     }
 }
 

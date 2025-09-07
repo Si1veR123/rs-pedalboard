@@ -14,6 +14,7 @@ use super::{ui::pedal_knob, PedalParameter, PedalParameterValue, PedalTrait};
 
 const IR_SAVE_PATH: &str = r"IR";
 
+#[derive(Clone)]
 pub struct ImpulseResponse {
     parameters: HashMap<String, PedalParameter>,
 
@@ -27,25 +28,6 @@ pub struct ImpulseResponse {
     max_buffer_size: usize,
     ir: Option<IRConvolver>,
     sample_rate: Option<f32>,
-}
-
-impl Clone for ImpulseResponse {
-    fn clone(&self) -> Self {
-        let new_id = unique_time_id();
-        let mut new_combobox = Self::get_empty_directory_combo_box(new_id);
-        new_combobox.roots = self.combobox_widget.roots.clone();
-
-        Self {
-            ir: self.ir.clone(),
-            max_buffer_size: self.max_buffer_size,
-            parameters: self.parameters.clone(),
-            dry_buffer: Vec::new(),
-            combobox_widget: new_combobox,
-            folders_state: self.folders_state,
-            id: new_id,
-            sample_rate: self.sample_rate,
-        }
-    }
 }
 
 impl Hash for ImpulseResponse {
@@ -141,6 +123,12 @@ impl ImpulseResponse {
             id,
             sample_rate: None,
         }
+    }
+
+    pub fn clone_with_new_id(&self) -> Self {
+        let mut cloned = self.clone();
+        cloned.id = unique_time_id();
+        cloned
     }
 
     fn get_empty_directory_combo_box(id: impl std::hash::Hash) -> DirectoryComboBox {

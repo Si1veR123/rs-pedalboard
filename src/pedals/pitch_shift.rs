@@ -41,7 +41,7 @@ impl Clone for PitchShift {
                 signalsmith_stretch: Some(Self::stretch_from_parameters(&self.parameters, *sample_rate as f32)),
                 eq: self.eq.clone(),
                 output_buffer: self.output_buffer.clone(),
-                id: unique_time_id()
+                id: self.id
             }
         } else {
             PitchShift {
@@ -49,7 +49,7 @@ impl Clone for PitchShift {
                 signalsmith_stretch: None,
                 eq: None,
                 output_buffer: self.output_buffer.clone(),
-                id: unique_time_id()
+                id: self.id
             }
         }
     }
@@ -149,6 +149,12 @@ impl PitchShift {
         );
 
         PitchShift { parameters, signalsmith_stretch: None, eq: None, output_buffer: Vec::new(), id: unique_time_id() }
+    }
+
+    pub fn clone_with_new_id(&self) -> Self {
+        let mut cloned = self.clone();
+        cloned.id = unique_time_id();
+        cloned
     }
 
     pub fn eq_from_presence(presence: f32, sample_rate: f32) -> Equalizer {

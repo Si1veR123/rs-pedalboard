@@ -30,8 +30,7 @@ impl Clone for Nam {
         let buf_size = self.modeler.get_maximum_buffer_size();
         let new_modeler = NeuralAmpModeler::new_with_maximum_buffer_size(buf_size).expect("Failed to create neural amp modeler");
 
-        let new_id = unique_time_id();
-        let mut new_combobox = Self::get_empty_directory_combo_box(new_id);
+        let mut new_combobox = Self::get_empty_directory_combo_box(self.id);
         new_combobox.roots = self.combobox_widget.roots.clone();
 
         let mut new_nam = Nam {
@@ -40,7 +39,7 @@ impl Clone for Nam {
             dry_buffer: vec![0.0; buf_size],
             combobox_widget: new_combobox,
             folders_state: self.folders_state,
-            id: new_id
+            id: self.id
         };
 
         if let Some(model_path) = self.modeler.get_model_path() {
@@ -178,6 +177,11 @@ impl Nam {
         }
     }
 
+    pub fn clone_with_new_id(&self) -> Self {
+        let mut cloned = self.clone();
+        cloned.id = unique_time_id();
+        cloned
+    }
 
     fn get_empty_directory_combo_box(id: impl std::hash::Hash) -> DirectoryComboBox {
         DirectoryComboBox::new_from_nodes(vec![])

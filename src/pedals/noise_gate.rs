@@ -2,31 +2,20 @@ use std::{collections::HashMap, hash::Hash};
 use eframe::egui::{self, include_image};
 use serde::{ser::SerializeMap, Deserialize, Serialize};
 
-use crate::pedals::ui::pedal_switch;
+use crate::{pedals::ui::pedal_switch, unique_time_id};
 
 use super::{
     ui::pedal_knob,
     PedalParameter, PedalParameterValue, PedalTrait,
 };
 
+#[derive(Clone)]
 pub struct NoiseGate {
     parameters: HashMap<String, PedalParameter>,
     gain: f32,
     level: f32,
     sample_rate: Option<f32>,
     id: u32,
-}
-
-impl Clone for NoiseGate {
-    fn clone(&self) -> Self {
-        NoiseGate {
-            parameters: self.parameters.clone(),
-            gain: self.gain,
-            level: self.level,
-            sample_rate: self.sample_rate,
-            id: crate::unique_time_id()
-        }
-    }
 }
 
 impl Serialize for NoiseGate {
@@ -132,8 +121,14 @@ impl NoiseGate {
             gain: 1.0,
             level: 0.0,
             sample_rate: None,
-            id: crate::unique_time_id()
+            id: unique_time_id()
         }
+    }
+
+    pub fn clone_with_new_id(&self) -> Self {
+        let mut cloned = self.clone();
+        cloned.id = unique_time_id();
+        cloned
     }
 }
 

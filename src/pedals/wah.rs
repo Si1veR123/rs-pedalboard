@@ -8,6 +8,7 @@ use super::ui::pedal_knob;
 
 use eframe::egui::{self, include_image};
 
+#[derive(Clone)]
 pub struct Wah {
     parameters: HashMap<String, PedalParameter>,
     // Server only
@@ -15,17 +16,6 @@ pub struct Wah {
     moving_bandpass_filter: Option<MovingBandPass>,
 
     id: u32,
-}
-
-impl Clone for Wah {
-    fn clone(&self) -> Self {
-        Wah {
-            parameters: self.parameters.clone(),
-            sample_rate: self.sample_rate,
-            moving_bandpass_filter: self.moving_bandpass_filter.clone(),
-            id: unique_time_id(),
-        }
-    }
 }
 
 impl Hash for Wah {
@@ -121,6 +111,12 @@ impl Wah {
             moving_bandpass_filter: None,
             id: unique_time_id(),
         }
+    }
+
+    pub fn clone_with_new_id(&self) -> Self {
+        let mut cloned = self.clone();
+        cloned.id = unique_time_id();
+        cloned
     }
 }
 

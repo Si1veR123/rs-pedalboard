@@ -18,6 +18,7 @@ use serde::ser::SerializeMap;
 use serde::{Serialize, Deserialize};
 use egui_directory_combobox::{DirectoryComboBox, DirectoryNode};
 
+#[derive(Clone)]
 pub struct Vst2 {
     instance: Option<Vst2Instance>,
     // buffer size, sample rate
@@ -29,25 +30,6 @@ pub struct Vst2 {
     combobox_widget: DirectoryComboBox,
     folders_state: u32,
     id: u32
-}
-
-impl Clone for Vst2 {
-    fn clone(&self) -> Self {
-        let new_id = unique_time_id();
-        let mut new_combobox = Self::get_empty_directory_combo_box(new_id);
-        new_combobox.roots = self.combobox_widget.roots.clone();
-
-        Vst2 {
-            instance: self.instance.clone(),
-            config: self.config,
-            parameters: self.parameters.clone(),
-            param_index_map: self.param_index_map.clone(),
-            output_buffer: self.output_buffer.clone(),
-            combobox_widget: new_combobox,
-            folders_state: self.folders_state,
-            id: new_id
-        }
-    }
 }
 
 impl Serialize for Vst2 {
@@ -206,6 +188,12 @@ impl Vst2 {
             folders_state: 0,
             id
         }
+    }
+
+    pub fn clone_with_new_id(&self) -> Self {
+        let mut cloned = self.clone();
+        cloned.id = unique_time_id();
+        cloned
     }
 
     fn get_empty_directory_combo_box(id: impl std::hash::Hash) -> DirectoryComboBox {

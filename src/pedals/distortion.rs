@@ -17,7 +17,7 @@ use eframe::egui::{include_image, self, Vec2};
 use serde::ser::SerializeMap;
 use serde::{Serialize, Deserialize};
 
-
+#[derive(Clone)]
 pub struct Distortion {
     parameters: HashMap<String, PedalParameter>,
     // Server only
@@ -25,18 +25,6 @@ pub struct Distortion {
     post_eq: Option<eq::Equalizer>,
     sample_rate: Option<f32>,
     id: u32,
-}
-
-impl Clone for Distortion {
-    fn clone(&self) -> Self {
-        Distortion {
-            parameters: self.parameters.clone(),
-            post_eq: self.post_eq.clone(),
-            highpass: self.highpass.clone(),
-            sample_rate: self.sample_rate,
-            id: unique_time_id()
-        }
-    }
 }
 
 impl Serialize for Distortion {
@@ -119,6 +107,12 @@ impl Distortion {
             },
         );
         Distortion { parameters, post_eq: None, highpass: None, sample_rate: None, id: unique_time_id() }
+    }
+
+    pub fn clone_with_new_id(&self) -> Self {
+        let mut cloned = self.clone();
+        cloned.id = unique_time_id();
+        cloned
     }
 
     pub fn highpass(sample_rate: f32) -> BiquadFilter {

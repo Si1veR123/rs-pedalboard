@@ -15,19 +15,10 @@ use eframe::egui::{include_image, self, Vec2};
 use serde::{Serialize, Deserialize};
 
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Volume {
     parameters: HashMap<String, PedalParameter>,
     id: u32,
-}
-
-impl Clone for Volume {
-    fn clone(&self) -> Self {
-        Volume {
-            parameters: self.parameters.clone(),
-            id: unique_time_id()
-        }
-    }
 }
 
 impl Hash for Volume {
@@ -58,6 +49,12 @@ impl Volume {
             },
         );
         Volume { parameters, id: unique_time_id() }
+    }
+
+    pub fn clone_with_new_id(&self) -> Self {
+        let mut cloned = self.clone();
+        cloned.id = unique_time_id();
+        cloned
     }
 }
 

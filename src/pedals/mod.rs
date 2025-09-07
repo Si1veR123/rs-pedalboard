@@ -228,7 +228,6 @@ pub trait PedalTrait: Hash {
     fn get_id(&self) -> u32;
 }
 
-
 /// Wrapper enum type for serialization in Vec
 #[derive(Serialize, Deserialize, Clone, Hash, EnumDiscriminants)]
 #[strum_discriminants(derive(EnumIter))]

@@ -13,21 +13,11 @@ use eframe::egui::include_image;
 use eframe::egui::Vec2;
 use serde::{Serialize, Deserialize};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Fuzz {
     parameters: HashMap<String, PedalParameter>,
     id: u32
 }
-
-impl Clone for Fuzz {
-    fn clone(&self) -> Self {
-        Fuzz {
-            parameters: self.parameters.clone(),
-            id: unique_time_id()
-        }
-    }
-}
-
 
 impl Hash for Fuzz {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
@@ -84,6 +74,12 @@ impl Fuzz {
             },
         );
         Fuzz { parameters, id: unique_time_id()}
+    }
+
+    pub fn clone_with_new_id(&self) -> Self {
+        let mut cloned = self.clone();
+        cloned.id = unique_time_id();
+        cloned
     }
 }
 

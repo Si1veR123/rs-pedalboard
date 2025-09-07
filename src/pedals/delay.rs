@@ -12,6 +12,7 @@ use eframe::egui::{self, include_image};
 use serde::ser::SerializeMap;
 use serde::{Serialize, Deserialize};
 
+#[derive(Clone)]
 pub struct Delay {
     pub parameters: HashMap<String, PedalParameter>,
     // Server only
@@ -19,18 +20,6 @@ pub struct Delay {
     tone_eq: Option<eq::Equalizer>,
     sample_rate: Option<f32>,
     id: u32,
-}
-
-impl Clone for Delay {
-    fn clone(&self) -> Self {
-        Delay {
-            parameters: self.parameters.clone(),
-            delay_buffer: self.delay_buffer.clone(),
-            tone_eq: self.tone_eq.clone(),
-            sample_rate: self.sample_rate,
-            id: unique_time_id(),
-        }
-    }
 }
 
 impl Hash for Delay {
@@ -141,6 +130,12 @@ impl Delay {
         let biquad = biquad::BiquadFilter::high_shelf(4000.0, sample_rate, 0.707, -tone*10.0);
         let eq = eq::Equalizer::new(vec![biquad]);
         eq
+    }
+
+    pub fn clone_with_new_id(&self) -> Self {
+        let mut cloned = self.clone();
+        cloned.id = unique_time_id();
+        cloned
     }
 }
 

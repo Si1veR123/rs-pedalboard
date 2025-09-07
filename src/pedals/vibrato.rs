@@ -10,20 +10,11 @@ use crate::{
     unique_time_id
 };
 
+#[derive(Clone)]
 pub struct Vibrato {
     delay_line: Option<VariableDelayLine>,
     parameters: HashMap<String, PedalParameter>,
     id: u32
-}
-
-impl Clone for Vibrato {
-    fn clone(&self) -> Self {
-        Vibrato {
-            delay_line: self.delay_line.clone(),
-            parameters: self.parameters.clone(),
-            id: unique_time_id()
-        }
-    }
 }
 
 impl Hash for Vibrato {
@@ -111,6 +102,12 @@ impl Vibrato {
             parameters,
             id: unique_time_id()
         }
+    }
+
+    pub fn clone_with_new_id(&self) -> Self {
+        let mut cloned = self.clone();
+        cloned.id = unique_time_id();
+        cloned
     }
 }
 

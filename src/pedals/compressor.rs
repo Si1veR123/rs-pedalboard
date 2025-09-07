@@ -14,6 +14,7 @@ use serde::{ser::SerializeMap, Deserialize, Serialize};
 const ENVELOPE_UPDATE_RATE: Duration = Duration::from_millis(100);
 const EPS: f32 = 1e-8;
 
+#[derive(Clone)]
 pub struct Compressor {
     parameters: HashMap<String, PedalParameter>,
     sample_rate: Option<f32>,
@@ -27,20 +28,6 @@ pub struct Compressor {
     envelope_last_sent_value: f32,
 
     id: u32,
-}
-
-impl Clone for Compressor {
-    fn clone(&self) -> Self {
-        Compressor {
-            parameters: self.parameters.clone(),
-            sample_rate: self.sample_rate,
-            envelope: self.envelope,
-            current_envelope: self.current_envelope,
-            envelope_last_sent_time: self.envelope_last_sent_time,
-            envelope_last_sent_value: self.envelope_last_sent_value,
-            id: crate::unique_time_id(),
-        }
-    }
 }
 
 impl Serialize for Compressor {
@@ -156,6 +143,12 @@ impl Compressor {
             envelope_last_sent_value: 0.0,
             id: crate::unique_time_id(),
         }
+    }
+
+    pub fn clone_with_new_id(&self) -> Self {
+        let mut cloned = self.clone();
+        cloned.id = crate::unique_time_id();
+        cloned
     }
 }
 

@@ -10,20 +10,11 @@ use serde::{Serialize, Deserialize, ser::SerializeMap};
 
 macro_rules! var_delay_phaser {
     ($name:ident, ($default_rate:expr, $min_rate:expr, $max_rate:expr), ($default_min_depth:expr, $default_max_depth:expr, $min_depth: expr, $max_depth: expr), ($incl_feedback: expr, $default_feedback:expr, $max_feedback:expr), $default_dry_wet: expr) => {
+        #[derive(Clone)]
         pub struct $name {
             variable_delay_phaser: Option<VariableDelayPhaser>, // Server only
             parameters: HashMap<String, PedalParameter>,
             id: u32,
-        }
-
-        impl Clone for $name {
-            fn clone(&self) -> Self {
-                Self {
-                    variable_delay_phaser: self.variable_delay_phaser.clone(),
-                    parameters: self.parameters.clone(),
-                    id: crate::unique_time_id()
-                }
-            }
         }
 
         impl Hash for $name {
@@ -140,6 +131,12 @@ macro_rules! var_delay_phaser {
                     parameters,
                     id: crate::unique_time_id()
                 }
+            }
+
+            pub fn clone_with_new_id(&self) -> Self {
+                let mut cloned = self.clone();
+                cloned.id = crate::unique_time_id();
+                cloned
             }
         }
         

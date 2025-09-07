@@ -16,7 +16,7 @@ use eframe::egui::{include_image, self, Vec2};
 use serde::ser::SerializeMap;
 use serde::{Serialize, Deserialize};
 
-
+#[derive(Clone)]
 pub struct Overdrive {
     parameters: HashMap<String, PedalParameter>,
     // Server only
@@ -24,18 +24,6 @@ pub struct Overdrive {
     lowpass: Option<BiquadFilter>,
     sample_rate: Option<f32>,
     id: u32,
-}
-
-impl Clone for Overdrive {
-    fn clone(&self) -> Self {
-        Overdrive {
-            parameters: self.parameters.clone(),
-            lowpass: self.lowpass.clone(),
-            highpass: self.highpass.clone(),
-            sample_rate: self.sample_rate,
-            id: unique_time_id()
-        }
-    }
 }
 
 impl Serialize for Overdrive {
@@ -127,6 +115,12 @@ impl Overdrive {
     pub fn lowpass_from_tone(sample_rate: f32, tone: f32) -> BiquadFilter {
         let freq = 3000.0 + (6000.0 - 3000.0) * tone;
         BiquadFilter::low_pass(freq, sample_rate, 0.407)
+    }
+
+    pub fn clone_with_new_id(&self) -> Self {
+        let mut cloned = self.clone();
+        cloned.id = unique_time_id();
+        cloned
     }
 }
 
