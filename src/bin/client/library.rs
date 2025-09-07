@@ -115,10 +115,10 @@ impl Widget for &mut PedalboardLibraryScreen {
                     })
                     .spacing(Vec2::new(10.0, 20.0))
                     .show(ui, |ui| {
-                        for (i, pedalboard) in pedalboard_library.iter().enumerate() {
+                        for pedalboard in pedalboard_library.iter() {
                             if self.search_term.is_empty() || pedalboard.name.contains(&self.search_term) {
                                 PedalboardLibraryScreen::pedalboard_row(ui, pedalboard, row_size).0.map(|row_action| {
-                                    action = Some((i, row_action));
+                                    action = Some((pedalboard.get_id(), row_action));
                                 });
                                 ui.end_row();
                             }
@@ -126,16 +126,14 @@ impl Widget for &mut PedalboardLibraryScreen {
                 }).response;
 
                 // Perform any actions performed in this frame
-                if let Some((pedalboard_index, action)) = action {
+                if let Some((pedalboard_id, action)) = action {
                     match action {
                         RowAction::Load => {
-                            let pedalboard = pedalboard_library.get(pedalboard_index).unwrap();
+                            let pedalboard = pedalboard_library.iter().find(|p| p.get_id() == pedalboard_id).unwrap();
                             self.state.add_pedalboard(pedalboard.clone());
                         },
                         RowAction::Delete => {
-                            let pedalboard_name = &pedalboard_library.get(pedalboard_index).unwrap().name.clone();
-                            drop(pedalboard_library);
-                            self.state.pedalboards.delete_pedalboard(&pedalboard_name);
+                            self.state.pedalboards.delete_pedalboard(pedalboard_id);
                         }
                     }
                 };

@@ -37,7 +37,7 @@ impl Tremolo {
             "depth".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Float(1.0),
-                min: Some(PedalParameterValue::Float(0.0)),
+                min: Some(PedalParameterValue::Float(0.01)),
                 max: Some(PedalParameterValue::Float(1.0)),
                 step: None,
             },
@@ -77,7 +77,7 @@ impl PedalTrait for Tremolo {
         for sample in buffer.iter_mut() {
             let oscillator_value = oscillator.next().unwrap();
             let modulated_value = oscillator_value * depth;
-            *sample *= 1.0 + modulated_value;
+            *sample *= modulated_value;
         }
     }
 

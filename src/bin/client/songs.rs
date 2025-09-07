@@ -20,7 +20,7 @@ impl SongsScreen {
         }
     }
 
-    pub fn songs_row(ui: &mut egui::Ui, song_name: &str, pedalboards: &[String], row_size: Vec2) -> (Option<RowAction>, egui::Response) {
+    pub fn songs_row(&self, ui: &mut egui::Ui, song_name: &str, pedalboard_ids: &[u32], row_size: Vec2) -> (Option<RowAction>, egui::Response) {
         let mut action = None;
 
         let row_height = row_size.y;
@@ -53,7 +53,18 @@ impl SongsScreen {
                     )
                 });
 
-                let pedalboards_text = pedalboards.join(", ");
+                let mut pedalboards_text = String::new();
+
+                let pedalboard_library = self.state.pedalboards.pedalboard_library.borrow();
+                for (i, pedalboard_id) in pedalboard_ids.iter().enumerate() {
+                    if i > 0 {
+                        pedalboards_text.push_str(", ");
+                    }
+                    pedalboards_text.push_str(
+                        &pedalboard_library.iter().find(|pedalboard| pedalboard.get_id() == *pedalboard_id).map_or("Unknown", |pedalboard| &pedalboard.name)
+                    );
+                }
+
                 ui.label(RichText::new(pedalboards_text).size(15.0));
                 ui.add_space(5.0);
         }).response;
@@ -93,7 +104,7 @@ impl Widget for &mut SongsScreen {
                     .show(ui, |ui| {
                         for (song, pedalboards) in songs_library.iter() {
                             if self.search_term.is_empty() || song.contains(&self.search_term) {
-                                SongsScreen::songs_row(ui, song, pedalboards, row_size).0.map(|row_action| {
+                                SongsScreen::songs_row(self, ui, song, pedalboards, row_size).0.map(|row_action| {
                                     action = Some((song, row_action));
                                 });
                                 ui.end_row();
@@ -107,8 +118,8 @@ impl Widget for &mut SongsScreen {
                         RowAction::Load => {
                             let song = songs_library.get(song).unwrap();
                             let pedalboard_library = self.state.pedalboards.pedalboard_library.borrow();
-                            for pedalboard_name in song {
-                                if let Some(pedalboard) = pedalboard_library.iter().find(|pedalboard| &pedalboard.name == pedalboard_name) {
+                            for pedalboard_id in song {
+                                if let Some(pedalboard) = pedalboard_library.iter().find(|pedalboard| &pedalboard.get_id() == pedalboard_id) {
                                     self.state.pedalboards.active_pedalboardstage.borrow_mut().pedalboards.push(pedalboard.clone());
                                     self.state.load_active_set();
                                 }

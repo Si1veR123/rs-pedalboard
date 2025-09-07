@@ -24,7 +24,7 @@ pub struct MidiState {
     input_connections: Vec<(String, MidiInputConnection<String>)>,
     available_input_ports: MidiInputPorts,
     // Receive midi functions from the midi callbacks
-    receiver: Receiver<ClientMidiFunction>,
+    receiver: Receiver<ClientMidiFunction>, 
     // Used to clone new senders
     sender: Sender<ClientMidiFunction>,
     egui_ctx: egui::Context

@@ -23,7 +23,8 @@ pub fn pedalboard_stage_panel(screen: &mut PedalboardStageScreen, ui: &mut egui:
             |ui| {
                 ui.add_space(10.0);
                 if ui.add_sized([100.0, ui.available_height()], egui::Button::new("Clear Stage")).clicked() {
-                    screen.state.load_set(PedalboardSet::default());
+                    *screen.state.pedalboards.active_pedalboardstage.borrow_mut() = PedalboardSet::default();
+                    screen.state.load_active_set();
                 }
             }
         );
@@ -223,10 +224,10 @@ pub fn pedalboard_stage_panel(screen: &mut PedalboardStageScreen, ui: &mut egui:
             let saved = screen.input_string_window(ui, "Rename", &mut new_name, &mut open);
 
             if saved {
-                let old_name = active_pedalboards.pedalboards.get(index).unwrap().name.clone();
+                let pedalboard_id = active_pedalboards.pedalboards.get(index).unwrap().get_id();
                 drop(active_pedalboards);
                 drop(pedalboard_library);
-                screen.state.pedalboards.rename_pedalboard(&old_name, &new_name);
+                screen.state.rename_pedalboard(pedalboard_id, new_name);
             } else if open {
                 screen.current_action = Some(CurrentAction::Rename((index, new_name)));
             }

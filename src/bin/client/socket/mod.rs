@@ -12,13 +12,21 @@ use rs_pedalboard::socket_helper::CommandReceiver;
 
 pub const RESPONSE_TIMEOUT: Duration = Duration::from_secs(5);
 
+/// Can uniquely identify a parameter.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ParameterPath {
+    pub pedalboard_id: u32,
+    pub pedal_id: u32,
+    pub parameter_name: String,
+}
+
 /// Manages a handle to a client socket thread, when connected.
 pub struct ClientSocket {
     port: u16,
     socket_thread_responses: Vec<SocketThreadResponse>,
     pub received_commands: Vec<String>,
-    pub parameter_updates: HashMap<(usize, usize, String), PedalParameterValue>,
-    handle: Option<ClientSocketThreadHandle>,
+    pub parameter_updates: HashMap<ParameterPath, PedalParameterValue>,
+    handle: Option<ClientSocketThreadHandle>
 }
 
 impl ClientSocket {
@@ -75,15 +83,67 @@ impl ClientSocket {
 
     pub fn send(&mut self, message: String) {
         if let Some(handle) = &self.handle {
-            if handle.send(message) {
+            if handle.send_command(message) {
                 self.handle = None;
             }
         }
     }
 
-    pub fn send_parameter_update(&mut self, pedalboard_index: usize, pedal_index: usize, parameter_name: String, value: PedalParameterValue) {
+    pub fn send_parameter_update(&mut self, pedalboard_id: u32, pedal_id: u32, parameter_name: String, value: PedalParameterValue) {
         if let Some(handle) = &self.handle {
-            if handle.send_parameter_update(pedalboard_index, pedal_index, parameter_name, value) {
+            if handle.send_message(SocketThreadMessage::ParameterUpdate(ParameterPath {
+                pedalboard_id,
+                pedal_id,
+                parameter_name: parameter_name.clone()
+            }, value)) {
+                self.handle = None;
+            }
+        }
+    }
+
+    pub fn send_move_pedal(&mut self, pedalboard_id: u32, pedal_id: u32, to_index: usize) {
+        if let Some(handle) = &self.handle {
+            if handle.send_message(SocketThreadMessage::MovePedal(pedalboard_id, pedal_id, to_index)) {
+                self.handle = None;
+            }
+        }
+    }
+
+    pub fn send_delete_pedal(&mut self, pedalboard_id: u32, pedal_id: u32) {
+        if let Some(handle) = &self.handle {
+            if handle.send_message(SocketThreadMessage::DeletePedal(pedalboard_id, pedal_id)) {
+                self.handle = None;
+            }
+        }
+    }
+
+    pub fn send_move_pedalboard(&mut self, from_index: usize, to_index: usize) {
+        if let Some(handle) = &self.handle {
+            if handle.send_message(SocketThreadMessage::MovePedalboard(from_index, to_index)) {
+                self.handle = None;
+            }
+        }
+    }
+
+    pub fn send_delete_pedalboard(&mut self, pedalboard_index: usize) {
+        if let Some(handle) = &self.handle {
+            if handle.send_message(SocketThreadMessage::DeletePedalboard(pedalboard_index)) {
+                self.handle = None;
+            }
+        }
+    }
+
+    pub fn send_add_pedal(&mut self, pedalboard_id: u32, serialized_pedal: String) {
+        if let Some(handle) = &self.handle {
+            if handle.send_message(SocketThreadMessage::AddPedal(pedalboard_id, serialized_pedal)) {
+                self.handle = None;
+            }
+        }
+    }
+
+    pub fn send_add_pedalboard(&mut self, serialized_pedalboard: String) {
+        if let Some(handle) = &self.handle {
+            if handle.send_message(SocketThreadMessage::AddPedalboard(serialized_pedalboard)) {
                 self.handle = None;
             }
         }
@@ -99,8 +159,8 @@ impl ClientSocket {
                         SocketThreadResponse::Command(command) => {
                             self.received_commands.push(command);
                         },
-                        SocketThreadResponse::ParameterUpdate(pedalboard_index, pedal_index, parameter_name, value) => {
-                            self.parameter_updates.insert((pedalboard_index, pedal_index, parameter_name), value);
+                        SocketThreadResponse::ParameterUpdate(parameter_path, value) => {
+                            self.parameter_updates.insert(parameter_path, value);
                         },
                     }
                 }
@@ -127,8 +187,18 @@ impl ClientSocket {
 #[derive(Debug, Clone)]
 pub enum SocketThreadMessage {
     Send(String),
-    // pedalboard index, pedal index, parameter name, value
-    ParameterUpdate(usize, usize, String, PedalParameterValue),
+    ParameterUpdate(ParameterPath, PedalParameterValue),
+    // pedalboard id, pedal id, new pedal index
+    MovePedal(u32, u32, usize),
+    // pedalboard id, pedal id
+    DeletePedal(u32, u32),
+    // from index, to index
+    MovePedalboard(usize, usize),
+    // pedalboard index
+    DeletePedalboard(usize),
+    AddPedalboard(String),
+    // pedalboard id, serialized pedal
+    AddPedal(u32, String),
     ThreadAliveTest,
     KillServer,
     SubscribeToResponses(Sender<SocketThreadResponse>)
@@ -137,7 +207,7 @@ pub enum SocketThreadMessage {
 #[derive(Clone, Debug)]
 pub enum SocketThreadResponse {
     Command(String),
-    ParameterUpdate(usize, usize, String, PedalParameterValue),
+    ParameterUpdate(ParameterPath, PedalParameterValue)
 }
 
 pub struct ClientSocketThreadHandle {
@@ -154,9 +224,9 @@ impl ClientSocketThreadHandle {
     }
 
     /// Returns true if closed
-    pub fn send(&self, message: String) -> bool {
+    pub fn send_command(&self, command: String) -> bool {
         match smol::block_on(
-            self.message_sender.send(SocketThreadMessage::Send(message))
+            self.message_sender.send(SocketThreadMessage::Send(command))
         ) {
             Ok(_) => false,
             Err(_) => {
@@ -166,12 +236,9 @@ impl ClientSocketThreadHandle {
         }
     }
 
-    /// Sends a parameter update to the server.
-    /// 
-    /// Returns true if closed.
-    pub fn send_parameter_update(&self, pedalboard_index: usize, pedal_index: usize, parameter_name: String, value: PedalParameterValue) -> bool {
+    pub fn send_message(&self, message: SocketThreadMessage) -> bool {
         match smol::block_on(
-            self.message_sender.send(SocketThreadMessage::ParameterUpdate(pedalboard_index, pedal_index, parameter_name, value))
+            self.message_sender.send(message)
         ) {
             Ok(_) => false,
             Err(_) => {
@@ -207,6 +274,7 @@ impl ClientSocketThreadHandle {
             Err(_) => false
         }
     }
+
 }
 
 impl Clone for ClientSocketThreadHandle {
@@ -283,7 +351,7 @@ async fn send_to_all<T: Clone>(
 async fn client_socket_event_loop(
     stream: TcpStream,
     message_receiver: Receiver<SocketThreadMessage>,
-    mut response_senders: Vec<Sender<SocketThreadResponse>>,
+    mut response_senders: Vec<Sender<SocketThreadResponse>>
 ) {
     let mut command_receiver = CommandReceiver::new();
     // 128 is large but it is only storing String, which is small
@@ -337,16 +405,16 @@ async fn client_socket_event_loop(
                             break;
                         }
                     },
-                    Ok(SocketThreadMessage::ParameterUpdate(pedalboard_index, pedal_index, parameter_name, value)) => {
+                    Ok(SocketThreadMessage::ParameterUpdate(parameter_path, value)) => {
                         let message = format!(
-                            "setparameter {} {} {} {}\n",
-                            pedalboard_index,
-                            pedal_index,
-                            parameter_name,
+                            "setparameter|{}|{}|{}|{}\n",
+                            parameter_path.pedalboard_id,
+                            parameter_path.pedal_id,
+                            &parameter_path.parameter_name,
                             serde_json::to_string(&value).expect("Failed to serialize parameter value")
                         );
 
-                        if send_to_all(&response_senders, SocketThreadResponse::ParameterUpdate(pedalboard_index, pedal_index, parameter_name.clone(), value.clone())).await {
+                        if send_to_all(&response_senders, SocketThreadResponse::ParameterUpdate(parameter_path, value.clone())).await {
                             break;
                         }
                         if socket_send(&mut stream_writer, &message).await {
@@ -355,6 +423,65 @@ async fn client_socket_event_loop(
                     },
                     Ok(SocketThreadMessage::SubscribeToResponses(sender)) => {
                         response_senders.push(sender);
+                    },
+                    Ok(SocketThreadMessage::MovePedal(pedalboard_id, pedal_id, to_index)) => {
+                        let message = format!(
+                            "movepedal|{}|{}|{}\n",
+                            pedalboard_id,
+                            pedal_id,
+                            to_index
+                        );
+                        if socket_send(&mut stream_writer, &message).await {
+                            break;
+                        }
+                    },
+                    Ok(SocketThreadMessage::DeletePedal(pedalboard_id, pedal_id)) => {
+                        let message = format!(
+                            "deletepedal|{}|{}\n",
+                            pedalboard_id,
+                            pedal_id
+                        );
+                        if socket_send(&mut stream_writer, &message).await {
+                            break;
+                        }
+                    },
+                    Ok(SocketThreadMessage::MovePedalboard(from_index, to_index)) => {
+                        let message = format!(
+                            "movepedalboard|{}|{}\n",
+                            from_index,
+                            to_index
+                        );
+                        if socket_send(&mut stream_writer, &message).await {
+                            break;
+                        }
+                    },
+                    Ok(SocketThreadMessage::DeletePedalboard(pedalboard_index)) => {
+                        let message = format!(
+                            "deletepedalboard|{}\n",
+                            pedalboard_index
+                        );
+                        if socket_send(&mut stream_writer, &message).await {
+                            break;
+                        }
+                    },
+                    Ok(SocketThreadMessage::AddPedal(pedalboard_id, serialized_pedal)) => {
+                        let message = format!(
+                            "addpedal|{}|{}\n",
+                            pedalboard_id,
+                            serialized_pedal
+                        );
+                        if socket_send(&mut stream_writer, &message).await {
+                            break;
+                        }
+                    },
+                    Ok(SocketThreadMessage::AddPedalboard(serialized_pedalboard)) => {
+                        let message = format!(
+                            "addpedalboard|{}\n",
+                            serialized_pedalboard
+                        );
+                        if socket_send(&mut stream_writer, &message).await {
+                            break;
+                        }
                     },
                     Ok(SocketThreadMessage::ThreadAliveTest) => { },
                     Err(_) => {

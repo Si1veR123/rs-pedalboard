@@ -8,7 +8,7 @@ const SAVE_NAME: &str = "pedalboards.json";
 pub struct SavedPedalboards {
     pub active_pedalboardstage: RefCell<PedalboardSet>,
     pub pedalboard_library: RefCell<Vec<Pedalboard>>,
-    pub songs_library: RefCell<HashMap<String, Vec<String>>>,
+    pub songs_library: RefCell<HashMap<String, Vec<u32>>>,
 }
 
 impl Serialize for SavedPedalboards {
@@ -27,7 +27,7 @@ impl<'de> Deserialize<'de> for SavedPedalboards {
         struct SavedPedalboardsData {
             active_pedalboardstage: PedalboardSet,
             pedalboard_library: Vec<Pedalboard>,
-            songs_library: HashMap<String, Vec<String>>,
+            songs_library: HashMap<String, Vec<u32>>,
         }
 
         let data = SavedPedalboardsData::deserialize(deserializer)?;
@@ -51,43 +51,20 @@ impl Default for SavedPedalboards {
 }
 
 impl SavedPedalboards {
-    /// Requires a lock on active_pedalboardstage, pedalboard_library, and songs_library
-    pub fn rename_pedalboard(&self, to_rename: &str, new_name: &str) {
-        // First rename any matching names in pedalboard library
-        let mut pedalboard_library = self.pedalboard_library.borrow_mut();
-        for pedalboard in pedalboard_library.iter_mut() {
-            if pedalboard.name == to_rename {
-                pedalboard.name = new_name.to_string();
-            }
-        }
-    
-        // Then rename any matching names in the active pedalboard stage
-        let unique_name = self.unique_stage_pedalboard_name(new_name.to_string());
-        let mut pedalboard_set = self.active_pedalboardstage.borrow_mut();
-        for pedalboard in pedalboard_set.pedalboards.iter_mut() {
-            if pedalboard.name == to_rename {
-                pedalboard.name = unique_name.clone();
-            }
-        }
-
-        // Finally rename any matching names in songs
-        let mut songs = self.songs_library.borrow_mut();
-        for (_, pedalboards) in songs.iter_mut() {
-            for pedalboard in pedalboards.iter_mut() {
-                if pedalboard == to_rename {
-                    *pedalboard = new_name.to_string();
-                }
-            }
-        }
-    }
-    
     fn unique_name(mut name: String, pedalboards: &[Pedalboard]) -> String {
         name.truncate(25);
 
         let mut i = 1;
         while pedalboards.iter().any(|pedalboard| pedalboard.name == name) {
             if i == 1 {
-                name.push_str("_1");
+                let last_char = name.chars().last().unwrap_or(' ');
+                if last_char.is_numeric() {
+                    i = last_char.to_digit(10).unwrap_or(1) + 1;
+                    name.pop();
+                    name.push_str(&i.to_string());
+                } else {
+                    name.push_str("_1");
+                }
             } else {
                 name.pop();
                 name.push_str(&i.to_string());
@@ -111,16 +88,16 @@ impl SavedPedalboards {
     /// Delete a pedalboard from the pedalboard library
     /// 
     /// Requires a lock on pedalboard_library and songs_library
-    pub fn delete_pedalboard(&self, name: &str) {
+    pub fn delete_pedalboard(&self, id: u32) {
         let mut pedalboard_library = self.pedalboard_library.borrow_mut();
-        if let Some(index) = pedalboard_library.iter().position(|pedalboard| pedalboard.name == name) {
+        if let Some(index) = pedalboard_library.iter().position(|pedalboard| pedalboard.get_id() == id) {
             pedalboard_library.remove(index);
         }
 
         // Remove the pedalboard from any songs
         let mut songs = self.songs_library.borrow_mut();
         for (_, pedalboards) in songs.iter_mut() {
-            if let Some(index) = pedalboards.iter().position(|pedalboard| pedalboard == name) {
+            if let Some(index) = pedalboards.iter().position(|pedalboard_id| *pedalboard_id == id) {
                 pedalboards.remove(index);
             }
         }
@@ -140,7 +117,7 @@ impl SavedPedalboards {
             }
         }
 
-        self.songs_library.borrow_mut().insert(song_name, active_pedalboards.iter().map(|pedalboard| pedalboard.name.clone()).collect());
+        self.songs_library.borrow_mut().insert(song_name, active_pedalboards.iter().map(|pedalboard| pedalboard.get_id()).collect());
     }
 
     /// Save the pedalboard library into the save file

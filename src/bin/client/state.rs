@@ -1,6 +1,6 @@
 use std::cell::RefCell;
-use rs_pedalboard::{pedalboard::Pedalboard, pedalboard_set::PedalboardSet, pedals::{Pedal, PedalParameterValue, PedalTrait}, server_settings::ServerSettingsSave};
-use crate::{midi::{MidiSettings, MidiState}, saved_pedalboards::SavedPedalboards, settings::ClientSettings, socket::ClientSocket};
+use rs_pedalboard::{pedalboard::Pedalboard, pedals::{Pedal, PedalParameterValue, PedalTrait}, server_settings::ServerSettingsSave};
+use crate::{midi::{MidiSettings, MidiState}, saved_pedalboards::SavedPedalboards, settings::ClientSettings, socket::{ClientSocket, ParameterPath}};
 use eframe::egui;
 
 pub struct State {
@@ -30,8 +30,7 @@ impl State {
             pedalboard_set.active_pedalboard -= 1;
         }
 
-        let delete_message = format!("deletepedalboard {}\n", index);
-        self.socket.borrow_mut().send(delete_message);
+        self.socket.borrow_mut().send_delete_pedalboard(index);
     }
 
     /// Move a pedalboard in the active pedalboard stage
@@ -41,8 +40,7 @@ impl State {
         let mut pedalboard_set = self.pedalboards.active_pedalboardstage.borrow_mut();
         egui_dnd::utils::shift_vec(src_index, dest_index, &mut pedalboard_set.pedalboards);
 
-        let message = format!("movepedalboard {} {}\n", src_index, dest_index);
-        self.socket.borrow_mut().send(message);
+        self.socket.borrow_mut().send_move_pedalboard(src_index, dest_index);
     }
 
     /// Add a pedalboard to the active pedalboard stage
@@ -52,27 +50,43 @@ impl State {
         let mut pedalboard_set = self.pedalboards.active_pedalboardstage.borrow_mut();
         let mut socket = self.socket.borrow_mut();
 
-        let message = format!("addpedalboard {}\n", serde_json::to_string(&pedalboard).unwrap());
-        socket.send(message);
+        socket.send_add_pedalboard(serde_json::to_string(&pedalboard).unwrap());
 
         pedalboard_set.pedalboards.push(pedalboard);
+    }
+
+    /// Requires a lock on active_pedalboardstage, pedalboard_library, songs_library and socket
+    pub fn rename_pedalboard(&self, pedalboard_id: u32, new_name: String) {
+        // First rename any matching names in pedalboard library
+        let mut pedalboard_library = self.pedalboards.pedalboard_library.borrow_mut();
+        for pedalboard in pedalboard_library.iter_mut() {
+            if pedalboard.get_id() == pedalboard_id {
+                pedalboard.name = new_name.to_string();
+            }
+        }
+    
+        // Then rename any matching names in the active pedalboard stage
+        let unique_name = self.pedalboards.unique_stage_pedalboard_name(new_name.to_string());
+        let mut pedalboard_set = self.pedalboards.active_pedalboardstage.borrow_mut();
+        for pedalboard in pedalboard_set.pedalboards.iter_mut() {
+            if pedalboard.get_id() == pedalboard_id {
+                pedalboard.name = unique_name.clone();
+            }
+        }
     }
 
     /// Duplicate pedalboard in stage with same name
     /// 
     /// Requires a lock on active_pedalboardstage and socket
     pub fn duplicate_linked(&self, index: usize) {
-        let mut pedalboard_set = self.pedalboards.active_pedalboardstage.borrow_mut();
+        let pedalboard_set = self.pedalboards.active_pedalboardstage.borrow_mut();
         let pedalboard = &pedalboard_set.pedalboards[index];
         let new_pedalboard = pedalboard.clone();
+        let src_index = pedalboard_set.pedalboards.len();
+        drop(pedalboard_set);
 
-        let mut socket = self.socket.borrow_mut();
-        let add_message = format!("addpedalboard {}\n", serde_json::to_string(pedalboard).unwrap());
-        socket.send(add_message);
-        let move_message = format!("movepedalboard {} {}\n", pedalboard_set.pedalboards.len()-1, index+1);
-        socket.send(move_message);
-
-        pedalboard_set.pedalboards.insert(index+1, new_pedalboard);
+        self.add_pedalboard(new_pedalboard);
+        self.move_pedalboard(src_index, index+1);
     }
 
     /// Duplicate pedalboard in stage with new name
@@ -82,21 +96,14 @@ impl State {
         let pedalboard_set = self.pedalboards.active_pedalboardstage.borrow_mut();
         let pedalboard = &pedalboard_set.pedalboards[index];
 
-        let mut new_pedalboard = pedalboard.clone();
+        let mut new_pedalboard = pedalboard.clone_with_new_id();
+        let src_index = pedalboard_set.pedalboards.len();
         // Have to drop as the unique stage name requires a lock on active pedalboard stage
         drop(pedalboard_set);
         new_pedalboard.name = self.pedalboards.unique_stage_pedalboard_name(new_pedalboard.name.clone());
-        // Reborrow
-        let mut pedalboard_set = self.pedalboards.active_pedalboardstage.borrow_mut();
-        let pedalboard = &pedalboard_set.pedalboards[index];
-
-        let mut socket = self.socket.borrow_mut();
-        let add_message = format!("addpedalboard {}\n", serde_json::to_string(pedalboard).unwrap());
-        socket.send(add_message);
-        let move_message = format!("movepedalboard {} {}\n", pedalboard_set.pedalboards.len()-1, index+1);
-        socket.send(move_message);
-
-        pedalboard_set.pedalboards.insert(index+1, new_pedalboard);
+        
+        self.add_pedalboard(new_pedalboard);
+        self.move_pedalboard(src_index, index+1);
     }
 
     /// Add a pedal to the active pedalboard and matching pedalboard in library
@@ -106,125 +113,121 @@ impl State {
         let mut socket = self.socket.borrow_mut();
 
         let mut active_pedalboardstage = self.pedalboards.active_pedalboardstage.borrow_mut();
-        let active_pedalboard_name = active_pedalboardstage.pedalboards[active_pedalboardstage.active_pedalboard].name.clone();
+        let active_pedalboard_id = active_pedalboardstage.pedalboards[active_pedalboardstage.active_pedalboard].get_id();
         
         // Add in pedalboard library
         let mut pedalboard_library = self.pedalboards.pedalboard_library.borrow_mut();
         for pedalboard in pedalboard_library.iter_mut() {
-            if pedalboard.name == *active_pedalboard_name {
+            if pedalboard.get_id() == active_pedalboard_id {
                 pedalboard.pedals.push(pedal.clone());
                 break;
             }
         }
 
         // Add in all matching pedalboards in active pedalboard stage
-        for (i, pedalboard) in active_pedalboardstage.pedalboards.iter_mut().enumerate() {
-            if pedalboard.name == *active_pedalboard_name {
+        for pedalboard in active_pedalboardstage.pedalboards.iter_mut() {
+            if pedalboard.get_id() == active_pedalboard_id {
                 pedalboard.pedals.push(pedal.clone());
-                let message = format!("addpedal {} {}\n", i, serde_json::to_string(pedal).unwrap());
-                socket.send(message);
             }
         }
+
+        socket.send_add_pedal(active_pedalboard_id, serde_json::to_string(pedal).unwrap());
     }
 
     /// Move a pedal in the pedalboard stage and in library
     /// 
     /// Requires a lock on active_pedalboardstage, pedalboard_library, and socket
-    pub fn move_pedal(&self, pedalboard_index: usize, src_index: usize, dest_index: usize) {
+    pub fn move_pedal(&self, pedalboard_id: u32, pedal_id: u32, mut to_index: usize) {
         let mut active_pedalboardstage = self.pedalboards.active_pedalboardstage.borrow_mut();
-        let active_pedalboard_name = active_pedalboardstage.pedalboards[pedalboard_index].name.clone();
         let mut pedalboard_library = self.pedalboards.pedalboard_library.borrow_mut();
 
+        // Move in all matching pedalboards in active pedalboard stage
+        let mut src_index = None;
+
+        let mut socket = self.socket.borrow_mut();
+        for pedalboard in active_pedalboardstage.pedalboards.iter_mut() {
+            if pedalboard.get_id() == pedalboard_id {
+                if to_index >= pedalboard.pedals.len() + 1 {
+                    to_index = pedalboard.pedals.len();
+                }
+
+                src_index = Some(pedalboard.pedals.iter().position(|p| p.get_id() == pedal_id).unwrap());
+                egui_dnd::utils::shift_vec(src_index.unwrap(), to_index, &mut pedalboard.pedals);
+            }
+        }
+
+        if src_index.is_none() {
+            log::error!("move_pedal: Could not find pedalboard with ID {} in pedalboard library", pedalboard_id);
+            return;
+        }
+
+        // Move in pedalboard library
         for pedalboard in pedalboard_library.iter_mut() {
-            if pedalboard.name == *active_pedalboard_name {
-                egui_dnd::utils::shift_vec(src_index, dest_index, &mut pedalboard.pedals);
+            if pedalboard.get_id() == pedalboard_id {
+                egui_dnd::utils::shift_vec(src_index.unwrap(), to_index, &mut pedalboard.pedals); 
                 break;
             }
         }
 
-        // Move in all matching pedalboards in active pedalboard stage
-        let mut socket = self.socket.borrow_mut();
-        for (i, pedalboard) in active_pedalboardstage.pedalboards.iter_mut().enumerate() {
-            if pedalboard.name == *active_pedalboard_name {
-                egui_dnd::utils::shift_vec(src_index, dest_index, &mut pedalboard.pedals);
-                let message = format!("movepedal {} {} {}\n", i, src_index, dest_index);
-                socket.send(message);
-            }
-        }
+        socket.send_move_pedal(pedalboard_id, pedal_id, to_index);
     }
 
     /// Delete a pedal from the pedalboard stage and in library
     /// 
     /// Requires a lock on active_pedalboardstage, pedalboard_library, and socket
-    pub fn delete_pedal(&self, pedalboard_index: usize, pedal_index: usize) {
+    pub fn delete_pedal(&self, pedalboard_id: u32, pedal_id: u32) {
         let mut active_pedalboardstage = self.pedalboards.active_pedalboardstage.borrow_mut();
-        let active_pedalboard_name = active_pedalboardstage.pedalboards[pedalboard_index].name.clone();
         let mut pedalboard_library = self.pedalboards.pedalboard_library.borrow_mut();
 
         for pedalboard in pedalboard_library.iter_mut() {
-            if pedalboard.name == *active_pedalboard_name {
-                pedalboard.pedals.remove(pedal_index);
+            if pedalboard.get_id() == pedalboard_id {
+                pedalboard.pedals.retain(|p| p.get_id() != pedal_id);
                 break;
             }
         }
 
         // Remove in all matching pedalboards in active pedalboard stage
-        let mut socket = self.socket.borrow_mut();
-        for (i, pedalboard) in active_pedalboardstage.pedalboards.iter_mut().enumerate() {
-            if pedalboard.name == *active_pedalboard_name {
-                pedalboard.pedals.remove(pedal_index);
-                let message = format!("deletepedal {} {}\n", i, pedal_index);
-                socket.send(message);
+        for pedalboard in active_pedalboardstage.pedalboards.iter_mut() {
+            if pedalboard.get_id() == pedalboard_id {
+                pedalboard.pedals.retain(|p| p.get_id() != pedal_id);
             }
         }
+
+        let mut socket = self.socket.borrow_mut();
+        socket.send_delete_pedal(pedalboard_id, pedal_id);
     }
 
     /// Set a parameter on all pedalboards, on stage and in library, with the same name
     /// 
     /// Requires a lock on active_pedalboardstage, pedalboard_library and socket
-    pub fn set_parameter(&self, pedalboard_index: usize, pedal_index: usize, name: &str, parameter_value: &PedalParameterValue, local: bool) {
-        let mut socket = self.socket.borrow_mut();
-
-        let pedalboard_name = {
-            let active_pedalboardstage = self.pedalboards.active_pedalboardstage.borrow();
-            let pedalboard = active_pedalboardstage.pedalboards.get(pedalboard_index).unwrap();
-            pedalboard.name.clone()
-        };
-
+    pub fn set_parameter(&self, pedalboard_id: u32, pedal_id: u32, parameter_name: String, parameter_value: PedalParameterValue, local: bool) {
         // Set parameter on pedalboard stage
-        for (i, pedalboard) in self.pedalboards.active_pedalboardstage.borrow_mut().pedalboards.iter_mut().enumerate() {
-            if pedalboard.name == pedalboard_name {
-                pedalboard.pedals[pedal_index].set_parameter_value(name, parameter_value.clone());
-                if !local {
-                    socket.send_parameter_update(i, pedal_index, name.to_string(), parameter_value.clone());
-                }
+        for pedalboard in self.pedalboards.active_pedalboardstage.borrow_mut().pedalboards.iter_mut() {
+            if pedalboard.get_id() == pedalboard_id {
+                let pedal = pedalboard.pedals.iter_mut().find(|p| p.get_id() == pedal_id).unwrap();
+                pedal.set_parameter_value(&parameter_name, parameter_value.clone());
             }
         }
 
         // Set parameter on pedalboard library
         for pedalboard in self.pedalboards.pedalboard_library.borrow_mut().iter_mut() {
-            if pedalboard.name == pedalboard_name {
-                pedalboard.pedals[pedal_index].set_parameter_value(name, parameter_value.clone());
+            if pedalboard.get_id() == pedalboard_id {
+                let pedal = pedalboard.pedals.iter_mut().find(|p| p.get_id() == pedal_id).unwrap();
+                pedal.set_parameter_value(&parameter_name, parameter_value.clone());
             }
         }
-    }
 
-    /// Load a given pedalboard set to active stage
-    /// 
-    /// Requires a lock on active_pedalboardstage and socket
-    pub fn load_set(&self, pedalboard_set: PedalboardSet) {
-        let mut socket = self.socket.borrow_mut();
-        let message = format!("loadset {}\n", serde_json::to_string(&pedalboard_set).unwrap());
-        socket.send(message);
-
-        *self.pedalboards.active_pedalboardstage.borrow_mut() = pedalboard_set;
+        if !local {
+            let mut socket = self.socket.borrow_mut();
+            socket.send_parameter_update(pedalboard_id, pedal_id, parameter_name.to_string(), parameter_value.clone());
+        }
     }
 
     /// Tell the server to load the client's active pedalboard stage
     pub fn load_active_set(&self) {
         let mut socket = self.socket.borrow_mut();
         let active_pedalboardstage = self.pedalboards.active_pedalboardstage.borrow();
-        let message = format!("loadset {}\n", serde_json::to_string(&*active_pedalboardstage).unwrap());
+        let message = format!("loadset|{}\n", serde_json::to_string(&*active_pedalboardstage).unwrap());
         socket.send(message);
     }
 
@@ -233,7 +236,7 @@ impl State {
     /// Requires a lock on active_pedalboardstage and socket
     pub fn play(&self, pedalboard_index: usize) {
         let mut socket = self.socket.borrow_mut();
-        let message = format!("play {}\n", pedalboard_index);
+        let message = format!("play|{}\n", pedalboard_index);
         socket.send(message);
         self.pedalboards.active_pedalboardstage.borrow_mut().set_active_pedalboard(pedalboard_index);
     }
@@ -270,7 +273,7 @@ impl State {
     /// Requires a lock on socket.
     pub fn set_tuner_active_server(&self, active: bool) {
         let mut socket = self.socket.borrow_mut();
-        let message = format!("tuner {}\n", if active { "on" } else { "off" });
+        let message = format!("tuner|{}\n", if active { "on" } else { "off" });
         socket.send(message);
     }
 
@@ -280,7 +283,7 @@ impl State {
     pub fn set_metronome_server(&self, active: bool, bpm: u32, volume: f32) {
         let mut socket = self.socket.borrow_mut();
         let rounded_volume = (volume * 100.0).round() / 100.0;
-        let message = format!("metronome {} {} {}\n", if active { "on" } else { "off" }, bpm, rounded_volume);
+        let message = format!("metronome|{} {} {}\n", if active { "on" } else { "off" }, bpm, rounded_volume);
         socket.send(message);
     }
 
@@ -289,7 +292,7 @@ impl State {
     /// Requires a lock on socket.
     pub fn set_volume_monitor_active_server(&self, active: bool) {
         let mut socket = self.socket.borrow_mut();
-        let message = format!("volumemonitor {}\n", if active { "on" } else { "off" });
+        let message = format!("volumemonitor|{}\n", if active { "on" } else { "off" });
         socket.send(message);
     }
 
@@ -297,28 +300,28 @@ impl State {
         let mut socket = self.socket.borrow_mut();
         let rounded_auto_decay = (auto_decay * 1000.0).round() / 1000.0;
         match mode {
-            crate::settings::VolumeNormalizationMode::None => socket.send("volumenormalization none\n".to_string()),
-            crate::settings::VolumeNormalizationMode::Manual => socket.send("volumenormalization manual\n".to_string()),
-            crate::settings::VolumeNormalizationMode::Automatic => socket.send(format!("volumenormalization automatic {}\n", rounded_auto_decay)),
+            crate::settings::VolumeNormalizationMode::None => socket.send("volumenormalization|none\n".to_string()),
+            crate::settings::VolumeNormalizationMode::Manual => socket.send("volumenormalization|manual\n".to_string()),
+            crate::settings::VolumeNormalizationMode::Automatic => socket.send(format!("volumenormalization|automatic {}\n", rounded_auto_decay)),
         };
     }
 
     pub fn reset_volume_normalization_peak(&self) {
         let mut socket = self.socket.borrow_mut();
-        socket.send("volumenormalization reset\n".to_string());
+        socket.send("volumenormalization|reset\n".to_string());
     }
 
     pub fn master_in_server(&self, volume: f32) {
         let mut socket = self.socket.borrow_mut();
         let rounded_volume = (volume * 100.0).round() / 100.0;
-        let message = format!("masterin {}\n", rounded_volume);
+        let message = format!("masterin|{}\n", rounded_volume);
         socket.send(message);
     }
 
     pub fn master_out_server(&self, volume: f32) {
         let mut socket = self.socket.borrow_mut();
         let rounded_volume = (volume * 100.0).round() / 100.0;
-        let message = format!("masterout {}\n", rounded_volume);
+        let message = format!("masterout|{}\n", rounded_volume);
         socket.send(message);
     }
 
@@ -334,7 +337,7 @@ impl State {
 
     pub fn set_recorder_clean_server(&self, clean: bool) {
         let mut socket = self.socket.borrow_mut();
-        let message = format!("recordclean {}\n", if clean { "on" } else { "off" });
+        let message = format!("recordclean|{}\n", if clean { "on" } else { "off" });
         socket.send(message);
     }
 
@@ -424,8 +427,8 @@ impl State {
     /// Requires a lock on socket, active_pedalboardstage
     pub fn apply_parameter_updates(&self) {
         let mut socket = self.socket.borrow_mut();
-        for ((pedalboard_index, pedal_index, parameter_name), new_value) in socket.parameter_updates.drain() {
-            self.set_parameter(pedalboard_index, pedal_index, &parameter_name, &new_value, true);
+        for (ParameterPath { pedalboard_id, pedal_id, parameter_name }, new_value) in socket.parameter_updates.drain() {
+            self.set_parameter(pedalboard_id, pedal_id, parameter_name, new_value, true);
         }
     }
 

@@ -4,7 +4,7 @@ use crossbeam::channel::Receiver;
 use ringbuf::{traits::{Producer, Split}, HeapProd, HeapRb};
 
 use rs_pedalboard::{
-    dsp_algorithms::{yin::Yin, resampler::Resampler}, pedalboard_set::PedalboardSet, pedals::{Pedal, PedalParameterValue, PedalTrait}, DEFAULT_VOLUME_MONITOR_UPDATE_RATE
+    dsp_algorithms::{resampler::Resampler, yin::Yin}, pedalboard::Pedalboard, pedalboard_set::PedalboardSet, pedals::{Pedal, PedalParameterValue, PedalTrait}, DEFAULT_VOLUME_MONITOR_UPDATE_RATE
 };
 
 use crate::{
@@ -178,8 +178,8 @@ impl AudioProcessor {
     }
 
     fn handle_command(&mut self, command: Box<str>) -> Option<()> {
-        let mut words = command.split_whitespace();
-        let command_name = words.next()?;
+        let mut arguments = command.split('|');
+        let command_name = arguments.next()?;
 
         match command_name {
             "kill" => {
@@ -193,25 +193,27 @@ impl AudioProcessor {
                 }
             },
             "setparameter" => {
-                let pedalboard_index = words.next()?.parse::<usize>().ok()?;
-                let pedal_index = words.next()?.parse::<usize>().ok()?;
-                let parameter_name = words.next()?;
+                let pedalboard_id = arguments.next()?.parse::<u32>().ok()?;
+                let pedal_id = arguments.next()?.parse::<u32>().ok()?;
+                let parameter_name = arguments.next()?;
 
-                let pedalboard_ser_start_index = parameter_name.as_ptr() as usize + parameter_name.len() - command.as_ptr() as usize;
-                let mut parameter_value: PedalParameterValue = serde_json::from_str(&command[pedalboard_ser_start_index + 1..]).ok()?;
+                let pedal_parameter_ser_start = arguments.next()?.as_ptr() as usize - command.as_ptr() as usize;
+                let pedal_parameter_str = &command[pedal_parameter_ser_start..];
+                let mut parameter_value: PedalParameterValue = serde_json::from_str(&pedal_parameter_str).ok()?;
 
                 // If the parameter is an oscillator, we must change the sample rate to whatever the server is using
                 if let Some(oscillator) = parameter_value.as_oscillator_mut() {
                     oscillator.set_sample_rate(self.processing_sample_rate as f32);
                 }
 
-                self.pedalboard_set.pedalboards.get_mut(pedalboard_index)?
-                    .pedals.get_mut(pedal_index)?
-                    .set_parameter_value(parameter_name, parameter_value);
+                for pedalboard in self.pedalboard_set.pedalboards.iter_mut().filter(|pedalboard| pedalboard.get_id() == pedalboard_id) {
+                    pedalboard.pedals.iter_mut().find(|pedal| pedal.get_id() == pedal_id)?
+                        .set_parameter_value(parameter_name, parameter_value.clone());
+                }
             },
             "movepedalboard" => {
-                let src_index = words.next()?.parse::<usize>().ok()?;
-                let dest_index = words.next()?.parse::<usize>().ok()?;
+                let src_index = arguments.next()?.parse::<usize>().ok()?;
+                let dest_index = arguments.next()?.parse::<usize>().ok()?;
 
                 let pedalboard = self.pedalboard_set.pedalboards.remove(src_index);
 
@@ -225,47 +227,61 @@ impl AudioProcessor {
             },
             "addpedalboard" => {
                 let pedalboard_stringified = &command[command_name.len() + 1..];
-                let pedalboard = serde_json::from_str(&pedalboard_stringified).ok()?;
+                let mut pedalboard: Pedalboard = serde_json::from_str(&pedalboard_stringified).ok()?;
+
+                for pedal in &mut pedalboard.pedals {
+                    pedal.set_config(self.settings.frames_per_period, self.processing_sample_rate);
+                }
+
                 self.pedalboard_set.pedalboards.push(pedalboard);
             },
             "deletepedalboard" => {
-                let pedalboard_index = words.next()?.parse::<usize>().ok()?;
+                let pedalboard_index = arguments.next()?.parse::<usize>().ok()?;
                 self.pedalboard_set.pedalboards.remove(pedalboard_index);
             },
             "addpedal" => {
-                let pedalboard_index_str = words.next()?;
-                let pedalboard_index = pedalboard_index_str.parse::<usize>().ok()?;
+                let pedalboard_id = arguments.next()?.parse::<u32>().ok()?;
 
-                let pedalboard_ser_start_index = pedalboard_index_str.as_ptr() as usize + pedalboard_index_str.len() - command.as_ptr() as usize;
-                let pedal_stringified = &command[pedalboard_ser_start_index + 1..];
+                let pedal_ser_start = arguments.next()?;
+                let pedalboard_ser_start_index = pedal_ser_start.as_ptr() as usize - command.as_ptr() as usize;
+                let pedal_stringified = &command[pedalboard_ser_start_index..];
                 
                 let mut pedal: Pedal = serde_json::from_str(&pedal_stringified).ok()?;
                 pedal.set_config(self.settings.frames_per_period, self.processing_sample_rate);
-                self.pedalboard_set.pedalboards.get_mut(pedalboard_index)?
-                    .pedals.push(pedal);
+
+                for pedalboard in self.pedalboard_set.pedalboards.iter_mut() {
+                    if pedalboard.get_id() == pedalboard_id {
+                        pedalboard.pedals.push(pedal.clone());
+                    }
+                }
             },
             "deletepedal" => {
-                let pedalboard_index = words.next()?.parse::<usize>().ok()?;
-                let pedal_index = words.next()?.parse::<usize>().ok()?;
-                self.pedalboard_set.pedalboards.get_mut(pedalboard_index)?
-                    .pedals.remove(pedal_index);
+                let pedalboard_id = arguments.next()?.parse::<u32>().ok()?;
+                let pedal_id = arguments.next()?.parse::<u32>().ok()?;
+                
+                for pedalboard in self.pedalboard_set.pedalboards.iter_mut().filter(|pedalboard| pedalboard.get_id() == pedalboard_id) {
+                    pedalboard.pedals.retain(|p| p.get_id() != pedal_id);
+                }
             },
             "movepedal" => {
-                let pedalboard_index = words.next()?.parse::<usize>().ok()?;
-                let src_index = words.next()?.parse::<usize>().ok()?;
-                let dest_index = words.next()?.parse::<usize>().ok()?;
+                let pedalboard_id = arguments.next()?.parse::<u32>().ok()?;
+                let pedal_id = arguments.next()?.parse::<usize>().ok()?;
+                let dest_index = arguments.next()?.parse::<usize>().ok()?;
 
-                let pedal = self.pedalboard_set.pedalboards.get_mut(pedalboard_index)?
-                    .pedals.remove(src_index);
+                for pedalboard in &mut self.pedalboard_set.pedalboards {
+                    if pedalboard.get_id() == pedalboard_id {
+                        let pedal_index = pedalboard.pedals.iter().position(|p| p.get_id() as usize == pedal_id)?;
+                        let pedal = pedalboard.pedals.remove(pedal_index);
 
-                let shifted_dest_index = if dest_index > src_index {
-                    dest_index - 1
-                } else {
-                    dest_index
-                };
+                        let shifted_dest_index = if dest_index > pedal_index {
+                            dest_index - 1
+                        } else {
+                            dest_index
+                        };
 
-                self.pedalboard_set.pedalboards.get_mut(pedalboard_index)?
-                    .pedals.insert(shifted_dest_index, pedal);
+                        pedalboard.pedals.insert(shifted_dest_index, pedal.clone());
+                    }
+                }
             },
             "loadset" => {
                 let pedalboardset_stringified = &command[command_name.len() + 1..];
@@ -281,19 +297,19 @@ impl AudioProcessor {
                 self.pedalboard_set = pedalboardset;
             },
             "play" => {
-                let pedalboard_index = words.next()?.parse::<usize>().ok()?;
+                let pedalboard_index = arguments.next()?.parse::<usize>().ok()?;
                 self.pedalboard_set.set_active_pedalboard(pedalboard_index);
             },
             "masterin" => {
-                let volume = words.next()?.parse::<f32>().ok()?;
+                let volume = arguments.next()?.parse::<f32>().ok()?;
                 self.master_in_volume = volume;
             },
             "masterout" => {
-                let volume = words.next()?.parse::<f32>().ok()?;
+                let volume = arguments.next()?.parse::<f32>().ok()?;
                 self.master_out_volume = volume.clamp(0.0, 1.0);
             },
             "tuner" => {
-                let enable_str = words.next()?;
+                let enable_str = arguments.next()?;
                 match enable_str {
                     "on" => {
                         let buffer_size = Yin::minimum_buffer_length(self.processing_sample_rate, self.settings.tuner_min_freq, self.settings.tuner_periods);
@@ -323,9 +339,9 @@ impl AudioProcessor {
                 }
             },
             "metronome" => {
-                let enable_str = words.next()?;
-                let bpm = words.next()?.parse::<u32>().ok()?;
-                let volume = words.next()?.parse::<f32>().ok()?;
+                let enable_str = arguments.next()?;
+                let bpm = arguments.next()?.parse::<u32>().ok()?;
+                let volume = arguments.next()?.parse::<f32>().ok()?;
                 match enable_str {
                     "on" => {
                         self.metronome.0 = true;
@@ -343,7 +359,7 @@ impl AudioProcessor {
                 self.metronome.1.volume = volume.clamp(0.0, 1.0);
             },
             "volumemonitor" => {
-                let enable_str = words.next()?;
+                let enable_str = arguments.next()?;
                 match enable_str {
                     "on" => {
                         self.volume_monitor.0 = true;
@@ -359,7 +375,7 @@ impl AudioProcessor {
                 }
             },
             "volumenormalization" => {
-                let mode = words.next()?;
+                let mode = arguments.next()?;
                 match mode {
                     "none" => {
                         self.volume_normalizer = None;
@@ -368,7 +384,7 @@ impl AudioProcessor {
                         self.volume_normalizer = Some(PeakNormalizer::new(0.95, 1.0, self.settings.frames_per_period, self.processing_sample_rate));
                     },
                     "automatic" => {
-                        let decay = words.next()?.parse::<f32>().ok()?.clamp(0.01, 1.0);
+                        let decay = arguments.next()?.parse::<f32>().ok()?.clamp(0.01, 1.0);
                         self.volume_normalizer = Some(PeakNormalizer::new(0.95, decay, self.settings.frames_per_period, self.processing_sample_rate));
                     },
                     "reset" => {
@@ -396,7 +412,7 @@ impl AudioProcessor {
                 self.recording.stop_recording();
             },
             "recordclean" => {
-                let enable_str = words.next()?;
+                let enable_str = arguments.next()?;
                 match enable_str {
                     "on" => {
                         self.recording.set_clean(true);
