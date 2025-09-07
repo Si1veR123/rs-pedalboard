@@ -124,7 +124,7 @@ impl PedalParameter {
 }
 
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum PedalParameterValue {
     Float(f32),
     String(String),

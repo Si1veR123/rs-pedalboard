@@ -1,6 +1,7 @@
-use std::cell::RefCell;
+use std::{cell::{Cell, RefCell}, time::Instant};
+use crossbeam::channel::Receiver;
 use rs_pedalboard::{pedalboard::Pedalboard, pedals::{Pedal, PedalParameterValue, PedalTrait}, server_settings::ServerSettingsSave};
-use crate::{midi::{MidiSettings, MidiState}, saved_pedalboards::SavedPedalboards, settings::ClientSettings, socket::{ClientSocket, ParameterPath}};
+use crate::{midi::{MidiSettings, MidiState}, saved_pedalboards::SavedPedalboards, settings::{ClientSettings, VolumeNormalizationMode}, socket::{ClientSocket, Command, ParameterPath}};
 use eframe::egui;
 
 pub struct State {
@@ -9,14 +10,23 @@ pub struct State {
 
     pub client_settings: RefCell<ClientSettings>,
     pub server_settings: RefCell<ServerSettingsSave>,
-    pub midi_state: RefCell<MidiState>
+    pub midi_state: RefCell<MidiState>,
+    pub midi_command_receiver: Receiver<Command>,
+
+    // Utility state
+    pub recording_time: Cell<Option<Instant>>,
+    pub recording_save_clean: Cell<bool>,
+    pub metronome_active: Cell<bool>,
+    pub metronome_bpm: Cell<u32>,
+    pub metronome_volume: Cell<f32>,
+    pub tuner_active: Cell<bool>,
 }
 
 impl State {
     /// Delete a pedalboard from the active pedalboard stage
     /// 
     /// Requires a lock on active_pedalboardstage and socket
-    pub fn remove_pedalboard_from_stage(&self, index: usize) {
+    pub fn remove_pedalboard_from_stage(&self, index: usize, local: bool) {
         let mut pedalboard_set = self.pedalboards.active_pedalboardstage.borrow_mut();
 
         if pedalboard_set.pedalboards.len() <= 1 {
@@ -30,28 +40,35 @@ impl State {
             pedalboard_set.active_pedalboard -= 1;
         }
 
-        self.socket.borrow_mut().send_delete_pedalboard(index);
+        if !local {
+            let mut socket = self.socket.borrow_mut();
+            socket.send(Command::DeletePedalboard(index));
+        }
     }
 
     /// Move a pedalboard in the active pedalboard stage
     /// 
     /// Requires a lock on active_pedalboardstage and socket
-    pub fn move_pedalboard(&self, src_index: usize, dest_index: usize) {
+    pub fn move_pedalboard(&self, src_index: usize, dest_index: usize, local: bool) {
         let mut pedalboard_set = self.pedalboards.active_pedalboardstage.borrow_mut();
         egui_dnd::utils::shift_vec(src_index, dest_index, &mut pedalboard_set.pedalboards);
 
-        self.socket.borrow_mut().send_move_pedalboard(src_index, dest_index);
+        if !local {
+            let mut socket = self.socket.borrow_mut();
+            socket.send(Command::MovePedalboard(src_index, dest_index));
+        }
     }
 
     /// Add a pedalboard to the active pedalboard stage
     /// 
     /// Requires a lock on active_pedalboardstage and socket
-    pub fn add_pedalboard(&self, pedalboard: Pedalboard) {
+    pub fn add_pedalboard(&self, pedalboard: Pedalboard, local: bool) {
+        if !local {
+            let mut socket = self.socket.borrow_mut();
+            socket.send(Command::AddPedalboard(serde_json::to_string(&pedalboard).unwrap()));
+        }
+
         let mut pedalboard_set = self.pedalboards.active_pedalboardstage.borrow_mut();
-        let mut socket = self.socket.borrow_mut();
-
-        socket.send_add_pedalboard(serde_json::to_string(&pedalboard).unwrap());
-
         pedalboard_set.pedalboards.push(pedalboard);
     }
 
@@ -85,8 +102,8 @@ impl State {
         let src_index = pedalboard_set.pedalboards.len();
         drop(pedalboard_set);
 
-        self.add_pedalboard(new_pedalboard);
-        self.move_pedalboard(src_index, index+1);
+        self.add_pedalboard(new_pedalboard, false);
+        self.move_pedalboard(src_index, index+1, false);
     }
 
     /// Duplicate pedalboard in stage with new name
@@ -102,49 +119,57 @@ impl State {
         drop(pedalboard_set);
         new_pedalboard.name = self.pedalboards.unique_stage_pedalboard_name(new_pedalboard.name.clone());
         
-        self.add_pedalboard(new_pedalboard);
-        self.move_pedalboard(src_index, index+1);
+        self.add_pedalboard(new_pedalboard, false);
+        self.move_pedalboard(src_index, index+1, false);
     }
 
-    /// Add a pedal to the active pedalboard and matching pedalboard in library
+    /// Add a pedal to a given pedalboard ID
     /// 
     /// Requires a lock on active_pedalboardstage, pedalboard_library, and socket
-    pub fn add_pedal(&self, pedal: &Pedal) {
-        let mut socket = self.socket.borrow_mut();
-
-        let mut active_pedalboardstage = self.pedalboards.active_pedalboardstage.borrow_mut();
-        let active_pedalboard_id = active_pedalboardstage.pedalboards[active_pedalboardstage.active_pedalboard].get_id();
-        
+    pub fn add_pedal_to_pedalboard(&self, pedalboard_id: u32, pedal: &Pedal, local: bool) {
         // Add in pedalboard library
         let mut pedalboard_library = self.pedalboards.pedalboard_library.borrow_mut();
         for pedalboard in pedalboard_library.iter_mut() {
-            if pedalboard.get_id() == active_pedalboard_id {
+            if pedalboard.get_id() == pedalboard_id {
                 pedalboard.pedals.push(pedal.clone());
                 break;
             }
         }
 
         // Add in all matching pedalboards in active pedalboard stage
+        let mut active_pedalboardstage = self.pedalboards.active_pedalboardstage.borrow_mut();
         for pedalboard in active_pedalboardstage.pedalboards.iter_mut() {
-            if pedalboard.get_id() == active_pedalboard_id {
+            if pedalboard.get_id() == pedalboard_id {
                 pedalboard.pedals.push(pedal.clone());
             }
         }
 
-        socket.send_add_pedal(active_pedalboard_id, serde_json::to_string(pedal).unwrap());
+        if !local {
+            let mut socket = self.socket.borrow_mut();
+            socket.send(Command::AddPedal(pedalboard_id, serde_json::to_string(pedal).unwrap()));
+        }
+    }
+
+    /// Add a pedal to the active pedalboard and matching pedalboard in library
+    /// 
+    /// Requires a lock on active_pedalboardstage, pedalboard_library, and socket
+    pub fn add_pedal_to_active(&self, pedal: &Pedal, local: bool) {
+        let active_pedalboardstage = self.pedalboards.active_pedalboardstage.borrow_mut();
+        let active_pedalboard_id = active_pedalboardstage.pedalboards[active_pedalboardstage.active_pedalboard].get_id();
+        drop(active_pedalboardstage);
+        self.add_pedal_to_pedalboard(active_pedalboard_id, pedal, local);
     }
 
     /// Move a pedal in the pedalboard stage and in library
     /// 
     /// Requires a lock on active_pedalboardstage, pedalboard_library, and socket
-    pub fn move_pedal(&self, pedalboard_id: u32, pedal_id: u32, mut to_index: usize) {
+    pub fn move_pedal(&self, pedalboard_id: u32, pedal_id: u32, mut to_index: usize, local: bool) {
         let mut active_pedalboardstage = self.pedalboards.active_pedalboardstage.borrow_mut();
         let mut pedalboard_library = self.pedalboards.pedalboard_library.borrow_mut();
 
         // Move in all matching pedalboards in active pedalboard stage
         let mut src_index = None;
 
-        let mut socket = self.socket.borrow_mut();
         for pedalboard in active_pedalboardstage.pedalboards.iter_mut() {
             if pedalboard.get_id() == pedalboard_id {
                 if to_index >= pedalboard.pedals.len() + 1 {
@@ -169,13 +194,16 @@ impl State {
             }
         }
 
-        socket.send_move_pedal(pedalboard_id, pedal_id, to_index);
+        if !local {
+            let mut socket = self.socket.borrow_mut();
+            socket.send(Command::MovePedal(pedalboard_id, pedal_id, to_index));
+        }
     }
 
     /// Delete a pedal from the pedalboard stage and in library
     /// 
     /// Requires a lock on active_pedalboardstage, pedalboard_library, and socket
-    pub fn delete_pedal(&self, pedalboard_id: u32, pedal_id: u32) {
+    pub fn delete_pedal(&self, pedalboard_id: u32, pedal_id: u32, local: bool) {
         let mut active_pedalboardstage = self.pedalboards.active_pedalboardstage.borrow_mut();
         let mut pedalboard_library = self.pedalboards.pedalboard_library.borrow_mut();
 
@@ -193,8 +221,10 @@ impl State {
             }
         }
 
-        let mut socket = self.socket.borrow_mut();
-        socket.send_delete_pedal(pedalboard_id, pedal_id);
+        if !local {
+            let mut socket = self.socket.borrow_mut();
+            socket.send(Command::DeletePedal(pedalboard_id, pedal_id));
+        }
     }
 
     /// Set a parameter on all pedalboards, on stage and in library, with the same name
@@ -219,7 +249,11 @@ impl State {
 
         if !local {
             let mut socket = self.socket.borrow_mut();
-            socket.send_parameter_update(pedalboard_id, pedal_id, parameter_name.to_string(), parameter_value.clone());
+            socket.send(Command::ParameterUpdate(ParameterPath {
+                pedalboard_id,
+                pedal_id,
+                parameter_name
+            }, parameter_value));
         }
     }
 
@@ -227,18 +261,19 @@ impl State {
     pub fn load_active_set(&self) {
         let mut socket = self.socket.borrow_mut();
         let active_pedalboardstage = self.pedalboards.active_pedalboardstage.borrow();
-        let message = format!("loadset|{}\n", serde_json::to_string(&*active_pedalboardstage).unwrap());
-        socket.send(message);
+        socket.send(Command::LoadSet(serde_json::to_string(&*active_pedalboardstage).unwrap()));
     }
 
     /// Play a pedalboard from the active stage
     /// 
     /// Requires a lock on active_pedalboardstage and socket
-    pub fn play(&self, pedalboard_index: usize) {
-        let mut socket = self.socket.borrow_mut();
-        let message = format!("play|{}\n", pedalboard_index);
-        socket.send(message);
+    pub fn play(&self, pedalboard_index: usize, local: bool) {
         self.pedalboards.active_pedalboardstage.borrow_mut().set_active_pedalboard(pedalboard_index);
+
+        if !local {
+            let mut socket = self.socket.borrow_mut();
+            socket.send(Command::Play(pedalboard_index));
+        }
     }
 
     /// Update the received messages from the socket thread.
@@ -256,7 +291,7 @@ impl State {
         let mut socket = self.socket.borrow_mut();
 
         // TODO: remove cloning with nightly `drain_filter`? 
-        socket.received_commands.retain(|cmd| {
+        socket.received_server_commands.retain(|cmd| {
             if cmd.starts_with(prefix) {
                 // Remove the prefix and push the command into the vector
                 let cmd_trim = cmd.trim_start_matches(prefix).trim().to_string();
@@ -268,23 +303,27 @@ impl State {
         });
     }
 
-    /// Set whether the tuner is active on the server.
+    /// Set whether the tuner is active.
     /// 
     /// Requires a lock on socket.
-    pub fn set_tuner_active_server(&self, active: bool) {
+    pub fn set_tuner_active(&self, active: bool) {
+        self.tuner_active.set(active);
+
         let mut socket = self.socket.borrow_mut();
-        let message = format!("tuner|{}\n", if active { "on" } else { "off" });
-        socket.send(message);
+        socket.send(Command::Tuner(active));
     }
 
-    /// Set the metronome settings on the server.
+    /// Set the metronome settings.
     /// 
     /// Requires a lock on socket.
-    pub fn set_metronome_server(&self, active: bool, bpm: u32, volume: f32) {
+    pub fn set_metronome(&self, active: bool, bpm: u32, volume: f32) {
+        self.metronome_active.set(active);
+        self.metronome_bpm.set(bpm);
+        self.metronome_volume.set(volume);
+
         let mut socket = self.socket.borrow_mut();
         let rounded_volume = (volume * 100.0).round() / 100.0;
-        let message = format!("metronome|{} {} {}\n", if active { "on" } else { "off" }, bpm, rounded_volume);
-        socket.send(message);
+        socket.send(Command::Metronome(active, bpm, rounded_volume));
     }
 
     /// Set whether the volume monitor is active on the server.
@@ -292,53 +331,51 @@ impl State {
     /// Requires a lock on socket.
     pub fn set_volume_monitor_active_server(&self, active: bool) {
         let mut socket = self.socket.borrow_mut();
-        let message = format!("volumemonitor|{}\n", if active { "on" } else { "off" });
-        socket.send(message);
+        socket.send(Command::VolumeMonitor(active));
     }
 
     pub fn set_volume_normalization_server(&self, mode: crate::settings::VolumeNormalizationMode, auto_decay: f32) {
         let mut socket = self.socket.borrow_mut();
         let rounded_auto_decay = (auto_decay * 1000.0).round() / 1000.0;
-        match mode {
-            crate::settings::VolumeNormalizationMode::None => socket.send("volumenormalization|none\n".to_string()),
-            crate::settings::VolumeNormalizationMode::Manual => socket.send("volumenormalization|manual\n".to_string()),
-            crate::settings::VolumeNormalizationMode::Automatic => socket.send(format!("volumenormalization|automatic {}\n", rounded_auto_decay)),
-        };
+        
+        if matches!(mode, VolumeNormalizationMode::Automatic) {
+            socket.send(Command::VolumeNormalization(VolumeNormalizationMode::Automatic, Some(rounded_auto_decay)));
+        } else {
+            socket.send(Command::VolumeNormalization(mode, None));
+        }
     }
 
     pub fn reset_volume_normalization_peak(&self) {
         let mut socket = self.socket.borrow_mut();
-        socket.send("volumenormalization|reset\n".to_string());
+        socket.send(Command::VolumeNormalizationReset);
     }
 
     pub fn master_in_server(&self, volume: f32) {
         let mut socket = self.socket.borrow_mut();
         let rounded_volume = (volume * 100.0).round() / 100.0;
-        let message = format!("masterin|{}\n", rounded_volume);
-        socket.send(message);
+        socket.send(Command::MasterIn(rounded_volume));
     }
 
     pub fn master_out_server(&self, volume: f32) {
         let mut socket = self.socket.borrow_mut();
         let rounded_volume = (volume * 100.0).round() / 100.0;
-        let message = format!("masterout|{}\n", rounded_volume);
-        socket.send(message);
+        socket.send(Command::MasterOut(rounded_volume));
     }
 
-    pub fn start_recording_server(&self) {
+    pub fn set_recording(&self, active: bool) {
         let mut socket = self.socket.borrow_mut();
-        socket.send("startrecording\n".to_string());
+        socket.send(Command::SetRecording(active));
+        if active {
+            self.recording_time.set(Some(Instant::now()));
+        } else {
+            self.recording_time.set(None);
+        }
     }
 
-    pub fn stop_recording_server(&self) {
+    pub fn set_recorder_clean(&self, clean: bool) {
         let mut socket = self.socket.borrow_mut();
-        socket.send("stoprecording\n".to_string());
-    }
-
-    pub fn set_recorder_clean_server(&self, clean: bool) {
-        let mut socket = self.socket.borrow_mut();
-        let message = format!("recordclean|{}\n", if clean { "on" } else { "off" });
-        socket.send(message);
+        socket.send(Command::RecordClean(clean));
+        self.recording_save_clean.set(clean);
     }
 
     pub fn load_state(egui_ctx: eframe::egui::Context) -> Self {
@@ -370,13 +407,22 @@ impl State {
 
         let server_settings = ServerSettingsSave::load_or_default();
         let midi_settings = MidiSettings::load_or_default();
+        let (midi_command_sender, midi_command_receiver) = crossbeam::channel::unbounded();
+        let midi_state = MidiState::new(midi_settings.clone(), egui_ctx.clone(), midi_command_sender, None);
 
         State {
             pedalboards,
             socket: RefCell::new(socket),
             client_settings: RefCell::new(client_settings),
             server_settings: RefCell::new(server_settings),
-            midi_state: RefCell::new(MidiState::new(midi_settings, egui_ctx))
+            midi_state: RefCell::new(midi_state),
+            midi_command_receiver,
+            recording_time: Cell::new(None),
+            recording_save_clean: Cell::new(true),
+            metronome_active: Cell::new(false),
+            metronome_bpm: Cell::new(120),
+            metronome_volume: Cell::new(0.5),
+            tuner_active: Cell::new(false),
         }
     }
 
@@ -393,14 +439,20 @@ impl State {
         if !socket.is_connected() {
             socket.connect()?;
             if socket.is_connected() {
+                socket.send(Command::RequestSampleRate);
+
+                let new_handle = socket.handle.clone();
                 drop(socket);
+                let mut midi_state = self.midi_state.borrow_mut();
+                midi_state.disconnect_from_all_ports();
+                midi_state.set_socket_handle(new_handle);
+                midi_state.connect_to_auto_connect_ports();
+
                 let client_settings = self.client_settings.borrow();
                 self.set_volume_monitor_active_server(client_settings.show_volume_monitor);
                 self.set_volume_normalization_server(client_settings.volume_normalization, client_settings.auto_volume_normalization_decay);
                 self.master_in_server(client_settings.input_volume);
                 self.load_active_set();
-
-                self.socket.borrow_mut().send("requestsr\n".to_string());
             }
         }
         Ok(())
@@ -422,25 +474,144 @@ impl State {
         socket.kill();
     }
 
-    /// Apply parameter updates that other threads have sent to the server (oscillators, etc)
-    /// 
-    /// Requires a lock on socket, active_pedalboardstage
-    pub fn apply_parameter_updates(&self) {
-        let mut socket = self.socket.borrow_mut();
-        for (ParameterPath { pedalboard_id, pedal_id, parameter_name }, new_value) in socket.parameter_updates.drain() {
-            self.set_parameter(pedalboard_id, pedal_id, parameter_name, new_value, true);
-        }
-    }
-
-    pub fn default_with_context(egui_ctx: eframe::egui::Context) -> Self {
-        let socket = ClientSocket::new(crate::SERVER_PORT);
-        let midi_state = MidiState::new(MidiSettings::default(), egui_ctx);
-        Self {
-            pedalboards: SavedPedalboards::default(),
-            socket: RefCell::new(socket),
-            client_settings: RefCell::new(ClientSettings::default()),
-            server_settings: RefCell::new(ServerSettingsSave::default()),
-            midi_state: RefCell::new(midi_state)
+    /// Update the state with commands that other threads have sent to the server
+    pub fn handle_other_thread_commands(&self) {
+        for command in self.midi_command_receiver.try_iter() {
+            match command {
+                Command::LoadSet(pedalboard_set_json) => {
+                    match serde_json::from_str::<rs_pedalboard::pedalboard_set::PedalboardSet>(&pedalboard_set_json) {
+                        Ok(pedalboard_set) => {
+                            self.pedalboards.active_pedalboardstage.replace(pedalboard_set);
+                        },
+                        Err(e) => {
+                            log::error!("Failed to parse pedalboard set JSON from server: {}", e);
+                        }
+                    }
+                },
+                Command::Play(pedalboard_index) => {
+                    self.pedalboards.active_pedalboardstage.borrow_mut().set_active_pedalboard(pedalboard_index);
+                },
+                Command::NextPedalboard => {
+                    let mut pedalboard_set = self.pedalboards.active_pedalboardstage.borrow_mut();
+                    pedalboard_set.active_pedalboard = (pedalboard_set.active_pedalboard + 1) % pedalboard_set.pedalboards.len();
+                },
+                Command::PrevPedalboard => {
+                    let mut pedalboard_set = self.pedalboards.active_pedalboardstage.borrow_mut();
+                    if pedalboard_set.active_pedalboard == 0 {
+                        pedalboard_set.active_pedalboard = pedalboard_set.pedalboards.len() - 1;
+                    } else {
+                        pedalboard_set.active_pedalboard -= 1;
+                    }
+                },
+                Command::MovePedal(pedalboard_id, pedal_id, to_index) => {
+                    self.move_pedal(pedalboard_id, pedal_id, to_index, true);
+                },
+                Command::DeletePedal(pedalboard_id, pedal_id) => {
+                    self.delete_pedal(pedalboard_id, pedal_id, true);
+                },
+                Command::MovePedalboard(src_index, dest_index) => {
+                    self.move_pedalboard(src_index, dest_index, true);
+                },
+                Command::DeletePedalboard(index) => {
+                    self.remove_pedalboard_from_stage(index, true);
+                },
+                Command::AddPedalboard(pedalboard_json) => {
+                    match serde_json::from_str::<Pedalboard>(&pedalboard_json) {
+                        Ok(pedalboard) => {
+                            self.add_pedalboard(pedalboard, true);
+                        },
+                        Err(e) => {
+                            log::error!("Failed to parse pedalboard JSON from other thread: {}", e);
+                        }
+                    }
+                },
+                Command::AddPedal(pedalboard_id, pedal_json) => {
+                    match serde_json::from_str::<Pedal>(&pedal_json) {
+                        Ok(pedal) => {
+                            self.add_pedal_to_pedalboard(pedalboard_id, &pedal, true);
+                        },
+                        Err(e) => {
+                            log::error!("Failed to parse pedal JSON from other thread: {}", e);
+                        }
+                    }
+                },
+                Command::KillServer => {
+                    self.socket.borrow_mut().handle = None;
+                },
+                Command::MasterIn(vol) => {
+                    self.client_settings.borrow_mut().input_volume = vol;
+                },
+                Command::MasterOut(vol) => {
+                    self.client_settings.borrow_mut().output_volume = vol;
+                },
+                Command::VolumeNormalization(mode, decay) => {
+                    let mut client_settings = self.client_settings.borrow_mut();
+                    client_settings.volume_normalization = mode;
+                    if let Some(d) = decay {
+                        client_settings.auto_volume_normalization_decay = d;
+                    }
+                },
+                Command::SetRecording(active) => {
+                    if active {
+                        self.recording_time.set(Some(Instant::now()));
+                    } else {
+                        self.recording_time.set(None);
+                    }
+                },
+                Command::ToggleRecording => {
+                    let currently_recording = self.recording_time.get().is_some();
+                    if currently_recording {
+                        self.recording_time.set(None);
+                    } else {
+                        self.recording_time.set(Some(Instant::now()));
+                    }
+                },
+                Command::RecordClean(clean) => {
+                    self.recording_save_clean.set(clean);
+                },
+                Command::ToggleClean => {
+                    let currently_clean = self.recording_save_clean.get();
+                    self.recording_save_clean.set(!currently_clean);
+                },
+                Command::VolumeMonitor(active) => {
+                    self.client_settings.borrow_mut().show_volume_monitor = active;
+                },
+                Command::ToggleVolumeMonitor => {
+                    let mut client_settings = self.client_settings.borrow_mut();
+                    client_settings.show_volume_monitor = !client_settings.show_volume_monitor;
+                },
+                Command::Metronome(active, bpm, volume) => {
+                    self.metronome_active.set(active);
+                    self.metronome_bpm.set(bpm);
+                    self.metronome_volume.set(volume);
+                },
+                Command::ToggleMetronome => {
+                    let currently_active = self.metronome_active.get();
+                    self.metronome_active.set(!currently_active);
+                },
+                Command::Tuner(active) => {
+                    self.tuner_active.set(active);
+                },
+                Command::ToggleTuner => {
+                    let currently_active = self.tuner_active.get();
+                    self.tuner_active.set(!currently_active);
+                },
+                Command::ParameterUpdate(path, value) => {
+                    self.set_parameter(
+                        path.pedalboard_id,
+                        path.pedal_id,
+                        path.parameter_name,
+                        value,
+                        true
+                    );
+                },
+                Command::VolumeNormalizationReset => {},
+                Command::SetMute(mute) => { log::info!("Set mute to {mute}") },
+                Command::ToggleMute => { log::info!("Toggled mute") },
+                Command::RequestSampleRate => log::error!("Unexpected RequestSampleRate command in other thread commands"),
+                Command::ThreadAliveTest => log::error!("Unexpected ThreadAliveTest command in other thread commands"),
+                Command::SubscribeToResponses(_) => log::error!("Unexpected SubscribeToResponses command in other thread commands"),
+            }
         }
     }
 }

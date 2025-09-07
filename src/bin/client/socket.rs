@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::time::Duration;
 
 use futures::{pin_mut, select, FutureExt};
@@ -9,6 +8,8 @@ use smol::net::{TcpStream, Ipv4Addr};
 
 use rs_pedalboard::pedals::PedalParameterValue;
 use rs_pedalboard::socket_helper::CommandReceiver;
+
+use crate::settings::VolumeNormalizationMode;
 
 pub const RESPONSE_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -23,10 +24,9 @@ pub struct ParameterPath {
 /// Manages a handle to a client socket thread, when connected.
 pub struct ClientSocket {
     port: u16,
-    socket_thread_responses: Vec<SocketThreadResponse>,
-    pub received_commands: Vec<String>,
-    pub parameter_updates: HashMap<ParameterPath, PedalParameterValue>,
-    handle: Option<ClientSocketThreadHandle>
+    socket_thread_responses: Vec<String>,
+    pub received_server_commands: Vec<String>,
+    pub handle: Option<ClientSocketThreadHandle>
 }
 
 impl ClientSocket {
@@ -34,9 +34,8 @@ impl ClientSocket {
         ClientSocket {
             port,
             handle: None,
-            received_commands: Vec::new(),
-            socket_thread_responses: Vec::new(),
-            parameter_updates: HashMap::new(),
+            received_server_commands: Vec::new(),
+            socket_thread_responses: Vec::new()
         }
     }
 
@@ -46,7 +45,7 @@ impl ClientSocket {
             return Ok(());
         }
 
-        match new_client_socket_thread(self.port) {
+        match new_client_socket_thread(self.port, true) {
             Ok(handle) => {
                 self.handle = Some(handle);
                 Ok(())
@@ -81,69 +80,9 @@ impl ClientSocket {
         }
     }
 
-    pub fn send(&mut self, message: String) {
+    pub fn send(&mut self, command: Command) {
         if let Some(handle) = &self.handle {
-            if handle.send_command(message) {
-                self.handle = None;
-            }
-        }
-    }
-
-    pub fn send_parameter_update(&mut self, pedalboard_id: u32, pedal_id: u32, parameter_name: String, value: PedalParameterValue) {
-        if let Some(handle) = &self.handle {
-            if handle.send_message(SocketThreadMessage::ParameterUpdate(ParameterPath {
-                pedalboard_id,
-                pedal_id,
-                parameter_name: parameter_name.clone()
-            }, value)) {
-                self.handle = None;
-            }
-        }
-    }
-
-    pub fn send_move_pedal(&mut self, pedalboard_id: u32, pedal_id: u32, to_index: usize) {
-        if let Some(handle) = &self.handle {
-            if handle.send_message(SocketThreadMessage::MovePedal(pedalboard_id, pedal_id, to_index)) {
-                self.handle = None;
-            }
-        }
-    }
-
-    pub fn send_delete_pedal(&mut self, pedalboard_id: u32, pedal_id: u32) {
-        if let Some(handle) = &self.handle {
-            if handle.send_message(SocketThreadMessage::DeletePedal(pedalboard_id, pedal_id)) {
-                self.handle = None;
-            }
-        }
-    }
-
-    pub fn send_move_pedalboard(&mut self, from_index: usize, to_index: usize) {
-        if let Some(handle) = &self.handle {
-            if handle.send_message(SocketThreadMessage::MovePedalboard(from_index, to_index)) {
-                self.handle = None;
-            }
-        }
-    }
-
-    pub fn send_delete_pedalboard(&mut self, pedalboard_index: usize) {
-        if let Some(handle) = &self.handle {
-            if handle.send_message(SocketThreadMessage::DeletePedalboard(pedalboard_index)) {
-                self.handle = None;
-            }
-        }
-    }
-
-    pub fn send_add_pedal(&mut self, pedalboard_id: u32, serialized_pedal: String) {
-        if let Some(handle) = &self.handle {
-            if handle.send_message(SocketThreadMessage::AddPedal(pedalboard_id, serialized_pedal)) {
-                self.handle = None;
-            }
-        }
-    }
-
-    pub fn send_add_pedalboard(&mut self, serialized_pedalboard: String) {
-        if let Some(handle) = &self.handle {
-            if handle.send_message(SocketThreadMessage::AddPedalboard(serialized_pedalboard)) {
+            if handle.send_command(command) {
                 self.handle = None;
             }
         }
@@ -155,14 +94,7 @@ impl ClientSocket {
                 self.handle = None;
             } else {
                 for response in self.socket_thread_responses.drain(..) {
-                    match response {
-                        SocketThreadResponse::Command(command) => {
-                            self.received_commands.push(command);
-                        },
-                        SocketThreadResponse::ParameterUpdate(parameter_path, value) => {
-                            self.parameter_updates.insert(parameter_path, value);
-                        },
-                    }
+                    self.received_server_commands.push(response);
                 }
             }
         }
@@ -171,7 +103,7 @@ impl ClientSocket {
     pub fn kill(&mut self) {
         if let Some(handle) = self.handle.take() {
             handle.kill();
-            self.received_commands.clear();
+            self.received_server_commands.clear();
         }
     }
 
@@ -185,8 +117,7 @@ impl ClientSocket {
 }
 
 #[derive(Debug, Clone)]
-pub enum SocketThreadMessage {
-    Send(String),
+pub enum Command {
     ParameterUpdate(ParameterPath, PedalParameterValue),
     // pedalboard id, pedal id, new pedal index
     MovePedal(u32, u32, usize),
@@ -201,61 +132,64 @@ pub enum SocketThreadMessage {
     AddPedal(u32, String),
     ThreadAliveTest,
     KillServer,
-    SubscribeToResponses(Sender<SocketThreadResponse>)
-}
-
-#[derive(Clone, Debug)]
-pub enum SocketThreadResponse {
-    Command(String),
-    ParameterUpdate(ParameterPath, PedalParameterValue)
+    SubscribeToResponses(Sender<String>),
+    MasterIn(f32),
+    MasterOut(f32),
+    VolumeNormalization(VolumeNormalizationMode, Option<f32>),
+    VolumeNormalizationReset,
+    SetRecording(bool),
+    ToggleRecording,
+    RecordClean(bool),
+    ToggleClean,
+    VolumeMonitor(bool),
+    ToggleVolumeMonitor,
+    Metronome(bool, u32, f32),
+    ToggleMetronome,
+    Tuner(bool),
+    ToggleTuner,
+    // Serialized PedalboardSet
+    LoadSet(String),
+    Play(usize),
+    NextPedalboard,
+    PrevPedalboard,
+    RequestSampleRate,
+    SetMute(bool),
+    ToggleMute,
 }
 
 pub struct ClientSocketThreadHandle {
-    message_sender: Sender<SocketThreadMessage>,
-    response_receiver: Receiver<SocketThreadResponse>
+    message_sender: Sender<Command>,
+    response_receiver: Receiver<String>
 }
 
 impl ClientSocketThreadHandle {
-    pub fn new(message_sender: Sender<SocketThreadMessage>, response_receiver: Receiver<SocketThreadResponse>) -> Self {
+    pub fn new(message_sender: Sender<Command>, response_receiver: Receiver<String>) -> Self {
         ClientSocketThreadHandle {
             message_sender,
             response_receiver
         }
     }
 
-    /// Returns true if closed
-    pub fn send_command(&self, command: String) -> bool {
+    pub fn send_command(&self, command: Command) -> bool {
         match smol::block_on(
-            self.message_sender.send(SocketThreadMessage::Send(command))
+            self.message_sender.send(command)
         ) {
             Ok(_) => false,
             Err(_) => {
-                log::error!("Failed to send message to socket thread");
-                true
-            }
-        }
-    }
-
-    pub fn send_message(&self, message: SocketThreadMessage) -> bool {
-        match smol::block_on(
-            self.message_sender.send(message)
-        ) {
-            Ok(_) => false,
-            Err(_) => {
-                log::error!("Failed to send message to socket thread");
+                log::error!("Failed to send command to socket thread");
                 true
             }
         }
     }
 
     pub fn kill(&self) {
-        if smol::block_on(self.message_sender.send(SocketThreadMessage::KillServer)).is_err() {
+        if smol::block_on(self.message_sender.send(Command::KillServer)).is_err() {
             log::error!("Failed to send kill command");
         }
     }
 
     /// Returns true if closed
-    pub fn all_socket_responses(&self, into: &mut Vec<SocketThreadResponse>) -> bool {
+    pub fn all_socket_responses(&self, into: &mut Vec<String>) -> bool {
         loop {
             match self.response_receiver.try_recv() {
                 Ok(command) => {
@@ -269,18 +203,23 @@ impl ClientSocketThreadHandle {
     }
 
     pub fn is_connected(&self) -> bool {
-        match smol::block_on(self.message_sender.send(SocketThreadMessage::ThreadAliveTest)) {
+        match smol::block_on(self.message_sender.send(Command::ThreadAliveTest)) {
             Ok(_) => true,
             Err(_) => false
         }
     }
 
-}
-
-impl Clone for ClientSocketThreadHandle {
-    fn clone(&self) -> Self {
+    pub fn clone_with_responses(&self) -> Self {
         let (new_sender, new_receiver) = smol::channel::unbounded();
-        let _ = smol::block_on(self.message_sender.send(SocketThreadMessage::SubscribeToResponses(new_sender)));
+        let _ = smol::block_on(self.message_sender.send(Command::SubscribeToResponses(new_sender)));
+        ClientSocketThreadHandle {
+            message_sender: self.message_sender.clone(),
+            response_receiver: new_receiver
+        }
+    }
+
+    pub fn clone_without_responses(&self) -> Self {
+        let (_new_sender, new_receiver) = smol::channel::bounded(1);
         ClientSocketThreadHandle {
             message_sender: self.message_sender.clone(),
             response_receiver: new_receiver
@@ -288,7 +227,13 @@ impl Clone for ClientSocketThreadHandle {
     }
 }
 
-pub fn new_client_socket_thread(port: u16) -> std::io::Result<ClientSocketThreadHandle> {
+impl Clone for ClientSocketThreadHandle {
+    fn clone(&self) -> Self {
+        self.clone_without_responses()
+    }
+}
+
+pub fn new_client_socket_thread(port: u16, subscribe_to_responses: bool) -> std::io::Result<ClientSocketThreadHandle> {
     let (message_sender, message_receiver) = smol::channel::unbounded();
     let (response_sender, response_receiver) = smol::channel::unbounded();
 
@@ -309,8 +254,13 @@ pub fn new_client_socket_thread(port: u16) -> std::io::Result<ClientSocketThread
             };
 
             log::info!("Connected to server on port {}", port);
+            let response_senders = if subscribe_to_responses {
+                vec![response_sender.clone()]
+            } else {
+                Vec::new()
+            };
             match connected_status_oneshot_sender.send(Ok(())) {
-                Ok(_) => client_socket_event_loop(stream, message_receiver, vec![response_sender]).await,
+                Ok(_) => client_socket_event_loop(stream, message_receiver, response_senders).await,
                 Err(e) => {
                     log::error!("Failed to send connection status: {}", e);
                     return;
@@ -350,8 +300,8 @@ async fn send_to_all<T: Clone>(
 
 async fn client_socket_event_loop(
     stream: TcpStream,
-    message_receiver: Receiver<SocketThreadMessage>,
-    mut response_senders: Vec<Sender<SocketThreadResponse>>
+    message_receiver: Receiver<Command>,
+    mut response_senders: Vec<Sender<String>>
 ) {
     let mut command_receiver = CommandReceiver::new();
     // 128 is large but it is only storing String, which is small
@@ -361,9 +311,9 @@ async fn client_socket_event_loop(
 
     loop {
         let socket_fut = command_receiver.receive_commands_async(&mut stream_reader, &mut received_commands_writer).fuse();
-        let msg_fut = message_receiver.recv().fuse();
+        let command_fut = message_receiver.recv().fuse();
 
-        pin_mut!(socket_fut, msg_fut);
+        pin_mut!(socket_fut, command_fut);
 
         select! {
             closed = socket_fut => {
@@ -383,7 +333,7 @@ async fn client_socket_event_loop(
                     }
                     Ok(false) => {
                         for command in received_commands_reader.pop_iter() {
-                            if send_to_all(&response_senders, SocketThreadResponse::Command(command)).await {
+                            if send_to_all(&response_senders, command).await {
                                 log::error!("Failed to send command to response channel");
                                 break;
                             }
@@ -392,20 +342,20 @@ async fn client_socket_event_loop(
                 }
             },
 
-            msg = msg_fut => {
-                match msg {
-                    Ok(SocketThreadMessage::KillServer) => {
+            command = command_fut => {
+                if command.is_err() {
+                    log::info!("Channel closed. Exiting event loop.");
+                    break;
+                }
+
+                match command.unwrap() {
+                    Command::KillServer => {
                         log::info!("Received kill command from channel. Closing connection.");
                         socket_send(&mut stream_writer, "kill\n").await;
                         let _ = stream_writer.flush().await;
                         break;
                     },
-                    Ok(SocketThreadMessage::Send(message)) => {
-                        if socket_send(&mut stream_writer, &message).await {
-                            break;
-                        }
-                    },
-                    Ok(SocketThreadMessage::ParameterUpdate(parameter_path, value)) => {
+                    Command::ParameterUpdate(parameter_path, value) => {
                         let message = format!(
                             "setparameter|{}|{}|{}|{}\n",
                             parameter_path.pedalboard_id,
@@ -414,17 +364,14 @@ async fn client_socket_event_loop(
                             serde_json::to_string(&value).expect("Failed to serialize parameter value")
                         );
 
-                        if send_to_all(&response_senders, SocketThreadResponse::ParameterUpdate(parameter_path, value.clone())).await {
-                            break;
-                        }
                         if socket_send(&mut stream_writer, &message).await {
                             break;
                         }
                     },
-                    Ok(SocketThreadMessage::SubscribeToResponses(sender)) => {
+                    Command::SubscribeToResponses(sender) => {
                         response_senders.push(sender);
                     },
-                    Ok(SocketThreadMessage::MovePedal(pedalboard_id, pedal_id, to_index)) => {
+                    Command::MovePedal(pedalboard_id, pedal_id, to_index) => {
                         let message = format!(
                             "movepedal|{}|{}|{}\n",
                             pedalboard_id,
@@ -435,7 +382,7 @@ async fn client_socket_event_loop(
                             break;
                         }
                     },
-                    Ok(SocketThreadMessage::DeletePedal(pedalboard_id, pedal_id)) => {
+                    Command::DeletePedal(pedalboard_id, pedal_id) => {
                         let message = format!(
                             "deletepedal|{}|{}\n",
                             pedalboard_id,
@@ -445,7 +392,7 @@ async fn client_socket_event_loop(
                             break;
                         }
                     },
-                    Ok(SocketThreadMessage::MovePedalboard(from_index, to_index)) => {
+                    Command::MovePedalboard(from_index, to_index) => {
                         let message = format!(
                             "movepedalboard|{}|{}\n",
                             from_index,
@@ -455,7 +402,7 @@ async fn client_socket_event_loop(
                             break;
                         }
                     },
-                    Ok(SocketThreadMessage::DeletePedalboard(pedalboard_index)) => {
+                    Command::DeletePedalboard(pedalboard_index) => {
                         let message = format!(
                             "deletepedalboard|{}\n",
                             pedalboard_index
@@ -464,7 +411,7 @@ async fn client_socket_event_loop(
                             break;
                         }
                     },
-                    Ok(SocketThreadMessage::AddPedal(pedalboard_id, serialized_pedal)) => {
+                    Command::AddPedal(pedalboard_id, serialized_pedal) => {
                         let message = format!(
                             "addpedal|{}|{}\n",
                             pedalboard_id,
@@ -474,7 +421,7 @@ async fn client_socket_event_loop(
                             break;
                         }
                     },
-                    Ok(SocketThreadMessage::AddPedalboard(serialized_pedalboard)) => {
+                    Command::AddPedalboard(serialized_pedalboard) => {
                         let message = format!(
                             "addpedalboard|{}\n",
                             serialized_pedalboard
@@ -483,11 +430,147 @@ async fn client_socket_event_loop(
                             break;
                         }
                     },
-                    Ok(SocketThreadMessage::ThreadAliveTest) => { },
-                    Err(_) => {
-                        log::info!("Channel closed. Exiting event loop.");
-                        break;
+                    Command::LoadSet(pedalboard_set) => {
+                        let message = format!(
+                            "loadset|{}\n",
+                            pedalboard_set
+                        );
+                        if socket_send(&mut stream_writer, &message).await {
+                            break;
+                        }
+                    },
+                    Command::MasterIn(value) => {
+                        let message = format!("masterin|{}\n", value);
+                        if socket_send(&mut stream_writer, &message).await {
+                            break;
+                        }
+                    },
+                    Command::MasterOut(value) => {
+                        let message = format!("masterout|{}\n", value);
+                        if socket_send(&mut stream_writer, &message).await {
+                            break;
+                        }
+                    },
+                    Command::VolumeNormalization(mode, auto_decay) => {
+                        let message: String;
+                        
+                        if let Some(decay) = auto_decay {
+                            message = format!("volumenormalization|{}|{}\n", match mode {
+                                VolumeNormalizationMode::None => "none",
+                                VolumeNormalizationMode::Manual => "manual",
+                                VolumeNormalizationMode::Automatic => "automatic"
+                            }, decay);
+                        } else {
+                            message = format!("volumenormalization|{}|none\n", match mode {
+                                VolumeNormalizationMode::None => "none",
+                                VolumeNormalizationMode::Manual => "manual",
+                                VolumeNormalizationMode::Automatic => "automatic"
+                            });
+                        }
+
+                        if socket_send(&mut stream_writer, &message).await {
+                            break;
+                        }
+                    },
+                    Command::VolumeNormalizationReset => {
+                        if socket_send(&mut stream_writer, "volumenormalization|reset\n").await {
+                            break;
+                        }
                     }
+                    Command::SetRecording(active) => {
+                        let message = format!("setrecording|{}\n", if active { "on" } else { "off" });
+                        if socket_send(&mut stream_writer, &message).await {
+                            break;
+                        }
+                    },
+                    Command::ToggleRecording => {
+                        let message = "setrecording|toggle\n";
+                        if socket_send(&mut stream_writer, message).await {
+                            break;
+                        }
+                    },
+                    Command::RecordClean(clean) => {
+                        let message = format!("recordclean|{}\n", if clean { "on" } else { "off" });
+                        if socket_send(&mut stream_writer, &message).await {
+                            break;
+                        }
+                    },
+                    Command::VolumeMonitor(enable) => {
+                        let message = format!("volumemonitor|{}\n", if enable { "on" } else { "off" });
+                        if socket_send(&mut stream_writer, &message).await {
+                            break;
+                        }
+                    },
+                    Command::ToggleClean => {
+                        let message = "recordclean|toggle\n";
+                        if socket_send(&mut stream_writer, message).await {
+                            break;
+                        }
+                    },
+                    Command::Metronome(enable, bpm, volume) => {
+                        let message = format!("metronome|{}|{}|{}\n", if enable { "on" } else { "off" }, bpm, volume);
+                        if socket_send(&mut stream_writer, &message).await {
+                            break;
+                        }
+                    },
+                    Command::ToggleMetronome => {
+                        let message = "metronome|toggle\n";
+                        if socket_send(&mut stream_writer, message).await {
+                            break;
+                        }
+                    },
+                    Command::ToggleVolumeMonitor => {
+                        let message = "volumemonitor|toggle\n";
+                        if socket_send(&mut stream_writer, message).await {
+                            break;
+                        }
+                    },
+                    Command::Tuner(enable) => {
+                        let message = format!("tuner|{}\n", if enable { "on" } else { "off" });
+                        if socket_send(&mut stream_writer, &message).await {
+                            break;
+                        }
+                    },
+                    Command::ToggleTuner => {
+                        let message = "tuner|toggle\n";
+                        if socket_send(&mut stream_writer, message).await {
+                            break;
+                        }
+                    },
+                    Command::Play(index) => {
+                        let message = format!("play|{}\n", index);
+                        if socket_send(&mut stream_writer, &message).await {
+                            break;
+                        }
+                    },
+                    Command::NextPedalboard => {
+                        if socket_send(&mut stream_writer, "nextpedalboard\n").await {
+                            break;
+                        }
+                    },
+                    Command::PrevPedalboard => {
+                        if socket_send(&mut stream_writer, "prevpedalboard\n").await {
+                            break;
+                        }
+                    },
+                    Command::RequestSampleRate => {
+                        if socket_send(&mut stream_writer, "requestsr\n").await {
+                            break;
+                        }
+                    },
+                    Command::SetMute(mute) => {
+                        let message = format!("mute|{}\n", if mute { "on" } else { "off" });
+                        if socket_send(&mut stream_writer, &message).await {
+                            break;
+                        }
+                    },
+                    Command::ToggleMute => {
+                        let message = "mute|toggle\n";
+                        if socket_send(&mut stream_writer, message).await {
+                            break;
+                        }
+                    },
+                    Command::ThreadAliveTest => { },
                 }
             }
         }

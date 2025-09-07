@@ -30,8 +30,8 @@ pub struct ClientSettings {
     pub volume_normalization: VolumeNormalizationMode,
     // Only used if volume_normalization is set to Automatic
     pub auto_volume_normalization_decay: f32,
-    // Only used if volume_normalization is set to None
     pub input_volume: f32,
+    pub output_volume: f32,
     pub nam_folders: Vec<PathBuf>,
     pub ir_folders: Vec<PathBuf>,
     pub vst2_folders: Vec<PathBuf>,
@@ -87,6 +87,7 @@ impl Default for ClientSettings {
             volume_normalization: VolumeNormalizationMode::None,
             auto_volume_normalization_decay: 0.95,
             input_volume: 1.0,
+            output_volume: 1.0,
             nam_folders: vec![],
             ir_folders: vec![],
             vst2_folders: vec![],
@@ -527,31 +528,39 @@ impl Widget for &mut SettingsScreen {
                                 ui.end_row();
                             }
 
-                            match client_settings.volume_normalization {
-                                VolumeNormalizationMode::None => {
-                                    ui.label("Input Volume");
-                                    if ui.add_sized(
-                                        Vec2::new(ui.available_width(), 45.0),
-                                        egui::Slider::new(&mut client_settings.input_volume, 0.1..=5.0)
-                                            .show_value(true)
-                                            .fixed_decimals(2)
-                                    ).changed() {
-                                        self.state.master_in_server(client_settings.input_volume);
-                                    };
-                                    ui.end_row();
-                                },
-                                VolumeNormalizationMode::Manual | VolumeNormalizationMode::Automatic => {
-                                    // Show peak reset button
-                                    ui.label("Reset Volume Normalization");
+                            ui.label("Input Volume");
+                            if ui.add_sized(
+                                Vec2::new(ui.available_width(), 45.0),
+                                egui::Slider::new(&mut client_settings.input_volume, 0.1..=5.0)
+                                    .show_value(true)
+                                    .fixed_decimals(2)
+                            ).changed() {
+                                self.state.master_in_server(client_settings.input_volume);
+                            };
+                            ui.end_row();
 
-                                    if ui.add_sized(
-                                        Vec2::new(ui.available_width()*0.5, ui.available_height()*0.75),
-                                        egui::Button::new("Reset Peak")
-                                    ).on_hover_text("Reset the current peak used to normalize volume.").clicked() {
-                                        self.state.reset_volume_normalization_peak();
-                                    };
-                                    ui.end_row();
-                                }
+                            ui.label("Output Volume");
+                            if ui.add_sized(
+                                Vec2::new(ui.available_width(), 45.0),
+                                egui::Slider::new(&mut client_settings.output_volume, 0.01..=1.0)
+                                    .show_value(true)
+                                    .fixed_decimals(2)
+                            ).changed() {
+                                self.state.master_out_server(client_settings.output_volume);
+                            };
+                            ui.end_row();
+
+                            if matches!(client_settings.volume_normalization, VolumeNormalizationMode::Manual | VolumeNormalizationMode::Automatic) {
+                                // Show peak reset button
+                                ui.label("Reset Volume Normalization");
+
+                                if ui.add_sized(
+                                    Vec2::new(ui.available_width()*0.5, ui.available_height()*0.75),
+                                    egui::Button::new("Reset Peak")
+                                ).on_hover_text("Reset the current peak used to normalize volume.").clicked() {
+                                    self.state.reset_volume_normalization_peak();
+                                };
+                                ui.end_row();
                             };
 
                             ui.style_mut().spacing.icon_width = 35.0;

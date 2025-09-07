@@ -1,36 +1,62 @@
+pub mod functions;
+use functions::MidiFunctions;
+
 use std::{collections::HashMap, sync::{Arc, Mutex}};
 use midir::{MidiInput, MidiInputConnection, MidiInputPorts};
 use serde::{Serialize, Deserialize, Serializer, Deserializer, ser::SerializeStruct};
 use eframe::egui::{self, Id, Rangef};
 use egui_extras::{Size, StripBuilder};
-use crossbeam::channel::{Receiver, Sender};
+use crossbeam::channel::Sender;
 
-use crate::SAVE_DIR;
+use crate::{socket::{ClientSocketThreadHandle, Command}, SAVE_DIR};
 
 pub const MIDI_SETTINGS_SAVE_NAME: &'static str = "midi_settings.json";
-
-// Simple functions that MIDI devices can control
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum ClientMidiFunction {
-    Mute,
-    NextPedalboard,
-    PrevPedalboard,
-    OpenUtilities,
-    OpenStage
-}
 
 pub struct MidiState {
     settings: Arc<Mutex<MidiSettings>>,
     input_connections: Vec<(String, MidiInputConnection<String>)>,
     available_input_ports: MidiInputPorts,
-    // Receive midi functions from the midi callbacks
-    receiver: Receiver<ClientMidiFunction>, 
-    // Used to clone new senders
-    sender: Sender<ClientMidiFunction>,
+    ui_thread_sender: Sender<Command>,
+    socket_handle: Option<ClientSocketThreadHandle>,
     egui_ctx: egui::Context
 }
 
 impl MidiState {
+    pub fn new(settings: MidiSettings, egui_ctx: egui::Context, ui_thread_sender: Sender<Command>, socket_handle: Option<ClientSocketThreadHandle>) -> Self {
+        let available_input_ports = Self::create_midi_input().ports();
+
+        Self {
+            settings: Arc::new(Mutex::new(settings)),
+            available_input_ports,
+            input_connections: Vec::new(),
+            socket_handle,
+            egui_ctx,
+            ui_thread_sender
+        }
+    }
+
+    pub fn connect_to_auto_connect_ports(&mut self) {
+        let settings_lock = self.settings.lock().expect("MidiState: Mutex poisoned.");
+        let auto_connect_ports: Vec<String> = settings_lock.port_settings.iter()
+            .filter_map(|(port_name, port_settings)| {
+                if port_settings.auto_connect {
+                    Some(port_name.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
+        drop(settings_lock);
+
+        for port in auto_connect_ports {
+            self.connect_to_port(&port);
+        }
+    }
+
+    pub fn set_socket_handle(&mut self, handle: Option<ClientSocketThreadHandle>) {
+        self.socket_handle = handle;
+    }
+
     pub fn save_settings(&self) -> Result<(), std::io::Error> {
         self.settings.lock().map_err(|_e| std::io::Error::new(std::io::ErrorKind::Other, "MIDI settings mutex poisoned"))?.save()
     }
@@ -59,11 +85,20 @@ impl MidiState {
         }
     }
 
-    fn handle_midi_message(settings: &Arc<Mutex<MidiSettings>>, port_name: &str, message: &[u8], sender: &Sender<ClientMidiFunction>, egui_ctx: &egui::Context) {
+    fn handle_midi_message(
+        settings: &Arc<Mutex<MidiSettings>>,
+        port_name: &str,
+        message: &[u8],
+        ui_thread_sender: &Sender<Command>,
+        socket_handle: Option<&ClientSocketThreadHandle>,
+        egui_ctx: &egui::Context
+    ) {
         let (channel, cc, value) = match Self::parse_cc_message(message) {
             Some((channel, cc, value)) => (channel, cc, value),
             None => return
         };
+
+        log::info!("Received MIDI CC message on port '{}': channel {}, cc {}, value {}", port_name, channel + 1, cc, value);
 
         let mut settings_lock = settings.lock().expect("MidiState: Mutex poisoned.");
 
@@ -73,44 +108,38 @@ impl MidiState {
             egui_ctx.request_repaint();
             if device.current_value != old_value {
                 // Activate any MIDI functions for this device
-                if device.current_value == 1.0 {
-                    for function in &device.functions {
-                        // If this fails the channel is dead -> the client is dead
-                        let _ = sender.send(function.clone());
+                for functions in &device.functions {
+                    // If this fails the channel is dead -> the client is dead
+                    match functions {
+                        MidiFunctions::Global(global_midi_functions) => {
+                            for global_function in global_midi_functions {
+                                if let Some(command) = global_function.command_from_function(device.current_value) {
+                                    if let Err(e) = ui_thread_sender.send(command.clone()) {
+                                        log::error!("Failed to send global MIDI command to UI thread: {}", e);
+                                    }
+
+                                    if let Some(handle) = &socket_handle {
+                                        handle.send_command(command);
+                                    }
+                                }
+                            }
+                        },
+                        MidiFunctions::Parameter(parameter_midi_functions) => {
+                            for parameter_function in parameter_midi_functions {
+                                let command = parameter_function.command_from_value(device.current_value);
+                                if let Err(e) = ui_thread_sender.send(command.clone()) {
+                                    log::error!("Failed to send parameter MIDI command to UI thread: {}", e);
+                                }
+
+                                if let Some(handle) = &socket_handle {
+                                    handle.send_command(command);
+                                }
+                            }
+                        },
                     }
                 }
             }
         }
-    }
-
-    pub fn new(settings: MidiSettings, egui_ctx: egui::Context) -> Self {
-        let available_input_ports = Self::create_midi_input().ports();
-        let (sender, receiver) = crossbeam::channel::unbounded();
-
-        let auto_connect_ports: Vec<String> = settings.port_settings.iter()
-            .filter_map(|(port_name, port_settings)| {
-                if port_settings.auto_connect {
-                    Some(port_name.clone())
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        let mut state = Self {
-            settings: Arc::new(Mutex::new(settings)),
-            available_input_ports,
-            input_connections: Vec::new(),
-            receiver,
-            sender,
-            egui_ctx
-        };
-
-        for port in auto_connect_ports {
-            state.connect_to_port(&port);
-        }
-
-        state
     }
 
     pub fn connect_to_port(&mut self, id: &str) {
@@ -118,13 +147,21 @@ impl MidiState {
             if !self.input_connections.iter().any(|(name, _c) | name == id) {
                 let midi_input = Self::create_midi_input();
                 let settings_clone = self.settings.clone();
-                let sender_clone = self.sender.clone();
+                let ui_thread_sender_clone = self.ui_thread_sender.clone();
+                let socket_thread_handle_clone = self.socket_handle.clone();
                 let egui_ctx_clone = self.egui_ctx.clone();
                 match midi_input.connect(
                     port,
                     "Pedalboard MIDI Input Port",
                     move |_time, message, data| {
-                        Self::handle_midi_message(&settings_clone, data.as_str(), message, &sender_clone, &egui_ctx_clone);
+                        Self::handle_midi_message(
+                            &settings_clone,
+                            data.as_str(),
+                            message,
+                            &ui_thread_sender_clone,
+                            socket_thread_handle_clone.as_ref(),
+                            &egui_ctx_clone
+                        );
                     },
                     id.to_string()
                 ) {
@@ -143,6 +180,11 @@ impl MidiState {
         } else {
             log::error!("MIDI port {} not found", id);
         }
+    }
+
+    pub fn disconnect_from_all_ports(&mut self) {
+        self.input_connections.clear();
+        self.refresh_available_ports();
     }
 
     pub fn disconnect_from_port(&mut self, id: &str) {
@@ -478,7 +520,7 @@ pub struct MidiDevice {
     pub name: String,
     pub device_type: MidiDeviceType,
     pub current_value: f32,
-    pub functions: Vec<ClientMidiFunction>,
+    pub functions: Vec<MidiFunctions>,
 }
 
 impl MidiDevice {

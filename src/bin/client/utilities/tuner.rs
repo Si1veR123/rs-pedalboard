@@ -10,13 +10,12 @@ pub struct TunerWidget {
     recent_freq: f32,
     recent_freq_smooth: f32,
     last_update: Instant,
-    pub active: bool,
     command_buffer: Vec<String>
 }
 
 impl TunerWidget {
     pub fn new(state: &'static State) -> Self {
-        Self { state, recent_freq: 0.0, recent_freq_smooth: 0.0, active: false, command_buffer: Vec::with_capacity(1), last_update: Instant::now() }
+        Self { state, recent_freq: 0.0, recent_freq_smooth: 0.0, command_buffer: Vec::with_capacity(1), last_update: Instant::now() }
     }
 
     pub fn update_frequency(&mut self) {
@@ -47,7 +46,9 @@ impl TunerWidget {
 
 impl Widget for &mut TunerWidget {
     fn ui(self, ui: &mut egui::Ui) -> egui::Response {
-        if self.active {
+        let active = self.state.tuner_active.get();
+
+        if active {
             self.update_frequency();
             ui.ctx().request_repaint();
         }

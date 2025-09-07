@@ -16,6 +16,12 @@ pub struct Pedalboard {
     pedal_message_buffer: Vec<String>,
 }
 
+impl std::fmt::Debug for Pedalboard {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Pedalboard {{ id: {}, name: {}, pedals count: {:?} }}", self.id, self.name, self.pedals.len())
+    }
+}
+
 impl Default for Pedalboard {
     fn default() -> Pedalboard {
         Pedalboard {
@@ -38,9 +44,7 @@ impl Pedalboard {
     /// Has a volume pedal by default
     pub fn new(name: String) -> Pedalboard {
         Self {
-            id: unique_time_id(),
             name,
-            pedals: vec![Pedal::Volume(crate::pedals::Volume::new())],
             ..Default::default()
         }
     }

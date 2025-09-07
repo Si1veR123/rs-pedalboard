@@ -150,6 +150,7 @@ impl PedalboardClientApp {
         let loaded_state = State::load_state(cc.egui_ctx.clone());
         let leaked_state = Box::leak(Box::new(loaded_state));
         let _ = leaked_state.connect_to_server();
+        leaked_state.midi_state.borrow_mut().connect_to_auto_connect_ports();
 
         let mut settings_screen = SettingsScreen::new(leaked_state);
 
@@ -199,6 +200,7 @@ impl eframe::App for PedalboardClientApp {
         }
 
         self.state.update_socket_responses();
+        self.state.handle_other_thread_commands();
 
         let mut sr_buf = Vec::new();
         self.state.get_commands("sr", &mut sr_buf);
@@ -226,8 +228,7 @@ impl eframe::App for PedalboardClientApp {
                                     RichText::new("Stage View").size(20.0)
                                 ).stroke(button_outline[0]).fill(button_bg[0])).clicked() {
                                     if self.selected_screen == 2 {
-                                        self.utilities_screen.tuner.active = false;
-                                        self.state.set_tuner_active_server(false);
+                                        self.state.set_tuner_active(false);
                                     }
                                     self.selected_screen = 0;
                                 }
@@ -237,14 +238,13 @@ impl eframe::App for PedalboardClientApp {
                                     RichText::new("Library").size(20.0)
                                 ).stroke(button_outline[1]).fill(button_bg[1])).clicked() {
                                     if self.selected_screen == 2 {
-                                        self.utilities_screen.tuner.active = false;
-                                        self.state.set_tuner_active_server(false);
+                                        self.state.set_tuner_active(false);
                                     }
                                     self.selected_screen = 1;
                                 }
                             });
                             column2.horizontal_centered(|ui| {
-                                let recording = self.utilities_screen.recorder.recording_time.is_some();
+                                let recording = self.state.recording_time.get().is_some();
                                 let text_color = if recording {
                                     ui.visuals().text_color().lerp_to_gamma(Color32::RED, 0.5)
                                 } else {
@@ -254,8 +254,7 @@ impl eframe::App for PedalboardClientApp {
                                 if ui.add_sized(button_size, Button::new(
                                     RichText::new("Utilities").size(20.0).color(text_color)
                                 ).stroke(button_outline[2]).fill(button_bg[2])).clicked() {
-                                    self.utilities_screen.tuner.active = true;
-                                    self.state.set_tuner_active_server(true);
+                                    self.state.set_tuner_active(true);
                                     self.selected_screen = 2;
                                 }
                             });
@@ -275,8 +274,7 @@ impl eframe::App for PedalboardClientApp {
                             .tint(Color32::from_white_alpha(200))
                     ).clicked() {
                         if self.selected_screen == 2 {
-                            self.utilities_screen.tuner.active = false;
-                            self.state.set_tuner_active_server(false);
+                            self.state.set_tuner_active(false);
                         }
                         self.selected_screen = 3;
                     }
@@ -299,8 +297,7 @@ impl eframe::App for PedalboardClientApp {
                             .tint(Color32::from_white_alpha(200))
                     ).clicked() {
                         if self.selected_screen == 2 {
-                            self.utilities_screen.tuner.active = false;
-                            self.state.set_tuner_active_server(false);
+                            self.state.set_tuner_active(false);
                         }
                         self.selected_screen = 4;
                     };

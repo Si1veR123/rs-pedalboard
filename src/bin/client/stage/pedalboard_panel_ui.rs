@@ -178,16 +178,16 @@ pub fn pedalboard_stage_panel(screen: &mut PedalboardStageScreen, ui: &mut egui:
                 let active_index = active_pedalboards.active_pedalboard;
                 drop(active_pedalboards);
                 if drag_update.from == active_index {
-                    screen.state.play(new_pedalboard_index);
+                    screen.state.play(new_pedalboard_index, false);
                 }
                 else if drag_update.from < active_index && drag_update.to > active_index {
-                    screen.state.play(active_index-1);
+                    screen.state.play(active_index-1, false);
                 }
                 else if drag_update.from > active_index && drag_update.to <= active_index {
-                    screen.state.play(active_index+1);
+                    screen.state.play(active_index+1, false);
                 }
 
-                screen.state.move_pedalboard(drag_update.from, new_pedalboard_index);
+                screen.state.move_pedalboard(drag_update.from, new_pedalboard_index, false);
             }
         }
     }).inner;
@@ -205,7 +205,7 @@ pub fn pedalboard_stage_panel(screen: &mut PedalboardStageScreen, ui: &mut egui:
         },
         Some(CurrentAction::Remove(index)) => {
             drop(active_pedalboards);
-            screen.state.remove_pedalboard_from_stage(index);
+            screen.state.remove_pedalboard_from_stage(index, false);
         },
         Some(CurrentAction::SaveToSong(mut song_name)) => {
             let mut open = true;
@@ -238,7 +238,7 @@ pub fn pedalboard_stage_panel(screen: &mut PedalboardStageScreen, ui: &mut egui:
         },
         Some(CurrentAction::ChangeActive(index)) => {
             drop(active_pedalboards);
-            screen.state.play(index);
+            screen.state.play(index, false);
         },
         None => {}
     }

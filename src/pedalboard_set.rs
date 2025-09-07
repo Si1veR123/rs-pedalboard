@@ -1,7 +1,7 @@
 use crate::pedalboard::Pedalboard;
 use serde::{Serialize, Deserialize};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PedalboardSet {
     pub pedalboards: Vec<Pedalboard>,
     pub active_pedalboard: usize

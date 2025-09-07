@@ -62,6 +62,14 @@ impl RecordingHandle {
         }
     }
 
+    pub fn is_clean(&self) -> bool {
+        match &self.state {
+            RecordingHandleState::Inactive { clean, .. } => clean.is_some(),
+            RecordingHandleState::Active { clean_prod, .. } => clean_prod.is_some(),
+            _ => false
+        }
+    }
+
     pub fn tick(&mut self) {
         if matches!(self.state, RecordingHandleState::Stopping { .. }) {
             if let RecordingHandleState::Stopping {

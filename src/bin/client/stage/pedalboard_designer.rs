@@ -55,7 +55,7 @@ fn add_pedal_menu(screen: &mut PedalboardStageScreen, ui: &mut Ui, rect: Rect) {
             for pedal in PedalDiscriminants::iter() {
                 if ui.add_sized(Vec2::new(ui.available_width()*0.95, 35.0), egui::Button::new(pedal.display_name())).clicked() {
                     let new_pedal = pedal.new_pedal();
-                    screen.state.add_pedal(&new_pedal);
+                    screen.state.add_pedal_to_active(&new_pedal, false);
                     screen.show_pedal_menu = false
                 }
                 ui.separator();
@@ -290,11 +290,11 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
                                     if mouse_over_delete {
                                         if ui.ctx().input(|i| i.pointer.any_released()) {
                                             drop(pedalboard_set);
-                                            screen.state.delete_pedal(active_id, pedal_id);
+                                            screen.state.delete_pedal(active_id, pedal_id, false);
                                         }
                                     } else {
                                         drop(pedalboard_set);
-                                        screen.state.move_pedal(active_id, pedal_id, update.to);
+                                        screen.state.move_pedal(active_id, pedal_id, update.to, false);
                                     }
                                 }
                             }

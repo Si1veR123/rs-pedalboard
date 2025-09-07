@@ -130,7 +130,7 @@ impl Widget for &mut PedalboardLibraryScreen {
                     match action {
                         RowAction::Load => {
                             let pedalboard = pedalboard_library.iter().find(|p| p.get_id() == pedalboard_id).unwrap();
-                            self.state.add_pedalboard(pedalboard.clone());
+                            self.state.add_pedalboard(pedalboard.clone(), false);
                         },
                         RowAction::Delete => {
                             self.state.pedalboards.delete_pedalboard(pedalboard_id);

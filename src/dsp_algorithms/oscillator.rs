@@ -3,7 +3,7 @@ use ordered_float::OrderedFloat;
 use serde::{Serialize, Deserialize};
 use strum_macros::EnumDiscriminants;
 
-#[derive(Clone, Hash, Debug, Serialize, Deserialize, EnumDiscriminants)]
+#[derive(Clone, Hash, Debug, Serialize, Deserialize, EnumDiscriminants, PartialEq)]
 #[serde(tag = "type")]
 pub enum Oscillator {
     Sine(Sine),
@@ -85,7 +85,7 @@ impl Iterator for Oscillator {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Hash, Debug)]
+#[derive(Serialize, Deserialize, Clone, Hash, Debug, PartialEq)]
 pub struct Sine {
     pub sample_rate: OrderedFloat<f32>,
     phase: OrderedFloat<f32>,
@@ -154,7 +154,7 @@ impl Iterator for Sine {
     }
 }
 
-#[derive(Clone, Hash, Debug, Serialize, Deserialize)]
+#[derive(Clone, Hash, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Square {
     pub sample_rate: OrderedFloat<f32>,
     phase: OrderedFloat<f32>,
@@ -193,7 +193,7 @@ impl Iterator for Square {
     }
 }
 
-#[derive(Clone, Hash, Debug, Serialize, Deserialize)]
+#[derive(Clone, Hash, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Sawtooth {
     pub sample_rate: OrderedFloat<f32>,
     phase: OrderedFloat<f32>,
@@ -228,7 +228,7 @@ impl Iterator for Sawtooth {
     }
 }
 
-#[derive(Clone, Hash, Debug, Serialize, Deserialize)]
+#[derive(Clone, Hash, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Triangle {
     sample_rate: OrderedFloat<f32>,
     phase: OrderedFloat<f32>,
