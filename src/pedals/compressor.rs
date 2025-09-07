@@ -68,7 +68,7 @@ impl<'de> Deserialize<'de> for Compressor {
 
 impl Hash for Compressor {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.parameters.values().map(|p| &p.value).for_each(|v| v.hash(state));
+        self.id.hash(state);
     }
 }
 

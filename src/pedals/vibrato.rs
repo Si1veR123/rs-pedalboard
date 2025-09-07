@@ -19,7 +19,7 @@ pub struct Vibrato {
 
 impl Hash for Vibrato {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.parameters.values().map(|p| &p.value).for_each(|v| v.hash(state));
+        self.id.hash(state);
     }
 }
 

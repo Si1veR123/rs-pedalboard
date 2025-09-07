@@ -24,8 +24,7 @@ pub struct Delay {
 
 impl Hash for Delay {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        // Probably not technically correct since values may change order but good enough for now
-        self.parameters.values().map(|p| &p.value).for_each(|v| v.hash(state));
+        self.id.hash(state);
     }
 }
 

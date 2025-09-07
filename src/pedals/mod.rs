@@ -190,7 +190,7 @@ impl PedalParameterValue {
 }
 
 #[enum_dispatch]
-pub trait PedalTrait: Hash {
+pub trait PedalTrait {
     /// message_buffer is where messages to send to the client can be passed
     fn process_audio(&mut self, buffer: &mut [f32], message_buffer: &mut Vec<String>);
 
