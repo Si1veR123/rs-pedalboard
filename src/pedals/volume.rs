@@ -31,7 +31,7 @@ impl Volume {
     pub fn new() -> Self {
         let mut parameters = HashMap::new();
         parameters.insert(
-            "volume".to_string(),
+            "Volume".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Float(1.0),
                 min: Some(PedalParameterValue::Float(0.0)),
@@ -40,7 +40,7 @@ impl Volume {
             },
         );
         parameters.insert(
-            "active".to_string(),
+            "Active".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Bool(true),
                 min: None,
@@ -64,7 +64,7 @@ impl PedalTrait for Volume {
     }
 
     fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
-        let volume = self.parameters.get("volume").unwrap().value.as_float().unwrap();
+        let volume = self.parameters.get("Volume").unwrap().value.as_float().unwrap();
         
         for sample in buffer.iter_mut() {
             *sample *= volume;
@@ -82,14 +82,14 @@ impl PedalTrait for Volume {
     fn ui(&mut self, ui: &mut egui::Ui, _message_buffer: &[String]) -> Option<(String, PedalParameterValue)> {
         ui.add(Image::new(include_image!("images/volume.png")));
 
-        let volume_param = self.get_parameters().get("volume").unwrap();
+        let volume_param = self.get_parameters().get("Volume").unwrap();
         let mut changed = None;
         if let Some(value) = pedal_knob(ui, RichText::new(&format!("{:.2}", volume_param.value.as_float().unwrap())).color(Color32::BLACK).size(10.0), volume_param, Vec2::new(0.3, 0.2), 0.4) {
-            changed = Some(("volume".to_string(), value));
+            changed = Some(("Volume".to_string(), value));
         }
-        let active_param = self.get_parameters().get("active").unwrap().value.as_bool().unwrap();
+        let active_param = self.get_parameters().get("Active").unwrap().value.as_bool().unwrap();
         if let Some(value) = pedal_switch(ui, active_param, Vec2::new(0.33, 0.72), 0.16) {
-            changed = Some(("active".to_string(), PedalParameterValue::Bool(value)));
+            changed = Some(("Active".to_string(), PedalParameterValue::Bool(value)));
         }
         
         changed

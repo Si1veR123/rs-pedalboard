@@ -78,7 +78,7 @@ impl<'a> Deserialize<'a> for Nam {
         let helper = NamData::deserialize(deserializer)?;
 
         let parameters = helper.parameters;
-        let model = parameters.get("model").unwrap().value.as_str().unwrap();
+        let model = parameters.get("Model").unwrap().value.as_str().unwrap();
         // Default buffer size, can be changed later with `set_config`
         let modeler = NeuralAmpModeler::new_with_maximum_buffer_size(512).expect("Failed to create neural amp modeler");
 
@@ -112,7 +112,7 @@ impl Nam {
         let mut parameters = HashMap::new();
 
         parameters.insert(
-            "model".to_string(),
+            "Model".to_string(),
             PedalParameter {
                 value: PedalParameterValue::String("".to_string()),
                 min: None,
@@ -122,7 +122,7 @@ impl Nam {
         );
 
         parameters.insert(
-            "gain".to_string(),
+            "Gain".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Float(1.0),
                 min: Some(PedalParameterValue::Float(0.00)),
@@ -132,7 +132,7 @@ impl Nam {
         );
 
         parameters.insert(
-            "dry_wet".to_string(),
+            "Dry/Wet".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Float(1.0),
                 min: Some(PedalParameterValue::Float(0.0)),
@@ -142,7 +142,7 @@ impl Nam {
         );
 
         parameters.insert(
-            "level".to_string(),
+            "Level".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Float(1.0),
                 min: Some(PedalParameterValue::Float(0.0)),
@@ -152,7 +152,7 @@ impl Nam {
         );
 
         parameters.insert(
-            "active".to_string(),
+            "Active".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Bool(true),
                 min: None,
@@ -215,12 +215,12 @@ impl Nam {
         if let Err(e) = self.modeler.set_model(model_path) {
             log::error!("Failed to set model: {}", e);
         } else {
-            self.parameters.get_mut("model").unwrap().value = PedalParameterValue::String(string_path);
+            self.parameters.get_mut("Model").unwrap().value = PedalParameterValue::String(string_path);
         }
     }
 
     pub fn remove_model(&mut self) {
-        self.parameters.get_mut("model").unwrap().value = PedalParameterValue::String("".to_string());
+        self.parameters.get_mut("Model").unwrap().value = PedalParameterValue::String("".to_string());
         let buffer_size = self.modeler.get_maximum_buffer_size();
         self.modeler = NeuralAmpModeler::new_with_maximum_buffer_size(buffer_size).expect("Failed to create neural amp modeler");
     }
@@ -245,9 +245,9 @@ impl PedalTrait for Nam {
     }
 
     fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
-        let gain = self.parameters.get("gain").unwrap().value.as_float().unwrap();
-        let dry_wet = self.parameters.get("dry_wet").unwrap().value.as_float().unwrap();
-        let level = self.parameters.get("level").unwrap().value.as_float().unwrap();
+        let gain = self.parameters.get("Gain").unwrap().value.as_float().unwrap();
+        let dry_wet = self.parameters.get("Dry/Wet").unwrap().value.as_float().unwrap();
+        let level = self.parameters.get("Level").unwrap().value.as_float().unwrap();
 
         buffer.iter_mut().for_each(|sample| {
             *sample *= gain;
@@ -278,7 +278,7 @@ impl PedalTrait for Nam {
         }
 
         if let Some(param) = self.parameters.get_mut(name) {
-            if name == "model" {
+            if name == "Model" {
                 let value_str = value.as_str().unwrap();
 
                 if value_str.is_empty() {
@@ -312,7 +312,7 @@ impl PedalTrait for Nam {
             } else {
                 log::warn!("Failed to get main save directory");
             }
-            let model_path = self.parameters.get("model").unwrap().value.as_str().unwrap();
+            let model_path = self.parameters.get("Model").unwrap().value.as_str().unwrap();
             self.combobox_widget = Self::get_empty_directory_combo_box(self.id);
             self.combobox_widget.set_selection(match model_path {
                 s if s.is_empty() => None,
@@ -358,7 +358,7 @@ impl PedalTrait for Nam {
                     match path.to_str() {
                         Some(s) => {
                             let selected_str = s.to_string();
-                            to_change = Some((String::from("model"), PedalParameterValue::String(selected_str)));
+                            to_change = Some((String::from("Model"), PedalParameterValue::String(selected_str)));
                         },
                         None => {
                             log::warn!("Selected model path is not valid unicode");
@@ -366,7 +366,7 @@ impl PedalTrait for Nam {
                     }
                 },
                 None => {
-                    to_change = Some((String::from("model"), PedalParameterValue::String("".to_string())));
+                    to_change = Some((String::from("Model"), PedalParameterValue::String("".to_string())));
                 }
             }
         }
@@ -389,7 +389,7 @@ impl PedalTrait for Nam {
             self.combobox_widget.select_previous_file();
             if let Some(path) = self.combobox_widget.selected() {
                 if let Some(s) = path.to_str() {
-                    to_change = Some((String::from("model"), PedalParameterValue::String(s.to_string())));
+                    to_change = Some((String::from("Model"), PedalParameterValue::String(s.to_string())));
                 } else {
                     log::warn!("Selected model path is not valid unicode");
                 }
@@ -407,26 +407,26 @@ impl PedalTrait for Nam {
             self.combobox_widget.select_next_file();
             if let Some(path) = self.combobox_widget.selected() {
                 if let Some(s) = path.to_str() {
-                    to_change = Some((String::from("model"), PedalParameterValue::String(s.to_string())));
+                    to_change = Some((String::from("Model"), PedalParameterValue::String(s.to_string())));
                 } else {
                     log::warn!("Selected model path is not valid unicode");
                 }
             }
         };
 
-        if let Some(value) = pedal_knob(ui, "", self.parameters.get("gain").unwrap(), Vec2::new(0.05, 0.06), 0.25) {
-            to_change = Some(("gain".to_string(), value));
+        if let Some(value) = pedal_knob(ui, "", self.parameters.get("Gain").unwrap(), Vec2::new(0.05, 0.06), 0.25) {
+            to_change = Some(("Gain".to_string(), value));
         }
-        if let Some(value) = pedal_knob(ui, "", self.parameters.get("dry_wet").unwrap(), Vec2::new(0.375, 0.06), 0.25) {
-            to_change = Some(("dry_wet".to_string(), value));
+        if let Some(value) = pedal_knob(ui, "", self.parameters.get("Dry/Wet").unwrap(), Vec2::new(0.375, 0.06), 0.25) {
+            to_change = Some(("Dry/Wet".to_string(), value));
         }
-        if let Some(value) = pedal_knob(ui, "", self.parameters.get("level").unwrap(), Vec2::new(0.7, 0.06), 0.25) {
-            to_change = Some(("level".to_string(), value));
+        if let Some(value) = pedal_knob(ui, "", self.parameters.get("Level").unwrap(), Vec2::new(0.7, 0.06), 0.25) {
+            to_change = Some(("Level".to_string(), value));
         }
 
-        let active_param = self.get_parameters().get("active").unwrap().value.as_bool().unwrap();
+        let active_param = self.get_parameters().get("Active").unwrap().value.as_bool().unwrap();
         if let Some(value) = pedal_switch(ui, active_param, egui::Vec2::new(0.33, 0.72), 0.16) {
-            to_change = Some(("active".to_string(), PedalParameterValue::Bool(value)));
+            to_change = Some(("Active".to_string(), PedalParameterValue::Bool(value)));
         }
 
         to_change

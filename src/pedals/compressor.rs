@@ -77,7 +77,7 @@ impl Compressor {
         let mut parameters = HashMap::new();
 
         parameters.insert(
-            "threshold".into(),
+            "Threshold".into(),
             PedalParameter {
                 value: PedalParameterValue::Float(-6.0),
                 min: Some(PedalParameterValue::Float(-30.0)),
@@ -85,38 +85,38 @@ impl Compressor {
                 step: None,
             },
         );
-        parameters.insert("attack".into(), PedalParameter {
+        parameters.insert("Attack".into(), PedalParameter {
             value: PedalParameterValue::Float(10.0),
             min: Some(PedalParameterValue::Float(1.0)),
             max: Some(PedalParameterValue::Float(50.0)),
             step: None,
         });
-        parameters.insert("release".into(), PedalParameter {
+        parameters.insert("Release".into(), PedalParameter {
             value: PedalParameterValue::Float(100.0),
             min: Some(PedalParameterValue::Float(5.0)),
             max: Some(PedalParameterValue::Float(300.0)),
             step: None,
         });
-        parameters.insert("level".into(), PedalParameter {
+        parameters.insert("Level".into(), PedalParameter {
             value: PedalParameterValue::Float(1.0),
             min: Some(PedalParameterValue::Float(0.0)),
             max: Some(PedalParameterValue::Float(5.0)),
             step: None,
         });
-        parameters.insert("ratio".into(), PedalParameter {
+        parameters.insert("Ratio".into(), PedalParameter {
             value: PedalParameterValue::Float(5.0),
             min: Some(PedalParameterValue::Float(1.0)),
             max: Some(PedalParameterValue::Float(20.0)),
             step: None,
         });
-        parameters.insert("dry_wet".into(), PedalParameter {
+        parameters.insert("Dry/Wet".into(), PedalParameter {
             value: PedalParameterValue::Float(1.0),
             min: Some(PedalParameterValue::Float(0.0)),
             max: Some(PedalParameterValue::Float(1.0)),
             step: None,
         });
         parameters.insert(
-            "soft_knee".into(),
+            "Soft Knee".into(),
             PedalParameter {
                 value: PedalParameterValue::Float(0.0),
                 min: Some(PedalParameterValue::Float(0.0)),
@@ -125,7 +125,7 @@ impl Compressor {
             },
         );
         parameters.insert(
-            "active".to_string(),
+            "Active".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Bool(true),
                 min: None,
@@ -170,13 +170,13 @@ impl PedalTrait for Compressor {
             }
         };
 
-        let threshold_db = self.parameters["threshold"].value.as_float().unwrap();
-        let attack = self.parameters["attack"].value.as_float().unwrap();
-        let release = self.parameters["release"].value.as_float().unwrap();
-        let level = self.parameters["level"].value.as_float().unwrap();
-        let ratio = self.parameters["ratio"].value.as_float().unwrap();
-        let blend = self.parameters["dry_wet"].value.as_float().unwrap();
-        let soft_knee_db = self.parameters["soft_knee"].value.as_float().unwrap();
+        let threshold_db = self.parameters["Threshold"].value.as_float().unwrap();
+        let attack = self.parameters["Attack"].value.as_float().unwrap();
+        let release = self.parameters["Release"].value.as_float().unwrap();
+        let level = self.parameters["Level"].value.as_float().unwrap();
+        let ratio = self.parameters["Ratio"].value.as_float().unwrap();
+        let blend = self.parameters["Dry/Wet"].value.as_float().unwrap();
+        let soft_knee_db = self.parameters["Soft Knee"].value.as_float().unwrap();
 
         // Sample rate independent
         let attack_coeff = (-1.0 / (attack / 1000.0 * sample_rate)).exp();
@@ -269,39 +269,39 @@ impl PedalTrait for Compressor {
         ui.add(egui::Image::new(include_image!("images/compressor_bg.png")));
 
         let mut to_change = None;
-        let ratio_param = self.get_parameters().get("ratio").unwrap();
+        let ratio_param = self.get_parameters().get("Ratio").unwrap();
         if let Some(value) = pedal_knob(ui, "", ratio_param, egui::Vec2::new(0.0625, 0.03), 0.25) {
-            to_change = Some(("ratio".to_string(), value));
+            to_change = Some(("Ratio".to_string(), value));
         }
 
-        let threshold_param = self.get_parameters().get("threshold").unwrap();
+        let threshold_param = self.get_parameters().get("Threshold").unwrap();
         if let Some(value) = pedal_knob(ui, "", threshold_param, egui::Vec2::new(0.375, 0.014), 0.25) {
-            to_change = Some(("threshold".to_string(), value));
+            to_change = Some(("Threshold".to_string(), value));
         }
 
-        let level_param = self.get_parameters().get("level").unwrap();
+        let level_param = self.get_parameters().get("Level").unwrap();
         if let Some(value) = pedal_knob(ui, "", level_param, egui::Vec2::new(0.6875, 0.03), 0.25) {
-            to_change = Some(("level".to_string(), value));
+            to_change = Some(("Level".to_string(), value));
         }
 
-        let attack_param = self.get_parameters().get("attack").unwrap();
+        let attack_param = self.get_parameters().get("Attack").unwrap();
         if let Some(value) = pedal_knob(ui, "", attack_param, egui::Vec2::new(0.09, 0.207), 0.2) {
-            to_change = Some(("attack".to_string(), value));
+            to_change = Some(("Attack".to_string(), value));
         }
 
-        let release_param = self.get_parameters().get("release").unwrap();
+        let release_param = self.get_parameters().get("Release").unwrap();
         if let Some(value) = pedal_knob(ui, "", release_param, egui::Vec2::new(0.3, 0.207), 0.2) {
-            to_change = Some(("release".to_string(), value));
+            to_change = Some(("Release".to_string(), value));
         }
 
-        let soft_knee_param = self.get_parameters().get("soft_knee").unwrap();
+        let soft_knee_param = self.get_parameters().get("Soft Knee").unwrap();
         if let Some(value) = pedal_knob(ui, "", soft_knee_param, egui::Vec2::new(0.50, 0.207), 0.2) {
-            to_change = Some(("soft_knee".to_string(), value));
+            to_change = Some(("Soft Knee".to_string(), value));
         }
 
-        let dry_wet_param = self.get_parameters().get("dry_wet").unwrap();
+        let dry_wet_param = self.get_parameters().get("Dry/Wet").unwrap();
         if let Some(value) = pedal_knob(ui, "", dry_wet_param, egui::Vec2::new(0.71, 0.207), 0.2) {
-            to_change = Some(("dry_wet".to_string(), value));
+            to_change = Some(("Dry/Wet".to_string(), value));
         }
 
         let compressor_graph_rect = egui::Rect::from_min_size(
@@ -313,14 +313,14 @@ impl PedalTrait for Compressor {
         draw_compressor_graph(
             &mut graph_ui,
             20.0*self.current_envelope.log10(), // dB conversion
-            self.parameters["threshold"].value.as_float().unwrap(),
-            self.parameters["ratio"].value.as_float().unwrap(),
-            self.parameters["soft_knee"].value.as_float().unwrap(),
+            self.parameters["Threshold"].value.as_float().unwrap(),
+            self.parameters["Ratio"].value.as_float().unwrap(),
+            self.parameters["Soft Knee"].value.as_float().unwrap(),
         );
 
-        let active_param = self.get_parameters().get("active").unwrap().value.as_bool().unwrap();
+        let active_param = self.get_parameters().get("Active").unwrap().value.as_bool().unwrap();
         if let Some(value) = pedal_switch(ui, active_param, egui::Vec2::new(0.363, 0.77), 0.12) {
-            to_change = Some(("active".to_string(), PedalParameterValue::Bool(value)));
+            to_change = Some(("Active".to_string(), PedalParameterValue::Bool(value)));
         }
 
         to_change

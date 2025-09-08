@@ -57,7 +57,7 @@ impl NoiseGate {
         let mut parameters = HashMap::new();
 
         parameters.insert(
-            "threshold_db".to_string(),
+            "Threshold Db".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Float(-20.0),
                 min: Some(PedalParameterValue::Float(-60.0)),
@@ -67,7 +67,7 @@ impl NoiseGate {
         );
 
         parameters.insert(
-            "reduction".to_string(),
+            "Reduction".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Float(10.0),
                 min: Some(PedalParameterValue::Float(1.0)),
@@ -77,7 +77,7 @@ impl NoiseGate {
         );
 
         parameters.insert(
-            "attack".to_string(),
+            "Attack".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Float(5.0),
                 min: Some(PedalParameterValue::Float(1.0)),
@@ -87,7 +87,7 @@ impl NoiseGate {
         );
 
         parameters.insert(
-            "release".to_string(),
+            "Release".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Float(100.0),
                 min: Some(PedalParameterValue::Float(5.0)),
@@ -97,7 +97,7 @@ impl NoiseGate {
         );
 
         parameters.insert(
-            "dry_wet".to_string(),
+            "Dry/Wet".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Float(1.0),
                 min: Some(PedalParameterValue::Float(0.0)),
@@ -107,7 +107,7 @@ impl NoiseGate {
         );
 
         parameters.insert(
-            "active".to_string(),
+            "Active".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Bool(true),
                 min: None,
@@ -153,11 +153,11 @@ impl PedalTrait for NoiseGate {
             return;
         }
 
-        let threshold_db = self.parameters["threshold_db"].value.as_float().unwrap();
-        let reduction_ratio = self.parameters["reduction"].value.as_float().unwrap();
-        let attack_ms = self.parameters["attack"].value.as_float().unwrap();
-        let release_ms = self.parameters["release"].value.as_float().unwrap();
-        let dry_wet = self.parameters["dry_wet"].value.as_float().unwrap();
+        let threshold_db = self.parameters["Threshold Db"].value.as_float().unwrap();
+        let reduction_ratio = self.parameters["Reduction"].value.as_float().unwrap();
+        let attack_ms = self.parameters["Attack"].value.as_float().unwrap();
+        let release_ms = self.parameters["Release"].value.as_float().unwrap();
+        let dry_wet = self.parameters["Dry/Wet"].value.as_float().unwrap();
 
         // per sample smoothing coefficients (sample rate independent)
         let attack_coeff = (-1.0 / ((attack_ms / 1000.0) * self.sample_rate.unwrap())).exp();
@@ -207,29 +207,29 @@ impl PedalTrait for NoiseGate {
 
         let mut to_change = None;
 
-        let threshold_db_param = self.get_parameters().get("threshold_db").unwrap();
+        let threshold_db_param = self.get_parameters().get("Threshold Db").unwrap();
         if let Some(value) = pedal_knob(ui, "", threshold_db_param, egui::Vec2::new(0.08, 0.03), 0.35) {
-            to_change = Some(("threshold_db".to_string(), value));
+            to_change = Some(("Threshold Db".to_string(), value));
         }
 
-        let reduction_param = self.get_parameters().get("reduction").unwrap();
+        let reduction_param = self.get_parameters().get("Reduction").unwrap();
         if let Some(value) = pedal_knob(ui, "", reduction_param, egui::Vec2::new(0.57, 0.03), 0.35) {
-            to_change = Some(("reduction".to_string(), value));
+            to_change = Some(("Reduction".to_string(), value));
         }
 
-        let attack_param = self.get_parameters().get("attack").unwrap();
+        let attack_param = self.get_parameters().get("Attack").unwrap();
         if let Some(value) = pedal_knob(ui, "", attack_param, egui::Vec2::new(0.08, 0.34), 0.35) {
-            to_change = Some(("attack".to_string(), value));
+            to_change = Some(("Attack".to_string(), value));
         }
 
-        let release_param = self.get_parameters().get("release").unwrap();
+        let release_param = self.get_parameters().get("Release").unwrap();
         if let Some(value) = pedal_knob(ui, "", release_param, egui::Vec2::new(0.57, 0.34), 0.35) {
-            to_change = Some(("release".to_string(), value));
+            to_change = Some(("Release".to_string(), value));
         }
 
-        let active_param = self.get_parameters().get("active").unwrap().value.as_bool().unwrap();
+        let active_param = self.get_parameters().get("Active").unwrap().value.as_bool().unwrap();
         if let Some(value) = pedal_switch(ui, active_param, egui::Vec2::new(0.33, 0.72), 0.16) {
-            to_change = Some(("active".to_string(), PedalParameterValue::Bool(value)));
+            to_change = Some(("Active".to_string(), PedalParameterValue::Bool(value)));
         }
 
         to_change

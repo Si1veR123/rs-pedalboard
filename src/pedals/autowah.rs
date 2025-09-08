@@ -60,7 +60,7 @@ impl AutoWah {
     pub fn new() -> Self {
         let mut parameters = HashMap::new();
         parameters.insert(
-            "width".to_string(),
+            "Width".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Float(0.5),
                 min: Some(PedalParameterValue::Float(0.1)),
@@ -69,7 +69,7 @@ impl AutoWah {
             },
         );
         parameters.insert(
-            "sensitivity".to_string(),
+            "Sensitivity".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Float(1000.0), // in Hz
                 min: Some(PedalParameterValue::Float(100.0)),
@@ -78,7 +78,7 @@ impl AutoWah {
             },
         );
         parameters.insert(
-            "base_freq".to_string(),
+            "Base Freq".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Float(100.0), // in Hz
                 min: Some(PedalParameterValue::Float(50.0)),
@@ -87,7 +87,7 @@ impl AutoWah {
             },
         );
         parameters.insert(
-            "envelope_smoothing".to_string(),
+            "Envelope Smoothing".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Float(0.9999), // smoothing factor
                 min: Some(PedalParameterValue::Float(0.999)),
@@ -96,7 +96,7 @@ impl AutoWah {
             },
         );
         parameters.insert(
-            "dry_wet".to_string(),
+            "Dry Wet".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Float(1.0),
                 min: Some(PedalParameterValue::Float(0.0)),
@@ -105,7 +105,7 @@ impl AutoWah {
             },
         );
         parameters.insert(
-            "active".to_string(),
+            "Active".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Bool(true),
                 min: None,
@@ -140,10 +140,10 @@ impl PedalTrait for AutoWah {
             None => return,
         };
 
-        let sensitivity = self.parameters["sensitivity"].value.as_float().unwrap();
-        let base_freq = self.parameters["base_freq"].value.as_float().unwrap();
-        let envelope_smoothing = self.parameters["envelope_smoothing"].value.as_float().unwrap();
-        let dry_wet = self.parameters["dry_wet"].value.as_float().unwrap();
+        let sensitivity = self.parameters["Sensitivity"].value.as_float().unwrap();
+        let base_freq = self.parameters["Base Freq"].value.as_float().unwrap();
+        let envelope_smoothing = self.parameters["Envelope Smoothing"].value.as_float().unwrap();
+        let dry_wet = self.parameters["Dry Wet"].value.as_float().unwrap();
 
         for sample in buffer.iter_mut() {
             self.envelope = envelope_smoothing * self.envelope.max(sample.abs()) + (1.0 - envelope_smoothing) * sample.abs();
@@ -169,7 +169,7 @@ impl PedalTrait for AutoWah {
             if parameter.is_valid(&value) {
                 parameter.value = value;
 
-                if name == "width" {
+                if name == "Width" {
                     let width = parameter.value.as_float().unwrap();
                     if let Some((bandpass, _)) = &mut self.filter {
                         bandpass.set_width(width);
@@ -182,8 +182,8 @@ impl PedalTrait for AutoWah {
     }
 
     fn set_config(&mut self, _buffer_size: usize, sample_rate: u32) {
-        let width = self.parameters["width"].value.as_float().unwrap();
-        let base_freq = self.parameters["base_freq"].value.as_float().unwrap();
+        let width = self.parameters["Width"].value.as_float().unwrap();
+        let base_freq = self.parameters["Base Freq"].value.as_float().unwrap();
         let filter = MovingBandPass::new(
             base_freq,
             sample_rate as f32,
@@ -199,29 +199,29 @@ impl PedalTrait for AutoWah {
 
         let mut to_change = None;
 
-        let base_freq_param = self.get_parameters().get("base_freq").unwrap();
+        let base_freq_param = self.get_parameters().get("Base Freq").unwrap();
         if let Some(value) = pedal_knob(ui, "", base_freq_param, egui::Vec2::new(0.68, 0.045), 0.25) {
-            to_change = Some(("base_freq".to_string(), value));
+            to_change = Some(("Base Freq".to_string(), value));
         }
 
-        let sensitivity_param = self.get_parameters().get("sensitivity").unwrap();
+        let sensitivity_param = self.get_parameters().get("Sensitivity").unwrap();
         if let Some(value) = pedal_knob(ui, "", sensitivity_param, egui::Vec2::new(0.68, 0.17), 0.25) {
-            to_change = Some(("sensitivity".to_string(), value));
+            to_change = Some(("Sensitivity".to_string(), value));
         }
 
-        let width_param = self.get_parameters().get("width").unwrap();
+        let width_param = self.get_parameters().get("Width").unwrap();
         if let Some(value) = pedal_knob(ui, "", width_param, egui::Vec2::new(0.68, 0.295), 0.25) {
-            to_change = Some(("width".to_string(), value));
+            to_change = Some(("Width".to_string(), value));
         }
 
-        let envelope_smoothing_param = self.get_parameters().get("envelope_smoothing").unwrap();
+        let envelope_smoothing_param = self.get_parameters().get("Envelope Smoothing").unwrap();
         if let Some(value) = pedal_knob(ui, "", envelope_smoothing_param, egui::Vec2::new(0.68, 0.425), 0.25) {
-            to_change = Some(("envelope_smoothing".to_string(), value));
+            to_change = Some(("Envelope Smoothing".to_string(), value));
         }
 
-        let active_param = self.get_parameters().get("active").unwrap().value.as_bool().unwrap();
+        let active_param = self.get_parameters().get("Active").unwrap().value.as_bool().unwrap();
         if let Some(value) = pedal_switch(ui, active_param, egui::Vec2::new(0.33, 0.72), 0.16) {
-            to_change = Some(("active".to_string(), PedalParameterValue::Bool(value)));
+            to_change = Some(("Active".to_string(), PedalParameterValue::Bool(value)));
         }
 
         to_change

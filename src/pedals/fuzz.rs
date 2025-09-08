@@ -29,7 +29,7 @@ impl Fuzz {
     pub fn new() -> Self {
         let mut parameters = HashMap::new();
         parameters.insert(
-            "gain".to_string(),
+            "Gain".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Float(20.0),
                 min: Some(PedalParameterValue::Float(0.0)),
@@ -38,7 +38,7 @@ impl Fuzz {
             },
         );
         parameters.insert(
-            "level".to_string(),
+            "Level".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Float(1.0),
                 min: Some(PedalParameterValue::Float(0.0)),
@@ -47,7 +47,7 @@ impl Fuzz {
             },
         );
         parameters.insert(
-            "type".to_string(),
+            "Type".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Int(0),
                 min: Some(PedalParameterValue::Int(0)),
@@ -56,7 +56,7 @@ impl Fuzz {
             },
         );
         parameters.insert(
-            "dry_wet".to_string(),
+            "Dry/Wet".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Float(1.0),
                 min: Some(PedalParameterValue::Float(0.0)),
@@ -65,7 +65,7 @@ impl Fuzz {
             },
         );
         parameters.insert(
-            "active".to_string(),
+            "Active".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Bool(true),
                 min: None,
@@ -90,10 +90,10 @@ impl PedalTrait for Fuzz {
 
     fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
 
-        let gain = self.parameters.get("gain").unwrap().value.as_float().unwrap();
-        let level = self.parameters.get("level").unwrap().value.as_float().unwrap();
-        let fuzz_type = self.parameters.get("type").unwrap().value.as_int().unwrap();
-        let dry_wet = self.parameters.get("dry_wet").unwrap().value.as_float().unwrap();
+        let gain = self.parameters.get("Gain").unwrap().value.as_float().unwrap();
+        let level = self.parameters.get("Level").unwrap().value.as_float().unwrap();
+        let fuzz_type = self.parameters.get("Type").unwrap().value.as_int().unwrap();
+        let dry_wet = self.parameters.get("Dry/Wet").unwrap().value.as_float().unwrap();
         
         for sample in buffer.iter_mut() {
             let x = *sample * gain;
@@ -142,29 +142,29 @@ impl PedalTrait for Fuzz {
         ui.add(egui::Image::new(include_image!("images/fuzz.png")));
 
         let mut to_change = None;
-        let gain_param = self.get_parameters().get("gain").unwrap();
+        let gain_param = self.get_parameters().get("Gain").unwrap();
         if let Some(value) = pedal_knob(ui, "", gain_param, Vec2::new(0.1, 0.07), 0.35) {
-            to_change = Some(("gain".to_string(), value));
+            to_change = Some(("Gain".to_string(), value));
         }
 
-        let level_param = self.get_parameters().get("level").unwrap();
+        let level_param = self.get_parameters().get("Level").unwrap();
         if let Some(value) = pedal_knob(ui, "", level_param, Vec2::new(0.52, 0.07), 0.35) {
-            to_change = Some(("level".to_string(), value));
+            to_change = Some(("Level".to_string(), value));
         }
 
-        let type_param = self.get_parameters().get("type").unwrap();
+        let type_param = self.get_parameters().get("Type").unwrap();
         if let Some(value) = pedal_knob(ui, "", type_param, Vec2::new(0.1, 0.3), 0.35) {
-            to_change = Some(("type".to_string(), value));
+            to_change = Some(("Type".to_string(), value));
         }
 
-        let dry_wet_param = self.get_parameters().get("dry_wet").unwrap();
+        let dry_wet_param = self.get_parameters().get("Dry/Wet").unwrap();
         if let Some(value) = pedal_knob(ui, "", dry_wet_param, Vec2::new(0.52, 0.3), 0.35) {
-            to_change = Some(("dry_wet".to_string(), value));
+            to_change = Some(("Dry/Wet".to_string(), value));
         }
 
-        let active_param = self.get_parameters().get("active").unwrap().value.as_bool().unwrap();
+        let active_param = self.get_parameters().get("Active").unwrap().value.as_bool().unwrap();
         if let Some(value) = pedal_switch(ui, active_param, egui::Vec2::new(0.33, 0.72), 0.16) {
-            to_change = Some(("active".to_string(), PedalParameterValue::Bool(value)));
+            to_change = Some(("Active".to_string(), PedalParameterValue::Bool(value)));
         }
 
         to_change

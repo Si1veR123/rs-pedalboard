@@ -82,7 +82,7 @@ impl ImpulseResponse {
 
         let init_ir = r"";
         parameters.insert(
-            "ir".to_string(),
+            "IR".to_string(),
             PedalParameter {
                 value: PedalParameterValue::String(init_ir.to_string()),
                 min: None,
@@ -92,7 +92,7 @@ impl ImpulseResponse {
         );
 
         parameters.insert(
-            "dry_wet".to_string(),
+            "Dry/Wet".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Float(1.0),
                 min: Some(PedalParameterValue::Float(0.0)),
@@ -102,7 +102,7 @@ impl ImpulseResponse {
         );
 
         parameters.insert(
-            "active".to_string(),
+            "Active".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Bool(true),
                 min: None,
@@ -161,7 +161,7 @@ impl ImpulseResponse {
         match load_ir(ir_path.as_ref(), sample_rate) {
             Ok(ir) => {
                 self.ir = Some(IRConvolver::new(ir.first().expect("IR has no channels").as_slice(), self.max_buffer_size));
-                self.parameters.get_mut("ir").unwrap().value = PedalParameterValue::String(string_path);
+                self.parameters.get_mut("IR").unwrap().value = PedalParameterValue::String(string_path);
             },
             Err(e) => {
                 log::error!("Failed to load IR: {}", e);
@@ -171,7 +171,7 @@ impl ImpulseResponse {
     }
 
     pub fn remove_ir(&mut self) {
-        self.parameters.get_mut("ir").unwrap().value = PedalParameterValue::String("".to_string());
+        self.parameters.get_mut("IR").unwrap().value = PedalParameterValue::String("".to_string());
         self.ir = None;
     }
 
@@ -191,7 +191,7 @@ impl PedalTrait for ImpulseResponse {
         self.dry_buffer.resize(buffer_size, 0.0);
         self.sample_rate = Some(sample_rate as f32);
 
-        let ir_path = self.parameters.get("ir").unwrap().value.as_str().unwrap().to_string();
+        let ir_path = self.parameters.get("IR").unwrap().value.as_str().unwrap().to_string();
         if !ir_path.is_empty() {
             self.set_ir_convolver(&ir_path, sample_rate as f32);
         } else {
@@ -209,7 +209,7 @@ impl PedalTrait for ImpulseResponse {
             return;
         }
 
-        let dry_wet = self.parameters.get("dry_wet").unwrap().value.as_float().unwrap();
+        let dry_wet = self.parameters.get("Dry/Wet").unwrap().value.as_float().unwrap();
 
         self.dry_buffer.clear();
         self.dry_buffer.extend_from_slice(buffer);
@@ -230,7 +230,7 @@ impl PedalTrait for ImpulseResponse {
     }
 
     fn set_parameter_value(&mut self, name: &str, value: PedalParameterValue) {
-        if name == "ir" {
+        if name == "IR" {
             // If sample rate is not set we are not on server, so don't need to set the IR convolver.
             let path = value.as_str().unwrap();
             if let Some(sample_rate) = self.sample_rate {
@@ -279,7 +279,7 @@ impl PedalTrait for ImpulseResponse {
                 log::warn!("Failed to get main save directory");
             }
             self.combobox_widget = Self::get_empty_directory_combo_box(self.id);
-            let ir_path = self.parameters.get("ir").unwrap().value.as_str().unwrap();
+            let ir_path = self.parameters.get("IR").unwrap().value.as_str().unwrap();
             self.combobox_widget.set_selection(match ir_path {
                 s if s.is_empty() => None,
                 s => Some(s)
@@ -324,7 +324,7 @@ impl PedalTrait for ImpulseResponse {
                     match path.to_str() {
                         Some(s) => {
                             let selected_str = s.to_string();
-                            to_change = Some((String::from("ir"), PedalParameterValue::String(selected_str)));
+                            to_change = Some((String::from("IR"), PedalParameterValue::String(selected_str)));
                         },
                         None => {
                             log::warn!("Selected IR path is not valid unicode");
@@ -332,7 +332,7 @@ impl PedalTrait for ImpulseResponse {
                     }
                 },
                 None => {
-                    to_change = Some((String::from("ir"), PedalParameterValue::String("".to_string())));
+                    to_change = Some((String::from("IR"), PedalParameterValue::String("".to_string())));
                 }
             }
         }
@@ -355,7 +355,7 @@ impl PedalTrait for ImpulseResponse {
             self.combobox_widget.select_previous_file();
             if let Some(path) = self.combobox_widget.selected() {
                 if let Some(s) = path.to_str() {
-                    to_change = Some((String::from("ir"), PedalParameterValue::String(s.to_string())));
+                    to_change = Some((String::from("IR"), PedalParameterValue::String(s.to_string())));
                 } else {
                     log::warn!("Selected IR path is not valid unicode");
                 }
@@ -373,20 +373,20 @@ impl PedalTrait for ImpulseResponse {
             self.combobox_widget.select_next_file();
             if let Some(path) = self.combobox_widget.selected() {
                 if let Some(s) = path.to_str() {
-                    to_change = Some((String::from("ir"), PedalParameterValue::String(s.to_string())));
+                    to_change = Some((String::from("IR"), PedalParameterValue::String(s.to_string())));
                 } else {
                     log::warn!("Selected IR path is not valid unicode");
                 }
             }
         };
 
-        if let Some(value) = pedal_knob(ui, "", self.parameters.get("dry_wet").unwrap(), Vec2::new(0.325, 0.037), 0.35) {
-            to_change = Some(("dry_wet".to_string(), value));
+        if let Some(value) = pedal_knob(ui, "", self.parameters.get("Dry/Wet").unwrap(), Vec2::new(0.325, 0.037), 0.35) {
+            to_change = Some(("Dry/Wet".to_string(), value));
         }
 
-        let active_param = self.get_parameters().get("active").unwrap().value.as_bool().unwrap();
+        let active_param = self.get_parameters().get("Active").unwrap().value.as_bool().unwrap();
         if let Some(value) = pedal_switch(ui, active_param, egui::Vec2::new(0.33, 0.72), 0.16) {
-            to_change = Some(("active".to_string(), PedalParameterValue::Bool(value)));
+            to_change = Some(("Active".to_string(), PedalParameterValue::Bool(value)));
         }
 
         to_change

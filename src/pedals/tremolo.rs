@@ -24,7 +24,7 @@ impl Tremolo {
     pub fn new() -> Self {
         let mut parameters = HashMap::new();
         parameters.insert(
-            "oscillator".to_string(),
+            "Oscillator".to_string(),
             PedalParameter {
                 // Sample rate on oscillators is not used on clients so the hardcoded sample rate is ok
                 value: PedalParameterValue::Oscillator(Oscillator::Sine(Sine::new(48000.0, 5.0, 0.0, 0.0))),
@@ -34,7 +34,7 @@ impl Tremolo {
             },
         );
         parameters.insert(
-            "depth".to_string(),
+            "Depth".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Float(1.0),
                 min: Some(PedalParameterValue::Float(0.01)),
@@ -43,7 +43,7 @@ impl Tremolo {
             },
         );
         parameters.insert(
-            "active".to_string(),
+            "Active".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Bool(true),
                 min: None,
@@ -71,8 +71,8 @@ impl PedalTrait for Tremolo {
     }
 
     fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
-        let depth = self.parameters.get("depth").unwrap().value.as_float().unwrap();
-        let oscillator = self.parameters.get_mut("oscillator").unwrap().value.as_oscillator_mut().unwrap();
+        let depth = self.parameters.get("Depth").unwrap().value.as_float().unwrap();
+        let oscillator = self.parameters.get_mut("Oscillator").unwrap().value.as_oscillator_mut().unwrap();
 
         for sample in buffer.iter_mut() {
             let oscillator_value = oscillator.next().unwrap();
@@ -90,7 +90,7 @@ impl PedalTrait for Tremolo {
     }
 
     fn set_config(&mut self, _buffer_size:usize,sample_rate:u32) {
-        self.parameters.get_mut("oscillator").unwrap().value.as_oscillator_mut().unwrap().set_sample_rate(sample_rate as f32);
+        self.parameters.get_mut("Oscillator").unwrap().value.as_oscillator_mut().unwrap().set_sample_rate(sample_rate as f32);
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _message_buffer: &[String]) -> Option<(String, PedalParameterValue)> {
@@ -98,14 +98,14 @@ impl PedalTrait for Tremolo {
 
         let mut to_change = None;
 
-        let depth_param = self.get_parameters().get("depth").unwrap();
+        let depth_param = self.get_parameters().get("Depth").unwrap();
         if let Some(value) = pedal_knob(ui, "", depth_param, egui::Vec2::new(0.3, 0.11), 0.4) {
-            to_change =  Some(("depth".to_string(), value));
+            to_change =  Some(("Depth".to_string(), value));
         }
 
-        let active_param = self.get_parameters().get("active").unwrap().value.as_bool().unwrap();
+        let active_param = self.get_parameters().get("Active").unwrap().value.as_bool().unwrap();
         if let Some(value) = pedal_switch(ui, active_param, egui::Vec2::new(0.33, 0.72), 0.16) {
-            to_change = Some(("active".to_string(), PedalParameterValue::Bool(value)));
+            to_change = Some(("Active".to_string(), PedalParameterValue::Bool(value)));
         }
 
         to_change

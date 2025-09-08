@@ -435,7 +435,7 @@ impl MidiState {
                                                                                 let bg_color = if is_active { selected_color } else { ui.visuals().widgets.inactive.bg_fill };
                                                                                 if ui.selectable_label(
                                                                                     is_active,
-                                                                                    RichText::new(format!("{:?}", global_function)).background_color(bg_color)
+                                                                                    RichText::new(format!("{}", global_function)).background_color(bg_color)
                                                                                 ).clicked() {
                                                                                     if is_active {
                                                                                         device.global_functions.retain(|f| f != &global_function);

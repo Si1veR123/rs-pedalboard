@@ -14,6 +14,20 @@ pub enum GlobalMidiFunction {
     ToggleMetronome
 }
 
+impl std::fmt::Display for GlobalMidiFunction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name = match self {
+            GlobalMidiFunction::ToggleMute => "Toggle Mute",
+            GlobalMidiFunction::SetMasterOut => "Set Master Out Volume",
+            GlobalMidiFunction::NextPedalboard => "Next Pedalboard",
+            GlobalMidiFunction::PrevPedalboard => "Previous Pedalboard",
+            GlobalMidiFunction::ToggleRecording => "Toggle Recording",
+            GlobalMidiFunction::ToggleMetronome => "Toggle Metronome"
+        };
+        write!(f, "{name}")
+    }
+}
+
 impl GlobalMidiFunction {
     pub fn command_from_function(&self, value: f32) -> Command {
         match self {

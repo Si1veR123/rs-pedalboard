@@ -114,7 +114,7 @@ impl<'a> Deserialize<'a> for GraphicEq7 {
         let mut parameters = helper.parameters;
 
         // Set live_frequency_plot to false when loading the pedal as it is intensive
-        parameters.entry("live_frequency_plot".to_string())
+        parameters.entry("Live Frequency Plot".to_string())
             .and_modify(|p| p.value = PedalParameterValue::Bool(false))
             .or_insert_with(|| PedalParameter {
                 value: PedalParameterValue::Bool(false),
@@ -123,10 +123,10 @@ impl<'a> Deserialize<'a> for GraphicEq7 {
                 step: None
             });
 
-        let high_shelf_enabled = parameters.get("high_shelf")
+        let high_shelf_enabled = parameters.get("High Shelf")
             .and_then(|p| p.value.as_float())
             .map_or(true, |v| v > 0.0);
-        let low_shelf_enabled = parameters.get("low_shelf")
+        let low_shelf_enabled = parameters.get("Low Shelf")
             .and_then(|p| p.value.as_float())
             .map_or(false, |v| v > 0.0);
 
@@ -162,7 +162,7 @@ impl GraphicEq7 {
         let init_bandwidth = 1.05;
         for i in 0..7 {
             parameters.insert(
-                format!("gain{}", i + 1),
+                format!("Gain {}", i + 1),
                 PedalParameter {
                     value: PedalParameterValue::Float(init_gain),
                     min: Some(PedalParameterValue::Float(-EQ_DB_GAIN)),
@@ -171,7 +171,7 @@ impl GraphicEq7 {
                 },
             );
             parameters.insert(
-                format!("bandwidth{}", i + 1),
+                format!("Bandwidth {}", i + 1),
                 PedalParameter {
                     value: PedalParameterValue::Float(init_bandwidth),
                     min: Some(PedalParameterValue::Float(0.1)),
@@ -182,7 +182,7 @@ impl GraphicEq7 {
         }
 
         parameters.insert(
-            "low_shelf".to_string(),
+            "Low Shelf".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Float(0.0),
                 min: Some(PedalParameterValue::Float(0.0)),
@@ -192,7 +192,7 @@ impl GraphicEq7 {
         );
 
         parameters.insert(
-            "high_shelf".to_string(),
+            "High Shelf".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Float(1.0),
                 min: Some(PedalParameterValue::Float(0.0)),
@@ -202,7 +202,7 @@ impl GraphicEq7 {
         );
 
         parameters.insert(
-            "live_frequency_plot".to_string(),
+            "Live Frequency Plot".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Bool(false),
                 min: None,
@@ -212,7 +212,7 @@ impl GraphicEq7 {
         );
 
         parameters.insert(
-            "dry_wet".to_string(),
+            "Dry/Wet".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Float(1.0),
                 min: Some(PedalParameterValue::Float(0.0)),
@@ -222,7 +222,7 @@ impl GraphicEq7 {
         );
 
         parameters.insert(
-            "active".to_string(),
+            "Active".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Bool(true),
                 min: None,
@@ -264,25 +264,25 @@ impl GraphicEq7 {
 
     pub fn get_gains(parameters: &HashMap<String, PedalParameter>) -> [f32; 7] {
         [
-            parameters.get("gain1").unwrap().value.as_float().unwrap(),
-            parameters.get("gain2").unwrap().value.as_float().unwrap(),
-            parameters.get("gain3").unwrap().value.as_float().unwrap(),
-            parameters.get("gain4").unwrap().value.as_float().unwrap(),
-            parameters.get("gain5").unwrap().value.as_float().unwrap(),
-            parameters.get("gain6").unwrap().value.as_float().unwrap(),
-            parameters.get("gain7").unwrap().value.as_float().unwrap(),
+            parameters.get("Gain 1").unwrap().value.as_float().unwrap(),
+            parameters.get("Gain 2").unwrap().value.as_float().unwrap(),
+            parameters.get("Gain 3").unwrap().value.as_float().unwrap(),
+            parameters.get("Gain 4").unwrap().value.as_float().unwrap(),
+            parameters.get("Gain 5").unwrap().value.as_float().unwrap(),
+            parameters.get("Gain 6").unwrap().value.as_float().unwrap(),
+            parameters.get("Gain 7").unwrap().value.as_float().unwrap(),
         ]
     }
 
     pub fn get_bandwidths(parameters: &HashMap<String, PedalParameter>) -> [f32; 7] {
         [
-            parameters.get("bandwidth1").unwrap().value.as_float().unwrap(),
-            parameters.get("bandwidth2").unwrap().value.as_float().unwrap(),
-            parameters.get("bandwidth3").unwrap().value.as_float().unwrap(),
-            parameters.get("bandwidth4").unwrap().value.as_float().unwrap(),
-            parameters.get("bandwidth5").unwrap().value.as_float().unwrap(),
-            parameters.get("bandwidth6").unwrap().value.as_float().unwrap(),
-            parameters.get("bandwidth7").unwrap().value.as_float().unwrap(),
+            parameters.get("Bandwidth 1").unwrap().value.as_float().unwrap(),
+            parameters.get("Bandwidth 2").unwrap().value.as_float().unwrap(),
+            parameters.get("Bandwidth 3").unwrap().value.as_float().unwrap(),
+            parameters.get("Bandwidth 4").unwrap().value.as_float().unwrap(),
+            parameters.get("Bandwidth 5").unwrap().value.as_float().unwrap(),
+            parameters.get("Bandwidth 6").unwrap().value.as_float().unwrap(),
+            parameters.get("Bandwidth 7").unwrap().value.as_float().unwrap(),
         ]
     }
 
@@ -311,12 +311,12 @@ impl PedalTrait for GraphicEq7 {
     }
 
     fn process_audio(&mut self, buffer: &mut [f32], message_buffer: &mut Vec<String>) {
-        let dry_wet = self.parameters.get("dry_wet").unwrap().value.as_float().unwrap();
+        let dry_wet = self.parameters.get("Dry/Wet").unwrap().value.as_float().unwrap();
         for sample in buffer.iter_mut() {
             *sample = self.eq.process(*sample) * dry_wet + *sample * (1.0 - dry_wet);
         }
 
-        if self.parameters.get("live_frequency_plot").unwrap().value.as_bool().unwrap() {
+        if self.parameters.get("Live Frequency Plot").unwrap().value.as_bool().unwrap() {
             let frequency_analyser = self.frequency_analyser.as_mut().expect("Frequency Analyser should not be None on server");
             frequency_analyser.push_samples(buffer);
 
@@ -340,8 +340,8 @@ impl PedalTrait for GraphicEq7 {
         self.eq = Self::build_eq(
             Self::get_bandwidths(&self.parameters),
             Self::get_gains(&self.parameters),
-            self.parameters.get("high_shelf").unwrap().value.as_float().unwrap() > 0.0,
-            self.parameters.get("low_shelf").unwrap().value.as_float().unwrap() > 0.0,
+            self.parameters.get("High Shelf").unwrap().value.as_float().unwrap() > 0.0,
+            self.parameters.get("Low Shelf").unwrap().value.as_float().unwrap() > 0.0,
             self.sample_rate
         );
     }
@@ -359,9 +359,9 @@ impl PedalTrait for GraphicEq7 {
             if param.is_valid(&value) {
                 param.value = value;
 
-                if name.starts_with("gain") || name.starts_with("bandwidth") || name == "low_shelf" || name == "high_shelf" {
-                    let low_shelf = self.parameters.get("low_shelf").unwrap().value.as_float().unwrap() > 0.0;
-                    let high_shelf = self.parameters.get("high_shelf").unwrap().value.as_float().unwrap() > 0.0;
+                if name.starts_with("Gain ") || name.starts_with("Bandwidth ") || name == "Low Shelf" || name == "High Shelf" {
+                    let low_shelf = self.parameters.get("Low Shelf").unwrap().value.as_float().unwrap() > 0.0;
+                    let high_shelf = self.parameters.get("High Shelf").unwrap().value.as_float().unwrap() > 0.0;
                     let gains = Self::get_gains(&self.parameters);
                     let bandwidths = Self::get_bandwidths(&self.parameters);
                     self.eq = Self::build_eq(bandwidths, gains, high_shelf, low_shelf, self.sample_rate);
@@ -372,7 +372,7 @@ impl PedalTrait for GraphicEq7 {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, message_buffer: &[String]) -> Option<(String, PedalParameterValue)> {
-        let live_frequency_enabled = self.parameters.get("live_frequency_plot").unwrap().value.as_bool().unwrap();
+        let live_frequency_enabled = self.parameters.get("Live Frequency Plot").unwrap().value.as_bool().unwrap();
         if live_frequency_enabled {
             // Update the live frequency plot smoothly
             if self.prev_live_frequency_plot.is_empty() {
@@ -430,8 +430,8 @@ impl PedalTrait for GraphicEq7 {
             ui.style_mut().visuals.widgets.inactive.weak_bg_fill = Color32::from_black_alpha(50);
             ui.style_mut().visuals.widgets.hovered.weak_bg_fill = Color32::from_black_alpha(80);
             ui.columns_const(|[col1, _col2, col3]| {
-                let high_shelf_enabled = self.parameters.get("high_shelf").unwrap().value.as_float().unwrap() > 0.0;
-                let low_shelf_enabled = self.parameters.get("low_shelf").unwrap().value.as_float().unwrap() > 0.0;
+                let high_shelf_enabled = self.parameters.get("High Shelf").unwrap().value.as_float().unwrap() > 0.0;
+                let low_shelf_enabled = self.parameters.get("Low Shelf").unwrap().value.as_float().unwrap() > 0.0;
 
                 col1.centered_and_justified(|ui| {
                     if ui.add(
@@ -442,7 +442,7 @@ impl PedalTrait for GraphicEq7 {
                     ).on_hover_text("Low Shelf")
                     .clicked() {
                         let new_value = if low_shelf_enabled { 0.0 } else { 1.0 };
-                        changed_param = Some(("low_shelf".to_string(), PedalParameterValue::Float(new_value)));
+                        changed_param = Some(("Low Shelf".to_string(), PedalParameterValue::Float(new_value)));
                     }
                 });
 
@@ -455,7 +455,7 @@ impl PedalTrait for GraphicEq7 {
                     ).on_hover_text("High Shelf")
                     .clicked() {
                         let new_value = if high_shelf_enabled { 0.0 } else { 1.0 };
-                        changed_param = Some(("high_shelf".to_string(), PedalParameterValue::Float(new_value)));
+                        changed_param = Some(("High Shelf".to_string(), PedalParameterValue::Float(new_value)));
                     }
                 });
             });
@@ -470,36 +470,36 @@ impl PedalTrait for GraphicEq7 {
             ui.add_space(spacing/2.0);
 
             let mut changed_eq_param = None;
-            if let Some(change) = eq_knob(ui, self.parameters.get("gain1").unwrap(), self.parameters.get("bandwidth1").unwrap(), width) {
+            if let Some(change) = eq_knob(ui, self.parameters.get("Gain 1").unwrap(), self.parameters.get("Bandwidth 1").unwrap(), width) {
                 changed_eq_param = Some((1, change));
             }
-            if let Some(change) = eq_knob(ui, self.parameters.get("gain2").unwrap(), self.parameters.get("bandwidth2").unwrap(), width) {
+            if let Some(change) = eq_knob(ui, self.parameters.get("Gain 2").unwrap(), self.parameters.get("Bandwidth 2").unwrap(), width) {
                 changed_eq_param = Some((2, change));
             }
-            if let Some(change) = eq_knob(ui, self.parameters.get("gain3").unwrap(), self.parameters.get("bandwidth3").unwrap(), width) {
+            if let Some(change) = eq_knob(ui, self.parameters.get("Gain 3").unwrap(), self.parameters.get("Bandwidth 3").unwrap(), width) {
                 changed_eq_param = Some((3, change));
             }
-            if let Some(change) = eq_knob(ui, self.parameters.get("gain4").unwrap(), self.parameters.get("bandwidth4").unwrap(), width) {
+            if let Some(change) = eq_knob(ui, self.parameters.get("Gain 4").unwrap(), self.parameters.get("Bandwidth 4").unwrap(), width) {
                 changed_eq_param = Some((4, change));
             }
-            if let Some(change) = eq_knob(ui, self.parameters.get("gain5").unwrap(), self.parameters.get("bandwidth5").unwrap(), width) {
+            if let Some(change) = eq_knob(ui, self.parameters.get("Gain 5").unwrap(), self.parameters.get("Bandwidth 5").unwrap(), width) {
                 changed_eq_param = Some((5, change));
             }
-            if let Some(change) = eq_knob(ui, self.parameters.get("gain6").unwrap(), self.parameters.get("bandwidth6").unwrap(), width) {
+            if let Some(change) = eq_knob(ui, self.parameters.get("Gain 6").unwrap(), self.parameters.get("Bandwidth 6").unwrap(), width) {
                 changed_eq_param = Some((6, change));
             }
-            if let Some(change) = eq_knob(ui, self.parameters.get("gain7").unwrap(), self.parameters.get("bandwidth7").unwrap(), width) {
+            if let Some(change) = eq_knob(ui, self.parameters.get("Gain 7").unwrap(), self.parameters.get("Bandwidth 7").unwrap(), width) {
                 changed_eq_param = Some((7, change));
             }
 
             if let Some((i, change)) = changed_eq_param {
                 match change {
                     EqChange::Gain(value) => {
-                        let param_name = format!("gain{}", i);
+                        let param_name = format!("Gain {}", i);
                         changed_param = Some((param_name, PedalParameterValue::Float(value)));
                     },
                     EqChange::Bandwidth(value) => {
-                        let param_name = format!("bandwidth{}", i);
+                        let param_name = format!("Bandwidth {}", i);
                         changed_param = Some((param_name, PedalParameterValue::Float(value)));
                     }
                 }
@@ -530,7 +530,7 @@ impl PedalTrait for GraphicEq7 {
                         .color(Color32::from_rgb(150, 150, 245))
                 );
 
-                if self.parameters.get("live_frequency_plot").unwrap().value.as_bool().unwrap() {
+                if self.parameters.get("Live Frequency Plot").unwrap().value.as_bool().unwrap() {
                     plot_ui.line(
                         Line::new("live_frequency", self.prev_live_frequency_plot.as_slice())
                             .color(Color32::from_rgb(200, 0, 0))
@@ -568,7 +568,7 @@ impl PedalTrait for GraphicEq7 {
                 .selected(live_frequency_enabled)
                 .frame(false)
         ).clicked() {
-            changed_param = Some(("live_frequency_plot".to_string(), PedalParameterValue::Bool(!live_frequency_enabled)));
+            changed_param = Some(("Live Frequency Plot".to_string(), PedalParameterValue::Bool(!live_frequency_enabled)));
         }
 
         changed_param

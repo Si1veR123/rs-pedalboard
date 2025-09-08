@@ -72,35 +72,35 @@ impl Reverb {
     pub fn new() -> Self {
         let mut parameters = HashMap::new();
 
-        parameters.insert("room_size".into(), PedalParameter {
+        parameters.insert("Room Size".into(), PedalParameter {
             value: PedalParameterValue::Float(0.5),
             min: Some(PedalParameterValue::Float(0.0)),
             max: Some(PedalParameterValue::Float(1.0)),
             step: None,
         });
 
-        parameters.insert("dampening".into(), PedalParameter {
+        parameters.insert("Dampening".into(), PedalParameter {
             value: PedalParameterValue::Float(0.5),
             min: Some(PedalParameterValue::Float(0.0)),
             max: Some(PedalParameterValue::Float(1.0)),
             step: None,
         });
 
-        parameters.insert("width".into(), PedalParameter {
+        parameters.insert("Width".into(), PedalParameter {
             value: PedalParameterValue::Float(1.0),
             min: Some(PedalParameterValue::Float(0.0)),
             max: Some(PedalParameterValue::Float(1.0)),
             step: None,
         });
 
-        parameters.insert("freeze".into(), PedalParameter {
+        parameters.insert("Freeze".into(), PedalParameter {
             value: PedalParameterValue::Bool(false),
             min: None,
             max: None,
             step: None,
         });
 
-        parameters.insert("dry_wet".into(), PedalParameter {
+        parameters.insert("Dry/Wet".into(), PedalParameter {
             value: PedalParameterValue::Float(0.5),
             min: Some(PedalParameterValue::Float(0.0)),
             max: Some(PedalParameterValue::Float(1.0)),
@@ -108,7 +108,7 @@ impl Reverb {
         });
 
         parameters.insert(
-            "active".to_string(),
+            "Active".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Bool(true),
                 min: None,
@@ -135,17 +135,17 @@ impl Reverb {
     fn sync_parameters(&mut self) {
         let p = &self.parameters;
 
-        let dry_wet = p["dry_wet"].value.as_float().unwrap().clamp(0.0, 1.0);
+        let dry_wet = p["Dry/Wet"].value.as_float().unwrap().clamp(0.0, 1.0);
         let wet = dry_wet;
         let dry = 1.0 - dry_wet;
 
         if let Some((ref mut reverb, _sample_rate)) = &mut self.reverb {
-            reverb.set_room_size(p["room_size"].value.as_float().unwrap() as f64);
-            reverb.set_dampening(p["dampening"].value.as_float().unwrap() as f64);
+            reverb.set_room_size(p["Room Size"].value.as_float().unwrap() as f64);
+            reverb.set_dampening(p["Dampening"].value.as_float().unwrap() as f64);
             reverb.set_wet(wet as f64);
             reverb.set_dry(dry as f64);
-            reverb.set_width(p["width"].value.as_float().unwrap() as f64);
-            reverb.set_freeze(p["freeze"].value.as_bool().unwrap_or(false));
+            reverb.set_width(p["Width"].value.as_float().unwrap() as f64);
+            reverb.set_freeze(p["Freeze"].value.as_bool().unwrap_or(false));
         }
     }
 }
@@ -190,7 +190,7 @@ impl PedalTrait for Reverb {
         if let Some(parameter) = parameters.get_mut(name) {
             if parameter.is_valid(&value) {
                 parameter.value = value;
-                if name == "room_size" || name == "dampening" || name == "width" || name == "dry_wet" || name == "freeze" {
+                if name == "Room Size" || name == "Dampening" || name == "Width" || name == "Dry/Wet" || name == "Freeze" {
                     self.sync_parameters();
                 }
             } else {
@@ -203,29 +203,29 @@ impl PedalTrait for Reverb {
         ui.add(egui::Image::new(include_image!("images/reverb.png")));
 
         let mut to_change = None;
-        let room_size_param = self.get_parameters().get("room_size").unwrap();
+        let room_size_param = self.get_parameters().get("Room Size").unwrap();
         if let Some(value) = pedal_knob(ui, "", room_size_param, egui::Vec2::new(0.05, 0.022), 0.3) {
-            to_change = Some(("room_size".to_string(), value));
+            to_change = Some(("Room Size".to_string(), value));
         }
 
-        let width_param = self.get_parameters().get("width").unwrap();
+        let width_param = self.get_parameters().get("Width").unwrap();
         if let Some(value) = pedal_knob(ui, "", width_param, egui::Vec2::new(0.05, 0.171), 0.3) {
-            to_change = Some(("width".to_string(), value));
+            to_change = Some(("Width".to_string(), value));
         }
 
-        let dampening_param = self.get_parameters().get("dampening").unwrap();
+        let dampening_param = self.get_parameters().get("Dampening").unwrap();
         if let Some(value) = pedal_knob(ui, "", dampening_param, egui::Vec2::new(0.05, 0.32), 0.3) {
-            to_change = Some(("dampening".to_string(), value));
+            to_change = Some(("Dampening".to_string(), value));
         }
 
-        let dry_wet_param = self.get_parameters().get("dry_wet").unwrap();
+        let dry_wet_param = self.get_parameters().get("Dry/Wet").unwrap();
         if let Some(value) = pedal_knob(ui, "", dry_wet_param, egui::Vec2::new(0.05, 0.469), 0.3) {
-            to_change = Some(("dry_wet".to_string(), value));
+            to_change = Some(("Dry/Wet".to_string(), value));
         }
 
-        let active_param = self.get_parameters().get("active").unwrap().value.as_bool().unwrap();
+        let active_param = self.get_parameters().get("Active").unwrap().value.as_bool().unwrap();
         if let Some(value) = pedal_switch(ui, active_param, egui::Vec2::new(0.33, 0.72), 0.16) {
-            to_change = Some(("active".to_string(), PedalParameterValue::Bool(value)));
+            to_change = Some(("Active".to_string(), PedalParameterValue::Bool(value)));
         }
 
         to_change

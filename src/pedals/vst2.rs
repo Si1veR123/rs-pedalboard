@@ -62,24 +62,24 @@ impl<'a> Deserialize<'a> for Vst2 {
         let helper = Vst2Data::deserialize(deserializer)?;
 
         let parameters_with_idx = helper.parameters_with_idx;
-        let name = parameters_with_idx.get("plugin").unwrap().1.value.as_str().unwrap().to_string();
-        let dry_wet = parameters_with_idx.get("dry_wet").unwrap().1.value.as_float().unwrap_or(1.0);
-        let active = parameters_with_idx.get("active").unwrap().1.value.as_bool().unwrap_or(true);
+        let name = parameters_with_idx.get("Plugin").unwrap().1.value.as_str().unwrap().to_string();
+        let dry_wet = parameters_with_idx.get("Dry/Wet").unwrap().1.value.as_float().unwrap_or(1.0);
+        let active = parameters_with_idx.get("Active").unwrap().1.value.as_bool().unwrap_or(true);
 
         let mut parameters = HashMap::new();
-        parameters.insert(String::from("plugin"), PedalParameter {
+        parameters.insert(String::from("Plugin"), PedalParameter {
             value: PedalParameterValue::String(name.clone()),
             min: None,
             max: None,
             step: None
         });
-        parameters.insert(String::from("dry_wet"), PedalParameter {
+        parameters.insert(String::from("Dry/Wet"), PedalParameter {
             value: PedalParameterValue::Float(dry_wet),
             min: Some(PedalParameterValue::Float(0.0)),
             max: Some(PedalParameterValue::Float(1.0)),
             step: None
         });
-        parameters.insert(String::from("active"), PedalParameter {
+        parameters.insert(String::from("Active"), PedalParameter {
             value: PedalParameterValue::Bool(active),
             min: None,
             max: None,
@@ -151,7 +151,7 @@ impl Vst2 {
     pub fn new() -> Self {
         let mut parameters = HashMap::new();
         parameters.insert(
-            "plugin".to_string(),
+            "Plugin".to_string(),
             PedalParameter {
                 value: PedalParameterValue::String("".to_string()),
                 min: None,
@@ -160,7 +160,7 @@ impl Vst2 {
             },
         );
         parameters.insert(
-            "dry_wet".to_string(),
+            "Dry/Wet".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Float(1.0),
                 min: Some(PedalParameterValue::Float(0.0)),
@@ -169,7 +169,7 @@ impl Vst2 {
             },
         );
         parameters.insert(
-            "active".to_string(),
+            "Active".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Bool(true),
                 min: None,
@@ -220,12 +220,12 @@ impl Vst2 {
     /// Update the pedal's parameters to the parameters of the current plugin instance
     pub fn sync_instance_to_parameters(&mut self) {
         if let Some(instance) = self.instance.as_mut() {
-            self.parameters.retain(|k, _| k == "dry_wet" || k == "active");
+            self.parameters.retain(|k, _| k == "Dry/Wet" || k == "Active");
 
             match instance.dll_path().to_str() {
                 Some(path) => {
                     self.parameters.insert(
-                        "plugin".to_string(),
+                        "Plugin".to_string(),
                         PedalParameter {
                             value: PedalParameterValue::String(path.to_string()),
                             min: None,
@@ -237,7 +237,7 @@ impl Vst2 {
                 None => {
                     log::warn!("Plugin path is not valid unicode, removing plugin instance.");
                     self.parameters.insert(
-                        "plugin".to_string(),
+                        "Plugin".to_string(),
                         PedalParameter {
                             value: PedalParameterValue::String("".to_string()),
                             min: None,
@@ -267,9 +267,9 @@ impl Vst2 {
                 self.param_index_map.insert(name, i);
             }
         } else {
-            self.parameters.retain(|k, _| k == "dry_wet");
+            self.parameters.retain(|k, _| k == "Dry/Wet");
             self.parameters.insert(
-                "plugin".to_string(),
+                "Plugin".to_string(),
                 PedalParameter {
                     value: PedalParameterValue::String("".to_string()),
                     min: None,
@@ -285,7 +285,7 @@ impl Vst2 {
     pub fn sync_parameters_to_instance(&mut self) {
         if let Some(instance) = self.instance.as_mut() {
             for (name, param) in &self.parameters {
-                if name == "plugin" || name == "dry_wet" || name == "active" {
+                if name == "Plugin" || name == "Dry/Wet" || name == "Active" {
                     continue;
                 }
                 if let Some(&index) = self.param_index_map.get(name) {
@@ -339,7 +339,7 @@ impl PedalTrait for Vst2 {
             None => return
         }
 
-        let dry_wet = self.parameters.get("dry_wet").unwrap().value.as_float().unwrap();
+        let dry_wet = self.parameters.get("Dry/Wet").unwrap().value.as_float().unwrap();
 
         if let Some(instance) = self.instance.as_mut() {
             instance.process(buffer, &mut self.output_buffer[..buffer.len()]);
@@ -360,7 +360,7 @@ impl PedalTrait for Vst2 {
     }
 
     fn set_parameter_value(&mut self, name: &str, value: PedalParameterValue) {
-        if name == "plugin" {
+        if name == "Plugin" {
             if let PedalParameterValue::String(plugin_path) = value {
                 if plugin_path.is_empty() {
                     self.instance = None;
@@ -405,7 +405,7 @@ impl PedalTrait for Vst2 {
             } else {
                 log::warn!("Failed to get default VST2 save directory: {}", VST2_PLUGIN_PATH);
             }
-            let current_vst = self.parameters.get("plugin").unwrap().value.as_str().unwrap();
+            let current_vst = self.parameters.get("Plugin").unwrap().value.as_str().unwrap();
             self.combobox_widget = Self::get_empty_directory_combo_box(self.id);
             self.combobox_widget.set_selection(match current_vst {
                 s if s.is_empty() => None,
@@ -459,7 +459,7 @@ impl PedalTrait for Vst2 {
                             match path.to_str() {
                                 Some(s) => {
                                     let selected_str = s.to_string();
-                                    to_change = Some((String::from("plugin"), PedalParameterValue::String(selected_str)));
+                                    to_change = Some((String::from("Plugin"), PedalParameterValue::String(selected_str)));
                                 },
                                 None => {
                                     log::warn!("Selected VST2 path is not valid unicode");
@@ -467,7 +467,7 @@ impl PedalTrait for Vst2 {
                             }
                         },
                         None => {
-                            to_change = Some((String::from("plugin"), PedalParameterValue::String("".to_string())));
+                            to_change = Some((String::from("Plugin"), PedalParameterValue::String("".to_string())));
                         }
                     }
                 }
@@ -489,15 +489,15 @@ impl PedalTrait for Vst2 {
 
                 ui.add_space(5.0);
                     
-                if let Some(value) = pedal_knob(ui, RichText::new("Dry/Wet").color(Color32::WHITE).size(8.0), self.parameters.get("dry_wet").unwrap(), Vec2::new(0.325, 0.55), 0.35) {
-                    to_change = Some(("dry_wet".to_string(), value));
+                if let Some(value) = pedal_knob(ui, RichText::new("Dry/Wet").color(Color32::WHITE).size(8.0), self.parameters.get("Dry/Wet").unwrap(), Vec2::new(0.325, 0.55), 0.35) {
+                    to_change = Some(("Dry/Wet".to_string(), value));
                 }
             }
         );
 
-        let active_param = self.get_parameters().get("active").unwrap().value.as_bool().unwrap();
+        let active_param = self.get_parameters().get("Active").unwrap().value.as_bool().unwrap();
         if let Some(value) = pedal_switch(ui, active_param, egui::Vec2::new(0.33, 0.72), 0.16) {
-            to_change = Some(("active".to_string(), PedalParameterValue::Bool(value)));
+            to_change = Some(("Active".to_string(), PedalParameterValue::Bool(value)));
         }
 
         if plugin_param_change.is_some() {

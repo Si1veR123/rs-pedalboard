@@ -60,35 +60,35 @@ impl Wah {
     pub fn new() -> Self {
         let mut parameters = HashMap::new();
 
-        parameters.insert("position".to_string(), PedalParameter {
+        parameters.insert("Position".to_string(), PedalParameter {
             value: PedalParameterValue::Float(0.5),
             min: Some(PedalParameterValue::Float(0.0)),
             max: Some(PedalParameterValue::Float(1.0)),
             step: None
         });
 
-        parameters.insert("base_freq".to_string(), PedalParameter {
+        parameters.insert("Base Frequency".to_string(), PedalParameter {
             value: PedalParameterValue::Float(100.0),
             min: Some(PedalParameterValue::Float(50.0)),
             max: Some(PedalParameterValue::Float(1000.0)),
             step: None
         });
 
-        parameters.insert("width".to_string(), PedalParameter {
+        parameters.insert("Width".to_string(), PedalParameter {
             value: PedalParameterValue::Float(0.5),
             min: Some(PedalParameterValue::Float(0.1)),
             max: Some(PedalParameterValue::Float(2.0)),
             step: None
         });
 
-        parameters.insert("sensitivity".to_string(), PedalParameter {
+        parameters.insert("Sensitivity".to_string(), PedalParameter {
             value: PedalParameterValue::Float(1000.0),
             min: Some(PedalParameterValue::Float(100.0)),
             max: Some(PedalParameterValue::Float(4000.0)),
             step: None
         });
 
-        parameters.insert("dry_wet".to_string(), PedalParameter {
+        parameters.insert("Dry/Wet".to_string(), PedalParameter {
             value: PedalParameterValue::Float(1.0),
             min: Some(PedalParameterValue::Float(0.0)),
             max: Some(PedalParameterValue::Float(1.0)),
@@ -96,7 +96,7 @@ impl Wah {
         });
         
         parameters.insert(
-            "active".to_string(),
+            "Active".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Bool(true),
                 min: None,
@@ -130,9 +130,9 @@ impl PedalTrait for Wah {
 
         // Initialize the moving bandpass filter
         self.moving_bandpass_filter = Some(MovingBandPass::new(
-            self.parameters.get("base_freq").and_then(|p| p.value.as_float()).unwrap(),
+            self.parameters.get("Base Frequency").and_then(|p| p.value.as_float()).unwrap(),
             sample_rate as f32,
-            self.parameters.get("width").and_then(|p| p.value.as_float()).unwrap(),
+            self.parameters.get("Width").and_then(|p| p.value.as_float()).unwrap(),
             64,
             2.0
         ));
@@ -144,9 +144,9 @@ impl PedalTrait for Wah {
             if parameter.is_valid(&value) {
                 parameter.value = value;
 
-                if name == "width" {
+                if name == "Width" {
                     if let Some(filter) = &mut self.moving_bandpass_filter {
-                        filter.set_width(self.parameters.get("width").unwrap().value.as_float().unwrap());
+                        filter.set_width(self.parameters.get("Width").unwrap().value.as_float().unwrap());
                     }
                 }
             }
@@ -159,10 +159,10 @@ impl PedalTrait for Wah {
             return;
         }
 
-        let position = self.parameters.get("position").unwrap().value.as_float().unwrap();
-        let base_freq = self.parameters.get("base_freq").unwrap().value.as_float().unwrap();
-        let sensitivity = self.parameters.get("sensitivity").unwrap().value.as_float().unwrap();
-        let dry_wet = self.parameters.get("dry_wet").unwrap().value.as_float().unwrap();
+        let position = self.parameters.get("Position").unwrap().value.as_float().unwrap();
+        let base_freq = self.parameters.get("Base Frequency").unwrap().value.as_float().unwrap();
+        let sensitivity = self.parameters.get("Sensitivity").unwrap().value.as_float().unwrap();
+        let dry_wet = self.parameters.get("Dry/Wet").unwrap().value.as_float().unwrap();
 
         let filter = self.moving_bandpass_filter.as_mut().unwrap();
         filter.set_freq(base_freq + position * sensitivity);
@@ -185,29 +185,29 @@ impl PedalTrait for Wah {
 
         let mut to_change = None;
 
-        let base_freq_param = self.get_parameters().get("base_freq").unwrap();
+        let base_freq_param = self.get_parameters().get("Base Frequency").unwrap();
         if let Some(value) = pedal_knob(ui, "", base_freq_param, egui::Vec2::new(0.68, 0.04), 0.25) {
-            to_change = Some(("base_freq".to_string(), value));
+            to_change = Some(("Base Frequency".to_string(), value));
         }
 
-        let sensitivity_param = self.get_parameters().get("sensitivity").unwrap();
+        let sensitivity_param = self.get_parameters().get("Sensitivity").unwrap();
         if let Some(value) = pedal_knob(ui, "", sensitivity_param, egui::Vec2::new(0.68, 0.165), 0.25) {
-            to_change = Some(("sensitivity".to_string(), value));
+            to_change = Some(("Sensitivity".to_string(), value));
         }
 
-        let width_param = self.get_parameters().get("width").unwrap();
+        let width_param = self.get_parameters().get("Width").unwrap();
         if let Some(value) = pedal_knob(ui, "", width_param, egui::Vec2::new(0.68, 0.29), 0.25) {
-            to_change = Some(("width".to_string(), value));
+            to_change = Some(("Width".to_string(), value));
         }
 
-        let position_param = self.get_parameters().get("position").unwrap();
+        let position_param = self.get_parameters().get("Position").unwrap();
         if let Some(value) = pedal_knob(ui, "", position_param, egui::Vec2::new(0.68, 0.42), 0.25) {
-            to_change = Some(("position".to_string(), value));
+            to_change = Some(("Position".to_string(), value));
         }
 
-        let active_param = self.get_parameters().get("active").unwrap().value.as_bool().unwrap();
+        let active_param = self.get_parameters().get("Active").unwrap().value.as_bool().unwrap();
         if let Some(value) = pedal_switch(ui, active_param, egui::Vec2::new(0.33, 0.72), 0.16) {
-            to_change = Some(("active".to_string(), PedalParameterValue::Bool(value)));
+            to_change = Some(("Active".to_string(), PedalParameterValue::Bool(value)));
         }
 
         to_change

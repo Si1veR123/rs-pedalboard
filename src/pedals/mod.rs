@@ -217,7 +217,7 @@ pub trait PedalTrait {
     fn set_config(&mut self, _buffer_size: usize, _sample_rate: u32) {}
 
     fn is_active(&self) -> bool {
-        if let Some(param) = self.get_parameters().get("active") {
+        if let Some(param) = self.get_parameters().get("Active") {
             if let PedalParameterValue::Bool(active) = &param.value {
                 return *active;
             }
