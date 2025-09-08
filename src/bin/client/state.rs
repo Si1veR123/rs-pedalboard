@@ -268,7 +268,11 @@ impl State {
     /// 
     /// Requires a lock on active_pedalboardstage and socket
     pub fn play(&self, pedalboard_index: usize, local: bool) {
-        self.pedalboards.active_pedalboardstage.borrow_mut().set_active_pedalboard(pedalboard_index);
+        let mut active_pedalboardset = self.pedalboards.active_pedalboardstage.borrow_mut();
+        active_pedalboardset.set_active_pedalboard(pedalboard_index);
+
+        let new_pedalboard_id = active_pedalboardset.pedalboards[active_pedalboardset.active_pedalboard].get_id();
+        self.midi_state.borrow().active_pedalboard_id.store(new_pedalboard_id, std::sync::atomic::Ordering::Relaxed);
 
         if !local {
             let mut socket = self.socket.borrow_mut();
@@ -380,6 +384,11 @@ impl State {
 
     pub fn load_state(egui_ctx: eframe::egui::Context) -> Self {
         let pedalboards = SavedPedalboards::load_or_default();
+        let active_pedalboard = pedalboards.active_pedalboardstage.borrow();
+        let active_pedalboard_index = active_pedalboard.active_pedalboard;
+        let active_pedalboard_id = active_pedalboard.pedalboards[active_pedalboard_index].get_id();
+        drop(active_pedalboard);
+
         let socket = ClientSocket::new(crate::SERVER_PORT);
         let client_settings = ClientSettings::load_or_default();
 
@@ -408,7 +417,14 @@ impl State {
         let server_settings = ServerSettingsSave::load_or_default();
         let midi_settings = MidiSettings::load_or_default();
         let (midi_command_sender, midi_command_receiver) = crossbeam::channel::unbounded();
-        let midi_state = MidiState::new(midi_settings.clone(), egui_ctx.clone(), midi_command_sender, None);
+
+        let midi_state = MidiState::new(
+            midi_settings.clone(),
+            egui_ctx.clone(),
+            midi_command_sender,
+            None,
+            active_pedalboard_id
+        );
 
         State {
             pedalboards,
@@ -489,19 +505,23 @@ impl State {
                     }
                 },
                 Command::Play(pedalboard_index) => {
-                    self.pedalboards.active_pedalboardstage.borrow_mut().set_active_pedalboard(pedalboard_index);
+                    self.play(pedalboard_index, true);
                 },
                 Command::NextPedalboard => {
-                    let mut pedalboard_set = self.pedalboards.active_pedalboardstage.borrow_mut();
-                    pedalboard_set.active_pedalboard = (pedalboard_set.active_pedalboard + 1) % pedalboard_set.pedalboards.len();
+                    let pedalboard_set = self.pedalboards.active_pedalboardstage.borrow();
+                    let new_index = (pedalboard_set.active_pedalboard + 1) % pedalboard_set.pedalboards.len();
+                    drop(pedalboard_set);
+                    self.play(new_index, true);
                 },
                 Command::PrevPedalboard => {
-                    let mut pedalboard_set = self.pedalboards.active_pedalboardstage.borrow_mut();
-                    if pedalboard_set.active_pedalboard == 0 {
-                        pedalboard_set.active_pedalboard = pedalboard_set.pedalboards.len() - 1;
+                    let pedalboard_set = self.pedalboards.active_pedalboardstage.borrow();
+                    let new_index = if pedalboard_set.active_pedalboard == 0 {
+                        pedalboard_set.pedalboards.len() - 1
                     } else {
-                        pedalboard_set.active_pedalboard -= 1;
-                    }
+                        pedalboard_set.active_pedalboard - 1
+                    };
+                    drop(pedalboard_set);
+                    self.play(new_index, true);
                 },
                 Command::MovePedal(pedalboard_id, pedal_id, to_index) => {
                     self.move_pedal(pedalboard_id, pedal_id, to_index, true);

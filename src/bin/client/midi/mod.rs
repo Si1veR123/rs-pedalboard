@@ -1,7 +1,7 @@
 pub mod functions;
 use strum::IntoEnumIterator;
 
-use std::{collections::HashMap, sync::{Arc, Mutex}};
+use std::{collections::HashMap, sync::{atomic::AtomicU32, Arc, Mutex}};
 use midir::{MidiInput, MidiInputConnection, MidiInputPorts};
 use serde::{Serialize, Deserialize, Serializer, Deserializer, ser::SerializeStruct};
 use eframe::egui::{self, Id, Rangef, RichText};
@@ -18,11 +18,19 @@ pub struct MidiState {
     available_input_ports: MidiInputPorts,
     ui_thread_sender: Sender<Command>,
     socket_handle: Option<ClientSocketThreadHandle>,
+    pub active_pedalboard_id: Arc<AtomicU32>,
     egui_ctx: egui::Context
 }
 
 impl MidiState {
-    pub fn new(settings: MidiSettings, egui_ctx: egui::Context, ui_thread_sender: Sender<Command>, socket_handle: Option<ClientSocketThreadHandle>) -> Self {
+    pub fn new(
+        settings: MidiSettings,
+        egui_ctx: egui::Context,
+        ui_thread_sender:
+        Sender<Command>,
+        socket_handle: Option<ClientSocketThreadHandle>,
+        active_pedalboard_id: u32
+    ) -> Self {
         let available_input_ports = Self::create_midi_input().ports();
 
         Self {
@@ -31,6 +39,7 @@ impl MidiState {
             input_connections: Vec::new(),
             socket_handle,
             egui_ctx,
+            active_pedalboard_id: Arc::new(AtomicU32::new(active_pedalboard_id)),
             ui_thread_sender
         }
     }
@@ -93,7 +102,8 @@ impl MidiState {
         message: &[u8],
         ui_thread_sender: &Sender<Command>,
         socket_handle: Option<&ClientSocketThreadHandle>,
-        egui_ctx: &egui::Context
+        egui_ctx: &egui::Context,
+        active_pedalboard_id: u32
     ) {
         let (channel, cc, value) = match Self::parse_cc_message(message) {
             Some((channel, cc, value)) => (channel, cc, value),
@@ -123,6 +133,10 @@ impl MidiState {
                     }
                 } else {
                     for function in &device.parameter_functions {
+                        if function.pedalboard_id != active_pedalboard_id {
+                            continue;
+                        }
+
                         let command = function.command_from_value(device.current_value);
                         if let Err(e) = ui_thread_sender.send(command.clone()) {
                             log::error!("Failed to send parameter MIDI command to UI thread: {}", e);
@@ -144,6 +158,7 @@ impl MidiState {
                 let settings_clone = self.settings.clone();
                 let ui_thread_sender_clone = self.ui_thread_sender.clone();
                 let socket_thread_handle_clone = self.socket_handle.clone();
+                let active_pedalboard_id_clone = self.active_pedalboard_id.clone();
                 let egui_ctx_clone = self.egui_ctx.clone();
                 match midi_input.connect(
                     port,
@@ -155,7 +170,8 @@ impl MidiState {
                             message,
                             &ui_thread_sender_clone,
                             socket_thread_handle_clone.as_ref(),
-                            &egui_ctx_clone
+                            &egui_ctx_clone,
+                            active_pedalboard_id_clone.load(std::sync::atomic::Ordering::Relaxed)
                         );
                     },
                     id.to_string()
