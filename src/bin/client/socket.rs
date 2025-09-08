@@ -478,13 +478,13 @@ async fn client_socket_event_loop(
                         }
                     }
                     Command::SetRecording(active) => {
-                        let message = format!("setrecording|{}\n", if active { "on" } else { "off" });
+                        let message = format!("recording|{}\n", if active { "on" } else { "off" });
                         if socket_send(&mut stream_writer, &message).await {
                             break;
                         }
                     },
                     Command::ToggleRecording => {
-                        let message = "setrecording|toggle\n";
+                        let message = "recording|toggle\n";
                         if socket_send(&mut stream_writer, message).await {
                             break;
                         }

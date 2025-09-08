@@ -631,6 +631,7 @@ impl Widget for &mut SettingsScreen {
 
                     ui.heading("MIDI");
                     ui.separator();
+
                     self.state.midi_state.borrow_mut().midi_port_device_settings_ui(ui);
 
                     if connect_button.is_some_and(|r| r.clicked()) {

@@ -1,18 +1,12 @@
 use rs_pedalboard::pedals::PedalParameterValue;
 use serde::{Serialize, Deserialize};
+use strum_macros::EnumIter;
 
 use crate::socket::{Command, ParameterPath};
 
-// Functions that can be triggered by MIDI devices
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum MidiFunctions {
-    Global(Vec<GlobalMidiFunction>),
-    Parameter(Vec<ParameterMidiFunction>)
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, EnumIter, PartialEq)]
 pub enum GlobalMidiFunction {
-    Mute,
+    ToggleMute,
     SetMasterOut,
     NextPedalboard,
     PrevPedalboard,
@@ -21,22 +15,14 @@ pub enum GlobalMidiFunction {
 }
 
 impl GlobalMidiFunction {
-    pub fn command_from_function(&self, value: f32) -> Option<Command> {
+    pub fn command_from_function(&self, value: f32) -> Command {
         match self {
-            GlobalMidiFunction::Mute => Some(Command::SetMute(value >= 0.5)),
-            GlobalMidiFunction::SetMasterOut => Some(Command::MasterOut(value)),
-            GlobalMidiFunction::NextPedalboard => {
-                if value >= 0.5 { Some(Command::NextPedalboard) } else { None }
-            },
-            GlobalMidiFunction::PrevPedalboard => {
-                if value >= 0.5 { Some(Command::PrevPedalboard) } else { None }
-            },
-            GlobalMidiFunction::ToggleRecording => {
-                if value >= 0.5 { Some(Command::ToggleRecording) } else { None }
-            },
-            GlobalMidiFunction::ToggleMetronome => {
-                if value >= 0.5 { Some(Command::ToggleMetronome) } else { None }
-            },
+            GlobalMidiFunction::ToggleMute => Command::ToggleMute,
+            GlobalMidiFunction::SetMasterOut => Command::MasterOut(value),
+            GlobalMidiFunction::NextPedalboard => Command::NextPedalboard,
+            GlobalMidiFunction::PrevPedalboard => Command::PrevPedalboard,
+            GlobalMidiFunction::ToggleRecording => Command::ToggleRecording,
+            GlobalMidiFunction::ToggleMetronome => Command::ToggleMetronome,
         }
     }
 }

@@ -1,14 +1,14 @@
 pub mod functions;
-use functions::MidiFunctions;
+use strum::IntoEnumIterator;
 
 use std::{collections::HashMap, sync::{Arc, Mutex}};
 use midir::{MidiInput, MidiInputConnection, MidiInputPorts};
 use serde::{Serialize, Deserialize, Serializer, Deserializer, ser::SerializeStruct};
-use eframe::egui::{self, Id, Rangef};
+use eframe::egui::{self, Id, Rangef, RichText};
 use egui_extras::{Size, StripBuilder};
 use crossbeam::channel::Sender;
 
-use crate::{socket::{ClientSocketThreadHandle, Command}, SAVE_DIR};
+use crate::{midi::functions::{GlobalMidiFunction, ParameterMidiFunction}, socket::{ClientSocketThreadHandle, Command}, SAVE_DIR};
 
 pub const MIDI_SETTINGS_SAVE_NAME: &'static str = "midi_settings.json";
 
@@ -69,7 +69,7 @@ impl MidiState {
         if message.len() < 3 || message[0] & 0xF0 != 0xB0 {
             return None; // Not a Control Change message
         }
-        Some((message[0] & 0x0F, message[1], message[2]))
+        Some(((message[0] & 0x0F) + 1, message[1], message[2]))
     }
 
     fn device_settings_mut<'a>(settings: &'a mut MidiSettings, port_name: &str, cc: u8, channel: u8) -> Option<&'a mut MidiDevice> {
@@ -78,7 +78,9 @@ impl MidiState {
                 name: "New Device".to_string(),
                 device_type: MidiDeviceType::AbsoluteEncoder { min_value: 0, max_value: 127 },
                 current_value: 0.5,
-                functions: Vec::new(),
+                global_functions: Vec::new(),
+                parameter_functions: Vec::new(),
+                use_global: true
             }))
         } else {
             None
@@ -98,7 +100,7 @@ impl MidiState {
             None => return
         };
 
-        log::info!("Received MIDI CC message on port '{}': channel {}, cc {}, value {}", port_name, channel + 1, cc, value);
+        log::debug!("Received MIDI CC message on port '{}': channel {}, cc {}, value {}", port_name, channel, cc, value);
 
         let mut settings_lock = settings.lock().expect("MidiState: Mutex poisoned.");
 
@@ -108,34 +110,27 @@ impl MidiState {
             egui_ctx.request_repaint();
             if device.current_value != old_value {
                 // Activate any MIDI functions for this device
-                for functions in &device.functions {
-                    // If this fails the channel is dead -> the client is dead
-                    match functions {
-                        MidiFunctions::Global(global_midi_functions) => {
-                            for global_function in global_midi_functions {
-                                if let Some(command) = global_function.command_from_function(device.current_value) {
-                                    if let Err(e) = ui_thread_sender.send(command.clone()) {
-                                        log::error!("Failed to send global MIDI command to UI thread: {}", e);
-                                    }
+                if device.use_global {
+                    for function in &device.global_functions {
+                        let command = function.command_from_function(device.current_value);
+                        if let Err(e) = ui_thread_sender.send(command.clone()) {
+                            log::error!("Failed to send global MIDI command to UI thread: {}", e);
+                        }
 
-                                    if let Some(handle) = &socket_handle {
-                                        handle.send_command(command);
-                                    }
-                                }
-                            }
-                        },
-                        MidiFunctions::Parameter(parameter_midi_functions) => {
-                            for parameter_function in parameter_midi_functions {
-                                let command = parameter_function.command_from_value(device.current_value);
-                                if let Err(e) = ui_thread_sender.send(command.clone()) {
-                                    log::error!("Failed to send parameter MIDI command to UI thread: {}", e);
-                                }
+                        if let Some(handle) = &socket_handle {
+                            handle.send_command(command);
+                        }
+                    }
+                } else {
+                    for function in &device.parameter_functions {
+                        let command = function.command_from_value(device.current_value);
+                        if let Err(e) = ui_thread_sender.send(command.clone()) {
+                            log::error!("Failed to send parameter MIDI command to UI thread: {}", e);
+                        }
 
-                                if let Some(handle) = &socket_handle {
-                                    handle.send_command(command);
-                                }
-                            }
-                        },
+                        if let Some(handle) = &socket_handle {
+                            handle.send_command(command);
+                        }
                     }
                 }
             }
@@ -343,30 +338,47 @@ impl MidiState {
                                                             }
                                                             if ui
                                                                 .selectable_label(
-                                                                    matches!(device.device_type, MidiDeviceType::LatchingFootswitch { .. }),
-                                                                    "Latching Footswitch",
+                                                                    matches!(device.device_type, MidiDeviceType::Footswitch { .. }),
+                                                                    "Footswitch",
                                                                 )
                                                                 .clicked()
                                                             {
-                                                                device.device_type = MidiDeviceType::LatchingFootswitch {
+                                                                device.device_type = MidiDeviceType::Footswitch {
                                                                     on_value: 127,
-                                                                };
-                                                            }
-                                                            if ui
-                                                                .selectable_label(
-                                                                    matches!(device.device_type, MidiDeviceType::MomentaryFootswitch { .. }),
-                                                                    "Momentary Footswitch",
-                                                                )
-                                                                .clicked()
-                                                            {
-                                                                device.device_type = MidiDeviceType::MomentaryFootswitch {
-                                                                    on_value: 127,
-                                                                    use_as_latching: false,
+                                                                    momentary_to_latching: false
                                                                 };
                                                             }
                                                         });
 
                                                     device.device_type.settings_ui(ui);
+
+                                                    ui.separator();
+                                                    ui.checkbox(&mut device.use_global, "Use Global Functions")
+                                                        .on_hover_text("If enabled, the global functions will be used. If disabled, the parameter functions will be used.");
+
+                                                    if device.use_global {
+                                                        egui::ComboBox::from_id_salt(&device.name)
+                                                            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+                                                            .selected_text(format!("{} functions", device.global_functions.len()))
+                                                            .show_ui(ui, |ui| {
+                                                                let selected_color = ui.visuals().selection.bg_fill;
+
+                                                                for global_function in GlobalMidiFunction::iter() {
+                                                                    let is_active = device.global_functions.contains(&global_function);
+                                                                    let bg_color = if is_active { selected_color } else { ui.visuals().widgets.inactive.bg_fill };
+                                                                    if ui.selectable_label(
+                                                                        is_active,
+                                                                        RichText::new(format!("{:?}", global_function)).background_color(bg_color)
+                                                                    ).clicked() {
+                                                                        if is_active {
+                                                                            device.global_functions.retain(|f| f != &global_function);
+                                                                        } else {
+                                                                            device.global_functions.push(global_function.clone());
+                                                                        }
+                                                                    };
+                                                                }
+                                                            });
+                                                    }
                                                 });
                                             });
                                         });
@@ -520,7 +532,9 @@ pub struct MidiDevice {
     pub name: String,
     pub device_type: MidiDeviceType,
     pub current_value: f32,
-    pub functions: Vec<MidiFunctions>,
+    pub global_functions: Vec<GlobalMidiFunction>,
+    pub parameter_functions: Vec<ParameterMidiFunction>,
+    pub use_global: bool,
 }
 
 impl MidiDevice {
@@ -538,18 +552,11 @@ impl MidiDevice {
                 let range = *max_value as f32 - *min_value as f32;
                 self.current_value = (midi_value as f32 - *min_value as f32) / range;
             }
-            MidiDeviceType::LatchingFootswitch { on_value } => {
-                self.current_value = if midi_value == *on_value {
-                    1.0
-                } else {
-                    0.0
-                };
-            },
-            MidiDeviceType::MomentaryFootswitch {
+            MidiDeviceType::Footswitch {
                 on_value,
-                use_as_latching
+                momentary_to_latching
             } => {
-                self.current_value = if *use_as_latching {
+                self.current_value = if *momentary_to_latching {
                     if midi_value == *on_value {
                         if self.current_value == 0.0 {
                             1.0
@@ -575,7 +582,7 @@ impl MidiDevice {
             MidiDeviceType::RelativeEncoder { .. } | MidiDeviceType::AbsoluteEncoder { .. } => {
                 format!("{:.2}", self.current_value)
             },
-            MidiDeviceType::LatchingFootswitch { .. } | MidiDeviceType::MomentaryFootswitch { .. } => {
+            MidiDeviceType::Footswitch { .. } => {
                 if self.current_value == 1.0 {
                     "On".into()
                 } else {
@@ -597,12 +604,9 @@ pub enum MidiDeviceType {
         min_value: u8,
         max_value: u8
     },
-    LatchingFootswitch {
-        on_value: u8
-    },
-    MomentaryFootswitch {
+    Footswitch {
         on_value: u8,
-        use_as_latching: bool
+        momentary_to_latching: bool
     }
 }
 
@@ -611,28 +615,25 @@ impl MidiDeviceType {
         match self {
             MidiDeviceType::RelativeEncoder { .. } => "Relative Encoder",
             MidiDeviceType::AbsoluteEncoder { .. } => "Absolute Encoder",
-            MidiDeviceType::LatchingFootswitch { .. } => "Latching Footswitch",
-            MidiDeviceType::MomentaryFootswitch { .. } => "Momentary Footswitch",
+            MidiDeviceType::Footswitch { .. } => "Footswitch",
         }
     }
 
     pub fn settings_ui(&mut self, ui: &mut egui::Ui) {
+        ui.style_mut().spacing.slider_width = ui.available_width() * 0.8;
         match self {
             MidiDeviceType::RelativeEncoder { sensitivity, increment_value, decrement_value } => {
                 ui.add(egui::Slider::new(sensitivity, 0.01..=1.0).text("Sensitivity"));
                 ui.add(egui::Slider::new(increment_value, 0..=127).text("Increment Value"));
                 ui.add(egui::Slider::new(decrement_value, 0..=127).text("Decrement Value"));
-            }
+            },
             MidiDeviceType::AbsoluteEncoder { min_value, max_value } => {
                 ui.add(egui::Slider::new(min_value, 0..=127).text("Min Value"));
                 ui.add(egui::Slider::new(max_value, 0..=127).text("Max Value"));
-            }
-            MidiDeviceType::LatchingFootswitch { on_value } => {
+            },
+            MidiDeviceType::Footswitch { on_value, momentary_to_latching } => {
                 ui.add(egui::Slider::new(on_value, 0..=127).text("On Value"));
-            }
-            MidiDeviceType::MomentaryFootswitch { on_value, use_as_latching } => {
-                ui.add(egui::Slider::new(on_value, 0..=127).text("On Value"));
-                ui.checkbox(use_as_latching, "Use as Latching");
+                ui.checkbox(momentary_to_latching, "Momentary -> Latching");
             }
         }
     }

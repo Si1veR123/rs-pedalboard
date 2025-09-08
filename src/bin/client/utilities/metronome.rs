@@ -60,7 +60,7 @@ impl Widget for &mut MetronomeWidget {
                 self.state.set_metronome(active, bpm, volume);
             }
 
-            start_stop_icon(ui, true, button_response.rect, 30.0);
+            start_stop_icon(ui, !active, button_response.rect, 30.0);
 
             ui.add_space(10.0);
         }).response
