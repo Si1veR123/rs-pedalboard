@@ -1,4 +1,4 @@
-use std::{cell::{Cell, RefCell}, time::Instant};
+use std::{cell::{Cell, RefCell}, collections::HashSet, time::Instant};
 use crossbeam::channel::Receiver;
 use rs_pedalboard::{pedalboard::Pedalboard, pedals::{Pedal, PedalParameterValue, PedalTrait}, server_settings::ServerSettingsSave};
 use crate::{midi::{MidiSettings, MidiState}, saved_pedalboards::SavedPedalboards, settings::{ClientSettings, VolumeNormalizationMode}, socket::{ClientSocket, Command, ParameterPath}};
@@ -23,6 +23,23 @@ pub struct State {
 }
 
 impl State {
+    /// Get a set of all pedalboard IDs in the active pedalboard stage and in the pedalboard library
+    /// 
+    /// Requires a lock on active_pedalboardstage and pedalboard_library
+    pub fn all_pedalboard_ids(&self) -> HashSet<u32> {
+        let mut ids = HashSet::new();
+
+        for pedalboard in self.pedalboards.active_pedalboardstage.borrow().pedalboards.iter() {
+            ids.insert(pedalboard.get_id());
+        }
+
+        for pedalboard in self.pedalboards.pedalboard_library.borrow().iter() {
+            ids.insert(pedalboard.get_id());
+        }
+
+        ids
+    }
+
     /// Delete a pedalboard from the active pedalboard stage
     /// 
     /// Requires a lock on active_pedalboardstage and socket

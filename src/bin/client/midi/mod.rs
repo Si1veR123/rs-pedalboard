@@ -1,7 +1,7 @@
 pub mod functions;
 use strum::IntoEnumIterator;
 
-use std::{collections::HashMap, sync::{atomic::AtomicU32, Arc, Mutex}};
+use std::{collections::{HashMap, HashSet}, sync::{atomic::AtomicU32, Arc, Mutex}};
 use midir::{MidiInput, MidiInputConnection, MidiInputPorts};
 use serde::{Serialize, Deserialize, Serializer, Deserializer, ser::SerializeStruct};
 use eframe::egui::{self, Id, Rangef, RichText};
@@ -206,6 +206,16 @@ impl MidiState {
     pub fn refresh_available_ports(&mut self) {
         self.available_input_ports = Self::create_midi_input().ports();
         self.available_input_ports.retain(|p| !self.input_connections.iter().any(|(name, _)| name == &p.id()));
+    }
+
+    pub fn remove_old_parameter_functions(&self, existing_pedalboards: &HashSet<u32>) {
+        let mut settings_lock = self.settings.lock().expect("MidiState: Mutex poisoned.");
+
+        for (_port_name, port_settings) in settings_lock.port_settings.iter_mut() {
+            for (_cc_channel, device) in port_settings.devices.iter_mut() {
+                device.parameter_functions.retain(|function| existing_pedalboards.contains(&function.pedalboard_id));
+            }
+        }
     }
 
     /// This UI contains a list of ports that we can connect to, and a list of connected ports.

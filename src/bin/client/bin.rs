@@ -329,6 +329,9 @@ impl eframe::App for PedalboardClientApp {
     }
 
     fn save(&mut self, _storage: &mut dyn eframe::Storage) {
+        // Remove any MIDI parameter functions that refer to pedalboards that no longer exist
+        self.state.midi_state.borrow_mut().remove_old_parameter_functions(&self.state.all_pedalboard_ids());
+
         log::info!("Saving state");
         if let Err(e) = self.state.save_state() {
             log::error!("Failed to save state: {}", e);
