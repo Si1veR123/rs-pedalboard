@@ -239,6 +239,13 @@ impl SettingsScreen {
     }
 }
 
+const SETTING_ROW_HEIGHT: f32 = 60.0;
+const HEADING_SIZE: f32 = 36.0;
+const BODY_TEXT_SIZE: f32 = 24.0;
+const BUTTON_TEXT_SIZE: f32 = 20.0;
+const BUTTON_EXPANSION: f32 = 2.0;
+const SECTION_SPACE: f32 = 40.0;
+
 impl Widget for &mut SettingsScreen {
     fn ui(self, ui: &mut egui::Ui) -> Response {
         self.handle_server_launch();
@@ -246,12 +253,21 @@ impl Widget for &mut SettingsScreen {
         let mut server_settings = self.state.server_settings.borrow_mut();
         let mut client_settings = self.state.client_settings.borrow_mut();
 
-        ui.add_space(ui.available_height()*0.05);
         ui.allocate_ui_with_layout(ui.available_size(), Layout::left_to_right(egui::Align::Center), |ui| {
             ui.add_space(ui.available_width()*0.05);
-            ui.allocate_ui_with_layout(ui.available_size()*Vec2::new(0.9, 0.95), Layout::top_down(egui::Align::Min), |ui| {
+            ui.allocate_ui_with_layout(ui.available_size()*Vec2::new(0.95, 1.0), Layout::top_down(egui::Align::Min), |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| {
-                    ui.style_mut().spacing.slider_width = ui.available_width()*0.4;
+                    ui.style_mut().text_styles.get_mut(&egui::TextStyle::Heading).unwrap().size = HEADING_SIZE;
+                    ui.style_mut().text_styles.get_mut(&egui::TextStyle::Body).unwrap().size = BODY_TEXT_SIZE;
+                    ui.style_mut().text_styles.get_mut(&egui::TextStyle::Button).unwrap().size = BUTTON_TEXT_SIZE;
+                    ui.style_mut().visuals.widgets.open.expansion = BUTTON_EXPANSION;
+                    ui.style_mut().visuals.widgets.inactive.expansion = BUTTON_EXPANSION;
+                    ui.style_mut().visuals.widgets.hovered.expansion = BUTTON_EXPANSION;
+                    ui.style_mut().visuals.widgets.active.expansion = BUTTON_EXPANSION;
+
+                    ui.style_mut().spacing.slider_width = ui.available_width()*0.45 - 80.0;
+
+                    ui.add_space(SECTION_SPACE);
 
                     ui.label(RichText::new("Server Settings").font(egui::TextStyle::Heading.resolve(ui.style())));
                     ui.separator();
@@ -259,13 +275,13 @@ impl Widget for &mut SettingsScreen {
                     egui::Grid::new("server_settings_grid")
                         .num_columns(2)
                         .min_col_width(ui.available_width()*0.5)
-                        .min_row_height(45.0)
+                        .min_row_height(SETTING_ROW_HEIGHT)
                         .striped(true)
                         .show(ui, |ui| {
                             // Audio Host
                             // Only show if the platform has multiple host options
                             if SupportedHost::iter().count() > 1 {
-                                ui.label("Host");
+                                ui.label("\tHost");
                                 let prev_host = server_settings.host;
                                 egui::ComboBox::new("host_dropdown", "")
                                     .selected_text(server_settings.host.to_string())
@@ -291,7 +307,7 @@ impl Widget for &mut SettingsScreen {
 
                             if show_asio_driver {
                                 // ASIO Driver
-                                ui.label("ASIO Driver");
+                                ui.label("\tASIO Driver");
                                 if egui::ComboBox::from_id_salt("output_device_dropdown")
                                     .wrap_mode(egui::TextWrapMode::Truncate)
                                     .selected_text(server_settings.output_device.clone().unwrap_or_else(|| "None".to_string()))
@@ -306,7 +322,7 @@ impl Widget for &mut SettingsScreen {
                                 ui.end_row();
                             } else {
                                 // Input Devices
-                                ui.label("Input Device");
+                                ui.label("\tInput Device");
                                 if egui::ComboBox::from_id_salt("input_device_dropdown")
                                     .wrap_mode(egui::TextWrapMode::Truncate)
                                     .selected_text(server_settings.input_device.clone().unwrap_or_else(|| "None".to_string()))
@@ -321,7 +337,7 @@ impl Widget for &mut SettingsScreen {
                                 ui.end_row();
 
                                 // Output Devices
-                                ui.label("Output Device");
+                                ui.label("\tOutput Device");
                                 if egui::ComboBox::from_id_salt("output_device_dropdown")
                                     .wrap_mode(egui::TextWrapMode::Truncate)
                                     .selected_text(server_settings.output_device.clone().unwrap_or_else(|| "None".to_string()))
@@ -337,48 +353,43 @@ impl Widget for &mut SettingsScreen {
                             }
 
                             // Buffer Size
-                            let current_buffer_size = server_settings.buffer_size_samples();
-                            ui.label(format!("Buffer Size - {} samples", current_buffer_size));
+                            ui.label("\tBuffer Size");
                             ui.add_sized(
                                 Vec2::new(ui.available_width(), 45.0),
                                 egui::Slider::new(&mut server_settings.buffer_size, 6..=12)
-                                    .show_value(false)
+                                    .custom_formatter(|value, _| format!("{}", 2_u32.pow(value as u32)))
                             );
                             ui.end_row();
 
                             // Latency
-                            ui.label(format!("Latency - {:.2} ms", server_settings.latency));
+                            ui.label("\tLatency");
                             ui.add_sized(
                                 Vec2::new(ui.available_width(), 45.0),
                                 egui::Slider::new(&mut server_settings.latency, 0.0..=25.0)
-                                    .show_value(false)
+                                    .custom_formatter(|value, _| format!("{:.2}ms", value))
                             ).on_hover_text("Internal buffer latency. Increase latency if you experience X Runs (in this app)");
                             ui.end_row();
 
                             // Periods per Buffer (JACK/Linux)
                             if cfg!(target_os = "linux") {
-                                let periods_per_buffer = server_settings.periods_per_buffer;
-                                ui.label(format!("Periods per Buffer - {periods_per_buffer}"));
+                                ui.label("\tPeriods per Buffer");
                                 ui.add_sized(
                                     Vec2::new(ui.available_width(), 45.0),
                                     egui::Slider::new(&mut server_settings.periods_per_buffer, 1..=4)
-                                        .show_value(false)
                                 );
                                 ui.end_row();
                             };
 
                             // Tuner Periods
-                            let tuner_periods = server_settings.tuner_periods;
-                            ui.label(format!("Tuner Periods - {tuner_periods}"));
+                            ui.label("\tTuner Periods");
                             ui.add_sized(
                                 Vec2::new(ui.available_width(), 45.0),
                                 egui::Slider::new(&mut server_settings.tuner_periods, 1..=8)
-                                    .show_value(false)
                             ).on_hover_text("Higher values may improve accuracy but increase computation, and decrease update time.");
                             ui.end_row();
 
                             // Preferred Sample Rate
-                            ui.label(format!("Preferred Sample Rate"));
+                            ui.label("\tPreferred Sample Rate");
                             egui::ComboBox::from_id_salt("preferred_sample_rate_dropdown")
                                 .selected_text(match server_settings.preferred_sample_rate {
                                     Some(rate) => format!("{rate}hz"),
@@ -398,7 +409,7 @@ impl Widget for &mut SettingsScreen {
                             ui.end_row();
                             
                             // Upsample Passes
-                            ui.label("Upsample");
+                            ui.label("\tUpsample");
                             egui::ComboBox::from_id_salt("upsample_dropdown")
                                 .selected_text(match server_settings.upsample_passes {
                                     0 => "None",
@@ -419,7 +430,7 @@ impl Widget for &mut SettingsScreen {
                             ui.end_row()
                         });
                     
-                    ui.add_space(10.0);
+                    ui.add_space(20.0);
                     let button_size = Vec2::new(ui.available_width() * 0.25, 45.0);
 
                     // Connecting requires a lock on client settings so must be done after rendering settings
@@ -445,7 +456,7 @@ impl Widget for &mut SettingsScreen {
                         if ui.add_enabled(
                             self.ready_to_start_server(&server_settings), 
                             egui::Button::new(button_text)
-                                .stroke(egui::Stroke::new(1.0, crate::THEME_COLOUR))
+                                .stroke(egui::Stroke::new(1.0, crate::THEME_COLOR))
                                 .min_size(button_size)
                         ).clicked() {
                             ui.ctx().request_repaint();
@@ -468,7 +479,7 @@ impl Widget for &mut SettingsScreen {
                             ui.add_space(button_horizontal_space*2.0);
                             connect_button = Some(ui.add(
                                 egui::Button::new("Connect")
-                                    .stroke(egui::Stroke::new(1.0, crate::ROW_COLOUR_LIGHT))
+                                    .stroke(egui::Stroke::new(1.0, crate::ROW_COLOR_LIGHT))
                                     .min_size(button_size)
                             ));
                         }
@@ -482,7 +493,8 @@ impl Widget for &mut SettingsScreen {
                         ServerLaunchState::AwaitingKill(_) | ServerLaunchState::AwaitingStart { .. } => { ui.ctx().request_repaint_after(rs_pedalboard::DEFAULT_REFRESH_DURATION); }
                         ServerLaunchState::None => {}
                     }
-                    ui.add_space(20.0);
+
+                    ui.add_space(SECTION_SPACE);
 
                     ui.label(RichText::new("Client Settings").font(egui::TextStyle::Heading.resolve(ui.style())));
                     ui.separator();
@@ -490,7 +502,7 @@ impl Widget for &mut SettingsScreen {
                     egui::Grid::new("client_settings_grid")
                         .num_columns(2)
                         .min_col_width(ui.available_width()*0.5)
-                        .min_row_height(45.0)
+                        .min_row_height(SETTING_ROW_HEIGHT)
                         .striped(true)
                         .show(ui, |ui| {
                             ui.label("Volume Normalization");
@@ -555,7 +567,7 @@ impl Widget for &mut SettingsScreen {
                                 ui.label("Reset Volume Normalization");
 
                                 if ui.add_sized(
-                                    Vec2::new(ui.available_width()*0.5, ui.available_height()*0.75),
+                                    Vec2::new(ui.available_width()*0.9, ui.available_height()*0.75),
                                     egui::Button::new("Reset Peak")
                                 ).on_hover_text("Reset the current peak used to normalize volume.").clicked() {
                                     self.state.reset_volume_normalization_peak();
@@ -563,9 +575,7 @@ impl Widget for &mut SettingsScreen {
                                 ui.end_row();
                             };
 
-                            ui.style_mut().spacing.icon_width = 35.0;
-                            ui.style_mut().spacing.icon_width_inner = 12.0;
-                            ui.style_mut().visuals.widgets.inactive.fg_stroke = egui::Stroke::new(2.0, Color32::from_rgb(200, 200, 200));
+                            set_large_checkbox_style(ui);
 
                             ui.label("Startup Server");
                             ui.checkbox(&mut client_settings.startup_server, "");
@@ -583,10 +593,18 @@ impl Widget for &mut SettingsScreen {
                             ui.end_row();
                         });
 
-                    ui.add_space(20.0);
+                    ui.add_space(SECTION_SPACE);
+
                     ui.heading("Neural Amp Modeler Folders");
                     ui.separator();
-                    if multiple_directories_select_ui(ui, &mut client_settings.nam_folders, "nam_folders", &mut self.nam_file_dialog) {
+                    ui.add_space(20.0);
+                    if multiple_directories_select_ui(
+                        ui,
+                        &mut client_settings.nam_folders,
+                        rs_pedalboard::pedals::Nam::get_save_directory(),
+                        "nam_folders",
+                        &mut self.nam_file_dialog
+                    ) {
                         let nam_root_nodes: Vec<_> = client_settings.nam_folders.iter().map(|p| {
                             egui_directory_combobox::DirectoryNode::from_path(p)
                         }).collect();
@@ -597,11 +615,19 @@ impl Widget for &mut SettingsScreen {
                             writer.data.insert_temp(egui::Id::new("nam_folders"), nam_root_nodes);
                         });
                     }
-                    ui.add_space(20.0);
+
+                    ui.add_space(SECTION_SPACE);
 
                     ui.heading("Impulse Response Folders");
                     ui.separator();
-                    if multiple_directories_select_ui(ui, &mut client_settings.ir_folders, "ir_folders", &mut self.ir_file_dialog) {
+                    ui.add_space(20.0);
+                    if multiple_directories_select_ui(
+                        ui,
+                        &mut client_settings.ir_folders,
+                        rs_pedalboard::pedals::ImpulseResponse::get_save_directory(),
+                        "ir_folders",
+                        &mut self.ir_file_dialog
+                    ) {
                         let ir_root_nodes: Vec<_> = client_settings.ir_folders.iter().map(|p| {
                             egui_directory_combobox::DirectoryNode::from_path(p)
                         }).collect();
@@ -612,11 +638,19 @@ impl Widget for &mut SettingsScreen {
                             writer.data.insert_temp(egui::Id::new("ir_folders"), ir_root_nodes);
                         });
                     }
-                    ui.add_space(20.0);
+
+                    ui.add_space(SECTION_SPACE);
 
                     ui.heading("VST2 Plugin Folders");
                     ui.separator();
-                    if multiple_directories_select_ui(ui, &mut client_settings.vst2_folders, "vst2_folders", &mut self.vst2_file_dialog) {
+                    ui.add_space(20.0);
+                    if multiple_directories_select_ui(
+                        ui,
+                        &mut client_settings.vst2_folders,
+                        Some(PathBuf::from(rs_pedalboard::plugin::vst2::VST2_PLUGIN_PATH)),
+                        "vst2_folders",
+                        &mut self.vst2_file_dialog
+                    ) {
                         let vst2_root_nodes: Vec<_> = client_settings.vst2_folders.iter().map(|p| {
                             egui_directory_combobox::DirectoryNode::from_path(p)
                         }).collect();
@@ -627,7 +661,8 @@ impl Widget for &mut SettingsScreen {
                             writer.data.insert_temp(egui::Id::new("vst2_folders"), vst2_root_nodes);
                         });
                     }
-                    ui.add_space(20.0);
+
+                    ui.add_space(SECTION_SPACE);
 
                     ui.heading("MIDI");
                     ui.separator();
@@ -644,15 +679,20 @@ impl Widget for &mut SettingsScreen {
     }
 }
 
-fn multiple_directories_select_ui(ui: &mut egui::Ui, paths: &mut Vec<PathBuf>, id: &str, file_dialog: &mut egui_file::FileDialog) -> bool {
+fn multiple_directories_select_ui(ui: &mut egui::Ui, paths: &mut Vec<PathBuf>, default_path: Option<PathBuf>, id: &str, file_dialog: &mut egui_file::FileDialog) -> bool {
     let mut changed = false;
     let available_width = ui.available_width();
 
-    if ui.button("Add Directory").clicked() {
+    if ui.add_sized(
+        Vec2::new(available_width*0.3, 45.0),
+        egui::Button::new("Add Directory")
+    ).clicked() {
         file_dialog.open();
     }
 
     file_dialog.show(ui.ctx());
+
+    ui.add_space(10.0);
 
     if file_dialog.selected() {
         if let Some(path) = file_dialog.path() {
@@ -674,29 +714,37 @@ fn multiple_directories_select_ui(ui: &mut egui::Ui, paths: &mut Vec<PathBuf>, i
 
     egui::Grid::new(id)
         .num_columns(2)
+        .min_row_height(SETTING_ROW_HEIGHT)
         .min_col_width(available_width/2.0)
         .striped(true)
         .show(ui, |ui| {
-            if paths.is_empty() {
-                ui.label("No directories selected");
-            } else {
-                let mut to_remove = None;
+            if let Some(default_path) = default_path {
+                ui.label(RichText::new(default_path.to_string_lossy()).color(crate::FAINT_TEXT_COLOR));
+                ui.end_row();
+            }
 
-                for path in paths.iter() {
-                    let file_name = path.file_name().map(|s| s.to_string_lossy()).unwrap_or_else(|| "Invalid Path".into());
-                    ui.label(file_name);
-                    if ui.button("Remove").clicked() {
-                        to_remove = Some(path.clone());
-                        changed = true;
-                    }
-                    ui.end_row();
-                }
+            let mut to_remove = None;
 
-                if let Some(to_remove) = to_remove {
-                    paths.retain(|p| p != &to_remove);
+            for path in paths.iter() {
+                let file_name = path.file_name().map(|s| s.to_string_lossy()).unwrap_or_else(|| "Invalid Path".into());
+                ui.label(file_name);
+                if ui.button("Remove").clicked() {
+                    to_remove = Some(path.clone());
+                    changed = true;
                 }
+                ui.end_row();
+            }
+
+            if let Some(to_remove) = to_remove {
+                paths.retain(|p| p != &to_remove);
             }
         });
     
     changed
+}
+
+pub fn set_large_checkbox_style(ui: &mut egui::Ui) {
+    ui.style_mut().spacing.icon_width = 35.0;
+    ui.style_mut().spacing.icon_width_inner = 12.0;
+    ui.style_mut().visuals.widgets.inactive.fg_stroke = egui::Stroke::new(2.0, Color32::from_rgb(200, 200, 200));
 }

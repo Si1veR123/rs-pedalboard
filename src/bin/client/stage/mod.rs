@@ -68,7 +68,7 @@ impl PedalboardStageScreen {
         system.refresh_cpu_usage();
         system.refresh_memory_specifics(MemoryRefreshKind::nothing().with_ram());
 
-        let volume_monitor = VolumeMonitorWidget::new(crate::THEME_COLOUR);
+        let volume_monitor = VolumeMonitorWidget::new(crate::THEME_COLOR);
 
         Self {
             state,

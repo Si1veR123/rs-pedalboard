@@ -29,7 +29,7 @@ impl Widget for &mut UtilitiesScreen {
         if !self.state.is_connected() {
             return ui.centered_and_justified(|ui| {
                 ui.label(RichText::from("Not connected to server")
-                    .color(Color32::from_gray(130))
+                    .color(crate::FAINT_TEXT_COLOR)
                     .size(50.0)
                 );
             }).response;

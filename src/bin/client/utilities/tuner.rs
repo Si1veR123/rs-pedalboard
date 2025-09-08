@@ -77,7 +77,7 @@ impl Widget for &mut TunerWidget {
             let bg_response = ui.add(bg_im);
             let needle_im = egui::Image::new(egui::include_image!("../files/tuner_needle.png"))
                 .max_height(bar_height-10.0)
-                .tint(crate::BACKGROUND_COLOUR);
+                .tint(crate::BACKGROUND_COLOR);
             let needle_size = match needle_im.load_for_size(ui.ctx(), Vec2::splat(50.0)).expect("Failed to load needle image size").size() {
                 Some(size) => size,
                 None => {

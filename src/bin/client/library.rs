@@ -82,7 +82,7 @@ impl Widget for &mut PedalboardLibraryScreen {
                         [200.0, 40.0],
                         egui::Button::new(
                             RichText::new("New Pedalboard").size(20.0)
-                        ).stroke((0.7, crate::THEME_COLOUR))).clicked()
+                        ).stroke((0.7, crate::THEME_COLOR))).clicked()
                     {
                         let unique_name = self.state.pedalboards.unique_library_pedalboard_name(String::from("New Pedalboard"));
                         self.state.pedalboards.pedalboard_library.borrow_mut().push(Pedalboard::new(unique_name));
@@ -100,7 +100,7 @@ impl Widget for &mut PedalboardLibraryScreen {
 
         let pedalboard_library = self.state.pedalboards.pedalboard_library.borrow();
         if pedalboard_library.is_empty() {
-            ui.add_sized(row_size, egui::Label::new(RichText::new("No Pedalboards Found").size(30.0)))
+            ui.add_sized(row_size, egui::Label::new(RichText::new("No Pedalboards Found").size(30.0).color(crate::FAINT_TEXT_COLOR)))
         } else {
             let mut action = None;
 
@@ -108,9 +108,9 @@ impl Widget for &mut PedalboardLibraryScreen {
                 let response = egui::Grid::new("pedalboard_library_grid")
                     .with_row_color(|index, _style| {
                         if index % 2 == 0 {
-                            Some(crate::ROW_COLOUR_LIGHT)
+                            Some(crate::ROW_COLOR_LIGHT)
                         } else {
-                            Some(crate::ROW_COLOUR_DARK)
+                            Some(crate::ROW_COLOR_DARK)
                         }
                     })
                     .spacing(Vec2::new(10.0, 20.0))
@@ -133,6 +133,7 @@ impl Widget for &mut PedalboardLibraryScreen {
                             self.state.add_pedalboard(pedalboard.clone(), false);
                         },
                         RowAction::Delete => {
+                            drop(pedalboard_library);
                             self.state.pedalboards.delete_pedalboard(pedalboard_id);
                         }
                     }

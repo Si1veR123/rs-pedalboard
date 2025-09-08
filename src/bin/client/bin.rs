@@ -27,16 +27,18 @@ const SERVER_PORT: u16 = 29475;
 const WINDOW_HEIGHT: f32 = 600.0;
 const WINDOW_WIDTH: f32 = 1024.0;
 
-pub const THEME_COLOUR: egui::Color32 = egui::Color32::from_rgb(255, 105, 46);
-pub const ROW_COLOUR_LIGHT: egui::Color32 = egui::Color32::from_gray(28);
-pub const ROW_COLOUR_DARK: egui::Color32 = egui::Color32::from_gray(22);
-pub const TEXT_COLOUR: egui::Color32 = egui::Color32::from_gray(200);
-pub const EXTREME_BACKGROUND_COLOUR: egui::Color32 = egui::Color32::from_gray(2);
-pub const BACKGROUND_COLOUR: egui::Color32 = egui::Color32::from_gray(15);
+pub const THEME_COLOR: egui::Color32 = egui::Color32::from_rgb(255, 105, 46);
+pub const FAINT_THEME_COLOR_ALPHA: f32 = 0.5;
+pub const ROW_COLOR_LIGHT: egui::Color32 = egui::Color32::from_gray(28);
+pub const ROW_COLOR_DARK: egui::Color32 = egui::Color32::from_gray(22);
+pub const TEXT_COLOR: egui::Color32 = egui::Color32::from_gray(200);
+pub const FAINT_TEXT_COLOR: egui::Color32 = egui::Color32::from_gray(130);
+pub const EXTREME_BACKGROUND_COLOR: egui::Color32 = egui::Color32::from_gray(2);
+pub const BACKGROUND_COLOR: egui::Color32 = egui::Color32::from_gray(15);
 pub const LIGHT_BACKGROUND_COLOR: egui::Color32 = egui::Color32::from_gray(22);
-pub const WIDGET_BACKGROUND_COLOUR: egui::Color32 = egui::Color32::from_gray(34);
-pub const WIDGET_HOVER_BACKGROUND_COLOUR: egui::Color32 = egui::Color32::from_gray(40);
-pub const WIDGET_CLICK_BACKGROUND_COLOUR_THEME_ALPHA: f32 = 0.025;
+pub const WIDGET_BACKGROUND_COLOR: egui::Color32 = egui::Color32::from_gray(34);
+pub const WIDGET_HOVER_BACKGROUND_COLOR: egui::Color32 = egui::Color32::from_gray(40);
+pub const WIDGET_CLICK_BACKGROUND_COLOR_THEME_ALPHA: f32 = 0.025;
 // Buttons
 pub const INACTIVE_BG_STROKE_COLOR: egui::Color32 = egui::Color32::from_gray(54);
 
@@ -109,19 +111,21 @@ fn main() {
     eframe::run_native("Pedalboard", native_options, Box::new(
         |cc| {
             cc.egui_ctx.style_mut(|style| {
-                style.visuals.extreme_bg_color = EXTREME_BACKGROUND_COLOUR.into();
-                style.visuals.panel_fill = BACKGROUND_COLOUR.into();
-                style.visuals.override_text_color = Some(TEXT_COLOUR.into());
-                style.visuals.extreme_bg_color = EXTREME_BACKGROUND_COLOUR.into();
-                let widget_click_background_color = THEME_COLOUR.linear_multiply(WIDGET_CLICK_BACKGROUND_COLOUR_THEME_ALPHA);
+                style.visuals.extreme_bg_color = EXTREME_BACKGROUND_COLOR.into();
+                style.visuals.panel_fill = BACKGROUND_COLOR.into();
+                style.visuals.override_text_color = Some(TEXT_COLOR.into());
+                style.visuals.extreme_bg_color = EXTREME_BACKGROUND_COLOR.into();
+                let widget_click_background_color = THEME_COLOR.gamma_multiply(WIDGET_CLICK_BACKGROUND_COLOR_THEME_ALPHA);
                 style.visuals.widgets.active.bg_fill = widget_click_background_color.into();
                 style.visuals.widgets.active.weak_bg_fill = widget_click_background_color.into();
-                style.visuals.widgets.hovered.bg_fill = WIDGET_HOVER_BACKGROUND_COLOUR.into();
-                style.visuals.widgets.hovered.weak_bg_fill = WIDGET_HOVER_BACKGROUND_COLOUR.into();
-                style.visuals.widgets.inactive.bg_fill = WIDGET_BACKGROUND_COLOUR.into();
-                style.visuals.widgets.inactive.weak_bg_fill = WIDGET_BACKGROUND_COLOUR.into();
+                let faint_theme_color = THEME_COLOR.gamma_multiply(FAINT_THEME_COLOR_ALPHA);
+                style.visuals.selection.bg_fill = faint_theme_color;
+                style.visuals.widgets.hovered.bg_fill = WIDGET_HOVER_BACKGROUND_COLOR.into();
+                style.visuals.widgets.hovered.weak_bg_fill = WIDGET_HOVER_BACKGROUND_COLOR.into();
+                style.visuals.widgets.inactive.bg_fill = WIDGET_BACKGROUND_COLOR.into();
+                style.visuals.widgets.inactive.weak_bg_fill = WIDGET_BACKGROUND_COLOR.into();
                 style.visuals.widgets.inactive.bg_stroke = (1.0, INACTIVE_BG_STROKE_COLOR).into();
-                style.visuals.widgets.active.bg_stroke = (1.0, THEME_COLOUR).into();
+                style.visuals.widgets.active.bg_stroke = (1.0, THEME_COLOR).into();
             });
             egui_extras::install_image_loaders(&cc.egui_ctx);
             setup_custom_fonts(&cc.egui_ctx);
@@ -215,7 +219,7 @@ impl eframe::App for PedalboardClientApp {
             .show(&ctx, |ui| {
                 ui.horizontal_centered(|ui| {
                     let mut button_outline = [egui::Stroke::new(0.3, INACTIVE_BG_STROKE_COLOR); 5];
-                    button_outline[self.selected_screen] = egui::Stroke::new(1.0, THEME_COLOUR);
+                    button_outline[self.selected_screen] = egui::Stroke::new(1.0, THEME_COLOR);
                     let mut button_bg = [egui::Color32::from_gray(19); 5];
                     button_bg[self.selected_screen] = egui::Color32::from_gray(33);
 

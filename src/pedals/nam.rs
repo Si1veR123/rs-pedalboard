@@ -30,14 +30,11 @@ impl Clone for Nam {
         let buf_size = self.modeler.get_maximum_buffer_size();
         let new_modeler = NeuralAmpModeler::new_with_maximum_buffer_size(buf_size).expect("Failed to create neural amp modeler");
 
-        let mut new_combobox = Self::get_empty_directory_combo_box(self.id);
-        new_combobox.roots = self.combobox_widget.roots.clone();
-
         let mut new_nam = Nam {
             modeler: new_modeler,
             parameters: self.parameters.clone(),
             dry_buffer: vec![0.0; buf_size],
-            combobox_widget: new_combobox,
+            combobox_widget: self.combobox_widget.clone(),
             folders_state: self.folders_state,
             id: self.id
         };

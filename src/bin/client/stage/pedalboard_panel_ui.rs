@@ -3,7 +3,7 @@ use super::{CurrentAction, PedalboardStageScreen};
 use eframe::egui::{self, Color32, Layout, Rgba, RichText, Vec2};
 use egui_dnd::dnd;
 use rs_pedalboard::pedalboard_set::PedalboardSet;
-use crate::THEME_COLOUR;
+use crate::THEME_COLOR;
 
 // Big ugly function to display the pedalboard stage panel
 // Effectively a method on PedalboardStageScreen
@@ -69,7 +69,7 @@ pub fn pedalboard_stage_panel(screen: &mut PedalboardStageScreen, ui: &mut egui:
                             ui.painter().rect_filled(
                                 ui.available_rect_before_wrap(),
                                 5.0,
-                                Color32::from(THEME_COLOUR.linear_multiply(0.2))
+                                Color32::from(THEME_COLOR.linear_multiply(0.2))
                             );
                         } else if i % 2 == 0 {
                             ui.painter().rect_filled(
@@ -115,6 +115,18 @@ pub fn pedalboard_stage_panel(screen: &mut PedalboardStageScreen, ui: &mut egui:
 
                                     ui.menu_button("...", |ui| {
                                         ui.add_space(5.0);
+
+                                        let in_library = pedalboard_library.iter().any(|library_pedalboard| library_pedalboard.name == pedalboard.name);
+                                        if in_library {
+                                            ui.label(RichText::new("Saved").size(25.0).color(crate::FAINT_TEXT_COLOR));
+                                        } else {
+                                            if ui.add(egui::Button::new(RichText::new("Save To Library").size(25.0))).clicked() {
+                                                screen.current_action = Some(CurrentAction::SaveToLibrary(i));
+                                            }
+                                        }
+                                        ui.add_space(2.0);
+                                        ui.separator();
+                                        ui.add_space(2.0);
                                         if ui.add(egui::Button::new(RichText::new("Remove From Stage").size(25.0))).clicked() {
                                             screen.current_action = Some(CurrentAction::Remove(i));
                                         }
@@ -140,15 +152,6 @@ pub fn pedalboard_stage_panel(screen: &mut PedalboardStageScreen, ui: &mut egui:
                                     });
 
                                     ui.add_space(5.0);
-
-                                    let in_library = pedalboard_library.iter().any(|library_pedalboard| library_pedalboard.name == pedalboard.name);
-                                    if in_library {
-                                        ui.add(egui::Button::new("Saved"));
-                                    } else {
-                                        if ui.add(egui::Button::new("Save")).clicked() {
-                                            screen.current_action = Some(CurrentAction::SaveToLibrary(i));
-                                        }
-                                    }
                                 }
                             )
                         }

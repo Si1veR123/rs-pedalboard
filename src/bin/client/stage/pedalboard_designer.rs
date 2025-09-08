@@ -96,7 +96,7 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
                             |ui| {
                                 ui.add_sized(
                                     [140.0, ui.available_height()],
-                                    egui::Button::new(RichText::new("Add Pedal")).stroke(egui::Stroke::new(1.0, crate::THEME_COLOUR))
+                                    egui::Button::new(RichText::new("Add Pedal")).stroke(egui::Stroke::new(1.0, crate::THEME_COLOR))
                                 )
                             },
                         )

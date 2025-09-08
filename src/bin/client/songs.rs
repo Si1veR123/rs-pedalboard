@@ -94,7 +94,7 @@ impl Widget for &mut SongsScreen {
 
             let mut songs_library = self.state.pedalboards.songs_library.borrow_mut();
             if songs_library.is_empty() {
-                ui.add_sized(row_size, egui::Label::new(RichText::new("No Songs Found").size(30.0)));
+                ui.add_sized(row_size, egui::Label::new(RichText::new("No Songs Found").size(30.0).color(crate::FAINT_TEXT_COLOR)));
             } else {
                 let mut action = None;
 

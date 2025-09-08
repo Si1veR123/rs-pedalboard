@@ -14,7 +14,8 @@ pub const MIDI_SETTINGS_SAVE_NAME: &'static str = "midi_settings.json";
 
 pub struct MidiState {
     settings: Arc<Mutex<MidiSettings>>,
-    input_connections: Vec<(String, MidiInputConnection<String>)>,
+    // Name, Id, Connection
+    input_connections: Vec<(String, String, MidiInputConnection<String>)>,
     available_input_ports: MidiInputPorts,
     ui_thread_sender: Sender<Command>,
     socket_handle: Option<ClientSocketThreadHandle>,
@@ -47,9 +48,9 @@ impl MidiState {
     pub fn connect_to_auto_connect_ports(&mut self) {
         let settings_lock = self.settings.lock().expect("MidiState: Mutex poisoned.");
         let auto_connect_ports: Vec<String> = settings_lock.port_settings.iter()
-            .filter_map(|(port_name, port_settings)| {
+            .filter_map(|(port_id, port_settings)| {
                 if port_settings.auto_connect {
-                    Some(port_name.clone())
+                    Some(port_id.clone())
                 } else {
                     None
                 }
@@ -81,8 +82,8 @@ impl MidiState {
         Some(((message[0] & 0x0F) + 1, message[1], message[2]))
     }
 
-    fn device_settings_mut<'a>(settings: &'a mut MidiSettings, port_name: &str, cc: u8, channel: u8) -> Option<&'a mut MidiDevice> {
-        if let Some(settings) = settings.port_settings.get_mut(port_name) {
+    fn device_settings_mut<'a>(settings: &'a mut MidiSettings, port_id: &str, cc: u8, channel: u8) -> Option<&'a mut MidiDevice> {
+        if let Some(settings) = settings.port_settings.get_mut(port_id) {
             Some(settings.devices.entry((cc, channel)).or_insert_with(|| MidiDevice {
                 name: "New Device".to_string(),
                 device_type: MidiDeviceType::AbsoluteEncoder { min_value: 0, max_value: 127 },
@@ -98,7 +99,7 @@ impl MidiState {
 
     fn handle_midi_message(
         settings: &Arc<Mutex<MidiSettings>>,
-        port_name: &str,
+        port_id: &str,
         message: &[u8],
         ui_thread_sender: &Sender<Command>,
         socket_handle: Option<&ClientSocketThreadHandle>,
@@ -110,11 +111,11 @@ impl MidiState {
             None => return
         };
 
-        log::debug!("Received MIDI CC message on port '{}': channel {}, cc {}, value {}", port_name, channel, cc, value);
+        log::debug!("Received MIDI CC message on port ID '{}': channel {}, cc {}, value {}", port_id, channel, cc, value);
 
         let mut settings_lock = settings.lock().expect("MidiState: Mutex poisoned.");
 
-        if let Some(device) = Self::device_settings_mut(&mut settings_lock, port_name, cc, channel) {
+        if let Some(device) = Self::device_settings_mut(&mut settings_lock, port_id, cc, channel) {
             let old_value = device.current_value;
             device.update_with_midi_value(value);
             egui_ctx.request_repaint();
@@ -153,8 +154,9 @@ impl MidiState {
 
     pub fn connect_to_port(&mut self, id: &str) {
         if let Some(port) = self.available_input_ports.iter().find(|p| p.id() == id) {
-            if !self.input_connections.iter().any(|(name, _c) | name == id) {
+            if !self.input_connections.iter().any(|(_name, conn_id, _c) | conn_id == id) {
                 let midi_input = Self::create_midi_input();
+                let port_name = midi_input.port_name(port).unwrap_or_else(|_e| id.to_string());
                 let settings_clone = self.settings.clone();
                 let ui_thread_sender_clone = self.ui_thread_sender.clone();
                 let socket_thread_handle_clone = self.socket_handle.clone();
@@ -177,7 +179,11 @@ impl MidiState {
                     id.to_string()
                 ) {
                     Ok(connection) => {
-                        self.input_connections.push((id.to_string(), connection));
+                        self.input_connections.push((
+                            port_name,
+                            id.to_string(),
+                            connection
+                        ));
                         log::info!("Connected to MIDI port: {}", id);
                         self.available_input_ports.retain(|p| p.id() != id);
                         self.settings.lock().expect("MidiState: Mutex poisoned.").port_settings.entry(id.to_string()).or_default();
@@ -199,13 +205,13 @@ impl MidiState {
     }
 
     pub fn disconnect_from_port(&mut self, id: &str) {
-        self.input_connections.retain(|(name, _)| name != id);
+        self.input_connections.retain(|(_name, conn_id, _)| conn_id != id);
         self.refresh_available_ports();
     }
 
     pub fn refresh_available_ports(&mut self) {
         self.available_input_ports = Self::create_midi_input().ports();
-        self.available_input_ports.retain(|p| !self.input_connections.iter().any(|(name, _)| name == &p.id()));
+        self.available_input_ports.retain(|p| !self.input_connections.iter().any(|(_name, conn_id, _)| conn_id == &p.id()));
     }
 
     pub fn remove_old_parameter_functions(&self, existing_pedalboards: &HashSet<u32>) {
@@ -221,38 +227,50 @@ impl MidiState {
     /// This UI contains a list of ports that we can connect to, and a list of connected ports.
     /// Connected ports have a list of devices from MidiSettings, that can be removed, edited, etc.
     pub fn midi_port_device_settings_ui(&mut self, ui: &mut egui::Ui) {
-        let row_height = 40.0;
-        ui.label("Available MIDI Ports:");
-        ui.separator();
-        ui.button("Refresh").on_hover_text("Refresh available MIDI ports").clicked().then(|| self.refresh_available_ports());
+        let row_height = 60.0;
+        
+        ui.add_space(10.0);
         egui::Grid::new("midi_ports_grid")
             .striped(true)
             .min_row_height(row_height)
+            .min_col_width(ui.available_width()/2.0)
             .num_columns(2)
             .show(ui, |ui| {
-                let mut connect = None;
-                for port in &self.available_input_ports {
-                    let port_name = port.id();
-                    ui.label(&port_name);
-                    if ui.button("Connect").clicked() {
-                        connect = Some(port_name);
-                    }
+                ui.label("Available MIDI Ports:");
+                ui.button("Refresh").on_hover_text("Refresh available MIDI ports").clicked().then(|| self.refresh_available_ports());
+                ui.end_row();
+
+                if self.available_input_ports.is_empty() {
+                    ui.label("No available MIDI input ports found");
                     ui.end_row();
-                }
-                if let Some(port_name) = connect {
-                    self.connect_to_port(&port_name);
+                } else {
+                    let mut connect = None;
+
+                    for port in &self.available_input_ports {
+                        let port_id = port.id();
+                        ui.label(&port_id);
+                        if ui.button("Connect").clicked() {
+                            connect = Some(port_id);
+                        }
+                        ui.end_row();
+                    }
+
+                    if let Some(port_id) = connect {
+                        self.connect_to_port(&port_id);
+                    }
                 }
             });
 
+        ui.add_space(40.0);
+
         ui.label("Connected MIDI Ports:");
-        ui.separator();
 
         let mut settings_lock = self.settings.lock().expect("MidiState: Mutex poisoned.");
         
         let row_count = {
             let mut row_count = self.input_connections.len();
-            for (port_name, _connection) in &self.input_connections {
-                if let Some(settings) = settings_lock.port_settings.get(port_name) {
+            for (_port_name, port_id, _connection) in &self.input_connections {
+                if let Some(settings) = settings_lock.port_settings.get(port_id) {
                     row_count += settings.devices.len();
                 }
             }
@@ -264,31 +282,31 @@ impl MidiState {
         StripBuilder::new(ui)
             .sizes(Size::Absolute { initial: row_height, range: Rangef::new(0.0, row_height) }, row_count)
             .vertical(|mut strip| {
-                for (port_name, _connection) in &mut self.input_connections {
+                for (port_name, port_id, _connection) in &self.input_connections {
                     // Port summary
                     strip.cell(|ui| {
                         ui.painter().rect_filled(ui.available_rect_before_wrap(), 5.0, crate::LIGHT_BACKGROUND_COLOR);
                         let width = ui.available_width();
                         StripBuilder::new(ui)
-                            .size(Size::Absolute { initial: width*0.7, range: Rangef::new(0.0, width*0.35) })
-                            .size(Size::Absolute { initial: width*0.15, range: Rangef::new(0.0, width*0.15) })
-                            .size(Size::Absolute { initial: width*0.15, range: Rangef::new(0.0, width*0.15) })
+                            .size(Size::Absolute { initial: width*0.5, range: Rangef::new(0.0, width*0.5) }) // Port name
+                            .size(Size::Absolute { initial: width*0.25, range: Rangef::new(0.0, width*0.25) }) // Disconnect
+                            .size(Size::Absolute { initial: width*0.25, range: Rangef::new(0.0, width*0.25) }) // Auto-connect
                             .horizontal(|mut strip| {
                                 strip.cell(|ui| { ui.horizontal_centered(|ui| ui.label(port_name.as_str())); });
                                 strip.cell(|ui| {
                                     if ui.horizontal_centered(|ui| ui.button("Disconnect")).inner.clicked() {
-                                        disconnect = Some(port_name.clone());
+                                        disconnect = Some(port_id.clone());
                                     }
                                 });
                                 strip.cell(|ui| {
-                                    let port_settings = settings_lock.port_settings.get_mut(port_name).expect("Any connected port should have an entry in port settings.");
-                                    ui.horizontal_centered(|ui| ui.checkbox(&mut port_settings.auto_connect, "Auto-Connect"));
+                                    let port_settings = settings_lock.port_settings.get_mut(port_id).expect("Any connected port should have an entry in port settings.");
+                                    ui.horizontal_centered(|ui| ui.toggle_value(&mut port_settings.auto_connect, "Auto-Connect"));
                                 });
                             });
                     });
 
                     // Device rows for this port
-                    if let Some(device_settings) = settings_lock.port_settings.get_mut(port_name) {
+                    if let Some(device_settings) = settings_lock.port_settings.get_mut(port_id) {
                         let mut forget: Option<(u8, u8)> = None;
 
                         for (i, ((cc, channel), device)) in device_settings.devices.iter_mut().enumerate() {
@@ -301,20 +319,22 @@ impl MidiState {
                                     ui.painter().rect_filled(rect, 5.0, crate::LIGHT_BACKGROUND_COLOR.gamma_multiply(0.6));
                                 }
                                 StripBuilder::new(ui)
-                                    .sizes(Size::Absolute { initial: row_height/2.0, range: Rangef::new(0.0, row_height/2.0) }, 2)
+                                    .size(Size::Absolute { initial: row_height, range: Rangef::new(0.0, row_height) }) // Device name etc.
+                                    .size(Size::Absolute { initial: 40.0, range: Rangef::new(0.0, 40.0) }) // Device settings collapsing header
                                     .vertical(|mut strip| {
                                         strip.strip(|builder| {
-                                            builder.size(Size::Absolute { initial: rect.width()*0.35, range: Rangef::new(0.0, rect.width()*0.35) })
-                                                .sizes(Size::Absolute { initial: rect.width()*0.08, range: Rangef::new(0.0, rect.width()*0.08) }, 2)
+                                            builder
+                                                .size(Size::Absolute { initial: rect.width()*0.75, range: Rangef::new(0.0, rect.width()*0.75) })
                                                 .size(Size::Absolute { initial: rect.width()*0.25, range: Rangef::new(0.0, rect.width()*0.25) })
-                                                .size(Size::Absolute { initial: rect.width()*0.08, range: Rangef::new(0.0, rect.width()*0.08) })
-                                                .size(Size::Absolute { initial: rect.width()*0.16, range: Rangef::new(0.0, rect.width()*0.16) })
+
                                                 .horizontal(|mut strip| {
-                                                    strip.cell(|ui| {ui.horizontal_centered(|ui| ui.label(&device.name)); });
-                                                    strip.cell(|ui| {ui.horizontal_centered(|ui| ui.label(format!("CC {}", cc))); });
-                                                    strip.cell(|ui| {ui.horizontal_centered(|ui| ui.label(format!("Ch {}", channel))); });
-                                                    strip.cell(|ui| {ui.horizontal_centered(|ui| ui.label(device.device_type.get_name())); });
-                                                    strip.cell(|ui| {ui.horizontal_centered(|ui| ui.label(device.display_value_string())); });
+                                                    strip.cell(|ui| {
+                                                        ui.horizontal_centered(|ui| ui.label(
+                                                            RichText::new(
+                                                                format!("{} - CC {cc} Ch {channel}", &device.name)
+                                                            ).color(crate::FAINT_TEXT_COLOR)
+                                                        ));
+                                                    });
                                                     strip.cell(|ui| {
                                                         ui.horizontal_centered(|ui| {
                                                             if ui.button("Forget").clicked() {
@@ -327,84 +347,110 @@ impl MidiState {
 
                                         // Full-width row for collapsible details/settings
                                         strip.cell(|ui| {
-                                            ui.push_id((port_name.as_str(), cc, channel), |ui| {
-                                                ui.collapsing("Settings", |ui| {
-                                                    ui.horizontal(|ui| {
-                                                        ui.label("Rename:");
-                                                        ui.text_edit_singleline(&mut device.name);
-                                                    });
+                                            ui.push_id((port_id.as_str(), cc, channel), |ui| {
+                                                ui.vertical_centered(|ui| {
+                                                    egui::CollapsingHeader::new("Device Settings")
+                                                    .id_salt(egui::Id::new("midi_device_settings").with(i))
+                                                    .show(ui, |ui| {
+                                                        ui.add_space(5.0);
 
-                                                    egui::ComboBox::from_label("Device Type")
-                                                        .selected_text(device.device_type.get_name())
-                                                        .show_ui(ui, |ui| {
-                                                            if ui
-                                                                .selectable_label(
-                                                                    matches!(device.device_type, MidiDeviceType::RelativeEncoder { .. }),
-                                                                    "Relative Encoder",
-                                                                )
-                                                                .clicked()
-                                                            {
-                                                                device.device_type = MidiDeviceType::RelativeEncoder {
-                                                                    sensitivity: 0.1,
-                                                                    increment_value: 0,
-                                                                    decrement_value: 127,
-                                                                };
-                                                            }
-                                                            if ui
-                                                                .selectable_label(
-                                                                    matches!(device.device_type, MidiDeviceType::AbsoluteEncoder { .. }),
-                                                                    "Absolute Encoder",
-                                                                )
-                                                                .clicked()
-                                                            {
-                                                                device.device_type = MidiDeviceType::AbsoluteEncoder {
-                                                                    min_value: 0,
-                                                                    max_value: 127,
-                                                                };
-                                                            }
-                                                            if ui
-                                                                .selectable_label(
-                                                                    matches!(device.device_type, MidiDeviceType::Footswitch { .. }),
-                                                                    "Footswitch",
-                                                                )
-                                                                .clicked()
-                                                            {
-                                                                device.device_type = MidiDeviceType::Footswitch {
-                                                                    on_value: 127,
-                                                                    momentary_to_latching: false
-                                                                };
-                                                            }
-                                                        });
+                                                        egui::Grid::new(egui::Id::new("midi_device_settings_grid").with(i))
+                                                            .num_columns(2)
+                                                            .min_col_width(ui.available_width()/2.0)
+                                                            .min_row_height(40.0)
+                                                            .show(ui, |ui| {
+                                                                ui.label("Current Value:");
+                                                                ui.label(device.display_value_string());
+                                                                ui.end_row();
 
-                                                    device.device_type.settings_ui(ui);
+                                                                ui.label("Rename:");
+                                                                ui.text_edit_singleline(&mut device.name);
+                                                                ui.end_row();
 
-                                                    ui.separator();
-                                                    ui.checkbox(&mut device.use_global, "Use Global Functions")
-                                                        .on_hover_text("If enabled, the global functions will be used. If disabled, the parameter functions will be used.");
-
-                                                    if device.use_global {
-                                                        egui::ComboBox::from_id_salt(&device.name)
-                                                            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
-                                                            .selected_text(format!("{} functions", device.global_functions.len()))
-                                                            .show_ui(ui, |ui| {
-                                                                let selected_color = ui.visuals().selection.bg_fill;
-
-                                                                for global_function in GlobalMidiFunction::iter() {
-                                                                    let is_active = device.global_functions.contains(&global_function);
-                                                                    let bg_color = if is_active { selected_color } else { ui.visuals().widgets.inactive.bg_fill };
-                                                                    if ui.selectable_label(
-                                                                        is_active,
-                                                                        RichText::new(format!("{:?}", global_function)).background_color(bg_color)
-                                                                    ).clicked() {
-                                                                        if is_active {
-                                                                            device.global_functions.retain(|f| f != &global_function);
-                                                                        } else {
-                                                                            device.global_functions.push(global_function.clone());
+                                                                ui.label("Device Type:");
+                                                                egui::ComboBox::from_id_salt(egui::Id::new("midi_device_type").with(i))
+                                                                    .selected_text(device.device_type.get_name())
+                                                                    .show_ui(ui, |ui| {
+                                                                        if ui
+                                                                            .selectable_label(
+                                                                                matches!(device.device_type, MidiDeviceType::RelativeEncoder { .. }),
+                                                                                "Relative Encoder",
+                                                                            )
+                                                                            .clicked()
+                                                                        {
+                                                                            device.device_type = MidiDeviceType::RelativeEncoder {
+                                                                                sensitivity: 0.1,
+                                                                                increment_value: 0,
+                                                                                decrement_value: 127,
+                                                                            };
                                                                         }
-                                                                    };
+                                                                        if ui
+                                                                            .selectable_label(
+                                                                                matches!(device.device_type, MidiDeviceType::AbsoluteEncoder { .. }),
+                                                                                "Absolute Encoder",
+                                                                            )
+                                                                            .clicked()
+                                                                        {
+                                                                            device.device_type = MidiDeviceType::AbsoluteEncoder {
+                                                                                min_value: 0,
+                                                                                max_value: 127,
+                                                                            };
+                                                                        }
+                                                                        if ui
+                                                                            .selectable_label(
+                                                                                matches!(device.device_type, MidiDeviceType::Footswitch { .. }),
+                                                                                "Footswitch",
+                                                                            )
+                                                                            .clicked()
+                                                                        {
+                                                                            device.device_type = MidiDeviceType::Footswitch {
+                                                                                on_value: 127,
+                                                                                momentary_to_latching: false
+                                                                            };
+                                                                        }
+                                                                    });
+                                                                ui.end_row();
+
+                                                                device.device_type.settings_ui(ui);
+
+                                                                ui.label("Use Global Functions:");
+
+                                                                ui.scope(|ui| {
+                                                                    crate::settings::set_large_checkbox_style(ui);
+                                                                    ui.checkbox(&mut device.use_global, "")
+                                                                        .on_hover_text("If enabled, the global functions will be used. If disabled, the parameter functions will be used.");
+                                                                });
+                                                                ui.end_row();
+
+                                                                if device.use_global {
+                                                                    ui.label("");
+                                                                    egui::ComboBox::from_id_salt(&device.name)
+                                                                        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+                                                                        .selected_text(format!("{} functions", device.global_functions.len()))
+                                                                        .show_ui(ui, |ui| {
+                                                                            let selected_color = ui.visuals().selection.bg_fill;
+
+                                                                            for global_function in GlobalMidiFunction::iter() {
+                                                                                let is_active = device.global_functions.contains(&global_function);
+                                                                                let bg_color = if is_active { selected_color } else { ui.visuals().widgets.inactive.bg_fill };
+                                                                                if ui.selectable_label(
+                                                                                    is_active,
+                                                                                    RichText::new(format!("{:?}", global_function)).background_color(bg_color)
+                                                                                ).clicked() {
+                                                                                    if is_active {
+                                                                                        device.global_functions.retain(|f| f != &global_function);
+                                                                                    } else {
+                                                                                        device.global_functions.push(global_function.clone());
+                                                                                    }
+                                                                                };
+                                                                            }
+                                                                        });
+                                                                    ui.end_row();
                                                                 }
-                                                            });
-                                                    }
+                                                            }
+                                                        );
+                                                        ui.add_space(5.0);
+                                                    });
                                                 });
                                             });
                                         });
@@ -424,22 +470,32 @@ impl MidiState {
             });
         drop(settings_lock);
         
-        if let Some(port_name) = disconnect {
-            self.disconnect_from_port(&port_name);
+        if let Some(port_id) = disconnect {
+            self.disconnect_from_port(&port_id);
         }
     }
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct MidiSettings {
+    // Port ID, Settings
     pub port_settings: HashMap<String, MidiPortSettings>
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct MidiPortSettings {
     // (cc, channel)
     pub devices: HashMap<(u8, u8), MidiDevice>,
     pub auto_connect: bool,
+}
+
+impl Default for MidiPortSettings {
+    fn default() -> Self {
+        MidiPortSettings {
+            devices: HashMap::new(),
+            auto_connect: true,
+        }
+    }
 }
 
 impl Serialize for MidiPortSettings {
@@ -645,21 +701,39 @@ impl MidiDeviceType {
         }
     }
 
+    /// UI is built for an egui Grid with 2 columns.
     pub fn settings_ui(&mut self, ui: &mut egui::Ui) {
         ui.style_mut().spacing.slider_width = ui.available_width() * 0.8;
         match self {
             MidiDeviceType::RelativeEncoder { sensitivity, increment_value, decrement_value } => {
-                ui.add(egui::Slider::new(sensitivity, 0.01..=1.0).text("Sensitivity"));
-                ui.add(egui::Slider::new(increment_value, 0..=127).text("Increment Value"));
-                ui.add(egui::Slider::new(decrement_value, 0..=127).text("Decrement Value"));
+                ui.label("Sensitivity:");
+                ui.add(egui::Slider::new(sensitivity, 0.01..=1.0));
+                ui.end_row();
+                ui.label("Increment Value:");
+                ui.add(egui::Slider::new(increment_value, 0..=127));
+                ui.end_row();
+                ui.label("Decrement Value:");
+                ui.add(egui::Slider::new(decrement_value, 0..=127));
+                ui.end_row();
             },
             MidiDeviceType::AbsoluteEncoder { min_value, max_value } => {
-                ui.add(egui::Slider::new(min_value, 0..=127).text("Min Value"));
-                ui.add(egui::Slider::new(max_value, 0..=127).text("Max Value"));
+                ui.label("Min Value:");
+                ui.add(egui::Slider::new(min_value, 0..=127));
+                ui.end_row();
+                ui.label("Max Value:");
+                ui.add(egui::Slider::new(max_value, 0..=127));
+                ui.end_row();
             },
             MidiDeviceType::Footswitch { on_value, momentary_to_latching } => {
-                ui.add(egui::Slider::new(on_value, 0..=127).text("On Value"));
-                ui.checkbox(momentary_to_latching, "Momentary -> Latching");
+                ui.label("On Value:");
+                ui.add(egui::Slider::new(on_value, 0..=127));
+                ui.end_row();
+                ui.label("Convert Momentary To Latching:");
+                ui.scope(|ui| {
+                    crate::settings::set_large_checkbox_style(ui);
+                    ui.checkbox(momentary_to_latching, "")
+                });
+                ui.end_row();
             }
         }
     }

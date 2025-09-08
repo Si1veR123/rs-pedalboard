@@ -410,6 +410,7 @@ impl State {
         let client_settings = ClientSettings::load_or_default();
 
         // Set NAM folders, IR folders and VST2 in ctx memory so pedals can access
+        log::info!("Indexing NAM, IR and VST2 folders...");
         let nam_root_nodes: Vec<_> = client_settings.nam_folders.iter().map(|p| {
             egui_directory_combobox::DirectoryNode::from_path(p)
         }).collect();

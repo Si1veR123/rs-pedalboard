@@ -248,6 +248,7 @@ pub fn new_client_socket_thread(port: u16, subscribe_to_responses: bool) -> std:
             let stream = match TcpStream::connect((Ipv4Addr::LOCALHOST, port)).await {
                 Ok(s) => s,
                 Err(e) => {
+                    log::warn!("Failed to connect to server: {}", e);
                     let _ = connected_status_oneshot_sender.send(Err(e));
                     return;
                 }
