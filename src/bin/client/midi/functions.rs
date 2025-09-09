@@ -2,7 +2,7 @@ use rs_pedalboard::pedals::PedalParameterValue;
 use serde::{Serialize, Deserialize};
 use strum_macros::EnumIter;
 
-use crate::socket::{Command, ParameterPath};
+use crate::socket::Command;
 
 #[derive(Debug, Clone, Serialize, Deserialize, EnumIter, PartialEq)]
 pub enum GlobalMidiFunction {
@@ -41,17 +41,14 @@ impl GlobalMidiFunction {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ParameterMidiFunction {
-    pub pedalboard_id: u32,
-    pub pedal_id: u32,
-    pub parameter_name: String,
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ParameterMidiFunctionValues {
     pub min_value: PedalParameterValue,
     pub max_value: PedalParameterValue
 }
 
-impl ParameterMidiFunction {
-    fn parameter_from_value(&self, value: f32) -> PedalParameterValue {
+impl ParameterMidiFunctionValues {
+    pub fn parameter_from_value(&self, value: f32) -> PedalParameterValue {
         match self.min_value {
             PedalParameterValue::Float(min) => {
                 let max = self.max_value.as_float().unwrap_or(min);
@@ -67,13 +64,5 @@ impl ParameterMidiFunction {
                 if value >= 0.5 { self.max_value.clone() } else { self.min_value.clone() }
             }
         }
-    }
-
-    pub fn command_from_value(&self, value: f32) -> Command {
-        Command::ParameterUpdate(ParameterPath {
-            pedalboard_id: self.pedalboard_id,
-            pedal_id: self.pedal_id,
-            parameter_name: self.parameter_name.clone()
-        }, self.parameter_from_value(value))
     }
 }

@@ -219,9 +219,9 @@ impl Vst2 {
 
     /// Update the pedal's parameters to the parameters of the current plugin instance
     pub fn sync_instance_to_parameters(&mut self) {
+        self.parameters.retain(|k, _| k == "Dry/Wet" || k == "Active");
+        
         if let Some(instance) = self.instance.as_mut() {
-            self.parameters.retain(|k, _| k == "Dry/Wet" || k == "Active");
-
             match instance.dll_path().to_str() {
                 Some(path) => {
                     self.parameters.insert(
@@ -267,7 +267,6 @@ impl Vst2 {
                 self.param_index_map.insert(name, i);
             }
         } else {
-            self.parameters.retain(|k, _| k == "Dry/Wet");
             self.parameters.insert(
                 "Plugin".to_string(),
                 PedalParameter {

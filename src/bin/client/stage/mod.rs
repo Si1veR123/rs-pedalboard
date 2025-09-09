@@ -1,5 +1,5 @@
 mod pedalboard_panel_ui;
-use std::time::{Duration, Instant};
+use std::{collections::HashMap, time::{Duration, Instant}};
 
 use pedalboard_panel_ui::pedalboard_stage_panel;
 
@@ -56,7 +56,8 @@ pub struct PedalboardStageScreen {
     command_buffer: Vec<String>,
     xrun_state: XRunState,
     clipping_state: ClippingState,
-    volume_monitors: (VolumeMonitorWidget, VolumeMonitorWidget)
+    volume_monitors: (VolumeMonitorWidget, VolumeMonitorWidget),
+    cached_midi_devices: HashMap<u32, String> // id to name
 }
 
 impl PedalboardStageScreen {
@@ -70,6 +71,8 @@ impl PedalboardStageScreen {
 
         let volume_monitor = VolumeMonitorWidget::new(crate::THEME_COLOR);
 
+        let cached_midi_device_names = state.midi_state.borrow().get_all_parameter_devices();
+
         Self {
             state,
             show_pedal_menu: false,
@@ -80,8 +83,21 @@ impl PedalboardStageScreen {
             command_buffer: Vec::new(),
             xrun_state: XRunState::None,
             clipping_state: ClippingState::None,
-            volume_monitors: (volume_monitor.clone(), volume_monitor)
+            volume_monitors: (volume_monitor.clone(), volume_monitor),
+            cached_midi_devices: cached_midi_device_names
         }
+    }
+
+    pub fn check_cached_midi_devices_invalid(ctx: &egui::Context) -> bool {
+        ctx.data_mut(|d| {
+            let invalid = d.get_temp_mut_or(egui::Id::new("midi_device_cache_invalid"), false);
+            if *invalid {
+                *invalid = false;
+                true
+            } else {
+                false
+            }
+        })
     }
 
     pub fn update_xrun_from_commands(&mut self) {

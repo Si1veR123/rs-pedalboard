@@ -48,7 +48,7 @@ mod ui;
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PedalParameter {
     pub value: PedalParameterValue,
-    // min and max are used for floats and selections
+    // min and max are used for floats and ints
     #[serde(skip_serializing_if = "Option::is_none")]
     pub min: Option<PedalParameterValue>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -120,6 +120,62 @@ impl PedalParameter {
         } else {
             panic!("PedalParameter::float_to_int called on non-float parameter");
         }
+    }
+
+    pub fn parameter_editor_ui(&self, ui: &mut egui::Ui, width: f32) -> egui::InnerResponse<Option<PedalParameterValue>> {
+        let mut to_change = None;
+
+        let response = match self.value {
+            PedalParameterValue::Float(mut f) => {
+                let init_value = f;
+                let min = self.min.clone().unwrap().as_float().unwrap_or(0.0);
+                let max = self.max.clone().unwrap().as_float().unwrap_or(1.0);
+                let response = ui.add(egui::Slider::new(&mut f, min..=max).max_decimals(2));
+                f = f.clamp(min, max);
+                if f != init_value {
+                    to_change = Some(PedalParameterValue::Float(f));
+                }
+                response
+            }
+            PedalParameterValue::Bool(mut b) => {
+                let init_value = b;
+                let response = ui.checkbox(&mut b, "");
+                if b != init_value {
+                    to_change = Some(PedalParameterValue::Bool(b));
+                }
+                response
+            }
+            PedalParameterValue::Int(mut i) => {
+                let init_value = i;
+                let min = self.min.clone().unwrap().as_int().unwrap_or(0);
+                let max = self.max.clone().unwrap().as_int().unwrap_or(100);
+                let response = ui.add(egui::Slider::new(&mut i, min..=max));
+
+                if i != init_value {
+                    to_change = Some(PedalParameterValue::Int(i));
+                }
+
+                response
+            }
+            PedalParameterValue::Oscillator(_) => {
+                let inner_response = ui::oscillator_selection_window(ui, &self, width, false);
+                if let Some(oscillator) = inner_response.inner {
+                    to_change = Some(PedalParameterValue::Oscillator(oscillator));
+                }
+                inner_response.response
+            }
+
+            PedalParameterValue::String(_) => {
+                let mut text = self.value.as_str().unwrap().to_string();
+                let response = ui.text_edit_singleline(&mut text);
+                if response.changed() {
+                    to_change = Some(PedalParameterValue::String(text));
+                };
+                response
+            }
+        };
+
+        egui::InnerResponse::new(to_change, response)
     }
 }
 

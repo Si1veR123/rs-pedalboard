@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use futures::{pin_mut, select, FutureExt};
 use ringbuf::traits::{Consumer, Split};
+use serde::{Deserialize, Serialize};
 use smol::channel::{Receiver, Sender, TryRecvError};
 use smol::io::{AsyncWriteExt, AsyncWrite};
 use smol::net::{TcpStream, Ipv4Addr};
@@ -14,7 +15,7 @@ use crate::settings::VolumeNormalizationMode;
 pub const RESPONSE_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Can uniquely identify a parameter.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ParameterPath {
     pub pedalboard_id: u32,
     pub pedal_id: u32,

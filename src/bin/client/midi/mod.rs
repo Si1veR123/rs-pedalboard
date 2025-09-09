@@ -1,14 +1,15 @@
 pub mod functions;
+use rs_pedalboard::unique_time_id;
 use strum::IntoEnumIterator;
 
 use std::{collections::{HashMap, HashSet}, sync::{atomic::AtomicU32, Arc, Mutex}};
-use midir::{MidiInput, MidiInputConnection, MidiInputPorts};
+use midir::{MidiInput, MidiInputConnection, MidiInputPort};
 use serde::{Serialize, Deserialize, Serializer, Deserializer, ser::SerializeStruct};
 use eframe::egui::{self, Id, Rangef, RichText};
 use egui_extras::{Size, StripBuilder};
 use crossbeam::channel::Sender;
 
-use crate::{midi::functions::{GlobalMidiFunction, ParameterMidiFunction}, socket::{ClientSocketThreadHandle, Command}, SAVE_DIR};
+use crate::{midi::{functions::{GlobalMidiFunction, ParameterMidiFunctionValues}}, socket::{ClientSocketThreadHandle, Command, ParameterPath}, SAVE_DIR};
 
 pub const MIDI_SETTINGS_SAVE_NAME: &'static str = "midi_settings.json";
 
@@ -16,7 +17,7 @@ pub struct MidiState {
     settings: Arc<Mutex<MidiSettings>>,
     // Name, Id, Connection
     input_connections: Vec<(String, String, MidiInputConnection<String>)>,
-    available_input_ports: MidiInputPorts,
+    available_input_ports: Vec<(String, MidiInputPort)>, // (name, port)
     ui_thread_sender: Sender<Command>,
     socket_handle: Option<ClientSocketThreadHandle>,
     pub active_pedalboard_id: Arc<AtomicU32>,
@@ -32,17 +33,34 @@ impl MidiState {
         socket_handle: Option<ClientSocketThreadHandle>,
         active_pedalboard_id: u32
     ) -> Self {
-        let available_input_ports = Self::create_midi_input().ports();
+        let available_named_input_ports = Self::resolve_port_names(Self::create_midi_input());
 
         Self {
             settings: Arc::new(Mutex::new(settings)),
-            available_input_ports,
+            available_input_ports: available_named_input_ports,
             input_connections: Vec::new(),
             socket_handle,
             egui_ctx,
             active_pedalboard_id: Arc::new(AtomicU32::new(active_pedalboard_id)),
             ui_thread_sender
         }
+    }
+
+    pub fn get_all_parameter_devices(&self) -> HashMap<u32, String> {
+        let settings_lock = self.settings.lock().expect("MidiState: Mutex poisoned.");
+        let mut device_names = HashMap::new();
+        for (_port_id, port_settings) in settings_lock.port_settings.iter() {
+            for ((_cc, _channel), device) in port_settings.devices.iter() {
+                if !device.use_global {
+                    device_names.insert(device.id, device.name.clone());
+                }
+            }
+        }
+        device_names
+    }
+
+    pub fn invalidate_device_name_cache(ctx: &egui::Context) {
+        ctx.data_mut(|d| { d.insert_temp(egui::Id::new("midi_device_cache_invalid"), true); });
     }
 
     pub fn connect_to_auto_connect_ports(&mut self) {
@@ -82,15 +100,20 @@ impl MidiState {
         Some(((message[0] & 0x0F) + 1, message[1], message[2]))
     }
 
-    fn device_settings_mut<'a>(settings: &'a mut MidiSettings, port_id: &str, cc: u8, channel: u8) -> Option<&'a mut MidiDevice> {
+    fn device_settings_mut<'a>(settings: &'a mut MidiSettings, port_id: &str, cc: u8, channel: u8, ctx: &egui::Context) -> Option<&'a mut MidiDevice> {
         if let Some(settings) = settings.port_settings.get_mut(port_id) {
-            Some(settings.devices.entry((cc, channel)).or_insert_with(|| MidiDevice {
-                name: "New Device".to_string(),
-                device_type: MidiDeviceType::AbsoluteEncoder { min_value: 0, max_value: 127 },
-                current_value: 0.5,
-                global_functions: Vec::new(),
-                parameter_functions: Vec::new(),
-                use_global: true
+            Some(settings.devices.entry((cc, channel)).or_insert_with(|| {
+                Self::invalidate_device_name_cache(ctx);
+
+                MidiDevice {
+                    id: unique_time_id(),
+                    name: "New Device".to_string(),
+                    device_type: MidiDeviceType::AbsoluteEncoder { min_value: 0, max_value: 127 },
+                    current_value: 0.5,
+                    global_functions: Vec::new(),
+                    parameter_functions: HashMap::new(),
+                    use_global: true
+                }
             }))
         } else {
             None
@@ -115,7 +138,7 @@ impl MidiState {
 
         let mut settings_lock = settings.lock().expect("MidiState: Mutex poisoned.");
 
-        if let Some(device) = Self::device_settings_mut(&mut settings_lock, port_id, cc, channel) {
+        if let Some(device) = Self::device_settings_mut(&mut settings_lock, port_id, cc, channel, egui_ctx) {
             let old_value = device.current_value;
             device.update_with_midi_value(value);
             egui_ctx.request_repaint();
@@ -133,12 +156,12 @@ impl MidiState {
                         }
                     }
                 } else {
-                    for function in &device.parameter_functions {
-                        if function.pedalboard_id != active_pedalboard_id {
+                    for (path, function_values) in &device.parameter_functions {
+                        if path.pedalboard_id != active_pedalboard_id {
                             continue;
                         }
 
-                        let command = function.command_from_value(device.current_value);
+                        let command = Command::ParameterUpdate(path.clone(), function_values.parameter_from_value(device.current_value));
                         if let Err(e) = ui_thread_sender.send(command.clone()) {
                             log::error!("Failed to send parameter MIDI command to UI thread: {}", e);
                         }
@@ -153,10 +176,9 @@ impl MidiState {
     }
 
     pub fn connect_to_port(&mut self, id: &str) {
-        if let Some(port) = self.available_input_ports.iter().find(|p| p.id() == id) {
+        if let Some((port_name, port)) = self.available_input_ports.iter().find(|(_name, p)| p.id() == id) {
             if !self.input_connections.iter().any(|(_name, conn_id, _c) | conn_id == id) {
                 let midi_input = Self::create_midi_input();
-                let port_name = midi_input.port_name(port).unwrap_or_else(|_e| id.to_string());
                 let settings_clone = self.settings.clone();
                 let ui_thread_sender_clone = self.ui_thread_sender.clone();
                 let socket_thread_handle_clone = self.socket_handle.clone();
@@ -180,12 +202,12 @@ impl MidiState {
                 ) {
                     Ok(connection) => {
                         self.input_connections.push((
-                            port_name,
+                            port_name.clone(),
                             id.to_string(),
                             connection
                         ));
                         log::info!("Connected to MIDI port: {}", id);
-                        self.available_input_ports.retain(|p| p.id() != id);
+                        self.available_input_ports.retain(|(_name, p)| p.id() != id);
                         self.settings.lock().expect("MidiState: Mutex poisoned.").port_settings.entry(id.to_string()).or_default();
                     }
                     Err(e) => {
@@ -209,9 +231,19 @@ impl MidiState {
         self.refresh_available_ports();
     }
 
+    fn resolve_port_names(midi_input: MidiInput) -> Vec<(String, MidiInputPort)> {
+        let ports = midi_input.ports();
+        ports.into_iter()
+            .map(|p| (midi_input.port_name(&p).unwrap_or_else(|_e| p.id().to_string()), p))
+            .collect()
+    }
+
     pub fn refresh_available_ports(&mut self) {
-        self.available_input_ports = Self::create_midi_input().ports();
-        self.available_input_ports.retain(|p| !self.input_connections.iter().any(|(_name, conn_id, _)| conn_id == &p.id()));
+        self.available_input_ports = Self::resolve_port_names(Self::create_midi_input());
+        self.available_input_ports.retain(
+            // Remove any ports that we are already connected to
+            |(_name, p)| !self.input_connections.iter().any(|(_name, conn_id, _)| conn_id == &p.id())
+        );
     }
 
     pub fn remove_old_parameter_functions(&self, existing_pedalboards: &HashSet<u32>) {
@@ -219,9 +251,49 @@ impl MidiState {
 
         for (_port_name, port_settings) in settings_lock.port_settings.iter_mut() {
             for (_cc_channel, device) in port_settings.devices.iter_mut() {
-                device.parameter_functions.retain(|function| existing_pedalboards.contains(&function.pedalboard_id));
+                device.parameter_functions.retain(|f, _| existing_pedalboards.contains(&f.pedalboard_id));
             }
         }
+    }
+
+    pub fn add_midi_parameter_function_to_device(
+        &self,
+        parameter_path: ParameterPath,
+        midi_function_values: ParameterMidiFunctionValues,
+        device_id: u32
+    ) {
+        let mut settings_lock = self.settings.lock().expect("MidiState: Mutex poisoned.");
+
+        for (_port_id, port_settings) in settings_lock.port_settings.iter_mut() {
+            for (_, device) in port_settings.devices.iter_mut() {
+                if device.id == device_id {
+                    device.parameter_functions.insert(parameter_path.clone(), midi_function_values);
+                    return;
+                }
+            }
+        }
+
+        log::warn!("MIDI device ID '{}' not found when adding MIDI function", device_id);
+    }
+
+    pub fn remove_midi_parameter_function_from_device(
+        &self,
+        parameter: &ParameterPath,
+        device_id: u32
+    ) -> Option<ParameterMidiFunctionValues> {
+        let mut settings_lock = self.settings.lock().expect("MidiState: Mutex poisoned.");
+
+        for (_port_id, port_settings) in settings_lock.port_settings.iter_mut() {
+            for ((_cc, _channel), device) in port_settings.devices.iter_mut() {
+                if device.id == device_id {
+                    return device.parameter_functions.remove(parameter);
+                }
+            }
+        }
+
+        log::warn!("MIDI device ID '{}' not found when removing MIDI function", device_id);
+
+        None
     }
 
     /// This UI contains a list of ports that we can connect to, and a list of connected ports.
@@ -246,11 +318,10 @@ impl MidiState {
                 } else {
                     let mut connect = None;
 
-                    for port in &self.available_input_ports {
-                        let port_id = port.id();
-                        ui.label(&port_id);
+                    for (name, port) in &self.available_input_ports {
+                        ui.label(name);
                         if ui.button("Connect").clicked() {
-                            connect = Some(port_id);
+                            connect = Some(port.id());
                         }
                         ui.end_row();
                     }
@@ -364,7 +435,9 @@ impl MidiState {
                                                                 ui.end_row();
 
                                                                 ui.label("Rename:");
-                                                                ui.text_edit_singleline(&mut device.name);
+                                                                if ui.text_edit_singleline(&mut device.name).changed() {
+                                                                    Self::invalidate_device_name_cache(&self.egui_ctx);
+                                                                }
                                                                 ui.end_row();
 
                                                                 ui.label("Device Type:");
@@ -463,6 +536,7 @@ impl MidiState {
                         }
 
                         if let Some((cc, channel)) = forget {
+                            Self::invalidate_device_name_cache(&self.egui_ctx);
                             device_settings.devices.remove(&(cc, channel));
                         }
                     }
@@ -609,13 +683,17 @@ impl MidiSettings {
     }
 }
 
+use serde_with::{serde_as, Seq};
+#[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MidiDevice {
+    pub id: u32,
     pub name: String,
     pub device_type: MidiDeviceType,
     pub current_value: f32,
     pub global_functions: Vec<GlobalMidiFunction>,
-    pub parameter_functions: Vec<ParameterMidiFunction>,
+    #[serde_as(as = "Seq<(_, _)>")]
+    pub parameter_functions: HashMap<ParameterPath, ParameterMidiFunctionValues>,
     pub use_global: bool,
 }
 

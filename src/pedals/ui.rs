@@ -1,5 +1,7 @@
 use eframe::egui::{self, Color32, Id, Vec2, WidgetText};
 
+use crate::dsp_algorithms::oscillator::{self, Oscillator};
+
 use super::{PedalParameter, PedalParameterValue};
 
 // -150 deg
@@ -168,4 +170,110 @@ pub fn sideways_arrow(
             egui::Stroke::NONE
         )
     );
+}
+
+pub fn oscillator_selection_window(
+    ui: &mut egui::Ui,
+    parameter: &PedalParameter,
+    width: f32,
+    oscillator_type_only: bool
+) -> egui::InnerResponse<Option<Oscillator>> {
+    let selected_oscillator = parameter.value.as_oscillator().unwrap();
+    let mut new_oscillator = None;
+
+    let response = ui.vertical(|ui| {
+        ui.set_max_width(width);
+
+        ui.columns_const(|[sine_ui, square_ui, sawtooth_ui, triangle_ui]| {
+            if matches!(selected_oscillator, Oscillator::Sine(_)) {
+                sine_ui.add(egui::Button::new("Sine").selected(true));
+            } else if sine_ui.add(egui::Button::new("Sine")).clicked() {
+                new_oscillator = Some(Oscillator::Sine(oscillator::Sine::new(
+                    // Sample rate on oscillator parameters on client do not matter, it is set correctly on the server
+                    48000.0,
+                    selected_oscillator.get_frequency(),
+                    selected_oscillator.get_phase_offset(),
+                    0.0,
+                )));
+            }
+
+            if matches!(selected_oscillator, Oscillator::Square(_)) {
+                square_ui.add(egui::Button::new("Square").selected(true));
+            } else if square_ui.add(egui::Button::new("Square")).clicked() {
+                new_oscillator = Some(Oscillator::Square(oscillator::Square::new(
+                    48000.0,
+                    selected_oscillator.get_frequency(),
+                    selected_oscillator.get_phase_offset(),
+                )));
+            }
+
+            if matches!(selected_oscillator, Oscillator::Sawtooth(_)) {
+                sawtooth_ui.add(egui::Button::new("Sawtooth").selected(true));
+            } else if sawtooth_ui.add(egui::Button::new("Sawtooth")).clicked() {
+                new_oscillator = Some(Oscillator::Sawtooth(oscillator::Sawtooth::new(
+                    48000.0,
+                    selected_oscillator.get_frequency(),
+                    selected_oscillator.get_phase_offset(),
+                )));
+            }
+
+            if matches!(selected_oscillator, Oscillator::Triangle(_)) {
+                triangle_ui.add(egui::Button::new("Triangle").selected(true));
+            } else if triangle_ui.add(egui::Button::new("Triangle")).clicked() {
+                new_oscillator = Some(Oscillator::Triangle(oscillator::Triangle::new(
+                    48000.0,
+                    selected_oscillator.get_frequency(),
+                    selected_oscillator.get_phase_offset(),
+                )));
+            }
+        });
+
+        if !oscillator_type_only {
+            // Frequency
+            ui.label("Frequency (Hz)");
+            let mut frequency_value = selected_oscillator.get_frequency();
+
+            let frequency_range = {
+                let min_freq = parameter.min.as_ref().and_then(|p| p.as_float()).unwrap_or(0.0);
+                let max_freq = parameter.max.as_ref().and_then(|p| p.as_float()).unwrap_or(20.0);
+                min_freq..=max_freq
+            };
+            ui.add(egui::Slider::new(&mut frequency_value, frequency_range).logarithmic(true).max_decimals(2));
+
+            if frequency_value != selected_oscillator.get_frequency() {
+                let mut cloned = selected_oscillator.clone();
+                cloned.set_frequency(frequency_value);
+                new_oscillator = Some(cloned);
+            }
+
+            // Phase
+            ui.label("Phase Offset");
+            let mut phase_offset_value = selected_oscillator.get_phase_offset();
+            ui.add(egui::Slider::new(&mut phase_offset_value, -0.5..=0.5).max_decimals(2));
+
+            if phase_offset_value != selected_oscillator.get_phase_offset() {
+                let mut cloned = selected_oscillator.clone();
+                cloned.set_phase_offset(phase_offset_value);
+                new_oscillator = Some(cloned);
+            }
+
+            // Sine-specific squareness
+            if let Oscillator::Sine(sine) = selected_oscillator {
+                ui.label("Squareness");
+                let mut squareness_value = sine.get_squareness();
+                ui.add(egui::Slider::new(&mut squareness_value, 0.0..=1.0).max_decimals(2));
+                if squareness_value != sine.get_squareness() {
+                    let new_sine = oscillator::Sine::new(
+                        48000.0,
+                        sine.frequency.0,
+                        sine.phase_offset.0,
+                        squareness_value,
+                    );
+                    new_oscillator = Some(Oscillator::Sine(new_sine));
+                }
+            }
+        }
+    }).response;
+
+    egui::InnerResponse::new(new_oscillator, response)
 }
