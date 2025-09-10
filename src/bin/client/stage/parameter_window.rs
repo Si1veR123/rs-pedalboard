@@ -1,9 +1,7 @@
 use std::collections::HashMap;
 
 use eframe::egui::{self, include_image};
-use rs_pedalboard::{
-    pedals::{Pedal, PedalDiscriminants, PedalParameter, PedalParameterValue, PedalTrait}
-};
+use rs_pedalboard::pedals::{ParameterUILocation, Pedal, PedalDiscriminants, PedalParameter, PedalParameterValue, PedalTrait};
 use crate::{midi::functions::ParameterMidiFunctionValues, socket::ParameterPath};
 
 pub fn get_window_id(pedal: &Pedal) -> egui::Id {
@@ -48,7 +46,7 @@ pub enum ParameterWindowChange {
     RemoveMidiFunction(ParameterPath, u32)
 }
 
-pub fn draw_parameter_window(ui: &mut egui::Ui, pedalboard_id: u32, pedal: &Pedal, devices: &HashMap<u32, String>) -> Option<ParameterWindowChange> {
+pub fn draw_parameter_window(ui: &mut egui::Ui, pedalboard_id: u32, pedal: &mut Pedal, devices: &HashMap<u32, String>) -> Option<ParameterWindowChange> {
     let id = get_window_id(pedal);
     let open_id = get_window_open_id(pedal);
     let height_id = get_window_height_id(pedal);
@@ -56,7 +54,7 @@ pub fn draw_parameter_window(ui: &mut egui::Ui, pedalboard_id: u32, pedal: &Peda
 
     let mut to_change = None;
 
-    egui::Window::new(PedalDiscriminants::from(pedal).display_name())
+    egui::Window::new(PedalDiscriminants::from(&*pedal).display_name())
         .vscroll(true)
         .id(id)
         .open(&mut window_open)
@@ -64,7 +62,9 @@ pub fn draw_parameter_window(ui: &mut egui::Ui, pedalboard_id: u32, pedal: &Peda
         .min_height(300.0)
         .max_height(ui.ctx().data(|data| data.get_temp::<f32>(height_id).unwrap_or(600.0)))
         .show(ui.ctx(), |ui| {
-            let mut parameters: Vec<_> = pedal.get_parameters().iter().collect();
+            let mut parameters: Vec<_> = pedal.get_parameters().iter()
+                .map(|(a, b)| (a.clone(), b.clone()))
+                .collect();
             parameters.sort_by(|(a, _), (b, _)| a.cmp(b));
 
             let param_col_width = ui.max_rect().width() *0.9;
@@ -75,14 +75,14 @@ pub fn draw_parameter_window(ui: &mut egui::Ui, pedalboard_id: u32, pedal: &Peda
                 .show(ui, |ui| {
                     ui.style_mut().spacing.slider_width = param_col_width*0.8;
                     for (name, parameter) in parameters {
-                        ui.label(name);
+                        ui.label(&name);
 
-                        if let Some(change) = parameter.parameter_editor_ui(ui, param_col_width*0.75).inner {
+                        if let Some(change) = pedal.parameter_editor_ui(ui, &name, &parameter, ParameterUILocation::ParameterWindow).inner {
                             to_change = Some(ParameterWindowChange::ParameterChanged(name.clone(), change));
                         }
 
                         // Parameter Function Button
-                        let parameter_settings_button_id = get_parameter_settings_open_id(pedal, name);
+                        let parameter_settings_button_id = get_parameter_settings_open_id(pedal, &name);
                         let mut is_selected = ui.ctx().data_mut(|d| *d.get_temp_mut_or(parameter_settings_button_id, false));
                         if ui.add_sized(
                             egui::Vec2::splat(30.0),
@@ -95,7 +95,7 @@ pub fn draw_parameter_window(ui: &mut egui::Ui, pedalboard_id: u32, pedal: &Peda
                         ui.end_row();
 
                         if is_selected {
-                            to_change = draw_midi_function_settings(ui, pedalboard_id, pedal, name.to_string(), parameter, devices, param_col_width);
+                            to_change = draw_midi_function_settings(ui, pedalboard_id, pedal, name, &parameter, devices);
                         }
                     }
                 });
@@ -112,11 +112,10 @@ pub fn draw_parameter_window(ui: &mut egui::Ui, pedalboard_id: u32, pedal: &Peda
 pub fn draw_midi_function_settings(
     ui: &mut egui::Ui,
     pedalboard_id: u32,
-    pedal: &Pedal,
+    pedal: &mut Pedal,
     name: String,
     parameter: &PedalParameter,
-    devices: &HashMap<u32, String>,
-    param_col_width: f32
+    devices: &HashMap<u32, String>
 ) -> Option<ParameterWindowChange> {
     let last_frame_bg_rect = ui.ctx().data(|d| d.get_temp::<egui::Rect>(get_parameter_settings_bg_id(pedal, &name)).unwrap_or(egui::Rect::NOTHING));
     ui.painter().rect_filled(last_frame_bg_rect.expand(5.0), 3.0, egui::Color32::from_gray(40));
@@ -141,6 +140,9 @@ pub fn draw_midi_function_settings(
                 PedalParameterValue::Bool(_) => {
                     minimum_parameter.value = PedalParameterValue::Bool(false);
                 },
+                PedalParameterValue::String(_) => {
+                    minimum_parameter.value = PedalParameterValue::String("".to_string());
+                },
                 _ => {}
             }
             minimum_parameter
@@ -163,6 +165,9 @@ pub fn draw_midi_function_settings(
                 },
                 PedalParameterValue::Bool(_) => {
                     maximum_parameter.value = PedalParameterValue::Bool(true);
+                },
+                PedalParameterValue::String(_) => {
+                    maximum_parameter.value = PedalParameterValue::String("".to_string());
                 },
                 _ => {}
             }
@@ -251,7 +256,7 @@ pub fn draw_midi_function_settings(
 
     // === Min Value ===
     ui.label("Min Value");
-    let min_changed = minimum_parameter.parameter_editor_ui(ui, param_col_width*0.75).inner;
+    let min_changed = pedal.parameter_editor_ui(ui, &name, &minimum_parameter, ParameterUILocation::MidiMin).inner;
     ui.end_row();
 
     if let Some(mut change) = min_changed {
@@ -295,7 +300,7 @@ pub fn draw_midi_function_settings(
     let egui::InnerResponse {
         inner: max_changed,
         response: max_parameter_response
-    } = maximum_parameter.parameter_editor_ui(ui, param_col_width*0.75);
+    } = pedal.parameter_editor_ui(ui, &name, &maximum_parameter, ParameterUILocation::MidiMax);
     ui.end_row();
 
     bg_rect = bg_rect.union(max_parameter_response.rect);

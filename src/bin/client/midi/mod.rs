@@ -490,8 +490,11 @@ impl MidiState {
 
                                                                 ui.scope(|ui| {
                                                                     crate::settings::set_large_checkbox_style(ui);
-                                                                    ui.checkbox(&mut device.use_global, "")
-                                                                        .on_hover_text("If enabled, the global functions will be used. If disabled, the parameter functions will be used.");
+                                                                    if ui.checkbox(&mut device.use_global, "")
+                                                                        .on_hover_text("If enabled, the global functions will be used. If disabled, the parameter functions will be used.")
+                                                                        .changed() {
+                                                                            Self::invalidate_device_name_cache(&self.egui_ctx);
+                                                                        }
                                                                 });
                                                                 ui.end_row();
 

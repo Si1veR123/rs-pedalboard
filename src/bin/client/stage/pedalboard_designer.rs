@@ -319,14 +319,15 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
 
     // Draw any open parameter windows
     {
-        let active_pedalboards = screen.state.pedalboards.active_pedalboardstage.borrow();
-        let active_pedalboard_id = active_pedalboards.pedalboards[active_pedalboards.active_pedalboard].get_id();
+        let mut active_pedalboards = screen.state.pedalboards.active_pedalboardstage.borrow_mut();
+        let active_pedalboard = active_pedalboards.active_pedalboard;
+        let active_pedalboard_id = active_pedalboards.pedalboards[active_pedalboard].get_id();
 
         if PedalboardStageScreen::check_cached_midi_devices_invalid(ui.ctx()) {
             screen.cached_midi_devices = screen.state.midi_state.borrow().get_all_parameter_devices();
         }
 
-        for pedal in active_pedalboards.pedalboards[active_pedalboards.active_pedalboard].pedals.iter() {
+        for pedal in active_pedalboards.pedalboards[active_pedalboard].pedals.iter_mut() {
             match draw_parameter_window(ui, active_pedalboard_id, pedal, &screen.cached_midi_devices) {
                 Some(ParameterWindowChange::ParameterChanged(name, value)) => changed = Some((pedal.get_id(), (name, value))),
                 Some(ParameterWindowChange::AddMidiFunction(parameter_path, midi_function_values, device_id)) => {

@@ -122,7 +122,8 @@ impl PedalParameter {
         }
     }
 
-    pub fn parameter_editor_ui(&self, ui: &mut egui::Ui, width: f32) -> egui::InnerResponse<Option<PedalParameterValue>> {
+    pub fn parameter_editor_ui(&self, ui: &mut egui::Ui) -> egui::InnerResponse<Option<PedalParameterValue>> {
+        let width = ui.available_width() * 0.8;
         let mut to_change = None;
 
         let response = match self.value {
@@ -245,6 +246,13 @@ impl PedalParameterValue {
     }
 }
 
+pub enum ParameterUILocation {
+    Pedal,
+    ParameterWindow,
+    MidiMin,
+    MidiMax,
+}
+
 #[enum_dispatch]
 pub trait PedalTrait {
     /// message_buffer is where messages to send to the client can be passed
@@ -282,6 +290,10 @@ pub trait PedalTrait {
     }
 
     fn get_id(&self) -> u32;
+
+    fn parameter_editor_ui(&mut self, ui: &mut egui::Ui, _name: &str, parameter: &PedalParameter, _location: ParameterUILocation) -> egui::InnerResponse<Option<PedalParameterValue>> {
+        parameter.parameter_editor_ui(ui)
+    }
 }
 
 /// Wrapper enum type for serialization in Vec
