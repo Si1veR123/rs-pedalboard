@@ -7,22 +7,26 @@ use crate::socket::Command;
 #[derive(Debug, Clone, Serialize, Deserialize, EnumIter, PartialEq)]
 pub enum GlobalMidiFunction {
     ToggleMute,
+    SetMasterIn,
     SetMasterOut,
     NextPedalboard,
     PrevPedalboard,
     ToggleRecording,
-    ToggleMetronome
+    ToggleMetronome,
+    DeleteActivePedalboard
 }
 
 impl std::fmt::Display for GlobalMidiFunction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let name = match self {
             GlobalMidiFunction::ToggleMute => "Toggle Mute",
+            GlobalMidiFunction::SetMasterIn => "Set Master In Volume",
             GlobalMidiFunction::SetMasterOut => "Set Master Out Volume",
             GlobalMidiFunction::NextPedalboard => "Next Pedalboard",
             GlobalMidiFunction::PrevPedalboard => "Previous Pedalboard",
             GlobalMidiFunction::ToggleRecording => "Toggle Recording",
-            GlobalMidiFunction::ToggleMetronome => "Toggle Metronome"
+            GlobalMidiFunction::ToggleMetronome => "Toggle Metronome",
+            GlobalMidiFunction::DeleteActivePedalboard => "Delete Active Pedalboard"
         };
         write!(f, "{name}")
     }
@@ -32,11 +36,13 @@ impl GlobalMidiFunction {
     pub fn command_from_function(&self, value: f32) -> Command {
         match self {
             GlobalMidiFunction::ToggleMute => Command::ToggleMute,
+            GlobalMidiFunction::SetMasterIn => Command::MasterIn(value),
             GlobalMidiFunction::SetMasterOut => Command::MasterOut(value),
             GlobalMidiFunction::NextPedalboard => Command::NextPedalboard,
             GlobalMidiFunction::PrevPedalboard => Command::PrevPedalboard,
             GlobalMidiFunction::ToggleRecording => Command::ToggleRecording,
             GlobalMidiFunction::ToggleMetronome => Command::ToggleMetronome,
+            GlobalMidiFunction::DeleteActivePedalboard => Command::DeleteActivePedalboard
         }
     }
 }

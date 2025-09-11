@@ -255,10 +255,15 @@ impl AudioProcessor {
                 self.pedalboard_set.pedalboards.push(pedalboard);
             },
             "deletepedalboard" => {
-                let pedalboard_index = arguments.next()
-                    .ok_or_else(|| "deletepedalboard: Failed to get pedalboard index".to_string())?
-                    .parse::<usize>()
-                    .map_err(|e| format!("deletepedalboard: Failed to parse pedalboard index: {e}"))?;
+                let pedalboard_index_str = arguments.next()
+                    .ok_or_else(|| "deletepedalboard: Failed to get pedalboard index".to_string())?;
+
+                let pedalboard_index = if pedalboard_index_str == "active" {
+                    self.pedalboard_set.active_pedalboard
+                } else {
+                    pedalboard_index_str.parse::<usize>()
+                        .map_err(|e| format!("deletepedalboard: Failed to parse pedalboard index: {e}"))?
+                };
                 self.pedalboard_set.pedalboards.remove(pedalboard_index);
             },
             "addpedal" => {

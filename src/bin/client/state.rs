@@ -553,6 +553,12 @@ impl State {
                 Command::DeletePedalboard(index) => {
                     self.remove_pedalboard_from_stage(index, true);
                 },
+                Command::DeleteActivePedalboard => {
+                    let pedalboard_set = self.pedalboards.active_pedalboardstage.borrow();
+                    let active_index = pedalboard_set.active_pedalboard;
+                    drop(pedalboard_set);
+                    self.remove_pedalboard_from_stage(active_index, true);
+                },
                 Command::AddPedalboard(pedalboard_json) => {
                     match serde_json::from_str::<Pedalboard>(&pedalboard_json) {
                         Ok(pedalboard) => {

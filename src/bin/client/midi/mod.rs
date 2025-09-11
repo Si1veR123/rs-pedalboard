@@ -33,7 +33,13 @@ impl MidiState {
         socket_handle: Option<ClientSocketThreadHandle>,
         active_pedalboard_id: u32
     ) -> Self {
-        let available_named_input_ports = Self::resolve_port_names(Self::create_midi_input());
+        let mut available_named_input_ports = vec![];
+        match Self::create_midi_input() {
+            Some(input) => available_named_input_ports = Self::resolve_port_names(input),
+            None => {
+                log::error!("Cannot list MIDI ports: MIDI input creation failed");
+            }
+        }
 
         Self {
             settings: Arc::new(Mutex::new(settings)),
@@ -89,8 +95,14 @@ impl MidiState {
         self.settings.lock().map_err(|_e| std::io::Error::new(std::io::ErrorKind::Other, "MIDI settings mutex poisoned"))?.save()
     }
 
-    fn create_midi_input() -> MidiInput {
-        MidiInput::new("Pedalboard MIDI Input").expect("Failed to create MIDI input")
+    fn create_midi_input() -> Option<MidiInput> {
+        match MidiInput::new("Pedalboard MIDI Input") {
+            Ok(input) => Some(input),
+            Err(e) => {
+                log::error!("Failed to create MIDI input: {}", e);
+                None
+            }
+        }
     }
 
     fn parse_cc_message(message: &[u8]) -> Option<(u8, u8, u8)> {
@@ -178,7 +190,14 @@ impl MidiState {
     pub fn connect_to_port(&mut self, id: &str) {
         if let Some((port_name, port)) = self.available_input_ports.iter().find(|(_name, p)| p.id() == id) {
             if !self.input_connections.iter().any(|(_name, conn_id, _c) | conn_id == id) {
-                let midi_input = Self::create_midi_input();
+                let midi_input = match Self::create_midi_input() {
+                    Some(input) => input,
+                    None => {
+                        log::error!("Cannot connect to port: MIDI input creation failed");
+                        return;
+                    }
+                };
+
                 let settings_clone = self.settings.clone();
                 let ui_thread_sender_clone = self.ui_thread_sender.clone();
                 let socket_thread_handle_clone = self.socket_handle.clone();
@@ -239,7 +258,14 @@ impl MidiState {
     }
 
     pub fn refresh_available_ports(&mut self) {
-        self.available_input_ports = Self::resolve_port_names(Self::create_midi_input());
+        let midi_input = match Self::create_midi_input() {
+            Some(input) => input,
+            None => {
+                log::error!("Cannot refresh ports: MIDI input creation failed");
+                return;
+            }
+        };
+        self.available_input_ports = Self::resolve_port_names(midi_input);
         self.available_input_ports.retain(
             // Remove any ports that we are already connected to
             |(_name, p)| !self.input_connections.iter().any(|(_name, conn_id, _)| conn_id == &p.id())

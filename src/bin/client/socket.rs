@@ -119,6 +119,7 @@ impl ClientSocket {
 
 #[derive(Debug, Clone)]
 pub enum Command {
+    // === Server Commands ===
     ParameterUpdate(ParameterPath, PedalParameterValue),
     // pedalboard id, pedal id, new pedal index
     MovePedal(u32, u32, usize),
@@ -128,12 +129,11 @@ pub enum Command {
     MovePedalboard(usize, usize),
     // pedalboard index
     DeletePedalboard(usize),
+    DeleteActivePedalboard,
     AddPedalboard(String),
     // pedalboard id, serialized pedal
     AddPedal(u32, String),
-    ThreadAliveTest,
     KillServer,
-    SubscribeToResponses(Sender<String>),
     MasterIn(f32),
     MasterOut(f32),
     VolumeNormalization(VolumeNormalizationMode, Option<f32>),
@@ -156,6 +156,9 @@ pub enum Command {
     RequestSampleRate,
     SetMute(bool),
     ToggleMute,
+
+    SubscribeToResponses(Sender<String>),
+    ThreadAliveTest,
 }
 
 pub struct ClientSocketThreadHandle {
@@ -410,6 +413,12 @@ async fn client_socket_event_loop(
                             pedalboard_index
                         );
                         if socket_send(&mut stream_writer, &message).await {
+                            break;
+                        }
+                    },
+                    Command::DeleteActivePedalboard => {
+                        let message = "deletepedalboard|active\n";
+                        if socket_send(&mut stream_writer, message).await {
                             break;
                         }
                     },
