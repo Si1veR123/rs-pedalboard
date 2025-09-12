@@ -2,7 +2,7 @@ use super::{CurrentAction, PedalboardStageScreen};
 
 use eframe::egui::{self, Color32, Layout, Rgba, RichText, Vec2};
 use egui_dnd::dnd;
-use rs_pedalboard::pedalboard_set::PedalboardSet;
+use rs_pedalboard::{pedalboard::Pedalboard, pedalboard_set::PedalboardSet};
 use crate::THEME_COLOR;
 
 // Big ugly function to display the pedalboard stage panel
@@ -15,30 +15,24 @@ pub fn pedalboard_stage_panel(screen: &mut PedalboardStageScreen, ui: &mut egui:
     ui.add_space(5.0);
 
     // === Header buttons ===
-    let buttons_row_height = ui.available_height() * 0.075;
-    ui.columns(2, |columns| {
-        columns[0].allocate_ui_with_layout(
-            Vec2::new(0.0, buttons_row_height),
-            Layout::left_to_right(egui::Align::Center),
-            |ui| {
-                ui.add_space(10.0);
-                if ui.add_sized([100.0, ui.available_height()], egui::Button::new("Clear Stage")).clicked() {
-                    *screen.state.pedalboards.active_pedalboardstage.borrow_mut() = PedalboardSet::default();
-                    screen.state.load_active_set();
-                }
-            }
-        );
+    let buttons_row_size =[ui.available_width()*0.31, ui.available_height() * 0.075];
+    ui.columns(3, |columns| {
+        if columns[0].add_sized(buttons_row_size, egui::Button::new("New Pedalboard")).clicked() {
+            screen.current_action = Some(CurrentAction::AddPedalboard);
+        }
 
-        columns[1].allocate_ui_with_layout(
-            Vec2::new(0.0, buttons_row_height),
-            Layout::right_to_left(egui::Align::Center),
-            |ui| {
-                ui.add_space(10.0);
-                if ui.add_sized([100.0, ui.available_height()], egui::Button::new("Save to Song")).clicked() {
-                    screen.current_action = Some(CurrentAction::SaveToSong(String::new()));
-                }
+        if columns[1].add_sized(buttons_row_size, egui::Button::new("Save To Song")).clicked() {
+            let active_pedalboards = screen.state.pedalboards.active_pedalboardstage.borrow();
+            if !active_pedalboards.pedalboards.is_empty() {
+                screen.current_action = Some(CurrentAction::SaveToSong(String::new()));
             }
-        );
+        }
+
+        
+        if columns[2].add_sized(buttons_row_size, egui::Button::new("Clear Stage")).clicked() {
+            *screen.state.pedalboards.active_pedalboardstage.borrow_mut() = PedalboardSet::default();
+            screen.state.load_active_set();
+        }
     });
 
     ui.add_space(5.0);
@@ -47,7 +41,7 @@ pub fn pedalboard_stage_panel(screen: &mut PedalboardStageScreen, ui: &mut egui:
 
     // === Active Pedalboard stage List ===
     let row_width = ui.available_width();
-    let row_height = 50.0;
+    let row_height = ui.available_height() * 0.1;
 
     egui::ScrollArea::vertical().show(ui, |ui| {
         let active_pedalboards = screen.state.pedalboards.active_pedalboardstage.borrow_mut();
@@ -97,11 +91,7 @@ pub fn pedalboard_stage_panel(screen: &mut PedalboardStageScreen, ui: &mut egui:
                                     ui.add_space(2.0);
                                 });
 
-                                if ui.label(RichText::new(pedalboard.name.clone()).color(text_color)
-                                    .size(20.0)
-                                    .font(
-                                        crate::default_proportional(20.0)
-                                    )).clicked()
+                                if ui.label(RichText::new(pedalboard.name.clone()).color(text_color)).clicked()
                                 {
                                     screen.current_action = Some(CurrentAction::ChangeActive(i));
                                 }
@@ -118,34 +108,34 @@ pub fn pedalboard_stage_panel(screen: &mut PedalboardStageScreen, ui: &mut egui:
 
                                         let in_library = pedalboard_library.iter().any(|library_pedalboard| library_pedalboard.name == pedalboard.name);
                                         if in_library {
-                                            ui.label(RichText::new("Saved").size(25.0).color(crate::FAINT_TEXT_COLOR));
+                                            ui.label(RichText::new("Saved").text_style(egui::TextStyle::Heading).color(crate::FAINT_TEXT_COLOR));
                                         } else {
-                                            if ui.add(egui::Button::new(RichText::new("Save To Library").size(25.0))).clicked() {
+                                            if ui.add(egui::Button::new(RichText::new("Save To Library").text_style(egui::TextStyle::Heading))).clicked() {
                                                 screen.current_action = Some(CurrentAction::SaveToLibrary(i));
                                             }
                                         }
                                         ui.add_space(2.0);
                                         ui.separator();
                                         ui.add_space(2.0);
-                                        if ui.add(egui::Button::new(RichText::new("Remove From Stage").size(25.0))).clicked() {
+                                        if ui.add(egui::Button::new(RichText::new("Remove From Stage").text_style(egui::TextStyle::Heading))).clicked() {
                                             screen.current_action = Some(CurrentAction::Remove(i));
                                         }
                                         ui.add_space(2.0);
                                         ui.separator();
                                         ui.add_space(2.0);
-                                        if ui.add(egui::Button::new(RichText::new("Rename").size(25.0))).clicked() {
+                                        if ui.add(egui::Button::new(RichText::new("Rename").text_style(egui::TextStyle::Heading))).clicked() {
                                             screen.current_action = Some(CurrentAction::Rename((i, pedalboard.name.clone())));
                                         }
                                         ui.add_space(2.0);
                                         ui.separator();
                                         ui.add_space(2.0);
-                                        if ui.add(egui::Button::new(RichText::new("Duplicate").size(25.0))).clicked() {
+                                        if ui.add(egui::Button::new(RichText::new("Duplicate").text_style(egui::TextStyle::Heading))).clicked() {
                                             screen.current_action = Some(CurrentAction::DuplicateLinked(i));
                                         }
                                         ui.add_space(2.0);
                                         ui.separator();
                                         ui.add_space(2.0);
-                                        if ui.add(egui::Button::new(RichText::new("Duplicate New").size(25.0))).clicked() {
+                                        if ui.add(egui::Button::new(RichText::new("Duplicate New").text_style(egui::TextStyle::Heading))).clicked() {
                                             screen.current_action = Some(CurrentAction::DuplicateNew(i));
                                         }
                                         ui.add_space(5.0);
@@ -242,6 +232,14 @@ pub fn pedalboard_stage_panel(screen: &mut PedalboardStageScreen, ui: &mut egui:
         Some(CurrentAction::ChangeActive(index)) => {
             drop(active_pedalboards);
             screen.state.play(index, false);
+        },
+        Some(CurrentAction::AddPedalboard) => {
+            drop(active_pedalboards);
+            drop(pedalboard_library);
+            let unique_name = screen.state.pedalboards.unique_name("New Pedalboard".to_string());
+            let mut new_pedalboard = Pedalboard::default();
+            new_pedalboard.name = unique_name;
+            screen.state.add_pedalboard(new_pedalboard, false);
         },
         None => {}
     }

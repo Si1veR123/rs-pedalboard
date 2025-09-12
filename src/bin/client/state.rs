@@ -91,16 +91,17 @@ impl State {
 
     /// Requires a lock on active_pedalboardstage, pedalboard_library, songs_library and socket
     pub fn rename_pedalboard(&self, pedalboard_id: u32, new_name: String) {
+        let unique_name = self.pedalboards.unique_name(new_name.clone());
+
         // First rename any matching names in pedalboard library
         let mut pedalboard_library = self.pedalboards.pedalboard_library.borrow_mut();
         for pedalboard in pedalboard_library.iter_mut() {
             if pedalboard.get_id() == pedalboard_id {
-                pedalboard.name = new_name.to_string();
+                pedalboard.name = unique_name.clone();
             }
         }
     
         // Then rename any matching names in the active pedalboard stage
-        let unique_name = self.pedalboards.unique_stage_pedalboard_name(new_name.to_string());
         let mut pedalboard_set = self.pedalboards.active_pedalboardstage.borrow_mut();
         for pedalboard in pedalboard_set.pedalboards.iter_mut() {
             if pedalboard.get_id() == pedalboard_id {
@@ -132,9 +133,9 @@ impl State {
 
         let mut new_pedalboard = pedalboard.clone_with_new_id();
         let src_index = pedalboard_set.pedalboards.len();
-        // Have to drop as the unique stage name requires a lock on active pedalboard stage
+        // Have to drop as the unique name requires a lock on active pedalboard stage
         drop(pedalboard_set);
-        new_pedalboard.name = self.pedalboards.unique_stage_pedalboard_name(new_pedalboard.name.clone());
+        new_pedalboard.name = self.pedalboards.unique_name(new_pedalboard.name.clone());
         
         self.add_pedalboard(new_pedalboard, false);
         self.move_pedalboard(src_index, index+1, false);

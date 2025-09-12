@@ -26,7 +26,8 @@ pub enum CurrentAction {
     SaveToSong(String),
     Rename((usize, String)),
     SaveToLibrary(usize),
-    ChangeActive(usize)
+    ChangeActive(usize),
+    AddPedalboard
 }
 
 pub enum ClippingState {

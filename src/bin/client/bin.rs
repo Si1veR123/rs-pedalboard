@@ -18,14 +18,14 @@ mod midi;
 #[cfg(feature = "virtual_keyboard")]
 use egui_keyboard::{Keyboard, layouts::KeyboardLayout};
 
-use eframe::egui::{self, include_image, Button, Color32, FontId, Id, ImageButton, RichText, Vec2};
+use eframe::egui::{self, include_image, Button, Color32, FontId, Id, ImageButton, RichText, Vec2, FontFamily};
 use rs_pedalboard::SAVE_DIR;
 use std::{sync::Arc, time::Instant};
 use simplelog::*;
 
 const SERVER_PORT: u16 = 29475;
-const WINDOW_HEIGHT: f32 = 600.0;
-const WINDOW_WIDTH: f32 = 1024.0;
+const WINDOW_HEIGHT: f32 = 1080.0;
+const WINDOW_WIDTH: f32 = 1920.0;
 
 pub const THEME_COLOR: egui::Color32 = egui::Color32::from_rgb(255, 105, 46);
 pub const FAINT_THEME_COLOR_ALPHA: f32 = 0.5;
@@ -41,6 +41,25 @@ pub const WIDGET_HOVER_BACKGROUND_COLOR: egui::Color32 = egui::Color32::from_gra
 pub const WIDGET_CLICK_BACKGROUND_COLOR_THEME_ALPHA: f32 = 0.025;
 // Buttons
 pub const INACTIVE_BG_STROKE_COLOR: egui::Color32 = egui::Color32::from_gray(54);
+
+fn set_font_size(width: f32, ctx: &egui::Context) {
+    let base_size = (width / 1920.0) * 18.0;
+
+    let mut style = (*ctx.style()).clone();
+    let text_styles = [
+        (egui::TextStyle::Heading, FontId::new(base_size * 2.0, FontFamily::Proportional)),
+        (egui::TextStyle::Body, FontId::new(base_size*1.38, FontFamily::Proportional)),
+        (egui::TextStyle::Monospace, FontId::new(base_size*1.33, FontFamily::Monospace)),
+        (egui::TextStyle::Button, FontId::new(base_size*1.38, FontFamily::Proportional)),
+        (egui::TextStyle::Small, FontId::new(base_size, FontFamily::Proportional)),
+    ];
+
+    for (text_style, font_id) in text_styles {
+        style.text_styles.insert(text_style, font_id);
+    }
+
+    ctx.set_style(style);
+}
 
 /// Get a FontId for the egui default proportional font
 pub fn default_proportional(size: f32) -> egui::FontId {
@@ -80,18 +99,6 @@ fn setup_custom_fonts(ctx: &egui::Context) {
 
     // Tell egui to use these fonts:
     ctx.set_fonts(fonts);
-
-    // Change text style sizes
-    ctx.style_mut(|style| {
-        style.text_styles = [
-            (egui::TextStyle::Small, FontId::new(12.0, egui::FontFamily::Proportional)),
-            (egui::TextStyle::Body, FontId::new(18.0, egui::FontFamily::Proportional)),
-            (egui::TextStyle::Button, FontId::new(18.0, egui::FontFamily::Proportional)),
-            (egui::TextStyle::Heading, FontId::new(30.0, egui::FontFamily::Proportional)),
-            (egui::TextStyle::Monospace, FontId::new(14.0, egui::FontFamily::Monospace)),
-        ]
-        .into();
-    });
 }
 
 fn main() {
@@ -106,7 +113,7 @@ fn main() {
     let mut native_options = eframe::NativeOptions::default();
     native_options.persist_window = false;
     native_options.persistence_path = homedir::my_home().map(|d| d.unwrap().join(SAVE_DIR).join("egui_persistence")).ok();
-    native_options.viewport = native_options.viewport.with_inner_size((WINDOW_WIDTH, WINDOW_HEIGHT)).with_resizable(false).with_maximized(false).with_maximize_button(false);
+    native_options.viewport = native_options.viewport.with_inner_size((WINDOW_WIDTH, WINDOW_HEIGHT)).with_maximized(true).with_maximize_button(true);
 
     eframe::run_native("Pedalboard", native_options, Box::new(
         |cc| {
@@ -154,7 +161,6 @@ impl PedalboardClientApp {
         let loaded_state = State::load_state(cc.egui_ctx.clone());
         let leaked_state = Box::leak(Box::new(loaded_state));
         let _ = leaked_state.connect_to_server();
-        leaked_state.midi_state.borrow_mut().connect_to_auto_connect_ports();
 
         let mut settings_screen = SettingsScreen::new(leaked_state);
 
@@ -181,6 +187,10 @@ impl PedalboardClientApp {
             }
         }
 
+        // Linux (JACK) requires jack server to be running before connecting MIDI ports
+        // This is started by the server app
+        leaked_state.midi_state.borrow_mut().connect_to_auto_connect_ports();
+
         PedalboardClientApp {
             selected_screen: 0,
             pedalboard_stage_screen: PedalboardStageScreen::new(leaked_state),
@@ -203,6 +213,8 @@ impl eframe::App for PedalboardClientApp {
             self.keyboard.show(ctx);
         }
 
+        set_font_size(ctx.available_rect().width(), ctx);
+
         self.state.update_socket_responses();
         self.state.handle_other_thread_commands();
 
@@ -212,7 +224,7 @@ impl eframe::App for PedalboardClientApp {
             log::info!("Server is using sample rate: {}hz", sr_buf[0]);
         }
 
-        let bottom_window_select_height = WINDOW_HEIGHT / 10.0;
+        let bottom_window_select_height = ctx.screen_rect().height() * 0.1;
         let padding = 10.0;
         egui::TopBottomPanel::bottom(Id::new("bottom_window_select"))
             .min_height(bottom_window_select_height)
@@ -229,7 +241,7 @@ impl eframe::App for PedalboardClientApp {
         
                             column0.horizontal_centered(|ui| {
                                 if ui.add_sized(button_size, Button::new(
-                                    RichText::new("Stage View").size(20.0)
+                                    RichText::new("Stage View")
                                 ).stroke(button_outline[0]).fill(button_bg[0])).clicked() {
                                     if self.selected_screen == 2 {
                                         self.state.set_tuner_active(false);
@@ -239,7 +251,7 @@ impl eframe::App for PedalboardClientApp {
                             });
                             column1.horizontal_centered(|ui| {
                                 if ui.add_sized(button_size, Button::new(
-                                    RichText::new("Library").size(20.0)
+                                    RichText::new("Library")
                                 ).stroke(button_outline[1]).fill(button_bg[1])).clicked() {
                                     if self.selected_screen == 2 {
                                         self.state.set_tuner_active(false);
@@ -256,7 +268,7 @@ impl eframe::App for PedalboardClientApp {
                                 };
 
                                 if ui.add_sized(button_size, Button::new(
-                                    RichText::new("Utilities").size(20.0).color(text_color)
+                                    RichText::new("Utilities").color(text_color)
                                 ).stroke(button_outline[2]).fill(button_bg[2])).clicked() {
                                     self.state.set_tuner_active(true);
                                     self.selected_screen = 2;

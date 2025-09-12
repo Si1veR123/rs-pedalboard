@@ -51,11 +51,14 @@ impl Default for SavedPedalboards {
 }
 
 impl SavedPedalboards {
-    fn unique_name(mut name: String, pedalboards: &[Pedalboard]) -> String {
+    pub fn unique_name(&self, mut name: String) -> String {
         name.truncate(25);
 
+        let active_stage_pedalboards = &self.active_pedalboardstage.borrow().pedalboards;
+        let library_pedalboards = &self.pedalboard_library.borrow();
+
         let mut i = 1;
-        while pedalboards.iter().any(|pedalboard| pedalboard.name == name) {
+        while active_stage_pedalboards.iter().chain(library_pedalboards.iter()).any(|pedalboard| pedalboard.name == name) {
             if i == 1 {
                 let last_char = name.chars().last().unwrap_or(' ');
                 if last_char.is_numeric() {
@@ -73,16 +76,6 @@ impl SavedPedalboards {
             i += 1;
         }
         name
-    }
-
-    /// Requires a lock on active_pedalboardstage
-    pub fn unique_stage_pedalboard_name(&self, name: String) -> String {
-        Self::unique_name(name, &self.active_pedalboardstage.borrow().pedalboards)
-    }
-
-    /// Requires a lock on pedalboard_library
-    pub fn unique_library_pedalboard_name(&self, name: String) -> String {
-        Self::unique_name(name, &self.pedalboard_library.borrow())
     }
 
     /// Delete a pedalboard from the pedalboard library

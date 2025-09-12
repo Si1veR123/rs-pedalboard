@@ -239,10 +239,7 @@ impl SettingsScreen {
     }
 }
 
-const SETTING_ROW_HEIGHT: f32 = 60.0;
-const HEADING_SIZE: f32 = 36.0;
-const BODY_TEXT_SIZE: f32 = 24.0;
-const BUTTON_TEXT_SIZE: f32 = 20.0;
+const SETTING_ROW_HEIGHT_FRACT: f32 = 0.1;
 const BUTTON_EXPANSION: f32 = 2.0;
 const SECTION_SPACE: f32 = 40.0;
 
@@ -257,9 +254,6 @@ impl Widget for &mut SettingsScreen {
             ui.add_space(ui.available_width()*0.05);
             ui.allocate_ui_with_layout(ui.available_size()*Vec2::new(0.95, 1.0), Layout::top_down(egui::Align::Min), |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| {
-                    ui.style_mut().text_styles.get_mut(&egui::TextStyle::Heading).unwrap().size = HEADING_SIZE;
-                    ui.style_mut().text_styles.get_mut(&egui::TextStyle::Body).unwrap().size = BODY_TEXT_SIZE;
-                    ui.style_mut().text_styles.get_mut(&egui::TextStyle::Button).unwrap().size = BUTTON_TEXT_SIZE;
                     ui.style_mut().visuals.widgets.open.expansion = BUTTON_EXPANSION;
                     ui.style_mut().visuals.widgets.inactive.expansion = BUTTON_EXPANSION;
                     ui.style_mut().visuals.widgets.hovered.expansion = BUTTON_EXPANSION;
@@ -275,7 +269,7 @@ impl Widget for &mut SettingsScreen {
                     egui::Grid::new("server_settings_grid")
                         .num_columns(2)
                         .min_col_width(ui.available_width()*0.5)
-                        .min_row_height(SETTING_ROW_HEIGHT)
+                        .min_row_height(SETTING_ROW_HEIGHT_FRACT * ui.ctx().screen_rect().height())
                         .striped(true)
                         .show(ui, |ui| {
                             // Audio Host
@@ -431,7 +425,7 @@ impl Widget for &mut SettingsScreen {
                         });
                     
                     ui.add_space(20.0);
-                    let button_size = Vec2::new(ui.available_width() * 0.25, 45.0);
+                    let button_size = Vec2::new(ui.available_width() * 0.25, ui.ctx().screen_rect().height()*0.06);
 
                     // Connecting requires a lock on client settings so must be done after rendering settings
                     // Store the connect button response to use later
@@ -502,7 +496,7 @@ impl Widget for &mut SettingsScreen {
                     egui::Grid::new("client_settings_grid")
                         .num_columns(2)
                         .min_col_width(ui.available_width()*0.5)
-                        .min_row_height(SETTING_ROW_HEIGHT)
+                        .min_row_height(SETTING_ROW_HEIGHT_FRACT * ui.ctx().screen_rect().height())
                         .striped(true)
                         .show(ui, |ui| {
                             ui.label("Volume Normalization");
@@ -714,7 +708,7 @@ fn multiple_directories_select_ui(ui: &mut egui::Ui, paths: &mut Vec<PathBuf>, d
 
     egui::Grid::new(id)
         .num_columns(2)
-        .min_row_height(SETTING_ROW_HEIGHT)
+        .min_row_height(SETTING_ROW_HEIGHT_FRACT * ui.ctx().screen_rect().height())
         .min_col_width(available_width/2.0)
         .striped(true)
         .show(ui, |ui| {

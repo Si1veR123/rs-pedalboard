@@ -34,7 +34,7 @@ impl SongsScreen {
                         Layout::left_to_right(egui::Align::Center),
                         |ui| {
                             ui.add_space(20.0);
-                            ui.label(RichText::new(song_name).size(20.0));   
+                            ui.label(song_name);
                         }
                     );
 
@@ -42,11 +42,18 @@ impl SongsScreen {
                         Vec2::new(0.0, row_height-20.0),
                         Layout::right_to_left(egui::Align::Center),
                         |ui| {
+                            let button_size = Vec2::new(ui.available_width() * 0.2, row_height * 0.6);
                             ui.add_space(20.0);
-                            if ui.add_sized([80.0, 30.0], egui::Button::new("Delete")).clicked() {
+                            if ui.add_sized(
+                                button_size,
+                                egui::Button::new("Delete").stroke((1.5, egui::Color32::from_rgb(150, 30, 30)))
+                            ).clicked() {
                                 action = Some(RowAction::Delete);
                             }
-                            if ui.add_sized([80.0, 30.0], egui::Button::new("Load")).clicked() {
+                            if ui.add_sized(
+                                button_size,
+                                egui::Button::new("Load").stroke((1.3, egui::Color32::from_gray(60)))
+                            ).clicked() {
                                 action = Some(RowAction::Load);
                             }
                         }
@@ -75,31 +82,42 @@ impl SongsScreen {
 
 impl Widget for &mut SongsScreen {
     fn ui(self, ui: &mut egui::Ui) -> egui::Response {
-        ui.add_space(10.0);
-
         ui.vertical_centered(|ui| {
+            ui.add_space(5.0);
+            
             // === Search bar ===
             ui.add_sized(
-                [ui.available_width()/3.0, 30.0],
-                TextEdit::singleline(&mut self.search_term).hint_text(RichText::new("Search songs...").size(20.0))
+                [ui.available_width()/3.0, ui.available_height() * 0.08],
+                TextEdit::singleline(&mut self.search_term)
+                    .hint_text(RichText::new("Search songs..."))
+                    .vertical_align(egui::Align::Center)
             );
 
-            ui.add_space(10.0);
+            ui.add_space(5.0);
             ui.separator();
             ui.add_space(10.0);
 
             // === Songs Grid ===
-            let row_height = 70.0;
-            let row_size = Vec2::new(ui.available_width(), row_height);
+            let row_size = Vec2::new(ui.available_width(), ui.available_height() * 0.15);
 
             let mut songs_library = self.state.pedalboards.songs_library.borrow_mut();
             if songs_library.is_empty() {
-                ui.add_sized(row_size, egui::Label::new(RichText::new("No Songs Found").size(30.0).color(crate::FAINT_TEXT_COLOR)));
+                ui.add_sized(row_size, egui::Label::new(
+                    RichText::new("No Songs Found")
+                        .text_style(egui::TextStyle::Heading)
+                        .color(crate::FAINT_TEXT_COLOR)
+                ));
             } else {
                 let mut action = None;
 
                 egui::Grid::new("songs_library_grid")
-                    .striped(true)
+                    .with_row_color(|index, _style| {
+                        if index % 2 == 0 {
+                            Some(crate::ROW_COLOR_LIGHT)
+                        } else {
+                            Some(crate::ROW_COLOR_DARK)
+                        }
+                    })
                     .spacing(Vec2::new(10.0, 10.0))
                     .show(ui, |ui| {
                         for (song, pedalboards) in songs_library.iter() {

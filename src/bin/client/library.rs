@@ -33,22 +33,23 @@ impl PedalboardLibraryScreen {
                 ui.columns(2, |columns| {
                     columns[0].horizontal_centered(|ui| {
                         ui.add_space(20.0);
-                        ui.label(RichText::new(&pedalboard.name).size(20.0));   
+                        ui.label(RichText::new(&pedalboard.name));   
                     });
 
                     columns[1].allocate_ui_with_layout(
                         Vec2::new(0.0, row_height),
                         Layout::right_to_left(egui::Align::Center),
                         |ui| {
+                            let button_size = Vec2::new(ui.available_width() * 0.2, row_height * 0.6);
                             ui.add_space(20.0);
                             if ui.add_sized(
-                                [80.0, 40.0],
+                                button_size,
                                 egui::Button::new("Delete").stroke((1.5, egui::Color32::from_rgb(150, 30, 30)))
                             ).clicked() {
                                 action = Some(RowAction::Delete);
                             }
                             if ui.add_sized(
-                                [80.0, 40.0],
+                                button_size,
                                 egui::Button::new("Load").stroke((1.3, egui::Color32::from_gray(60)))
                             ).clicked() {
                                 action = Some(RowAction::Load);
@@ -67,27 +68,29 @@ impl Widget for &mut PedalboardLibraryScreen {
         ui.add_space(5.0);
 
         // === Search bar and new pedalboard button ===
+        let col_height = ui.available_height() * 0.08;
         ui.columns(3, |columns| {
-            columns[1].add_sized(
-                [0.0, 40.0],
-                TextEdit::singleline(&mut self.search_term).hint_text(RichText::new("Search pedalboards...").size(20.0))
-            );
-
-
             columns[0].allocate_ui_with_layout(
-                Vec2::new(0.0, 40.0),
+                Vec2::new(0.0, col_height),
                 Layout::top_down(egui::Align::Center),
                 |ui| {
                     if ui.add_sized(
-                        [200.0, 40.0],
+                        [ui.available_width()*0.5, col_height*0.9],
                         egui::Button::new(
-                            RichText::new("New Pedalboard").size(20.0)
+                            RichText::new("New Pedalboard")
                         ).stroke((0.7, crate::THEME_COLOR))).clicked()
                     {
-                        let unique_name = self.state.pedalboards.unique_library_pedalboard_name(String::from("New Pedalboard"));
+                        let unique_name = self.state.pedalboards.unique_name(String::from("New Pedalboard"));
                         self.state.pedalboards.pedalboard_library.borrow_mut().push(Pedalboard::new(unique_name));
                 }
             });
+
+            columns[1].add_sized(
+                [0.0, col_height],
+                TextEdit::singleline(&mut self.search_term)
+                    .hint_text(RichText::new("Search pedalboards..."))
+                    .vertical_align(egui::Align::Center)
+            );
         });
 
         ui.add_space(5.0);
@@ -95,12 +98,15 @@ impl Widget for &mut PedalboardLibraryScreen {
         ui.add_space(10.0);
 
         // === Pedalboard Grid ===
-        let row_height = 50.0;
-        let row_size = Vec2::new(ui.available_width(), row_height);
+        let row_size = Vec2::new(ui.available_width(), ui.available_height() * 0.15);
 
         let pedalboard_library = self.state.pedalboards.pedalboard_library.borrow();
         if pedalboard_library.is_empty() {
-            ui.add_sized(row_size, egui::Label::new(RichText::new("No Pedalboards Found").size(30.0).color(crate::FAINT_TEXT_COLOR)))
+            ui.add_sized(row_size, egui::Label::new(
+                RichText::new("No Pedalboards Found")
+                    .text_style(egui::TextStyle::Heading)
+                    .color(crate::FAINT_TEXT_COLOR)
+            ))
         } else {
             let mut action = None;
 
