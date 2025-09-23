@@ -203,6 +203,7 @@ pub fn start_file_writer_thread<P: AsRef<Path>>(
     cons_sender: crossbeam::channel::Sender<(HeapCons<f32>, Option<HeapCons<f32>>)>,
 ) {
     let dir = output_dir.as_ref().to_path_buf();
+    std::fs::create_dir_all(&dir).expect("Failed to create recording directory");
 
     std::thread::spawn(move || {
         log::info!("Starting recording thread, to directory: {:?}", dir);
