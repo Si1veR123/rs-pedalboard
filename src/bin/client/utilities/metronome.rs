@@ -31,9 +31,7 @@ impl Widget for &mut MetronomeWidget {
             if ui.add_sized(Vec2::new(ui.available_width()*0.5, 30.0),
                 egui::Slider::new(&mut bpm, 40..=360).show_value(false)
             ).changed() {
-                if active {
-                    self.state.set_metronome(active, bpm, volume)
-                }
+                self.state.set_metronome(active, bpm, volume)
             }
 
             ui.add_space(10.0);

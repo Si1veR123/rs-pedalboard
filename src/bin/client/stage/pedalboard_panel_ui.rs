@@ -194,6 +194,7 @@ pub fn pedalboard_stage_panel(screen: &mut PedalboardStageScreen, ui: &mut egui:
         },
         Some(CurrentAction::DuplicateNew(index)) => {
             drop(active_pedalboards);
+            drop(pedalboard_library);
             screen.state.duplicate_new(index);
         },
         Some(CurrentAction::Remove(index)) => {

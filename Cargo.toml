@@ -8,7 +8,6 @@ server = ["dep:clap"]
 client = ["dep:egui_extras", "dep:image", "dep:egui_dnd", "dep:which", "dep:sysinfo", "dep:egui_file", "dep:serde_with"]
 virtual_keyboard = ["dep:egui_keyboard"]
 log_full_commands = []
-serde_with = ["dep:serde_with"]
 
 [[bin]]
 name = "server"

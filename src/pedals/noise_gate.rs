@@ -59,8 +59,8 @@ impl NoiseGate {
         parameters.insert(
             "Threshold Db".to_string(),
             PedalParameter {
-                value: PedalParameterValue::Float(-20.0),
-                min: Some(PedalParameterValue::Float(-60.0)),
+                value: PedalParameterValue::Float(-50.0),
+                min: Some(PedalParameterValue::Float(-70.0)),
                 max: Some(PedalParameterValue::Float(0.0)),
                 step: None,
             },
