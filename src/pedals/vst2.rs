@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use super::PedalTrait;
@@ -10,7 +11,7 @@ use super::ui::pedal_knob;
 
 use crate::pedals::ui::pedal_switch;
 use crate::pedals::ParameterUILocation;
-use crate::plugin::vst2::{Vst2Instance, path_from_name, VST2_PLUGIN_PATH};
+use crate::plugin::vst2::{Vst2Instance, VST2_PLUGIN_PATH};
 use crate::unique_time_id;
 
 use eframe::egui::RichText;
@@ -42,6 +43,19 @@ impl Serialize for Vst2 {
     {
         let parameters_with_idx: HashMap<String, (Option<usize>, PedalParameter)> = self.parameters.iter().map(|(k, v)| {
             let idx = self.param_index_map.get(k).cloned();
+            let mut value = v.clone();
+
+            // If the parameter is "Plugin", store only the relative path if it is in the VST2_PLUGIN_PATH directory
+            if k == "Plugin" {
+                if let PedalParameterValue::String(path) = &v.value {
+                    if let Some(save_dir) = Path::new(VST2_PLUGIN_PATH).canonicalize().ok() {
+                        if let Some(relative_path) = Path::new(path).canonicalize().ok().and_then(|p| p.strip_prefix(&save_dir).map(|rp| rp.to_path_buf()).ok()) {
+                            value.value = PedalParameterValue::String(relative_path.to_string_lossy().to_string());
+                        }
+                    }
+                }
+            }
+
             (k.clone(), (idx, v.clone()))
         }).collect();
 
@@ -65,13 +79,20 @@ impl<'a> Deserialize<'a> for Vst2 {
         let helper = Vst2Data::deserialize(deserializer)?;
 
         let parameters_with_idx = helper.parameters_with_idx;
-        let name = parameters_with_idx.get("Plugin").unwrap().1.value.as_str().unwrap().to_string();
+        let mut path = parameters_with_idx.get("Plugin").unwrap().1.value.as_str().unwrap().to_string();
+        // If the path is relative, make it absolute using the VST2_PLUGIN_PATH directory
+        if !path.is_empty() && Path::new(&path).is_relative() {
+            if let Some(save_dir) = Path::new(VST2_PLUGIN_PATH).canonicalize().ok() {
+                path = save_dir.join(path).to_string_lossy().to_string();
+            }
+        }
+
         let dry_wet = parameters_with_idx.get("Dry/Wet").unwrap().1.value.as_float().unwrap_or(1.0);
         let active = parameters_with_idx.get("Active").unwrap().1.value.as_bool().unwrap_or(true);
 
         let mut parameters = HashMap::new();
         parameters.insert(String::from("Plugin"), PedalParameter {
-            value: PedalParameterValue::String(name.clone()),
+            value: PedalParameterValue::String(path.clone()),
             min: None,
             max: None,
             step: None
@@ -90,7 +111,7 @@ impl<'a> Deserialize<'a> for Vst2 {
         });
 
         let mut param_index_map = HashMap::new();
-        if !name.is_empty() {
+        if !path.is_empty() {
             for (key, (idx, param)) in parameters_with_idx {
                 if let Some(index) = idx {
                     // If index is Some(..), then the parameter is a plugin parameter
@@ -114,24 +135,24 @@ impl<'a> Deserialize<'a> for Vst2 {
             folders_state: 0,
             id
         };
-        if name.is_empty() {
+        if path.is_empty() {
             Ok(empty_vst)
         } else {
-            let path = path_from_name(&name);
-            if path.is_none() {
-                log::error!("Plugin {} not found", name);
+            let path = PathBuf::from(path);
+            if !path.exists() {
+                log::error!("Plugin {:?} not found", &path);
                 empty_vst.sync_instance_to_parameters();
                 return Ok(empty_vst);
             }
 
-            let new_plugin_instance = Vst2Instance::load(path.unwrap());
+            let new_plugin_instance = Vst2Instance::load(&path);
             let mut deserialized_vst = match new_plugin_instance {
                 Ok(instance) => Ok(Vst2 {
                     instance: Some(instance),
                     ..empty_vst
                 }),
                 Err(_) => {
-                    log::error!("Failed to load plugin: {}", name);
+                    log::error!("Failed to load plugin: {:?}", path);
                     empty_vst.sync_instance_to_parameters();
                     Ok(empty_vst)
                 }

@@ -64,7 +64,16 @@ impl Serialize for Nam {
     {
         let mut ser_map = serializer.serialize_map(Some(2))?;
         ser_map.serialize_entry("id", &self.id)?;
-        ser_map.serialize_entry("parameters", &self.parameters)?;
+        let mut parameters = self.parameters.clone();
+        // If the model path is in the pedalboard NAM directory, store it as a relative path
+        if let Some(model_path) = self.modeler.get_model_path() {
+            if let Some(save_dir) = Self::get_save_directory() {
+                if let Ok(relative_path) = model_path.strip_prefix(&save_dir) {
+                    parameters.get_mut("Model").unwrap().value = PedalParameterValue::String(relative_path.to_string_lossy().to_string());
+                }
+            }
+        }
+        ser_map.serialize_entry("parameters", &parameters)?;
         ser_map.end()
     }
 }
@@ -84,6 +93,20 @@ impl<'a> Deserialize<'a> for Nam {
 
         let parameters = helper.parameters;
         let model = parameters.get("Model").unwrap().value.as_str().unwrap();
+
+        // If model is a relative path, make it absolute based on the save directory
+        let model_path = PathBuf::from(model);
+        let model = if model_path.is_relative() {
+            if let Some(save_dir) = Self::get_save_directory() {
+                save_dir.join(model_path)
+            } else {
+                log::warn!("Failed to get save directory, removing relative model path");
+                PathBuf::new()
+            }
+        } else {
+            model_path
+        };
+
         // Default buffer size, can be changed later with `set_config`
         let modeler = NeuralAmpModeler::new_with_maximum_buffer_size(512).expect("Failed to create neural amp modeler");
 
@@ -98,11 +121,11 @@ impl<'a> Deserialize<'a> for Nam {
             id: helper.id
         };
 
-        match PathBuf::from(model).canonicalize() {
+        match model.canonicalize() {
             Ok(model) => {
                 pedal.set_model(model);
             },
-            Err(e) => log::warn!("Failed to set model path ({model}) during deserialization: {e}"),
+            Err(e) => log::warn!("Failed to set model path ({model:?}) during deserialization: {e}"),
         };
         
         Ok(pedal)
