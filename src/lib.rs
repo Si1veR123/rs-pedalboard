@@ -1,5 +1,7 @@
 use std::time::{Duration, UNIX_EPOCH, SystemTime};
 
+use std::path::{Path, PathBuf};
+
 pub mod pedalboard;
 pub mod pedalboard_set;
 pub mod pedals;
@@ -21,4 +23,12 @@ pub fn unique_time_id() -> u32 {
     let duration = now.duration_since(UNIX_EPOCH).unwrap();
     let nanoseconds = duration.subsec_nanos();
     nanoseconds
+}
+
+pub fn forward_slash_path<P: AsRef<Path>>(path: P) -> PathBuf {
+    let s = path
+        .as_ref()
+        .to_str()
+        .expect("Path contains invalid UTF-8");
+    PathBuf::from(s.replace('\\', "/"))
 }

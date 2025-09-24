@@ -690,7 +690,7 @@ fn multiple_directories_select_ui(ui: &mut egui::Ui, paths: &mut Vec<PathBuf>, d
 
     if file_dialog.selected() {
         if let Some(path) = file_dialog.path() {
-            let path = path.to_path_buf().canonicalize();
+            let path = dunce::canonicalize(path);
             match path {
                 Ok(path) => {
                     if path.is_dir() && !paths.contains(&path) {

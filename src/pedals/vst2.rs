@@ -9,6 +9,7 @@ use super::PedalParameter;
 use super::PedalParameterValue;
 use super::ui::pedal_knob;
 
+use crate::forward_slash_path;
 use crate::pedals::ui::pedal_switch;
 use crate::pedals::ParameterUILocation;
 use crate::plugin::vst2::{Vst2Instance, VST2_PLUGIN_PATH};
@@ -48,9 +49,12 @@ impl Serialize for Vst2 {
             // If the parameter is "Plugin", store only the relative path if it is in the VST2_PLUGIN_PATH directory
             if k == "Plugin" {
                 if let PedalParameterValue::String(path) = &v.value {
-                    if let Some(save_dir) = Path::new(VST2_PLUGIN_PATH).canonicalize().ok() {
-                        if let Some(relative_path) = Path::new(path).canonicalize().ok().and_then(|p| p.strip_prefix(&save_dir).map(|rp| rp.to_path_buf()).ok()) {
-                            value.value = PedalParameterValue::String(relative_path.to_string_lossy().to_string());
+                    if let Some(save_dir) = dunce::canonicalize(Path::new(VST2_PLUGIN_PATH)).ok() {
+                        if let Ok(relative_path) = Path::new(path).strip_prefix(&save_dir) {
+                            // Convert relative paths to use forward slashes for cross platform compatibility
+                            // Not used for absolute path as they are not intended to be portable
+                            let relative_path_converted = forward_slash_path(relative_path);
+                            value.value = PedalParameterValue::String(relative_path_converted.to_string_lossy().to_string());
                         }
                     }
                 }
@@ -82,7 +86,7 @@ impl<'a> Deserialize<'a> for Vst2 {
         let mut path = parameters_with_idx.get("Plugin").unwrap().1.value.as_str().unwrap().to_string();
         // If the path is relative, make it absolute using the VST2_PLUGIN_PATH directory
         if !path.is_empty() && Path::new(&path).is_relative() {
-            if let Some(save_dir) = Path::new(VST2_PLUGIN_PATH).canonicalize().ok() {
+            if let Some(save_dir) = dunce::canonicalize(Path::new(VST2_PLUGIN_PATH)).ok() {
                 path = save_dir.join(path).to_string_lossy().to_string();
             }
         }
@@ -123,7 +127,7 @@ impl<'a> Deserialize<'a> for Vst2 {
 
         let id = helper.id;
 
-        let mut empty_vst = Vst2 {
+        let mut vst_pedal = Vst2 {
             instance: None,
             config: None,
             parameters,
@@ -136,32 +140,21 @@ impl<'a> Deserialize<'a> for Vst2 {
             id
         };
         if path.is_empty() {
-            Ok(empty_vst)
+            Ok(vst_pedal)
         } else {
             let path = PathBuf::from(path);
             if !path.exists() {
                 log::error!("Plugin {:?} not found", &path);
-                empty_vst.sync_instance_to_parameters();
-                return Ok(empty_vst);
+                vst_pedal.sync_instance_to_parameters();
+                return Ok(vst_pedal);
             }
 
-            let new_plugin_instance = Vst2Instance::load(&path);
-            let mut deserialized_vst = match new_plugin_instance {
-                Ok(instance) => Ok(Vst2 {
-                    instance: Some(instance),
-                    ..empty_vst
-                }),
-                Err(_) => {
-                    log::error!("Failed to load plugin: {:?}", path);
-                    empty_vst.sync_instance_to_parameters();
-                    Ok(empty_vst)
-                }
-            }?;
+            vst_pedal.set_plugin(path);
 
             // Set the saved parameters on the new instance
-            deserialized_vst.sync_parameters_to_instance();
+            vst_pedal.sync_parameters_to_instance();
 
-            Ok(deserialized_vst)
+            Ok(vst_pedal)
         }        
     }
 }
@@ -327,7 +320,17 @@ impl Vst2 {
     }
 
     pub fn set_plugin<P: AsRef<Path>>(&mut self, plugin_path: P) {
-        let new_plugin_instance = Vst2Instance::load(plugin_path.as_ref());
+        let canon_path = match dunce::canonicalize(plugin_path.as_ref()) {
+            Ok(p) => p,
+            Err(e) => {
+                log::error!("Failed to canonicalize plugin path {:?}: {}", plugin_path.as_ref(), e);
+                self.instance = None;
+                self.sync_instance_to_parameters();
+                return;
+            }
+        };
+
+        let new_plugin_instance = Vst2Instance::load(canon_path);
         match new_plugin_instance {
             Ok(mut instance) => {
                 if let Some((bs, sr)) = self.config {

@@ -6,7 +6,7 @@ use std::sync::Arc;
 use crate::dsp_algorithms::impluse_response::{IRConvolver, load_ir};
 use crate::pedals::ui::{pedal_switch, sideways_arrow};
 use crate::pedals::ParameterUILocation;
-use crate::{unique_time_id, SAVE_DIR};
+use crate::{forward_slash_path, unique_time_id, SAVE_DIR};
 use egui_directory_combobox::DirectoryComboBox;
 use serde::{ser::SerializeMap, Deserialize, Serialize};
 use eframe::egui::{self, include_image, Vec2};
@@ -51,11 +51,14 @@ impl Serialize for ImpulseResponse {
         if let Some(ir_path) = self.parameters.get("IR").and_then(|p| p.value.as_str()) {
             if let Some(save_dir) = Self::get_save_directory() {
                 if let Ok(relative_path) = PathBuf::from(ir_path).strip_prefix(&save_dir) {
-                    parameters.get_mut("IR").unwrap().value = PedalParameterValue::String(relative_path.to_string_lossy().to_string());
+                    // Convert relative paths to use forward slashes for cross platform compatibility
+                    // Not used for absolute path as they are not intended to be portable
+                    let relative_path_converted = forward_slash_path(relative_path);
+                    parameters.get_mut("IR").unwrap().value = PedalParameterValue::String(relative_path_converted.to_string_lossy().to_string());
                 }
             }
         }
-        ser_map.serialize_entry("parameters", &self.parameters)?;
+        ser_map.serialize_entry("parameters", &parameters)?;
         ser_map.end()
     }
 }
@@ -71,7 +74,7 @@ impl<'a> Deserialize<'a> for ImpulseResponse {
             parameters: HashMap<String, PedalParameter>,
         }
 
-        let helper = ImpulseResponseData::deserialize(deserializer)?;
+        let mut helper = ImpulseResponseData::deserialize(deserializer)?;
         let id = helper.id;
         let mut combobox_widget = Self::get_empty_directory_combo_box(id);
         let midi_min_combobox_widget = Self::get_empty_directory_combo_box(egui::Id::new(id).with("midi_min"));
@@ -86,7 +89,7 @@ impl<'a> Deserialize<'a> for ImpulseResponse {
         if let Some(model_path) = model_path.as_mut() {
             if model_path.is_relative() {
                 if let Some(save_dir) = Self::get_save_directory() {
-                    if let Ok(absolute_path) = save_dir.join(&model_path).canonicalize() {
+                    if let Ok(absolute_path) = dunce::canonicalize(save_dir.join(&model_path)) {
                         *model_path = absolute_path;
                     } else {
                         log::warn!("Failed to canonicalize IR path: {:?}", model_path);
@@ -99,7 +102,14 @@ impl<'a> Deserialize<'a> for ImpulseResponse {
             }
         }
 
-        combobox_widget.set_selection(model_path);
+        combobox_widget.set_selection(model_path.as_ref());
+        helper.parameters.get_mut("IR").map(|p| {
+            if let Some(path) = model_path {
+                p.value = PedalParameterValue::String(path.to_string_lossy().to_string());
+            } else {
+                p.value = PedalParameterValue::String("".to_string());
+            }
+        });
 
         Ok(Self {
             ir: None,
@@ -192,7 +202,20 @@ impl ImpulseResponse {
 
     /// Ensure max_buffer_size is set before setting the IR.
     pub fn set_ir_convolver<P: AsRef<Path>>(&mut self, ir_path: P, sample_rate: f32) {
-        let string_path = match ir_path.as_ref().to_str() {
+        if ir_path.as_ref().as_os_str().is_empty() {
+            self.remove_ir();
+            return;
+        }
+
+        let canon_path = match dunce::canonicalize(ir_path.as_ref()) {
+            Ok(p) => p,
+            Err(e) => {
+                log::error!("Failed to canonicalize IR path {:?}: {}", ir_path.as_ref(), e);
+                return;
+            }
+        };
+
+        let string_path = match canon_path.to_str() {
             Some(s) => s.to_string(),
             None => {
                 log::warn!("IR path is not valid unicode");
@@ -338,11 +361,7 @@ impl PedalTrait for ImpulseResponse {
         self.sample_rate = Some(sample_rate as f32);
 
         let ir_path = self.parameters.get("IR").unwrap().value.as_str().unwrap().to_string();
-        if !ir_path.is_empty() {
-            self.set_ir_convolver(&ir_path, sample_rate as f32);
-        } else {
-            self.ir = None;
-        }
+        self.set_ir_convolver(&ir_path, sample_rate as f32);
     }
 
     fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
@@ -380,11 +399,7 @@ impl PedalTrait for ImpulseResponse {
             // If sample rate is not set we are not on server, so don't need to set the IR convolver.
             let path = value.as_str().unwrap();
             if let Some(sample_rate) = self.sample_rate {
-                if path.is_empty() {
-                    self.remove_ir();
-                } else {
-                    self.set_ir_convolver(path, sample_rate);
-                }
+                self.set_ir_convolver(path, sample_rate);
                 return;
             }
             if !path.is_empty() {

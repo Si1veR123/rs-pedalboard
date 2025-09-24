@@ -11,7 +11,7 @@ use egui_directory_combobox::DirectoryComboBox;
 use super::{ui::pedal_knob, PedalParameter, PedalParameterValue, PedalTrait};
 use crate::pedals::ui::{pedal_switch, sideways_arrow};
 use crate::pedals::ParameterUILocation;
-use crate::{unique_time_id, SAVE_DIR};
+use crate::{forward_slash_path, unique_time_id, SAVE_DIR};
 
 const NAM_SAVE_PATH: &str = r"NAM";
 
@@ -69,7 +69,10 @@ impl Serialize for Nam {
         if let Some(model_path) = self.parameters.get("Model").and_then(|p| p.value.as_str()).map(PathBuf::from) {
             if let Some(save_dir) = Self::get_save_directory() {
                 if let Ok(relative_path) = model_path.strip_prefix(&save_dir) {
-                    parameters.get_mut("Model").unwrap().value = PedalParameterValue::String(relative_path.to_string_lossy().to_string());
+                    // Convert relative paths to use forward slashes for cross platform compatibility
+                    // Not used for absolute path as they are not intended to be portable
+                    let relative_path_converted = forward_slash_path(relative_path);
+                    parameters.get_mut("Model").unwrap().value = PedalParameterValue::String(relative_path_converted.to_string_lossy().to_string());
                 }
             }
         }
@@ -121,12 +124,7 @@ impl<'a> Deserialize<'a> for Nam {
             id: helper.id
         };
 
-        match dunce::canonicalize(&model) {
-            Ok(model) => {
-                pedal.set_model(model);
-            },
-            Err(e) => log::warn!("Failed to set model path ({model:?}) during deserialization: {e}"),
-        };
+        pedal.set_model(model);
         
         Ok(pedal)
     }
@@ -236,7 +234,15 @@ impl Nam {
             return;
         }
         
-        let string_path = match model_path.to_str() {
+        let canon_path = match dunce::canonicalize(&model_path) {
+            Ok(p) => p,
+            Err(e) => {
+                log::error!("Failed to canonicalize model path {:?}: {}", model_path, e);
+                return;
+            }
+        };
+
+        let string_path = match canon_path.to_str() {
             Some(s) => s.to_string(),
             None => {
                 log::warn!("Model path is not valid unicode");
