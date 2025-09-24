@@ -66,7 +66,7 @@ impl Serialize for Nam {
         ser_map.serialize_entry("id", &self.id)?;
         let mut parameters = self.parameters.clone();
         // If the model path is in the pedalboard NAM directory, store it as a relative path
-        if let Some(model_path) = self.modeler.get_model_path() {
+        if let Some(model_path) = self.parameters.get("Model").and_then(|p| p.value.as_str()).map(PathBuf::from) {
             if let Some(save_dir) = Self::get_save_directory() {
                 if let Ok(relative_path) = model_path.strip_prefix(&save_dir) {
                     parameters.get_mut("Model").unwrap().value = PedalParameterValue::String(relative_path.to_string_lossy().to_string());
@@ -121,7 +121,7 @@ impl<'a> Deserialize<'a> for Nam {
             id: helper.id
         };
 
-        match model.canonicalize() {
+        match dunce::canonicalize(&model) {
             Ok(model) => {
                 pedal.set_model(model);
             },
@@ -263,7 +263,7 @@ impl Nam {
     }
 
     pub fn get_save_directory() -> Option<PathBuf> {
-        Some(homedir::my_home().ok()??.join(SAVE_DIR).join(NAM_SAVE_PATH))
+        Some(dunce::canonicalize(homedir::my_home().ok()??.join(SAVE_DIR).join(NAM_SAVE_PATH)).ok()?)
     }
 
     /// Update the main pedal value, and midi min and max combobox widgets if the root directories have changed

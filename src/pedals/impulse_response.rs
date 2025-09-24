@@ -223,7 +223,7 @@ impl ImpulseResponse {
     }
 
     pub fn get_save_directory() -> Option<PathBuf> {
-        Some(homedir::my_home().ok()??.join(SAVE_DIR).join(IR_SAVE_PATH))
+        Some(dunce::canonicalize(homedir::my_home().ok()??.join(SAVE_DIR).join(IR_SAVE_PATH)).ok()?)
     }
 
     /// Update the main pedal value, and midi min and max combobox widgets if the root directories have changed
