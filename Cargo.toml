@@ -60,3 +60,4 @@ egui_keyboard = { git = "https://github.com/Si1veR123/egui_keyboard.git", option
 egui_directory_combobox = { git = "https://github.com/Si1veR123/egui-directory-combobox.git" }
 egui_file = { version = "0.23.1", optional = true }
 serde_with = { version = "3.14.0", optional = true }
+dunce = "1.0.5"
