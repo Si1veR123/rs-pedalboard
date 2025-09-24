@@ -77,15 +77,24 @@ impl<'a> Deserialize<'a> for ImpulseResponse {
         let midi_min_combobox_widget = Self::get_empty_directory_combo_box(egui::Id::new(id).with("midi_min"));
         let midi_max_combobox_widget = Self::get_empty_directory_combo_box(egui::Id::new(id).with("midi_max"));
 
-        let mut model_path = helper.parameters.get("IR").and_then(|p| p.value.as_str().map(|s| PathBuf::from(s)));
+        let mut model_path = helper.parameters.get("IR")
+            .and_then(
+                |p| p.value.as_str().and_then(|s| if s == "" { None } else { Some(PathBuf::from(s)) } )
+            );
 
         // If the model path is relative, make it absolute based on save directory
         if let Some(model_path) = model_path.as_mut() {
-            if !model_path.is_relative() {
+            if model_path.is_relative() {
                 if let Some(save_dir) = Self::get_save_directory() {
                     if let Ok(absolute_path) = save_dir.join(&model_path).canonicalize() {
                         *model_path = absolute_path;
+                    } else {
+                        log::warn!("Failed to canonicalize IR path: {:?}", model_path);
+                        *model_path = PathBuf::new();
                     }
+                } else {
+                    log::warn!("Failed to get save directory for IR path: {:?}", model_path);
+                    *model_path = PathBuf::new();
                 }
             }
         }
