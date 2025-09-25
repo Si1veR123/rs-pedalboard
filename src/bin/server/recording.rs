@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::{io, path::{Path, PathBuf}};
 
 use crossbeam::channel::{Receiver, Sender, TryRecvError};
 use hound::WavWriter;
@@ -57,7 +57,7 @@ impl RecordingHandle {
                 }
             },
             _ => {
-                tracing::warn!("RecordingHandle: Attempted to change clean recording state in invalid state.");
+                tracing::warn!("Attempted to change clean recording state in invalid state.");
             }
         }
     }
@@ -67,6 +67,21 @@ impl RecordingHandle {
             RecordingHandleState::Inactive { clean, .. } => clean.is_some(),
             RecordingHandleState::Active { clean_prod, .. } => clean_prod.is_some(),
             _ => false
+        }
+    }
+
+    fn new_inactive_state(ring_buf_size: usize, clean: bool) -> RecordingHandleState {
+        let (prod, cons) = ringbuf::HeapRb::<f32>::new(ring_buf_size).split();
+        let clean_ringbuf = if clean {
+            let (clean_prod, clean_cons) = ringbuf::HeapRb::<f32>::new(ring_buf_size).split();
+            Some((clean_prod, clean_cons))
+        } else {
+            None
+        };
+
+        RecordingHandleState::Inactive {
+            processed: (prod, cons),
+            clean: clean_ringbuf
         }
     }
 
@@ -82,7 +97,7 @@ impl RecordingHandle {
                         self.state = RecordingHandleState::Inactive {
                             processed: (processed_prod, cons),
                             clean:  match clean_cons {
-                                Some(c) => Some((clean_prod.expect("RecordingHandle: Clean producer missing when consumer received."), c)),
+                                Some(c) => Some((clean_prod.expect("Clean producer missing when consumer received."), c)),
                                 None => None
                             }
                         };
@@ -95,15 +110,8 @@ impl RecordingHandle {
                         };
                     },
                     Err(crossbeam::channel::TryRecvError::Disconnected) => {
-                        tracing::error!("RecordingHandle: Recording thread disconnected unexpectedly.");
-                        let (new_prod, new_cons) = ringbuf::HeapRb::<f32>::new(processed_prod.capacity().get()).split();
-                        self.state = RecordingHandleState::Inactive {
-                            processed: (new_prod, new_cons),
-                            clean: clean_prod.map(|p| {
-                                let (new_prod, new_cons) = ringbuf::HeapRb::<f32>::new(p.capacity().get()).split();
-                                (new_prod, new_cons)
-                            })
-                        };
+                        tracing::error!("Recording thread disconnected unexpectedly.");
+                        self.state = Self::new_inactive_state(processed_prod.capacity().get(), clean_prod.is_some());
                     }
                 }
             } else {
@@ -114,7 +122,7 @@ impl RecordingHandle {
 
     pub fn start_recording(&mut self) {
         if !matches!(self.state, RecordingHandleState::Inactive { .. }) {
-            tracing::warn!("RecordingHandle: Attempted to start recording while already active or changing.");
+            tracing::warn!("Attempted to start recording while already active or changing.");
             return;
         }
 
@@ -127,20 +135,25 @@ impl RecordingHandle {
                 None => (None, None)
             };
 
-            start_file_writer_thread(
+            if let Err(e) = start_file_writer_thread(
                 self.output_dir.clone(),
                 processed.1,
                 clean_cons,
                 self.sample_rate,
                 alive_receiver,
                 cons_sender
-            );
-            self.state = RecordingHandleState::Active {
-                processed_prod: processed.0,
-                clean_prod,
-                kill_channel: alive_sender,
-                cons_receiver
-            };
+            ) {
+                tracing::error!("Failed to start recording thread: {}", e);
+                self.state = Self::new_inactive_state(processed.0.capacity().get(), clean_prod.is_some());
+            } else {
+                // Ok
+                self.state = RecordingHandleState::Active {
+                    processed_prod: processed.0,
+                    clean_prod,
+                    kill_channel: alive_sender,
+                    cons_receiver
+                };
+            }
         } else {
             unreachable!();
         }
@@ -148,7 +161,7 @@ impl RecordingHandle {
 
     pub fn stop_recording(&mut self) {
         if !matches!(self.state, RecordingHandleState::Active { .. }) {
-            tracing::warn!("RecordingHandle: Attempted to stop recording while not active or changing.");
+            tracing::warn!("Attempted to stop recording while not active or changing.");
             return;
         }
 
@@ -194,18 +207,19 @@ impl RecordingHandle {
     }
 }
 
-pub fn start_file_writer_thread<P: AsRef<Path>>(
+#[tracing::instrument(level = "trace", skip(reader, clean_reader, alive_channel, cons_sender))]
+pub fn start_file_writer_thread<P: AsRef<Path> + std::fmt::Debug>(
     output_dir: P,
     mut reader: HeapCons<f32>,
     clean_reader: Option<HeapCons<f32>>,
     sample_rate: f32,
     alive_channel: crossbeam::channel::Receiver<()>,
     cons_sender: crossbeam::channel::Sender<(HeapCons<f32>, Option<HeapCons<f32>>)>,
-) {
+) -> io::Result<std::thread::JoinHandle<()>> {
     let dir = output_dir.as_ref().to_path_buf();
     std::fs::create_dir_all(&dir).expect("Failed to create recording directory");
 
-    std::thread::spawn(move || {
+    std::thread::Builder::new().name("RecordingThread".to_string()).spawn(move || {
         tracing::info!("Starting recording thread, to directory: {:?}", dir);
         let ringbuffer_len = reader.capacity().get();
         // Theoretical time for the ringbuffer to fill up
@@ -286,5 +300,5 @@ pub fn start_file_writer_thread<P: AsRef<Path>>(
         if let Some(w) = clean_file_writer {
             w.finalize().expect("Failed to finalize clean WAV file");
         }
-    });
+    })
 }

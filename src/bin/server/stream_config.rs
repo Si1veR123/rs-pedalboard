@@ -81,7 +81,7 @@ pub fn get_output_config_candidates(device: &Device, buffer_size: usize) -> Vec<
         panic!("No compatible output configs found for buffer size={}", buffer_size);
     }
 
-    // Prioritise configs based on first channel count (prefer max) then sample format
+    // Prioritise configs based on first channel count (prefer stereo then maximum) then sample format
     buffer_size_compatible_configs.sort_by(|a, b| {
         if a.channels() != b.channels() {
             b.channels().cmp(&a.channels())

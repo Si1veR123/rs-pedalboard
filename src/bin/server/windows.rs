@@ -8,6 +8,7 @@ fn find_device_by_name(host: &Host, name: &str) -> Option<Device> {
         .find(|d| d.name().unwrap() == name)
 }
 
+#[tracing::instrument(level = "trace")]
 pub fn setup(input: Option<&str>, output: Option<&str>, args: &ServerSettings) -> (Host, Device, Device) {
     let host_id = args.host.into();
 

@@ -6,6 +6,7 @@ use ringbuf::{traits::{Producer, Split}, HeapProd, HeapRb};
 use rs_pedalboard::{
     dsp_algorithms::{resampler::Resampler, yin::Yin}, pedalboard::Pedalboard, pedalboard_set::PedalboardSet, pedals::{Pedal, PedalParameterValue, PedalTrait}, DEFAULT_VOLUME_MONITOR_UPDATE_RATE
 };
+use tracing::trace_span;
 
 use crate::{
     metronome_player::MetronomePlayer, recording::RecordingHandle, settings::ServerSettings, volume_monitor::PeakVolumeMonitor, volume_normalization::PeakNormalizer
@@ -37,6 +38,7 @@ pub struct AudioProcessor {
 }
 
 impl AudioProcessor {
+    #[tracing::instrument(level = "trace", skip_all)]
     pub fn process_audio(&mut self, data: &[f32]) {
         self.recording.tick();
         if self.recording.is_recording() {
@@ -93,6 +95,9 @@ impl AudioProcessor {
         } else {
             // Main pedal audio processing
             // we process the data in chunks of FRAMES_PER_PERIOD
+            let span = trace_span!("process_audio", frames = self.processing_buffer.len());
+            let enter = span.enter();
+
             for i in 0..(self.processing_buffer.len() as f32 / self.settings.frames_per_period as f32).ceil() as usize {
                 let start = i * self.settings.frames_per_period;
                 let mut end = start + self.settings.frames_per_period;
@@ -101,7 +106,9 @@ impl AudioProcessor {
                 self.pedalboard_set.process_audio(frame, &mut self.pedal_command_to_client_buffer);
             }
 
-            self.processing_buffer.iter_mut().for_each(|sample| *sample *= self.master_out_volume);   
+            self.processing_buffer.iter_mut().for_each(|sample| *sample *= self.master_out_volume);
+
+            drop(enter);
         }
 
         // Downsample, if needed, back into data buffer
@@ -178,6 +185,7 @@ impl AudioProcessor {
         }
     }
 
+    #[tracing::instrument(level = "trace", skip(self))]
     fn handle_command(&mut self, command: Box<str>) -> Result<(), String> {
         let mut arguments = command.split('|');
         let command_name = arguments.next().ok_or_else(|| "No command name found".to_string())?;
@@ -436,8 +444,12 @@ impl AudioProcessor {
                         tuner_reader,
                     );
                     let kill = Arc::new(AtomicBool::new(false));
-                    crate::tuner::start_tuner(yin, kill.clone(), frequency_channel_send);
-                    self.tuner_handle = Some((tuner_writer, frequency_channel_recv, kill));
+                    if let Err(e) = crate::tuner::start_tuner(yin, kill.clone(), frequency_channel_send) {
+                        tracing::error!("Failed to start tuner thread: {}", e);
+                    } else {
+                        self.tuner_handle = Some((tuner_writer, frequency_channel_recv, kill));
+                    }
+                    
                 } else {
                     if let Some((_, _, kill)) = self.tuner_handle.take() {
                         kill.store(true, std::sync::atomic::Ordering::Relaxed);

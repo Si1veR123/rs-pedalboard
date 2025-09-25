@@ -67,6 +67,7 @@ fn current_time_string() -> String {
     format!("{}", chrono::Local::now().format("%H:%M:%S"))
 }
 
+#[tracing::instrument(level = "trace", skip_all)]
 pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
     // Status bar at the top. Allocate a top down ui for padding, then a left to right ui inside.
     let vertical_padding = 5.0;

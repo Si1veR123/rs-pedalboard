@@ -9,6 +9,7 @@ use library::PedalboardLibraryScreen;
 mod songs;
 use songs::SongsScreen;
 mod utilities;
+use tracing::trace_span;
 use utilities::UtilitiesScreen;
 mod settings;
 use settings::{SettingsScreen, ServerLaunchState};
@@ -108,6 +109,7 @@ pub fn init_tracing() {
 
     let stdout_layer = fmt::layer()
         .with_writer(io::stdout)
+        .with_timer(rs_pedalboard::TimeOnlyFormat)
         .with_target(false)
         .with_filter(console_filter_layer);
 
@@ -238,6 +240,7 @@ impl PedalboardClientApp {
 }
 
 impl eframe::App for PedalboardClientApp {
+    #[tracing::instrument(level = "trace", skip_all)]
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         #[cfg(feature = "virtual_keyboard")]
         {
@@ -258,6 +261,9 @@ impl eframe::App for PedalboardClientApp {
 
         let bottom_window_select_height = ctx.screen_rect().height() * 0.1;
         let padding = 10.0;
+
+        let span = trace_span!("TopBottomPanel");
+        let enter = span.enter();
         egui::TopBottomPanel::bottom(Id::new("bottom_window_select"))
             .min_height(bottom_window_select_height)
             .show(&ctx, |ui| {
@@ -270,7 +276,7 @@ impl eframe::App for PedalboardClientApp {
                     ui.allocate_ui(Vec2::new(ui.available_width()-(bottom_window_select_height*2.0), ui.available_height()), |ui| {
                         ui.columns_const(|[column0, column1, column2]| {
                             let button_size = [column0.available_width(), column0.available_height() - padding];
-        
+
                             column0.horizontal_centered(|ui| {
                                 if ui.add_sized(button_size, Button::new(
                                     RichText::new("Stage View")
@@ -351,7 +357,10 @@ impl eframe::App for PedalboardClientApp {
                     };
                 });
         });
+        drop(enter);
 
+        let span = trace_span!("CentralPanel", screen = self.selected_screen);
+        let enter = span.enter();
         egui::CentralPanel::default().show(&ctx, |ui| {
             match self.selected_screen {
                 0 => {
@@ -374,8 +383,10 @@ impl eframe::App for PedalboardClientApp {
                 }
             };
         });
+        drop(enter);
     }
 
+    #[tracing::instrument(level = "debug", skip_all)]
     fn save(&mut self, _storage: &mut dyn eframe::Storage) {
         // Remove any MIDI parameter functions that refer to pedalboards that no longer exist
         self.state.midi_state.borrow_mut().remove_old_parameter_functions(&self.state.all_pedalboard_ids());
@@ -388,6 +399,7 @@ impl eframe::App for PedalboardClientApp {
         }
     }
 
+    #[tracing::instrument(level = "debug", skip_all)]
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
         if self.state.client_settings.borrow().kill_server_on_close {
             tracing::info!("Killing server on exit");

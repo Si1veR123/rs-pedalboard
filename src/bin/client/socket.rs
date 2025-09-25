@@ -237,6 +237,7 @@ impl Clone for ClientSocketThreadHandle {
     }
 }
 
+#[tracing::instrument(level = "debug")]
 pub fn new_client_socket_thread(port: u16, subscribe_to_responses: bool) -> std::io::Result<ClientSocketThreadHandle> {
     let (message_sender, message_receiver) = smol::channel::unbounded();
     let (response_sender, response_receiver) = smol::channel::unbounded();
@@ -303,6 +304,7 @@ async fn send_to_all<T: Clone>(
     false
 }
 
+#[tracing::instrument(level = "trace")]
 async fn client_socket_event_loop(
     stream: TcpStream,
     message_receiver: Receiver<Command>,

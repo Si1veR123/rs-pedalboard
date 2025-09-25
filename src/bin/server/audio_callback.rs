@@ -295,6 +295,7 @@ fn build_output_stream(
     }
 }
 
+#[tracing::instrument(level = "trace", skip_all)]
 pub fn create_linked_streams(
     in_device: Device,
     out_device: Device,

@@ -306,7 +306,7 @@ impl RawVst3Plugin {
     pub fn load(path: PathBuf, max_samples: usize) -> Result<Vst3ProcessHandle, String> {
         let (s, r) = crossbeam::channel::bounded(1);
 
-        std::thread::spawn(move || {
+        std::thread::Builder::new().name(format!("Vst3Thread: {:?}", &path)).spawn(move || {
             let lib = unsafe { Library::new(path) }
                 .map_err(|e| format!("Failed to load plugin: {}", e));
 
@@ -519,7 +519,7 @@ mod tests {
         let mut plugin = result.unwrap();
         println!("Plugin loaded successfully");
         //plugin.open_gui_window().expect("Failed to open GUI window");
-        
+
         let sample_buffer = &mut vec![0.5; max_samples];
         plugin.process_buffer(sample_buffer);
         println!("Processed {} samples", sample_buffer.len());

@@ -39,6 +39,7 @@ pub fn init_tracing() {
     let stdout_layer = fmt::layer()
         .with_writer(io::stdout)
         .with_target(false)
+        .with_timer(rs_pedalboard::TimeOnlyFormat)
         .with_filter(console_filter_layer);
 
     // File layer
@@ -49,6 +50,7 @@ pub fn init_tracing() {
         .expect("Failed to create log file");
     let file_layer = fmt::layer()
         .with_writer(file)
+        .with_thread_names(true)
         .with_ansi(false)
         .with_target(true)
         .with_filter(file_filter_layer);

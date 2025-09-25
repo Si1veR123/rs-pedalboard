@@ -32,3 +32,14 @@ pub fn forward_slash_path<P: AsRef<Path>>(path: P) -> PathBuf {
         .expect("Path contains invalid UTF-8");
     PathBuf::from(s.replace('\\', "/"))
 }
+
+use tracing_subscriber::fmt::format::Writer;
+use tracing_subscriber::fmt::time::FormatTime;
+
+pub struct TimeOnlyFormat;
+impl FormatTime for TimeOnlyFormat {
+    fn format_time(&self, w: &mut Writer) -> std::fmt::Result {
+        let now = chrono::Local::now();
+        write!(w, "{}", now.format("%H:%M:%S"))
+    }
+}
