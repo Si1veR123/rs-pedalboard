@@ -81,7 +81,7 @@ pub fn get_output_config_candidates(device: &Device, buffer_size: usize) -> Vec<
         panic!("No compatible output configs found for buffer size={}", buffer_size);
     }
 
-    // Prioritise configs based on first channel count (prefer stereo then maximum) then sample format
+    // Prioritise configs based on first channel count (prefer maximum) then sample format
     buffer_size_compatible_configs.sort_by(|a, b| {
         if a.channels() != b.channels() {
             b.channels().cmp(&a.channels())
@@ -91,6 +91,25 @@ pub fn get_output_config_candidates(device: &Device, buffer_size: usize) -> Vec<
     });
 
     tracing::debug!("Sorted compatible buffer size output configs: {:?}", buffer_size_compatible_configs);
+
+    // If output config has more channels than 2, insert a 2 channel config with same settings at the start.
+    // This is to prefer stereo (2 channels) to configs with more channels if possible.
+    let mut stereo_configs = Vec::new();
+    for config in &buffer_size_compatible_configs {
+        if config.channels() > 2 {
+            let stereo_config = SupportedStreamConfigRange::new(
+                2,
+                config.min_sample_rate(),
+                config.max_sample_rate(),
+                config.buffer_size().clone(),
+                config.sample_format()
+            );
+
+            stereo_configs.push(stereo_config);
+        }
+    }
+    tracing::debug!("Adding stereo output configs: {:?}", stereo_configs);
+    buffer_size_compatible_configs.splice(0..0, stereo_configs);
 
     buffer_size_compatible_configs
 }
