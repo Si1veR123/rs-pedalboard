@@ -37,7 +37,7 @@ impl MidiState {
         match Self::create_midi_input() {
             Some(input) => available_named_input_ports = Self::resolve_port_names(input),
             None => {
-                log::error!("Cannot list MIDI ports: MIDI input creation failed");
+                tracing::error!("Cannot list MIDI ports: MIDI input creation failed");
             }
         }
 
@@ -99,7 +99,7 @@ impl MidiState {
         match MidiInput::new("Pedalboard MIDI Input") {
             Ok(input) => Some(input),
             Err(e) => {
-                log::error!("Failed to create MIDI input: {}", e);
+                tracing::error!("Failed to create MIDI input: {}", e);
                 None
             }
         }
@@ -146,7 +146,7 @@ impl MidiState {
             None => return
         };
 
-        log::debug!("Received MIDI CC message on port ID '{}': channel {}, cc {}, value {}", port_id, channel, cc, value);
+        tracing::debug!("Received MIDI CC message on port ID '{}': channel {}, cc {}, value {}", port_id, channel, cc, value);
 
         let mut settings_lock = settings.lock().expect("MidiState: Mutex poisoned.");
 
@@ -160,7 +160,7 @@ impl MidiState {
                     for function in &device.global_functions {
                         let command = function.command_from_function(device.current_value);
                         if let Err(e) = ui_thread_sender.send(command.clone()) {
-                            log::error!("Failed to send global MIDI command to UI thread: {}", e);
+                            tracing::error!("Failed to send global MIDI command to UI thread: {}", e);
                         }
 
                         if let Some(handle) = &socket_handle {
@@ -175,7 +175,7 @@ impl MidiState {
 
                         let command = Command::ParameterUpdate(path.clone(), function_values.parameter_from_value(device.current_value));
                         if let Err(e) = ui_thread_sender.send(command.clone()) {
-                            log::error!("Failed to send parameter MIDI command to UI thread: {}", e);
+                            tracing::error!("Failed to send parameter MIDI command to UI thread: {}", e);
                         }
 
                         if let Some(handle) = &socket_handle {
@@ -193,7 +193,7 @@ impl MidiState {
                 let midi_input = match Self::create_midi_input() {
                     Some(input) => input,
                     None => {
-                        log::error!("Cannot connect to port: MIDI input creation failed");
+                        tracing::error!("Cannot connect to port: MIDI input creation failed");
                         return;
                     }
                 };
@@ -225,18 +225,18 @@ impl MidiState {
                             id.to_string(),
                             connection
                         ));
-                        log::info!("Connected to MIDI port: {}", id);
+                        tracing::info!("Connected to MIDI port: {}", id);
                         self.available_input_ports.retain(|(_name, p)| p.id() != id);
                         self.settings.lock().expect("MidiState: Mutex poisoned.").port_settings.entry(id.to_string()).or_default();
                     }
                     Err(e) => {
-                        log::error!("Failed to connect to MIDI port {}: {}", id, e);
+                        tracing::error!("Failed to connect to MIDI port {}: {}", id, e);
                         return;
                     }
                 }
             }
         } else {
-            log::error!("MIDI port {} not found", id);
+            tracing::error!("MIDI port {} not found", id);
         }
     }
 
@@ -261,7 +261,7 @@ impl MidiState {
         let midi_input = match Self::create_midi_input() {
             Some(input) => input,
             None => {
-                log::error!("Cannot refresh ports: MIDI input creation failed");
+                tracing::error!("Cannot refresh ports: MIDI input creation failed");
                 return;
             }
         };
@@ -299,7 +299,7 @@ impl MidiState {
             }
         }
 
-        log::warn!("MIDI device ID '{}' not found when adding MIDI function", device_id);
+        tracing::warn!("MIDI device ID '{}' not found when adding MIDI function", device_id);
     }
 
     pub fn remove_midi_parameter_function_from_device(
@@ -317,7 +317,7 @@ impl MidiState {
             }
         }
 
-        log::warn!("MIDI device ID '{}' not found when removing MIDI function", device_id);
+        tracing::warn!("MIDI device ID '{}' not found when removing MIDI function", device_id);
 
         None
     }
@@ -680,24 +680,24 @@ impl MidiSettings {
         let file_path = match homedir::my_home() {
             Ok(Some(home)) => home.join(SAVE_DIR).join(MIDI_SETTINGS_SAVE_NAME),
             Ok(None) => {
-                log::error!("Could not determine home directory, using default MIDI settings");
+                tracing::error!("Could not determine home directory, using default MIDI settings");
                 return Default::default();
             }
             Err(e) => {
-                log::error!("Failed to get home directory: {e}, using default MIDI settings");
+                tracing::error!("Failed to get home directory: {e}, using default MIDI settings");
                 return Default::default();
             }
         };
 
         if !file_path.exists() {
-            log::info!("MIDI Settings save file not found at {:?}, using default", file_path);
+            tracing::info!("MIDI Settings save file not found at {:?}, using default", file_path);
             return Default::default();
         }
 
         let stringified = match std::fs::read_to_string(&file_path) {
             Ok(s) => s,
             Err(e) => {
-                log::error!("Failed to read MIDI settings file {:?}: {e}, using default", file_path);
+                tracing::error!("Failed to read MIDI settings file {:?}: {e}, using default", file_path);
                 return Default::default();
             }
         };
@@ -705,7 +705,7 @@ impl MidiSettings {
         match serde_json::from_str(&stringified) {
             Ok(state) => state,
             Err(e) => {
-                log::error!("Failed to deserialize MIDI settings from {:?}: {e}, using default", file_path);
+                tracing::error!("Failed to deserialize MIDI settings from {:?}: {e}, using default", file_path);
                 Default::default()
             }
         }

@@ -110,20 +110,20 @@ impl ServerSettingsSave {
         let save_path = match Self::get_save_path() {
             Some(path) => path,
             None => {
-                log::error!("Failed to get server settings save path, using default");
+                tracing::error!("Failed to get server settings save path, using default");
                 return Default::default();
             }
         };
 
         if !save_path.exists() {
-            log::info!("Server settings save file not found, using default");
+            tracing::info!("Server settings save file not found, using default");
             return Default::default();
         }
 
         let data = match std::fs::read_to_string(&save_path) {
             Ok(d) => d,
             Err(e) => {
-                log::error!("Failed to read server settings from {:?}: {e}, using default", save_path);
+                tracing::error!("Failed to read server settings from {:?}: {e}, using default", save_path);
                 return Default::default();
             }
         };
@@ -131,7 +131,7 @@ impl ServerSettingsSave {
         match serde_json::from_str(&data) {
             Ok(settings) => settings,
             Err(e) => {
-                log::error!("Failed to deserialize server settings from {:?}: {e}, using default", save_path);
+                tracing::error!("Failed to deserialize server settings from {:?}: {e}, using default", save_path);
                 Default::default()
             }
         }

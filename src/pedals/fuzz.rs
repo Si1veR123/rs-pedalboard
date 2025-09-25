@@ -118,7 +118,7 @@ impl PedalTrait for Fuzz {
                     }
                 },
                 _ => {
-                    log::warn!("Fuzz: Unknown fuzz type {}.", fuzz_type);
+                    tracing::warn!("Fuzz: Unknown fuzz type {}.", fuzz_type);
                     x
                 }
             };

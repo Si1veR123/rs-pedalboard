@@ -147,7 +147,7 @@ macro_rules! var_delay_phaser {
 
             fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
                 if self.variable_delay_phaser.is_none() {
-                    log::error!("{}: VariableDelayPhaser is not initialized. Call set_config() first.", stringify!($name));
+                    tracing::error!("{}: VariableDelayPhaser is not initialized. Call set_config() first.", stringify!($name));
                     return;
                 }
                 self.variable_delay_phaser.as_mut().unwrap().process_audio(buffer);
@@ -213,7 +213,7 @@ macro_rules! var_delay_phaser {
                                     variable_delay_phaser.feedback = feedback;
                                 }
                             } else {
-                                log::warn!("Feedback parameter is not included in this pedal.");
+                                tracing::warn!("Feedback parameter is not included in this pedal.");
                             }
                             self.parameters.get_mut(name).unwrap().value = PedalParameterValue::Float(feedback);
                         }
@@ -222,7 +222,7 @@ macro_rules! var_delay_phaser {
                         if let Some(parameter) = self.parameters.get_mut(name) {
                             parameter.value = value;
                         } else {
-                            log::warn!("Attempted to set unknown parameter: {}", name);
+                            tracing::warn!("Attempted to set unknown parameter: {}", name);
                         }
                     }
                 }

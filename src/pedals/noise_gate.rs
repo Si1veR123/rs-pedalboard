@@ -149,7 +149,7 @@ impl PedalTrait for NoiseGate {
 
     fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
         if self.sample_rate.is_none() {
-            log::warn!("NoiseGate: Sample rate not set. Call set_config first.");
+            tracing::warn!("NoiseGate: Sample rate not set. Call set_config first.");
             return;
         }
 

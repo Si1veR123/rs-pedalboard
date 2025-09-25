@@ -267,7 +267,7 @@ pub trait PedalTrait {
             if parameter.is_valid(&value) {
                 parameter.value = value;
             } else {
-                log::warn!("Attempted to set invalid value for parameter {}: {:?}", name, value);
+                tracing::warn!("Attempted to set invalid value for parameter {}: {:?}", name, value);
             }
         }
     }

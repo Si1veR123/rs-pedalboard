@@ -38,9 +38,9 @@ fn clip_f32_samples(samples: &mut [f32]) -> bool {
 
 fn handle_clipped_f32_samples(samples: &mut [f32], command_sender: &Sender<Box<str>>) {
     if clip_f32_samples(samples) {
-        log::warn!("Output samples clipped");
+        tracing::warn!("Output samples clipped");
         if let Err(e) = command_sender.try_send("clipped\n".into()) {
-            log::error!("Failed to send clipped command: {}", e);
+            tracing::error!("Failed to send clipped command: {}", e);
         }
     }
 }
@@ -60,7 +60,7 @@ fn build_input_stream(
             buffer_size: cpal::BufferSize::Fixed(buffer_size as u32),
         };
 
-        log::info!("Attempting to build test input stream with config: {:?}, format: {:?}", config, sample_format);
+        tracing::info!("Attempting to build test input stream with config: {:?}, format: {:?}", config, sample_format);
 
         let stream_result = match sample_format {
             cpal::SampleFormat::F32 => device.build_input_stream(&config, |_: &[f32], _| {} , |_| {}, None),
@@ -78,21 +78,21 @@ fn build_input_stream(
 
         match stream_result {
             Ok(_stream) => {
-                log::info!("Successfully built test input stream with config");
+                tracing::info!("Successfully built test input stream with config");
                 working_config =  Some((config, sample_format));
                 break;
             },
             Err(e) => {
-                log::warn!("Failed to build test input stream, error: {}", e);
+                tracing::warn!("Failed to build test input stream, error: {}", e);
             }
         }
     }
 
     if let Some((config, sample_format)) = working_config {
-        log::info!("Building input stream with config: {:?}, format {:?}", config, sample_format);
+        tracing::info!("Building input stream with config: {:?}, format {:?}", config, sample_format);
 
         let err_fn = |err| {
-            log::error!("An error occurred on the input stream: {}", err);
+            tracing::error!("An error occurred on the input stream: {}", err);
         };
         let mut sample_converter_buffer = Vec::with_capacity(buffer_size);
 
@@ -150,16 +150,16 @@ fn build_input_stream(
 
         match stream_result {
             Ok(stream) => {
-                log::info!("Successfully built input stream");
+                tracing::info!("Successfully built input stream");
                 return Some(stream);
             },
             Err(e) => {
-                log::error!("Failed to build input stream, error {}", e);
+                tracing::error!("Failed to build input stream, error {}", e);
                 return None;
             }
         }
     } else {
-        log::error!("No working input config found");
+        tracing::error!("No working input config found");
         return None;
     }
 }
@@ -180,7 +180,7 @@ fn build_output_stream(
             buffer_size: cpal::BufferSize::Fixed(buffer_size as u32),
         };
 
-        log::info!("Attempting to build test output stream with config: {:?}, format: {:?}", config, sample_format);
+        tracing::info!("Attempting to build test output stream with config: {:?}, format: {:?}", config, sample_format);
 
         let stream_result = match sample_format {
             cpal::SampleFormat::F32 => device.build_output_stream(&config, |_: &mut [f32], _| {}, |_| {}, None),
@@ -198,23 +198,23 @@ fn build_output_stream(
 
         match stream_result {
             Ok(_stream) => {
-                log::info!("Successfully built test output stream with config");
+                tracing::info!("Successfully built test output stream with config");
                 working_config = Some((config, sample_format));
                 break;
             },
             Err(e) => {
-                log::warn!("Failed to build test output stream, error: {}", e);
+                tracing::warn!("Failed to build test output stream, error: {}", e);
             }
         }
     }
 
     if let Some((config, sample_format)) = working_config {
-        log::info!("Building output stream with config: {:?}, format {:?}", config, sample_format);
+        tracing::info!("Building output stream with config: {:?}, format {:?}", config, sample_format);
 
         let mut sample_converter_buffer = Vec::with_capacity(buffer_size);
 
         let err_fn = |err| {
-            log::error!("An error occurred on the output stream: {}", err);
+            tracing::error!("An error occurred on the output stream: {}", err);
         };
 
         let stream_result = match sample_format {
@@ -281,16 +281,16 @@ fn build_output_stream(
 
         match stream_result {
             Ok(stream) => {
-                log::info!("Successfully built output stream");
+                tracing::info!("Successfully built output stream");
                 return Some(stream);
             },
             Err(e) => {
-                log::error!("Failed to build output stream, error {}", e);
+                tracing::error!("Failed to build output stream, error {}", e);
                 return None;
             }
         }
     } else {
-        log::error!("No working output config found");
+        tracing::error!("No working output config found");
         return None;
     }
 }
@@ -304,7 +304,7 @@ pub fn create_linked_streams(
 ) -> (Stream, Stream) {
     let in_command_sender = command_sender.clone();
 
-    log::info!("Finding a compatible config for input and output devices...");
+    tracing::info!("Finding a compatible config for input and output devices...");
     let (in_configs, out_configs) = get_compatible_configs(
         &in_device,
         &out_device,
@@ -320,7 +320,7 @@ pub fn create_linked_streams(
     let processing_sample_rate = used_sample_rate * (1 << settings.upsample_passes);
 
     let ring_buffer_size = ring_buffer_size(settings.frames_per_period, settings.buffer_latency, processing_sample_rate as f32);
-    log::info!("Ring buffer size: {}", ring_buffer_size);
+    tracing::info!("Ring buffer size: {}", ring_buffer_size);
     let ring_buffer: HeapRb<f32> = HeapRb::new(ring_buffer_size);
 
     let (audio_buffer_writer, mut audio_buffer_reader) = ring_buffer.split();
@@ -354,7 +354,7 @@ pub fn create_linked_streams(
             }
 
             if !input_stream_running {
-                log::info!("Input stream started. Received {} samples.", data.len());
+                tracing::info!("Input stream started. Received {} samples.", data.len());
                 input_stream_running = true;
             }
 
@@ -421,7 +421,7 @@ pub fn create_linked_streams(
             let channel_count = channel_count as usize;
 
             if !output_stream_running {
-                log::info!("Output stream started. Received {} samples.", data.len());
+                tracing::info!("Output stream started. Received {} samples.", data.len());
                 output_stream_running = true;
             }
 
@@ -432,9 +432,9 @@ pub fn create_linked_streams(
                 let read = audio_buffer_reader.pop_slice(&mut mono_buffer);
                 if read != frame_count {
                     if let Err(e) = command_sender.try_send("xrun\n".into()) {
-                        log::error!("Failed to send xrun command: {}", e);
+                        tracing::error!("Failed to send xrun command: {}", e);
                     }
-                    log::error!("Failed to provide a full buffer to output device. Input is behind.");
+                    tracing::warn!("Failed to provide a full buffer to output device. Input is behind.");
                 };
 
                 for (i, sample) in mono_buffer.iter().enumerate() {
@@ -443,7 +443,7 @@ pub fn create_linked_streams(
                     }
                 }
             } else {
-                log::error!("Output buffer length doesn't match channel count.");
+                tracing::error!("Output buffer length doesn't match channel count.");
             }
         }
     ).expect("Failed to build output stream");

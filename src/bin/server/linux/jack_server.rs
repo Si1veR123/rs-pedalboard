@@ -19,7 +19,7 @@ pub fn get_jack_host() -> (Host, Device, Device) {
 }
 
 pub fn kill_jack_servers() {
-    log::info!("Killing existing JACK servers");    
+    tracing::info!("Killing existing JACK servers");    
     Command::new("pkill").arg("jackd").spawn().expect("Failed to kill any existing JACK servers.").wait().unwrap();
 }
 
@@ -28,7 +28,7 @@ pub fn start_jack_server(frames_per_period: usize, periods_per_buffer: usize, sa
     jack_server_wait(false);
     std::thread::sleep(std::time::Duration::from_millis(1000));
 
-    log::info!("Starting JACK server with: Frames per Period {frames_per_period}, Periods per Buffer {periods_per_buffer}, Input {input}, Output {output}");
+    tracing::info!("Starting JACK server with: Frames per Period {frames_per_period}, Periods per Buffer {periods_per_buffer}, Input {input}, Output {output}");
 
     Command::new("jackd")
         .arg("-dalsa")
@@ -43,7 +43,7 @@ pub fn start_jack_server(frames_per_period: usize, periods_per_buffer: usize, sa
 }
 
 pub fn jack_server_wait(wait_until_open: bool) {
-    log::info!("Starting jack_wait. Waiting until open={wait_until_open}");
+    tracing::info!("Starting jack_wait. Waiting until open={wait_until_open}");
 
     let mut command = Command::new("jack_wait");
     command.arg("-t").arg("10");
@@ -64,11 +64,11 @@ pub fn jack_server_wait(wait_until_open: bool) {
         panic!("jack_wait timeout")
     }
 
-    log::info!("jack_wait completed successfully. JACK server is running.");
+    tracing::info!("jack_wait completed successfully. JACK server is running.");
 }
 
 pub fn stereo_output() {
-    log::info!("Connecting output to second playback port.");
+    tracing::info!("Connecting output to second playback port.");
     Command::new("jack_connect")
         .arg("cpal_client_out:out_0")
         .arg("system:playback_2")

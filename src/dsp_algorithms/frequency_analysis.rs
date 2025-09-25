@@ -19,7 +19,7 @@ pub struct FrequencyAnalyser {
 impl FrequencyAnalyser {
     pub fn new(sample_rate: f32, min_freq: f32, mut max_freq: f32, num_bins: usize, oversample: f32) -> Self {
         if max_freq > sample_rate * 0.5 {
-            log::warn!("FrequencyAnalyser: max_freq is greater than Nyquist frequency, clamping to Nyquist");
+            tracing::warn!("FrequencyAnalyser: max_freq is greater than Nyquist frequency, clamping to Nyquist");
             max_freq = sample_rate * 0.5;
         }
 
@@ -77,7 +77,7 @@ impl FrequencyAnalyser {
             if fft_bin_index < self.output.len() {
                 amplitude_output.push(PlotPoint::new(log2_f, self.output[fft_bin_index].norm()))
             } else {
-                log::warn!("FrequencyAnalyser: FFT bin index out of range");
+                tracing::warn!("FrequencyAnalyser: FFT bin index out of range");
                 amplitude_output.push(PlotPoint::new(log2_f, 0.0));
             }
         }

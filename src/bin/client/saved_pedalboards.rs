@@ -135,17 +135,17 @@ impl SavedPedalboards {
         let file_path = match homedir::my_home() {
             Ok(Some(home)) => home.join(SAVE_DIR).join(SAVE_NAME),
             Ok(None) => {
-                log::error!("Failed to resolve home directory, using default");
+                tracing::error!("Failed to resolve home directory, using default");
                 return Self::default();
             }
             Err(e) => {
-                log::error!("Error resolving home directory: {e}, using default");
+                tracing::error!("Error resolving home directory: {e}, using default");
                 return Self::default();
             }
         };
 
         if !file_path.exists() {
-            log::info!("Pedalboard save file not found, using default");
+            tracing::info!("Pedalboard save file not found, using default");
             return Self::default();
         }
 
@@ -153,12 +153,12 @@ impl SavedPedalboards {
             Ok(stringified) => match serde_json::from_str::<Self>(&stringified) {
                 Ok(state) => state,
                 Err(e) => {
-                    log::error!("Failed to parse save file {:?}: {e}, using default", file_path);
+                    tracing::error!("Failed to parse save file {:?}: {e}, using default", file_path);
                     Self::default()
                 }
             },
             Err(e) => {
-                log::error!("Failed to read save file {:?}: {e}, using default", file_path);
+                tracing::error!("Failed to read save file {:?}: {e}, using default", file_path);
                 Self::default()
             }
         }

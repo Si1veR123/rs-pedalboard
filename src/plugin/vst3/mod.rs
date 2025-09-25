@@ -95,7 +95,7 @@ impl Vst3ProcessHandle {
             ((*(*self.audio_processor.as_ptr()).vtbl).process)(self.audio_processor.as_ptr(), &mut process_data)
         };
         if res != kResultOk {
-            log::error!("Failed to process audio: {}", res);
+            tracing::error!("Failed to process audio: {}", res);
             return;
         }
     }
@@ -390,9 +390,9 @@ impl RawVst3Plugin {
             loop {
                 if plugin.should_gui_be_open() == Some(true) {
                     if plugin.plug_view.is_null() {
-                        log::error!("Plugin view is null, cannot open GUI");
+                        tracing::error!("Plugin view is null, cannot open GUI");
                     } else {
-                        log::info!("Opening GUI window for plugin");
+                        tracing::info!("Opening GUI window for plugin");
                         let event_loop = EventLoop::new().unwrap();
                         event_loop.set_control_flow(ControlFlow::Poll);
                         event_loop.run_app(&mut plugin).expect("Failed to run event loop");
@@ -442,13 +442,13 @@ impl ApplicationHandler for RawVst3Plugin {
                 unsafe { ((*(*self.plug_view).vtbl).attached)(self.plug_view, handle.window as *mut std::ffi::c_void, "X11EmbedWindowID\0".as_ptr() as *const i8) }
             },
             _ => {
-                log::error!("Unsupported platform window handle");
+                tracing::error!("Unsupported platform window handle");
                 return;
             }
         };
 
         if attach_res != kResultOk {
-            log::error!("Failed to attach plugin view to window");
+            tracing::error!("Failed to attach plugin view to window");
             return;
         }
 
@@ -510,13 +510,6 @@ mod tests {
 
     #[test]
     fn test_load_plugin() {
-        simplelog::CombinedLogger::init(
-            vec![
-                simplelog::TermLogger::new(simplelog::LevelFilter::Debug, simplelog::Config::default(), simplelog::TerminalMode::Mixed, simplelog::ColorChoice::Auto)
-            ]
-        ).expect("Failed to start logging");
-        log::info!("Started logging...");
-
         let plugin_path = PathBuf::from(r"C:\Program Files\Common Files\VST3\NA Black.vst3\Contents\x86_64-win\NA Black.vst3");
         let max_samples = 1024;
 
@@ -524,14 +517,12 @@ mod tests {
         assert!(result.is_ok(), "Failed to load plugin: {:?}", result.err());
         
         let mut plugin = result.unwrap();
-        log::info!("Plugin loaded successfully");
+        println!("Plugin loaded successfully");
         //plugin.open_gui_window().expect("Failed to open GUI window");
-        loop {
-            let sample_buffer = &mut vec![0.5; max_samples];
-            plugin.process_buffer(sample_buffer);
-            log::info!("Processed {} samples", sample_buffer.len());
-            log::info!(" with output: {:?}", &sample_buffer);
-            std::thread::sleep(std::time::Duration::from_secs(1));
-        }
+        
+        let sample_buffer = &mut vec![0.5; max_samples];
+        plugin.process_buffer(sample_buffer);
+        println!("Processed {} samples", sample_buffer.len());
+        println!(" with output: {:?}", &sample_buffer);
     }
 }

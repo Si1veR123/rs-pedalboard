@@ -25,53 +25,55 @@ use settings::{ServerSettings, ServerArguments};
 
 use cpal::traits::StreamTrait;
 use smol::channel::bounded;
-use simplelog::*;
+use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Layer, filter::EnvFilter};
 use clap::Parser;
-use std::{fs::{File, OpenOptions}, io::Write};
+use std::{fs::File, io};
 
 const LOG_FILE: &str = "pedalboard-server.log";
 
-fn insert_log_panic_hook() {
+pub fn init_tracing() {
+    // Console layer
+    let console_filter_layer = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("info"));
+
+    let stdout_layer = fmt::layer()
+        .with_writer(io::stdout)
+        .with_target(false)
+        .with_filter(console_filter_layer);
+
+    // File layer
+    let file_filter_layer = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("debug"));
+
+    let file = File::create(LOG_FILE)
+        .expect("Failed to create log file");
+    let file_layer = fmt::layer()
+        .with_writer(file)
+        .with_ansi(false)
+        .with_target(true)
+        .with_filter(file_filter_layer);
+
+    tracing_subscriber::registry()
+        .with(stdout_layer)
+        .with(file_layer)
+        .init();
+}
+
+pub fn init_panic_logging() {
     let default_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
-        let panic_str = if let Some(&s) = info.payload().downcast_ref::<&str>() {
-            Some(s)
-        } else if let Some(s) = info.payload().downcast_ref::<String>() {
-            Some(s.as_str())
-        } else {
-            None
-        };
-
-        let panic_message = match panic_str {
-            Some(s) => format!("Panic occurred. Message: {}. PanicHookInfo: {:?}\n", s, info),
-            None => format!("Panic occurred: {:?}\n", info),
-        };
-
-        OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(LOG_FILE)
-            .expect("Failed to open log file")
-            .write_all(panic_message.as_bytes())
-            .expect("Failed to write to log file");
-
+        tracing::error!("panic: {info:?}");
         default_hook(info);
     }));
 }
 
 fn main() {
-    CombinedLogger::init(
-        vec![
-            TermLogger::new(LevelFilter::Info, Config::default(), TerminalMode::Mixed, ColorChoice::Auto),
-            WriteLogger::new(LevelFilter::Debug, Config::default(), File::create(LOG_FILE).expect("Failed to create log file")),
-        ]
-    ).expect("Failed to start logging");
-    log::info!("Started logging...");
-
-    insert_log_panic_hook();
+    init_tracing();
+    tracing::info!("Started logging...");
+    init_panic_logging();
     
     let settings = ServerSettings::new(ServerArguments::parse(), Some(ServerSettingsSave::load_or_default()));
-    log::info!("Server settings: {:?}", settings);
+    tracing::info!("Server settings: {:?}", settings);
 
     let (_host, input, output) = setup(
         settings.input_device.as_ref().map(|s| s.as_str()),

@@ -122,7 +122,7 @@ impl IRConvolver {
 
     pub fn process(&mut self, mut buffer: &mut [f32]) {
         if buffer.len() > self.block_size {
-            log::warn!("IRConvolver: buffer size exceeds maximum block size.");
+            tracing::warn!("IRConvolver: buffer size exceeds maximum block size.");
             buffer = &mut buffer[..self.block_size];
         }
 

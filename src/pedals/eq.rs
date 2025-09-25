@@ -409,7 +409,7 @@ impl PedalTrait for GraphicEq7 {
 
                 self.target_live_frequency_plot = plot_points;
             } else {
-                log::error!("Failed to deserialize frequency response plot");
+                tracing::error!("Failed to deserialize frequency response plot");
             }
         }
 

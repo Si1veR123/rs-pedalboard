@@ -46,13 +46,13 @@ impl ClientSettings {
         let save_path = match Self::get_save_path() {
             Some(path) => path,
             None => {
-                log::error!("Failed to get client settings save path, using default");
+                tracing::error!("Failed to get client settings save path, using default");
                 return Self::default();
             }
         };
 
         if !save_path.exists() {
-            log::info!("Client settings save file not found, using default");
+            tracing::info!("Client settings save file not found, using default");
             return Self::default();
         }
 
@@ -60,12 +60,12 @@ impl ClientSettings {
             Ok(data) => match serde_json::from_str::<Self>(&data) {
                 Ok(state) => state,
                 Err(e) => {
-                    log::error!("Failed to deserialize client settings from {:?}: {e}, using default", save_path);
+                    tracing::error!("Failed to deserialize client settings from {:?}: {e}, using default", save_path);
                     Self::default()
                 }
             },
             Err(e) => {
-                log::error!("Failed to read client settings from {:?}: {e}, using default", save_path);
+                tracing::error!("Failed to read client settings from {:?}: {e}, using default", save_path);
                 Self::default()
             }
         }
@@ -209,7 +209,7 @@ impl SettingsScreen {
 
         if let ServerLaunchState::AwaitingKill(start_time) = self.server_launch_state {
             if start_time.elapsed().as_secs() > 5 {
-                log::error!("Failed to stop server");
+                tracing::error!("Failed to stop server");
                 self.server_launch_state = ServerLaunchState::KillError;
             } else if start_time.elapsed().as_secs() > 1 {
                 if !self.state.is_server_available() {
@@ -219,7 +219,7 @@ impl SettingsScreen {
                             process
                         };
                     } else {
-                        log::error!("Failed to start server process");
+                        tracing::error!("Failed to start server process");
                         self.server_launch_state = ServerLaunchState::None;
                     }
                 }
@@ -227,12 +227,12 @@ impl SettingsScreen {
         } else if let ServerLaunchState::AwaitingStart { start_time, process  } = &mut self.server_launch_state {
             // `try_wait` returns Ok(Some(status)) if the process has exited
             if start_time.elapsed().as_secs() > 5 || matches!(process.try_wait(), Ok(Some(_))) {
-                log::error!("Server process started but did not connect, or closed. Check server logs");
+                tracing::error!("Server process started but did not connect, or closed. Check server logs");
                 self.server_launch_state = ServerLaunchState::StartError;
             } else {
                 if self.state.connect_to_server().is_ok() {
                     self.server_launch_state = ServerLaunchState::None;
-                    log::info!("Server started successfully");
+                    tracing::info!("Server started successfully");
                 }
             }
         }
@@ -464,7 +464,7 @@ impl Widget for &mut SettingsScreen {
                                         process
                                     };
                                 } else {
-                                    log::error!("Failed to start server process");
+                                    tracing::error!("Failed to start server process");
                                 }
                             }
                         };
@@ -699,7 +699,7 @@ fn multiple_directories_select_ui(ui: &mut egui::Ui, paths: &mut Vec<PathBuf>, d
                     }
                 },
                 Err(e) => {
-                    log::error!("Failed to canonicalize path: {e}");
+                    tracing::error!("Failed to canonicalize path: {e}");
                     return false;
                 }
             }

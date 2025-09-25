@@ -138,7 +138,7 @@ impl PedalTrait for Overdrive {
 
     fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
         if self.highpass.is_none() || self.lowpass.is_none() {
-            log::warn!("Overdrive: Filters not initialized. Call set_config first.");
+            tracing::warn!("Overdrive: Filters not initialized. Call set_config first.");
             return;
         }
 
@@ -176,7 +176,7 @@ impl PedalTrait for Overdrive {
                     parameter.value = value;
                 }
             } else {
-                log::warn!("Attempted to set invalid value for parameter {}: {:?}", name, value);
+                tracing::warn!("Attempted to set invalid value for parameter {}: {:?}", name, value);
             }
         }
     }

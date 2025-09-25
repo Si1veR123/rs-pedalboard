@@ -176,7 +176,7 @@ impl PedalTrait for AutoWah {
                     }
                 }
             } else {
-                log::warn!("Attempted to set invalid value for parameter {}: {:?}", name, value);
+                tracing::warn!("Attempted to set invalid value for parameter {}: {:?}", name, value);
             }
         }
     }

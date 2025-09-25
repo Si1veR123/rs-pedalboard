@@ -20,8 +20,8 @@ use egui_keyboard::{Keyboard, layouts::KeyboardLayout};
 
 use eframe::egui::{self, include_image, Button, Color32, FontId, Id, ImageButton, RichText, Vec2, FontFamily};
 use rs_pedalboard::SAVE_DIR;
-use std::{sync::Arc, time::Instant};
-use simplelog::*;
+use std::{sync::Arc, time::Instant, io, fs::File};
+use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, filter::EnvFilter, Layer};
 
 const SERVER_PORT: u16 = 29475;
 const WINDOW_HEIGHT: f32 = 1080.0;
@@ -101,14 +101,46 @@ fn setup_custom_fonts(ctx: &egui::Context) {
     ctx.set_fonts(fonts);
 }
 
+pub fn init_tracing() {
+    // Console layer
+    let console_filter_layer = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("info"));
+
+    let stdout_layer = fmt::layer()
+        .with_writer(io::stdout)
+        .with_target(false)
+        .with_filter(console_filter_layer);
+
+    // File layer
+    let file_filter_layer = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("debug"));
+
+    let file = File::create("pedalboard-client.log")
+        .expect("Failed to create log file");
+    let file_layer = fmt::layer()
+        .with_writer(file)
+        .with_ansi(false)
+        .with_target(true)
+        .with_filter(file_filter_layer);
+
+    tracing_subscriber::registry()
+        .with(stdout_layer)
+        .with(file_layer)
+        .init();
+}
+
+pub fn init_panic_logging() {
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        tracing::error!("panic: {info:?}");
+        default_hook(info);
+    }));
+}
+
 fn main() {
-    CombinedLogger::init(
-        vec![
-            TermLogger::new(LevelFilter::Info, Config::default(), TerminalMode::Mixed, ColorChoice::Auto),
-            WriteLogger::new(LevelFilter::Info, Config::default(), std::fs::File::create("pedalboard-client.log").expect("Failed to create log file")),
-        ]
-    ).expect("Failed to start logging");
-    log::info!("Started logging...");
+    init_tracing();
+    tracing::info!("Started logging...");
+    init_panic_logging();
 
     let mut native_options = eframe::NativeOptions::default();
     native_options.persist_window = false;
@@ -167,7 +199,7 @@ impl PedalboardClientApp {
         let no_server_start_arg = std::env::args().any(|arg| arg == "--no-server");
         // Start up the server process if configured to do so, not already connected and not running with the `--no-server` argument
         if leaked_state.client_settings.borrow().startup_server && !leaked_state.is_connected() && !no_server_start_arg {
-            log::info!("Starting server on startup");
+            tracing::info!("Starting server on startup");
             if settings_screen.ready_to_start_server(&leaked_state.server_settings.borrow()) {
                 match server_process::start_server_process(&leaked_state.server_settings.borrow()) {
                     Some(child) => {
@@ -180,10 +212,10 @@ impl PedalboardClientApp {
                             std::thread::sleep(std::time::Duration::from_millis(100));
                         }
                     },
-                    None => log::error!("Failed to start server process")
+                    None => tracing::error!("Failed to start server process")
                 }
             } else {
-                log::error!("Set input and output device to launch server on start");
+                tracing::error!("Set input and output device to launch server on start");
             }
         }
 
@@ -221,7 +253,7 @@ impl eframe::App for PedalboardClientApp {
         let mut sr_buf = Vec::new();
         self.state.get_commands("sr", &mut sr_buf);
         if !sr_buf.is_empty() {
-            log::info!("Server is using sample rate: {}hz", sr_buf[0]);
+            tracing::info!("Server is using sample rate: {}hz", sr_buf[0]);
         }
 
         let bottom_window_select_height = ctx.screen_rect().height() * 0.1;
@@ -348,17 +380,17 @@ impl eframe::App for PedalboardClientApp {
         // Remove any MIDI parameter functions that refer to pedalboards that no longer exist
         self.state.midi_state.borrow_mut().remove_old_parameter_functions(&self.state.all_pedalboard_ids());
 
-        log::info!("Saving state");
+        tracing::info!("Saving state");
         if let Err(e) = self.state.save_state() {
-            log::error!("Failed to save state: {}", e);
+            tracing::error!("Failed to save state: {}", e);
         } else {
-            log::info!("State saved successfully");
+            tracing::info!("State saved successfully");
         }
     }
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
         if self.state.client_settings.borrow().kill_server_on_close {
-            log::info!("Killing server on exit");
+            tracing::info!("Killing server on exit");
             self.state.kill_server();
         }
     }

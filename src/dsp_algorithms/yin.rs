@@ -103,7 +103,7 @@ impl Yin {
         let tau_max = sample_rate / freq_min;
         let tau_min = sample_rate / freq_max;
 
-        log::debug!("Yin tau_max: {}, tau_min: {}", tau_max, tau_min);
+        tracing::debug!("Yin tau_max: {}, tau_min: {}", tau_max, tau_min);
 
         Self {
             read_from,

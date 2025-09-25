@@ -46,11 +46,11 @@ impl PedalboardSet {
                 }
                 true
             } else {
-                log::error!("Cannot remove the last pedalboard");
+                tracing::error!("Cannot remove the last pedalboard");
                 false
             }
         } else {
-            log::error!("Pedalboard index out of bounds");
+            tracing::error!("Pedalboard index out of bounds");
             false
         }
     }
@@ -59,7 +59,7 @@ impl PedalboardSet {
         if index < self.pedalboards.len() {
             self.active_pedalboard = index;
         } else {
-            log::error!("Pedalboard index out of bounds");
+            tracing::error!("Pedalboard index out of bounds");
         }
     }
 
@@ -71,7 +71,7 @@ impl PedalboardSet {
         if self.active_pedalboard < self.pedalboards.len() {
             self.pedalboards[self.active_pedalboard].process_audio(buffer, message_buffer);
         } else {
-            log::error!("Pedalboard index out of bounds");
+            tracing::error!("Pedalboard index out of bounds");
             self.active_pedalboard = 0;
         }
     }

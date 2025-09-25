@@ -44,7 +44,7 @@ pub fn available_plugins() -> Vec<String> {
 struct PedalboardVst2Host;
 impl Host for PedalboardVst2Host {
     fn automate(&mut self, _index: i32, _value: f32) {
-        //log::info!("Automating parameter {} with value {}", index, value);
+        //tracing::info!("Automating parameter {} with value {}", index, value);
     }
 
     fn get_info(&self) -> (isize, String, String) {
@@ -236,7 +236,7 @@ impl Vst2Instance {
         if index < self.info.parameters as usize {
             self.instance.get_parameter_name(index as i32)
         } else {
-            log::warn!("Attempted to get name for invalid parameter index: {}", index);
+            tracing::warn!("Attempted to get name for invalid parameter index: {}", index);
             "Invalid Parameter".to_string()
         }
     }
@@ -245,7 +245,7 @@ impl Vst2Instance {
         if index < self.info.parameters as usize {
             self.instance.get_parameter(index as i32)
         } else {
-            log::warn!("Attempted to get value for invalid parameter index: {}", index);
+            tracing::warn!("Attempted to get value for invalid parameter index: {}", index);
             -1.0
         }
     }
@@ -254,7 +254,7 @@ impl Vst2Instance {
         if index < self.info.parameters as usize {
             self.instance.get_parameter_label(index as i32)
         } else {
-            log::warn!("Attempted to get label for invalid parameter index: {}", index);
+            tracing::warn!("Attempted to get label for invalid parameter index: {}", index);
             "Invalid Parameter".to_string()
         }
     }
@@ -263,7 +263,7 @@ impl Vst2Instance {
         if index < self.info.parameters as usize {
             self.instance.set_parameter(index as i32, value);
         } else {
-            log::warn!("Attempted to set value for invalid parameter index: {}", index);
+            tracing::warn!("Attempted to set value for invalid parameter index: {}", index);
         }
     }
 }

@@ -103,7 +103,7 @@ impl<'a> Deserialize<'a> for Nam {
             if let Some(save_dir) = Self::get_save_directory() {
                 save_dir.join(model_path)
             } else {
-                log::warn!("Failed to get save directory, removing relative model path");
+                tracing::warn!("Failed to get save directory, removing relative model path");
                 PathBuf::new()
             }
         } else {
@@ -237,7 +237,7 @@ impl Nam {
         let canon_path = match dunce::canonicalize(&model_path) {
             Ok(p) => p,
             Err(e) => {
-                log::error!("Failed to canonicalize model path {:?}: {}", model_path, e);
+                tracing::error!("Failed to canonicalize model path {:?}: {}", model_path, e);
                 return;
             }
         };
@@ -245,13 +245,13 @@ impl Nam {
         let string_path = match canon_path.to_str() {
             Some(s) => s.to_string(),
             None => {
-                log::warn!("Model path is not valid unicode");
+                tracing::warn!("Model path is not valid unicode");
                 return;
             }
         };
 
         if let Err(e) = self.modeler.set_model(model_path) {
-            log::error!("Failed to set model: {}", e);
+            tracing::error!("Failed to set model: {}", e);
         } else {
             self.parameters.get_mut("Model").unwrap().value = PedalParameterValue::String(string_path);
 
@@ -289,7 +289,7 @@ impl Nam {
             if let Some(main_save_dir) = Self::get_save_directory() {
                 roots.push(egui_directory_combobox::DirectoryNode::from_path(&main_save_dir));
             } else {
-                log::warn!("Failed to get main save directory");
+                tracing::warn!("Failed to get main save directory");
             }
             let model_path = self.combobox_widget.selected().and_then(|p| p.to_str().map(|s| s.to_string()));
             self.combobox_widget = Self::get_empty_directory_combo_box(self.id);
@@ -354,7 +354,7 @@ impl Nam {
                             to_change = Some(PedalParameterValue::String(selected_str));
                         },
                         None => {
-                            log::warn!("Selected model path is not valid unicode");
+                            tracing::warn!("Selected model path is not valid unicode");
                         }
                     }
                 },
@@ -380,7 +380,7 @@ impl PedalTrait for Nam {
         self.modeler.set_maximum_buffer_size(buffer_size);
         let expected_sample_rate = self.modeler.expected_sample_rate() as u32;
         if expected_sample_rate != 0 && expected_sample_rate != sample_rate {
-            log::warn!("NeuralAmpModeler expected sample rate {} does not match provided sample rate {}", self.modeler.expected_sample_rate(), sample_rate);
+            tracing::warn!("NeuralAmpModeler expected sample rate {} does not match provided sample rate {}", self.modeler.expected_sample_rate(), sample_rate);
         }
         self.dry_buffer.resize(buffer_size, 0.0);
     }
@@ -414,7 +414,7 @@ impl PedalTrait for Nam {
 
     fn set_parameter_value(&mut self,name: &str, value: PedalParameterValue) {
         if !self.parameters.get(name).unwrap().is_valid(&value) {
-            log::warn!("Attempted to set invalid value for parameter {}: {:?}", name, value);
+            tracing::warn!("Attempted to set invalid value for parameter {}: {:?}", name, value);
             return;
         }
 
@@ -431,7 +431,7 @@ impl PedalTrait for Nam {
                 param.value = value;
             }
         } else {
-            log::error!("Parameter {} not found", name);
+            tracing::error!("Parameter {} not found", name);
         }
     }
 
@@ -489,7 +489,7 @@ impl PedalTrait for Nam {
                 if let Some(s) = path.to_str() {
                     to_change = Some((String::from("Model"), PedalParameterValue::String(s.to_string())));
                 } else {
-                    log::warn!("Selected model path is not valid unicode");
+                    tracing::warn!("Selected model path is not valid unicode");
                 }
             }
         };
@@ -507,7 +507,7 @@ impl PedalTrait for Nam {
                 if let Some(s) = path.to_str() {
                     to_change = Some((String::from("Model"), PedalParameterValue::String(s.to_string())));
                 } else {
-                    log::warn!("Selected model path is not valid unicode");
+                    tracing::warn!("Selected model path is not valid unicode");
                 }
             }
         };

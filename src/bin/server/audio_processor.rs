@@ -43,7 +43,7 @@ impl AudioProcessor {
             if let Some(producer) = self.recording.clean_recording_producer() {
                 let written = producer.push_slice(data);
                 if written != data.len() {
-                    log::warn!("RecordingHandle: Recording ring buffer full, dropping samples.");
+                    tracing::warn!("RecordingHandle: Recording ring buffer full, dropping samples.");
                 }
             }
         }
@@ -72,7 +72,7 @@ impl AudioProcessor {
         }
 
         if self.data_buffer.iter().all(|&sample| sample == 0.0) {
-            log::debug!("Buffer is silent, skipping processing.");
+            tracing::debug!("Buffer is silent, skipping processing.");
         } else if let Some((tuner_writer, frequency_channel_recv, _kill)) = &mut self.tuner_handle {
             // Tuner
             tuner_writer.push_slice(self.data_buffer.as_slice());
@@ -82,11 +82,11 @@ impl AudioProcessor {
                     Ok(frequency) => {
                         let command = format!("tuner {:.2}\n", frequency);
                         if self.command_sender.try_send(command.into()).is_err() {
-                            log::error!("Failed to send tuner command to client");
+                            tracing::error!("Failed to send tuner command to client");
                         }
                     },
                     Err(e) => {
-                        log::error!("Failed to receive frequency from tuner: {}", e);
+                        tracing::error!("Failed to receive frequency from tuner: {}", e);
                     }
                 }
             }
@@ -116,7 +116,7 @@ impl AudioProcessor {
             if let Some(producer) = self.recording.recording_producer() {
                 let written = producer.push_slice(&self.data_buffer);
                 if written != self.data_buffer.len() {
-                    log::warn!("RecordingHandle: Recording ring buffer full, dropping samples.");
+                    tracing::warn!("RecordingHandle: Recording ring buffer full, dropping samples.");
                 }
             }
         }
@@ -133,9 +133,9 @@ impl AudioProcessor {
         if written != self.data_buffer.len() {
             // XRun occurred
             if let Err(e) = self.command_sender.try_send("xrun\n".into()) {
-                log::error!("Failed to send xrun command: {}", e);
+                tracing::error!("Failed to send xrun command: {}", e);
             }
-            log::error!("Failed to write all processed data. Output is behind.")
+            tracing::warn!("Failed to write all processed data. Output is behind.")
         }
 
         // Send volume monitor to client
@@ -154,7 +154,7 @@ impl AudioProcessor {
                 if !((self.volume_monitor.2.0 - in_peak_round).abs() < eps && (self.volume_monitor.2.1 - out_peak_round).abs() < eps) {
                     let command = format!("volumemonitor {} {}\n", in_peak_round, out_peak_round); 
                     if self.command_sender.try_send(command.into()).is_err() {
-                        log::error!("Failed to send volume monitor command to client");
+                        tracing::error!("Failed to send volume monitor command to client");
                     }
                 }
 
@@ -166,14 +166,14 @@ impl AudioProcessor {
         for mut command in self.pedal_command_to_client_buffer.drain(..) {
             command.push('\n');
             if self.command_sender.try_send(command.into()).is_err() {
-                log::error!("Failed to send pedal command to client");
+                tracing::error!("Failed to send pedal command to client");
             }
         }
 
         // Handle commands that have been received
         while let Ok(command) = self.command_receiver.try_recv() {
             if let Err(e) = self.handle_command(command) {
-                log::error!("Failed to handle command: {e}");
+                tracing::error!("Failed to handle command: {e}");
             }
         }
     }
@@ -184,7 +184,7 @@ impl AudioProcessor {
 
         match command_name {
             "kill" => {
-                log::info!("Received kill command, shutting down server.");
+                tracing::info!("Received kill command, shutting down server.");
                 std::process::exit(0);
             },
             "disconnect" => {
@@ -511,7 +511,7 @@ impl AudioProcessor {
                         if let Some(normalizer) = &mut self.volume_normalizer {
                             normalizer.reset();
                         } else {
-                            log::warn!("Volume normalizer is not enabled, cannot reset");
+                            tracing::warn!("Volume normalizer is not enabled, cannot reset");
                         }
                     },
                     _ => {
@@ -569,7 +569,7 @@ impl AudioProcessor {
                 if dir_path.is_dir() {
                     self.settings.recording_dir = dir_path;
                 } else {
-                    log::error!("Invalid directory for setrecordingdir command: {dir_path:?}");
+                    tracing::error!("Invalid directory for setrecordingdir command: {dir_path:?}");
                 }
             },
             _ => return Err(format!("Unknown command: {}", command_name)),

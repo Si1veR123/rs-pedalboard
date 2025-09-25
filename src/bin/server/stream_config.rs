@@ -39,7 +39,7 @@ pub fn get_input_config_candidates(device: &Device, buffer_size: usize) -> Vec<S
         .expect("Failed to get supported input configs")
         .collect::<Vec<_>>();
 
-    log::debug!("Supported input configs: {:?}", input_supported_configs);
+    tracing::debug!("Supported input configs: {:?}", input_supported_configs);
 
     let mut buffer_size_compatible_configs = get_compatible_buffer_size_configs(
         input_supported_configs.iter().cloned(),
@@ -59,7 +59,7 @@ pub fn get_input_config_candidates(device: &Device, buffer_size: usize) -> Vec<S
         }
     });
 
-    log::debug!("Sorted compatible buffer size input configs: {:?}", buffer_size_compatible_configs);
+    tracing::debug!("Sorted compatible buffer size input configs: {:?}", buffer_size_compatible_configs);
 
     buffer_size_compatible_configs
 }
@@ -70,7 +70,7 @@ pub fn get_output_config_candidates(device: &Device, buffer_size: usize) -> Vec<
         .expect("Failed to get supported output configs")
         .collect::<Vec<_>>();
 
-    log::debug!("Supported output configs: {:?}", supported_output_configs);
+    tracing::debug!("Supported output configs: {:?}", supported_output_configs);
 
     let mut buffer_size_compatible_configs = get_compatible_buffer_size_configs(
         supported_output_configs.iter().cloned(),
@@ -90,7 +90,7 @@ pub fn get_output_config_candidates(device: &Device, buffer_size: usize) -> Vec<
         }
     });
 
-    log::debug!("Sorted compatible buffer size output configs: {:?}", buffer_size_compatible_configs);
+    tracing::debug!("Sorted compatible buffer size output configs: {:?}", buffer_size_compatible_configs);
 
     buffer_size_compatible_configs
 }
@@ -103,8 +103,8 @@ pub fn get_compatible_configs(
     preferred_sample_rate: Option<u32>,
     buffer_size: usize,
 ) -> (Vec<SupportedStreamConfig>, Vec<SupportedStreamConfig>) {
-    log::debug!("Input device default config: {:?}", input.default_input_config());
-    log::debug!("Output device default config: {:?}", output.default_output_config());
+    tracing::debug!("Input device default config: {:?}", input.default_input_config());
+    tracing::debug!("Output device default config: {:?}", output.default_output_config());
 
     let input_configs = get_input_config_candidates(input, buffer_size);
     let output_configs = get_output_config_candidates(output, buffer_size);
@@ -133,14 +133,14 @@ pub fn get_compatible_configs(
     let max_sample_rate = *common_rates.last().unwrap();
     let chosen_rate = if let Some(preferred_sample_rate) = preferred_sample_rate {
         if common_rates.contains(&preferred_sample_rate) {
-            log::info!("Using preferred sample rate: {}", preferred_sample_rate);
+            tracing::info!("Using preferred sample rate: {}", preferred_sample_rate);
             preferred_sample_rate
         } else {
-            log::warn!("Preferred sample rate {} not available, using max sample rate: {}", preferred_sample_rate, max_sample_rate);
+            tracing::warn!("Preferred sample rate {} not available, using max sample rate: {}", preferred_sample_rate, max_sample_rate);
             max_sample_rate
         }
     } else {
-        log::info!("No preferred sample rate specified, using max sample rate: {}", max_sample_rate);
+        tracing::info!("No preferred sample rate specified, using max sample rate: {}", max_sample_rate);
         max_sample_rate
     };
 
@@ -159,9 +159,9 @@ pub fn get_compatible_configs(
         }
     }
 
-    log::info!("Valid configs in order of preference:");
-    log::info!("Input configs: {:?}", input_configs_with_sr);
-    log::info!("Output configs: {:?}", output_configs_with_sr);
+    tracing::info!("Valid configs in order of preference:");
+    tracing::info!("Input configs: {:?}", input_configs_with_sr);
+    tracing::info!("Output configs: {:?}", output_configs_with_sr);
 
     (input_configs_with_sr, output_configs_with_sr)
 }

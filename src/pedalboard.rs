@@ -75,7 +75,7 @@ impl Pedalboard {
             self.prepend_message.clear();
             // Each message from a pedal will be preprended with "pedalmsg<id> "
             if let Err(e) = write!(&mut self.prepend_message, "pedalmsg{} ", pedal.get_id()) {
-                log::warn!("Failed to write prepend message: {}", e);
+                tracing::warn!("Failed to write prepend message: {}", e);
             }
 
             pedal.process_audio(buffer, &mut self.pedal_message_buffer);

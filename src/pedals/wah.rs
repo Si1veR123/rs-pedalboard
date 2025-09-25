@@ -155,7 +155,7 @@ impl PedalTrait for Wah {
 
     fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
         if self.moving_bandpass_filter.is_none() {
-            log::warn!("Wah: Call set_config before processing.");
+            tracing::warn!("Wah: Call set_config before processing.");
             return;
         }
 

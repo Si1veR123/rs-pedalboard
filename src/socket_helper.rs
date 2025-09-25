@@ -37,9 +37,9 @@ impl CommandReceiver {
 
             if !line.is_empty() {
                 if line.len() < 40 || cfg!(feature = "log_full_commands") {
-                    log::info!("Received command: {:?}", line);
+                    tracing::debug!("Received command: {:?}", line);
                 } else {
-                    log::info!("Received command: {:?}...", &line[..40]);
+                    tracing::debug!("Received command: {:?}...", &line[..40]);
                 }
 
                 self.temp_command_buffer.push(line);
@@ -91,7 +91,7 @@ impl CommandReceiver {
         
         for command in self.temp_command_buffer.drain(..) {
             if let Err(command) = into.try_push(command) {
-                log::warn!("Failed to push command into ringbuf producer, it is full. Command: {:?}", command);
+                tracing::warn!("Failed to push command into ringbuf producer, it is full. Command: {:?}", command);
                 break;
             }
         }

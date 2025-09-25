@@ -92,11 +92,11 @@ impl<'a> Deserialize<'a> for ImpulseResponse {
                     if let Ok(absolute_path) = dunce::canonicalize(save_dir.join(&model_path)) {
                         *model_path = absolute_path;
                     } else {
-                        log::warn!("Failed to canonicalize IR path: {:?}", model_path);
+                        tracing::warn!("Failed to canonicalize IR path: {:?}", model_path);
                         *model_path = PathBuf::new();
                     }
                 } else {
-                    log::warn!("Failed to get save directory for IR path: {:?}", model_path);
+                    tracing::warn!("Failed to get save directory for IR path: {:?}", model_path);
                     *model_path = PathBuf::new();
                 }
             }
@@ -210,7 +210,7 @@ impl ImpulseResponse {
         let canon_path = match dunce::canonicalize(ir_path.as_ref()) {
             Ok(p) => p,
             Err(e) => {
-                log::error!("Failed to canonicalize IR path {:?}: {}", ir_path.as_ref(), e);
+                tracing::error!("Failed to canonicalize IR path {:?}: {}", ir_path.as_ref(), e);
                 return;
             }
         };
@@ -218,7 +218,7 @@ impl ImpulseResponse {
         let string_path = match canon_path.to_str() {
             Some(s) => s.to_string(),
             None => {
-                log::warn!("IR path is not valid unicode");
+                tracing::warn!("IR path is not valid unicode");
                 return;
             }
         };
@@ -233,7 +233,7 @@ impl ImpulseResponse {
                 self.parameters.get_mut("IR").unwrap().value = PedalParameterValue::String(string_path);
             },
             Err(e) => {
-                log::error!("Failed to load IR: {}", e);
+                tracing::error!("Failed to load IR: {}", e);
                 return;
             }
         };
@@ -266,7 +266,7 @@ impl ImpulseResponse {
             if let Some(main_save_dir) = Self::get_save_directory() {
                 roots.push(egui_directory_combobox::DirectoryNode::from_path(&main_save_dir));
             } else {
-                log::warn!("Failed to get main save directory");
+                tracing::warn!("Failed to get main save directory");
             }
             let model_path = self.combobox_widget.selected().and_then(|p| p.to_str().map(|s| s.to_string()));
             self.combobox_widget = Self::get_empty_directory_combo_box(self.id);
@@ -332,7 +332,7 @@ impl ImpulseResponse {
                             to_change = Some(PedalParameterValue::String(selected_str));
                         },
                         None => {
-                            log::warn!("Selected IR is not valid unicode");
+                            tracing::warn!("Selected IR is not valid unicode");
                         }
                     }
                 },
@@ -366,7 +366,7 @@ impl PedalTrait for ImpulseResponse {
 
     fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
         if self.sample_rate.is_none() {
-            log::warn!("ImpulseResponse: Call set_config before processing.");
+            tracing::warn!("ImpulseResponse: Call set_config before processing.");
             return;
         }
 
@@ -410,14 +410,14 @@ impl PedalTrait for ImpulseResponse {
         }
 
         if !self.parameters.get(name).unwrap().is_valid(&value) {
-            log::warn!("Attempted to set invalid value for parameter {}: {:?}", name, value);
+            tracing::warn!("Attempted to set invalid value for parameter {}: {:?}", name, value);
             return;
         }
 
         if let Some(param) = self.parameters.get_mut(name) {
             param.value = value;
         } else {
-            log::error!("Parameter {} not found", name);
+            tracing::error!("Parameter {} not found", name);
         }
     }
 
@@ -474,7 +474,7 @@ impl PedalTrait for ImpulseResponse {
                 if let Some(s) = path.to_str() {
                     to_change = Some((String::from("IR"), PedalParameterValue::String(s.to_string())));
                 } else {
-                    log::warn!("Selected IR path is not valid unicode");
+                    tracing::warn!("Selected IR path is not valid unicode");
                 }
             }
         };
@@ -492,7 +492,7 @@ impl PedalTrait for ImpulseResponse {
                 if let Some(s) = path.to_str() {
                     to_change = Some((String::from("IR"), PedalParameterValue::String(s.to_string())));
                 } else {
-                    log::warn!("Selected IR path is not valid unicode");
+                    tracing::warn!("Selected IR path is not valid unicode");
                 }
             }
         };

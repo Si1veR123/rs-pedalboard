@@ -142,7 +142,7 @@ impl PedalTrait for Distortion {
 
     fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
         if self.highpass.is_none() || self.post_eq.is_none() {
-            log::warn!("Distortion: Filters not initialized. Call set_config first.");
+            tracing::warn!("Distortion: Filters not initialized. Call set_config first.");
             return;
         }
 
@@ -181,7 +181,7 @@ impl PedalTrait for Distortion {
                     parameter.value = value;
                 }
             } else {
-                log::warn!("Attempted to set invalid value for parameter {}: {:?}", name, value);
+                tracing::warn!("Attempted to set invalid value for parameter {}: {:?}", name, value);
             }
         }
     }

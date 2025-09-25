@@ -47,7 +47,7 @@ impl State {
         let mut pedalboard_set = self.pedalboards.active_pedalboardstage.borrow_mut();
 
         if pedalboard_set.pedalboards.len() <= 1 {
-            log::error!("Cannot remove the last pedalboard from the stage");
+            tracing::error!("Cannot remove the last pedalboard from the stage");
             return;
         }
 
@@ -200,7 +200,7 @@ impl State {
         }
 
         if src_index.is_none() {
-            log::error!("move_pedal: Could not find pedalboard with ID {} in pedalboard library", pedalboard_id);
+            tracing::error!("move_pedal: Could not find pedalboard with ID {} in pedalboard library", pedalboard_id);
             return;
         }
 
@@ -411,7 +411,7 @@ impl State {
         let client_settings = ClientSettings::load_or_default();
 
         // Set NAM folders, IR folders and VST2 in ctx memory so pedals can access
-        log::info!("Indexing NAM, IR and VST2 folders...");
+        tracing::info!("Indexing NAM, IR and VST2 folders...");
         let nam_root_nodes: Vec<_> = client_settings.nam_folders.iter().map(|p| {
             egui_directory_combobox::DirectoryNode::from_path(p)
         }).collect();
@@ -519,7 +519,7 @@ impl State {
                             self.pedalboards.active_pedalboardstage.replace(pedalboard_set);
                         },
                         Err(e) => {
-                            log::error!("Failed to parse pedalboard set JSON from server: {}", e);
+                            tracing::error!("Failed to parse pedalboard set JSON from server: {}", e);
                         }
                     }
                 },
@@ -566,7 +566,7 @@ impl State {
                             self.add_pedalboard(pedalboard, true);
                         },
                         Err(e) => {
-                            log::error!("Failed to parse pedalboard JSON from other thread: {}", e);
+                            tracing::error!("Failed to parse pedalboard JSON from other thread: {}", e);
                         }
                     }
                 },
@@ -576,7 +576,7 @@ impl State {
                             self.add_pedal_to_pedalboard(pedalboard_id, &pedal, true);
                         },
                         Err(e) => {
-                            log::error!("Failed to parse pedal JSON from other thread: {}", e);
+                            tracing::error!("Failed to parse pedal JSON from other thread: {}", e);
                         }
                     }
                 },
@@ -651,11 +651,11 @@ impl State {
                     );
                 },
                 Command::VolumeNormalizationReset => {},
-                Command::SetMute(mute) => { log::info!("Set mute to {mute}") },
-                Command::ToggleMute => { log::info!("Toggled mute") },
-                Command::RequestSampleRate => log::error!("Unexpected RequestSampleRate command in other thread commands"),
-                Command::ThreadAliveTest => log::error!("Unexpected ThreadAliveTest command in other thread commands"),
-                Command::SubscribeToResponses(_) => log::error!("Unexpected SubscribeToResponses command in other thread commands"),
+                Command::SetMute(mute) => { tracing::info!("Set mute to {mute}") },
+                Command::ToggleMute => { tracing::info!("Toggled mute") },
+                Command::RequestSampleRate => tracing::error!("Unexpected RequestSampleRate command in other thread commands"),
+                Command::ThreadAliveTest => tracing::error!("Unexpected ThreadAliveTest command in other thread commands"),
+                Command::SubscribeToResponses(_) => tracing::error!("Unexpected SubscribeToResponses command in other thread commands"),
             }
         }
     }

@@ -27,7 +27,7 @@ pub fn setup(input: Option<&str>, output: Option<&str>, args: &ServerSettings) -
         }
     };
 
-    log::info!("Selected ALSA Devices: Input {in_device}, Output {out_device}");
+    tracing::info!("Selected ALSA Devices: Input {in_device}, Output {out_device}");
 
     jack_server::start_jack_server(args.frames_per_period, args.periods_per_buffer, args.preferred_sample_rate.unwrap_or(48000), in_device, out_device).expect("Failed to start JACK server");
     jack_server::jack_server_wait(true);

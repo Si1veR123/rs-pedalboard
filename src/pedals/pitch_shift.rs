@@ -191,7 +191,7 @@ impl PedalTrait for PitchShift {
 
     fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
         if self.eq.is_none() || self.signalsmith_stretch.is_none() {
-            log::warn!("PitchShift: Call set_config before processing.");
+            tracing::warn!("PitchShift: Call set_config before processing.");
             return;
         }
 

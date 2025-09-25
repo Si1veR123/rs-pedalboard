@@ -42,7 +42,7 @@ impl ClientSocket {
 
     pub fn connect(&mut self) -> std::io::Result<()> {
         if self.is_connected() {
-            log::info!("Already connected to server on port {}", self.port);
+            tracing::info!("Already connected to server on port {}", self.port);
             return Ok(());
         }
 
@@ -180,7 +180,7 @@ impl ClientSocketThreadHandle {
         ) {
             Ok(_) => false,
             Err(_) => {
-                log::error!("Failed to send command to socket thread");
+                tracing::error!("Failed to send command to socket thread");
                 true
             }
         }
@@ -188,7 +188,7 @@ impl ClientSocketThreadHandle {
 
     pub fn kill(&self) {
         if smol::block_on(self.message_sender.send(Command::KillServer)).is_err() {
-            log::error!("Failed to send kill command");
+            tracing::error!("Failed to send kill command");
         }
     }
 
@@ -248,17 +248,17 @@ pub fn new_client_socket_thread(port: u16, subscribe_to_responses: bool) -> std:
 
     std::thread::spawn(move || {
         smol::block_on(async {
-            log::info!("Attempting to connect to server on port {}", port);
+            tracing::info!("Attempting to connect to server on port {}", port);
             let stream = match TcpStream::connect((Ipv4Addr::LOCALHOST, port)).await {
                 Ok(s) => s,
                 Err(e) => {
-                    log::warn!("Failed to connect to server: {}", e);
+                    tracing::warn!("Failed to connect to server: {}", e);
                     let _ = connected_status_oneshot_sender.send(Err(e));
                     return;
                 }
             };
 
-            log::info!("Connected to server on port {}", port);
+            tracing::info!("Connected to server on port {}", port);
             let response_senders = if subscribe_to_responses {
                 vec![response_sender.clone()]
             } else {
@@ -267,7 +267,7 @@ pub fn new_client_socket_thread(port: u16, subscribe_to_responses: bool) -> std:
             match connected_status_oneshot_sender.send(Ok(())) {
                 Ok(_) => client_socket_event_loop(stream, message_receiver, response_senders).await,
                 Err(e) => {
-                    log::error!("Failed to send connection status: {}", e);
+                    tracing::error!("Failed to send connection status: {}", e);
                     return;
                 }
             }
@@ -296,7 +296,7 @@ async fn send_to_all<T: Clone>(
 ) -> bool {
     for sender in senders {
         if sender.send(message.clone()).await.is_err() {
-            log::error!("Failed to send message to one of the response channels");
+            tracing::error!("Failed to send message to one of the response channels");
             return true;
         }
     }
@@ -324,22 +324,22 @@ async fn client_socket_event_loop(
             closed = socket_fut => {
                 match closed {
                     Ok(true) => {
-                        log::info!("Connection closed");
+                        tracing::info!("Connection closed");
                         break;
                     }
                     Err(e) if e.kind() == std::io::ErrorKind::ConnectionAborted
                             || e.kind() == std::io::ErrorKind::ConnectionReset => {
-                        log::info!("Connection closed");
+                        tracing::info!("Connection closed");
                         break;
                     }
                     Err(e) => {
-                        log::error!("Error receiving commands: {}", e);
+                        tracing::error!("Error receiving commands: {}", e);
                         break;
                     }
                     Ok(false) => {
                         for command in received_commands_reader.pop_iter() {
                             if send_to_all(&response_senders, command).await {
-                                log::error!("Failed to send command to response channel");
+                                tracing::error!("Failed to send command to response channel");
                                 break;
                             }
                         }
@@ -349,13 +349,13 @@ async fn client_socket_event_loop(
 
             command = command_fut => {
                 if command.is_err() {
-                    log::info!("Channel closed. Exiting event loop.");
+                    tracing::info!("Channel closed. Exiting event loop.");
                     break;
                 }
 
                 match command.unwrap() {
                     Command::KillServer => {
-                        log::info!("Received kill command from channel. Closing connection.");
+                        tracing::info!("Received kill command from channel. Closing connection.");
                         socket_send(&mut stream_writer, "kill\n").await;
                         let _ = stream_writer.flush().await;
                         break;
@@ -593,9 +593,9 @@ async fn socket_send(mut stream: impl AsyncWrite + Unpin, message: &str) -> bool
     match stream.write_all(message.as_bytes()).await {
         Ok(()) => {
             if message.len() < 40 || cfg!(feature="log_full_commands") {
-                log::info!("Sent: {:?}", message);
+                tracing::info!("Sent: {:?}", message);
             } else {
-                log::info!("Sent: {:?}...", &message[..40]);
+                tracing::info!("Sent: {:?}...", &message[..40]);
             }
             false
         }
@@ -605,10 +605,10 @@ async fn socket_send(mut stream: impl AsyncWrite + Unpin, message: &str) -> bool
                 std::io::ErrorKind::NotConnected |
                 std::io::ErrorKind::ConnectionReset |
                 std::io::ErrorKind::ConnectionAborted => {
-                    log::info!("Connection closed");
+                    tracing::info!("Connection closed");
                 },
                 _ => {
-                    log::error!("Failed to send message. Closing connection. Error: {}", e);
+                    tracing::error!("Failed to send message. Closing connection. Error: {}", e);
                 }
             };
             true

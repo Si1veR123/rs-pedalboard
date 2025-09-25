@@ -24,7 +24,7 @@ impl MovingBandPass {
         };
         let smoothing_per_update = smoothing_per_sample.powf(update_rate as f32);
 
-        log::debug!("Creating MovingBandPass with freq: {}, sample_rate: {}, q: {}, update_rate: {}, smoothing_per_sample: {}", 
+        tracing::debug!("Creating MovingBandPass with freq: {}, sample_rate: {}, q: {}, update_rate: {}, smoothing_per_sample: {}", 
             freq, sample_rate, q, update_rate, smoothing_per_sample);
 
         Self {

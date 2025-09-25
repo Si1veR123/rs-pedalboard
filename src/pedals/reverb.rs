@@ -194,7 +194,7 @@ impl PedalTrait for Reverb {
                     self.sync_parameters();
                 }
             } else {
-                log::warn!("Attempted to set invalid value for parameter {}: {:?}", name, value);
+                tracing::warn!("Attempted to set invalid value for parameter {}: {:?}", name, value);
             }
         }
     }

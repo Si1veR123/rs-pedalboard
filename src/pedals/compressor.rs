@@ -165,7 +165,7 @@ impl PedalTrait for Compressor {
         let sample_rate = match self.sample_rate {
             Some(rate) => rate,
             None => {
-                log::warn!("Compressor: Call set_config before processing.");
+                tracing::warn!("Compressor: Call set_config before processing.");
                 return;
             }
         };
@@ -244,7 +244,7 @@ impl PedalTrait for Compressor {
             if parameter.is_valid(&value){
                 parameter.value = value;
             } else {
-                log::warn!("Attempted to set invalid value for parameter {}: {:?}",name,value);
+                tracing::warn!("Attempted to set invalid value for parameter {}: {:?}",name,value);
             }
         }
     }
@@ -257,7 +257,7 @@ impl PedalTrait for Compressor {
             if let Ok(envelope) = message_buffer[0].parse::<f32>() {
                 self.envelope = envelope;
             } else {
-                log::warn!("Compressor: Invalid envelope value in message buffer: {}", message_buffer[0]);
+                tracing::warn!("Compressor: Invalid envelope value in message buffer: {}", message_buffer[0]);
             }
         }
 

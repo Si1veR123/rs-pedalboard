@@ -23,7 +23,7 @@ impl Resampler {
         let mut cur_len = input.len();
 
         if self.scratch_a.len() < (input.len() << self.stages.len()) {
-            log::warn!("Resampler: input size exceeds maximum block size, resizing scratch buffer.");
+            tracing::warn!("Resampler: input size exceeds maximum block size, resizing scratch buffer.");
             self.scratch_a.resize(input.len() << self.stages.len(), 0.0);
         }
 
@@ -50,11 +50,11 @@ impl Resampler {
         let mut cur_len = input.len();
 
         if self.scratch_a.len() < (input.len() << self.stages.len()) {
-            log::warn!("Resampler: input size exceeds maximum block size, resizing scratch buffer.");
+            tracing::warn!("Resampler: input size exceeds maximum block size, resizing scratch buffer.");
             self.scratch_a.resize(input.len() << self.stages.len(), 0.0);
         }
         if self.scratch_b.len() < (input.len() << self.stages.len()) {
-            log::warn!("Resampler: input size exceeds maximum block size, resizing scratch buffer.");
+            tracing::warn!("Resampler: input size exceeds maximum block size, resizing scratch buffer.");
             self.scratch_b.resize(input.len() << self.stages.len(), 0.0);
         }
         self.scratch_a[..cur_len].copy_from_slice(input);

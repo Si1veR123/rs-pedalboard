@@ -118,7 +118,7 @@ impl PedalTrait for Vibrato {
 
     fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
         if self.delay_line.is_none() {
-            log::warn!("Vibrato pedal not initialized. Call set_config before processing audio.");
+            tracing::warn!("Vibrato pedal not initialized. Call set_config before processing audio.");
             return;
         }
 

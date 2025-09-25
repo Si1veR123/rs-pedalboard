@@ -4,7 +4,7 @@ use rs_pedalboard::dsp_algorithms::yin::Yin;
 
 pub fn start_tuner(mut yin: Yin, kill: Arc<AtomicBool>, send_to: Sender<f32>) {
     std::thread::spawn(move || {
-        log::info!("Tuner thread started");
+        tracing::info!("Tuner thread started");
         let mut consecutive_zeros = 0;
 
         while !kill.load(std::sync::atomic::Ordering::Relaxed) {
@@ -20,12 +20,12 @@ pub fn start_tuner(mut yin: Yin, kill: Arc<AtomicBool>, send_to: Sender<f32>) {
             // This prevents a single 0 throwing off the tuner, and prevents many consecutive zeros being sent.
             if frequency != 0.0 || consecutive_zeros == 3 {
                 if send_to.send(frequency).is_err() {
-                    log::error!("Failed to send tuner frequency to audio thread");
+                    tracing::error!("Failed to send tuner frequency to audio thread");
                 }
             }
 
             std::thread::sleep(std::time::Duration::from_millis(rs_pedalboard::dsp_algorithms::yin::SERVER_UPDATE_FREQ_MS));
         }
-        log::info!("Tuner thread stopped");
+        tracing::info!("Tuner thread stopped");
     });
 }

@@ -157,7 +157,7 @@ impl PedalTrait for Delay {
 
     fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
         if self.tone_eq.is_none() || self.delay_buffer.is_none() {
-            log::warn!("Delay: Call set_config() before processing audio.");
+            tracing::warn!("Delay: Call set_config() before processing audio.");
             return;
         }
 

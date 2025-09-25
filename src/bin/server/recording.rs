@@ -57,7 +57,7 @@ impl RecordingHandle {
                 }
             },
             _ => {
-                log::warn!("RecordingHandle: Attempted to change clean recording state in invalid state.");
+                tracing::warn!("RecordingHandle: Attempted to change clean recording state in invalid state.");
             }
         }
     }
@@ -95,7 +95,7 @@ impl RecordingHandle {
                         };
                     },
                     Err(crossbeam::channel::TryRecvError::Disconnected) => {
-                        log::error!("RecordingHandle: Recording thread disconnected unexpectedly.");
+                        tracing::error!("RecordingHandle: Recording thread disconnected unexpectedly.");
                         let (new_prod, new_cons) = ringbuf::HeapRb::<f32>::new(processed_prod.capacity().get()).split();
                         self.state = RecordingHandleState::Inactive {
                             processed: (new_prod, new_cons),
@@ -114,7 +114,7 @@ impl RecordingHandle {
 
     pub fn start_recording(&mut self) {
         if !matches!(self.state, RecordingHandleState::Inactive { .. }) {
-            log::warn!("RecordingHandle: Attempted to start recording while already active or changing.");
+            tracing::warn!("RecordingHandle: Attempted to start recording while already active or changing.");
             return;
         }
 
@@ -148,7 +148,7 @@ impl RecordingHandle {
 
     pub fn stop_recording(&mut self) {
         if !matches!(self.state, RecordingHandleState::Active { .. }) {
-            log::warn!("RecordingHandle: Attempted to stop recording while not active or changing.");
+            tracing::warn!("RecordingHandle: Attempted to stop recording while not active or changing.");
             return;
         }
 
@@ -160,7 +160,7 @@ impl RecordingHandle {
         } = std::mem::replace(&mut self.state, RecordingHandleState::Transitioning) {
             // Sending a message will cause the recording thread to finish
             if let Err(e) = kill_channel.send(()) {
-                log::error!("RecordingHandle: Failed to send stop signal to recording thread: {}", e);
+                tracing::error!("RecordingHandle: Failed to send stop signal to recording thread: {}", e);
             }
 
             self.state = RecordingHandleState::Stopping {
@@ -206,7 +206,7 @@ pub fn start_file_writer_thread<P: AsRef<Path>>(
     std::fs::create_dir_all(&dir).expect("Failed to create recording directory");
 
     std::thread::spawn(move || {
-        log::info!("Starting recording thread, to directory: {:?}", dir);
+        tracing::info!("Starting recording thread, to directory: {:?}", dir);
         let ringbuffer_len = reader.capacity().get();
         // Theoretical time for the ringbuffer to fill up
         let fill_time = ringbuffer_len as f32 / sample_rate;
@@ -223,7 +223,7 @@ pub fn start_file_writer_thread<P: AsRef<Path>>(
             }
         ).expect("Failed to create WAV file");
 
-        log::info!("Recording to file: {:?}", file_writer.spec());
+        tracing::info!("Recording to file: {:?}", file_writer.spec());
 
         let mut clean_file_writer = None;
         if let Some(clean_reader) = clean_reader {
@@ -273,7 +273,7 @@ pub fn start_file_writer_thread<P: AsRef<Path>>(
             std::thread::sleep(sleep_time);
         }
 
-        log::info!("Stopped recording");
+        tracing::info!("Stopped recording");
 
         let (clean_file_writer, clean_reader) = match clean_file_writer {
             Some((w, r)) => (Some(w), Some(r)),

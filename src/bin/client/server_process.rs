@@ -11,7 +11,7 @@ pub fn get_server_executable_path() -> Option<PathBuf> {
         if path.exists() && path.is_file() {
             Some(path)
         } else {
-            log::warn!("Server executable path from environment variable {} does not exist: {}", SERVER_ENV_VAR, path.display());
+            tracing::warn!("Server executable path from environment variable {} does not exist: {}", SERVER_ENV_VAR, path.display());
             None
         }
     }).or_else(|| {
@@ -44,22 +44,22 @@ pub fn start_server_process(settings: &ServerSettingsSave) -> Option<Child> {
                 full_command.arg("--preferred-sample-rate").arg(preferred_sample_rate.to_string());
             }
 
-            log::info!("Full command to start server: {:?}", full_command);
+            tracing::info!("Full command to start server: {:?}", full_command);
             let process = full_command.spawn();
 
             match process {
                 Ok(child) => {
-                    log::info!("Server process started successfully with PID: {}", child.id());
+                    tracing::info!("Server process started successfully with PID: {}", child.id());
                     Some(child)
                 },
                 Err(e) => {
-                    log::error!("Failed to start server process: {}", e);
+                    tracing::error!("Failed to start server process: {}", e);
                     None
                 }
             }
         },
         None => {
-            log::error!("Server executable not found. Please set the {} environment variable or ensure the executable ({}) is in your PATH.", SERVER_ENV_VAR, SERVER_EXE_NAME);
+            tracing::error!("Server executable not found. Please set the {} environment variable or ensure the executable ({}) is in your PATH.", SERVER_ENV_VAR, SERVER_EXE_NAME);
             None
         }
     }

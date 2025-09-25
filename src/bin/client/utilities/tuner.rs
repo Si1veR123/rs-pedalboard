@@ -35,9 +35,9 @@ impl TunerWidget {
                     self.recent_freq_smooth = self.recent_freq;
                 }
 
-                log::debug!("Tuner frequency updated: {:?}", self.recent_freq);
+                tracing::debug!("Tuner frequency updated: {:?}", self.recent_freq);
             } else {
-                log::warn!("Failed to parse frequency from command: {}", cmd);
+                tracing::warn!("Failed to parse frequency from command: {}", cmd);
             }
         }
     }
@@ -81,7 +81,7 @@ impl Widget for &mut TunerWidget {
             let needle_size = match needle_im.load_for_size(ui.ctx(), Vec2::splat(50.0)).expect("Failed to load needle image size").size() {
                 Some(size) => size,
                 None => {
-                    log::warn!("Failed to load needle image size");
+                    tracing::warn!("Failed to load needle image size");
                     return;
                 }
             };

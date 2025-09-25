@@ -174,7 +174,7 @@ impl PedalboardStageScreen {
         }
 
         // If we reach here, the command was not in the expected format
-        log::error!("Invalid volume monitor command format: {}", latest_command);
+        tracing::error!("Invalid volume monitor command format: {}", latest_command);
     }
 
     fn save_song_input_window(&mut self, ui: &mut egui::Ui, title: &str, input: &mut String, open: &mut bool) -> bool {

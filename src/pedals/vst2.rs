@@ -144,7 +144,7 @@ impl<'a> Deserialize<'a> for Vst2 {
         } else {
             let path = PathBuf::from(path);
             if !path.exists() {
-                log::error!("Plugin {:?} not found", &path);
+                tracing::error!("Plugin {:?} not found", &path);
                 vst_pedal.sync_instance_to_parameters();
                 return Ok(vst_pedal);
             }
@@ -256,7 +256,7 @@ impl Vst2 {
                     );
                 },
                 None => {
-                    log::warn!("Plugin path is not valid unicode, removing plugin instance.");
+                    tracing::warn!("Plugin path is not valid unicode, removing plugin instance.");
                     self.parameters.insert(
                         "Plugin".to_string(),
                         PedalParameter {
@@ -311,11 +311,11 @@ impl Vst2 {
                 if let Some(&index) = self.param_index_map.get(name) {
                     instance.set_parameter_value(index, param.value.as_float().unwrap());
                 } else {
-                    log::warn!("Parameter {} not found in plugin instance", name);
+                    tracing::warn!("Parameter {} not found in plugin instance", name);
                 }
             }
         } else {
-            log::warn!("No plugin instance available to synchronise parameters");
+            tracing::warn!("No plugin instance available to synchronise parameters");
         }
     }
 
@@ -323,7 +323,7 @@ impl Vst2 {
         let canon_path = match dunce::canonicalize(plugin_path.as_ref()) {
             Ok(p) => p,
             Err(e) => {
-                log::error!("Failed to canonicalize plugin path {:?}: {}", plugin_path.as_ref(), e);
+                tracing::error!("Failed to canonicalize plugin path {:?}: {}", plugin_path.as_ref(), e);
                 self.instance = None;
                 self.sync_instance_to_parameters();
                 return;
@@ -341,7 +341,7 @@ impl Vst2 {
                 self.combobox_widget.set_selection(Some(plugin_path.as_ref()));
             },
             Err(_) => {
-                log::error!("Failed to load plugin: {}", plugin_path.as_ref().display());
+                tracing::error!("Failed to load plugin: {}", plugin_path.as_ref().display());
                 self.instance = None;
                 self.sync_instance_to_parameters();
             }
@@ -365,7 +365,7 @@ impl Vst2 {
             if let Some(node) = DirectoryNode::try_from_path(VST2_PLUGIN_PATH) {
                 roots.push(node);
             } else {
-                log::warn!("Failed to get default VST2 save directory: {}", VST2_PLUGIN_PATH);
+                tracing::warn!("Failed to get default VST2 save directory: {}", VST2_PLUGIN_PATH);
             }
             let model_path = self.combobox_widget.selected().and_then(|p| p.to_str().map(|s| s.to_string()));
             self.combobox_widget = Self::get_empty_directory_combo_box(self.id);
@@ -430,7 +430,7 @@ impl Vst2 {
                             to_change = Some(PedalParameterValue::String(selected_str));
                         },
                         None => {
-                            log::warn!("Selected VST2 path is not valid unicode");
+                            tracing::warn!("Selected VST2 path is not valid unicode");
                         }
                     }
                 },
