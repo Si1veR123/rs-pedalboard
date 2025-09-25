@@ -170,7 +170,7 @@ fn build_output_stream(
     buffer_size: usize,
     command_sender: Sender<Box<str>>,
     mut data_callback: impl FnMut(&mut [f32], &OutputCallbackInfo, cpal::ChannelCount) + Send + 'static
-) -> Option<Stream> {
+) -> Option<(Stream, cpal::ChannelCount)> {
     let mut working_config = None;
     for supported_config in stream_configs {
         let sample_format = supported_config.sample_format();
@@ -282,7 +282,7 @@ fn build_output_stream(
         match stream_result {
             Ok(stream) => {
                 tracing::info!("Successfully built output stream");
-                return Some(stream);
+                return Some((stream, config.channels));
             },
             Err(e) => {
                 tracing::error!("Failed to build output stream, error {}", e);
@@ -302,7 +302,7 @@ pub fn create_linked_streams(
     command_receiver: Receiver<Box<str>>,
     command_sender: Sender<Box<str>>,
     settings: ServerSettings
-) -> (Stream, Stream) {
+) -> (Stream, (Stream, cpal::ChannelCount)) {
     let in_command_sender = command_sender.clone();
 
     tracing::info!("Finding a compatible config for input and output devices...");
@@ -413,7 +413,7 @@ pub fn create_linked_streams(
     let mut output_stream_running = false;
     let mut mono_buffer = vec![0.0; settings.frames_per_period];
     
-    let stream_out = build_output_stream(
+    let stream_out_and_channels = build_output_stream(
         &out_device,
         &out_configs,
         settings.frames_per_period,
@@ -449,5 +449,5 @@ pub fn create_linked_streams(
         }
     ).expect("Failed to build output stream");
 
-    (stream_in, stream_out)
+    (stream_in, stream_out_and_channels)
 }

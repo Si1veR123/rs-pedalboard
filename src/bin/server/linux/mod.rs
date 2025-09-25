@@ -35,6 +35,8 @@ pub fn setup(input: Option<&str>, output: Option<&str>, args: &ServerSettings) -
     jack_server::get_jack_host()
 }
 
-pub fn after_setup() {
-    jack_server::stereo_output();
+pub fn after_setup(out_channels: cpal::ChannelCount) {
+    if channels == 1 {
+        jack_server::stereo_output();
+    }
 }

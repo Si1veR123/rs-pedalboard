@@ -86,7 +86,7 @@ fn main() {
     let (socket_command_sender, audio_command_receiver) = bounded(12);
     let (audio_command_sender, socket_command_receiver) = bounded(12);
 
-    let (in_stream, out_stream) = audio_callback::create_linked_streams(
+    let (in_stream, (out_stream, out_channels)) = audio_callback::create_linked_streams(
         input,
         output,
         audio_command_receiver,
@@ -97,7 +97,7 @@ fn main() {
     in_stream.play().expect("Failed to play input stream");
     out_stream.play().expect("Failed to play output stream");
 
-    after_setup();
+    after_setup(out_channels);
 
     // Will loop infinitely (unless panic)
     socket::ServerSocket::new(29475, socket_command_sender, socket_command_receiver).start().expect("Failed to start server");

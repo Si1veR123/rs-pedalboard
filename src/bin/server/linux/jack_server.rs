@@ -68,10 +68,11 @@ pub fn jack_server_wait(wait_until_open: bool) {
 }
 
 pub fn stereo_output() {
-    tracing::info!("Connecting output to second playback port.");
-    Command::new("jack_connect")
+    tracing::info!("Connecting mono output to second playback port.");
+    if let Err(e) = Command::new("jack_connect")
         .arg("cpal_client_out:out_0")
         .arg("system:playback_2")
-        .spawn()
-        .expect("Failed to connect to second playback port");
+        .spawn() {
+            tracing::error!("Failed to connect output to second JACK playback port: {}", e);
+        }
 }
