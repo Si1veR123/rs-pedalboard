@@ -204,22 +204,22 @@ impl PedalTrait for Reverb {
 
         let mut to_change = None;
         let room_size_param = self.get_parameters().get("Room Size").unwrap();
-        if let Some(value) = pedal_knob(ui, "", room_size_param, egui::Vec2::new(0.05, 0.022), 0.3) {
+        if let Some(value) = pedal_knob(ui, "", "Room Size", room_size_param, egui::Vec2::new(0.05, 0.022), 0.3, self.id) {
             to_change = Some(("Room Size".to_string(), value));
         }
 
         let width_param = self.get_parameters().get("Width").unwrap();
-        if let Some(value) = pedal_knob(ui, "", width_param, egui::Vec2::new(0.05, 0.171), 0.3) {
+        if let Some(value) = pedal_knob(ui, "", "Width", width_param, egui::Vec2::new(0.05, 0.171), 0.3, self.id) {
             to_change = Some(("Width".to_string(), value));
         }
 
         let dampening_param = self.get_parameters().get("Dampening").unwrap();
-        if let Some(value) = pedal_knob(ui, "", dampening_param, egui::Vec2::new(0.05, 0.32), 0.3) {
+        if let Some(value) = pedal_knob(ui, "", "Dampening", dampening_param, egui::Vec2::new(0.05, 0.32), 0.3, self.id) {
             to_change = Some(("Dampening".to_string(), value));
         }
 
         let dry_wet_param = self.get_parameters().get("Dry/Wet").unwrap();
-        if let Some(value) = pedal_knob(ui, "", dry_wet_param, egui::Vec2::new(0.05, 0.469), 0.3) {
+        if let Some(value) = pedal_knob(ui, "", "Dry/Wet", dry_wet_param, egui::Vec2::new(0.05, 0.469), 0.3, self.id) {
             to_change = Some(("Dry/Wet".to_string(), value));
         }
 

@@ -237,28 +237,28 @@ macro_rules! var_delay_phaser {
                 let mut to_change = None;
 
                 let min_depth_param = self.get_parameters().get("Min Depth").unwrap();
-                if let Some(value) = pedal_knob(ui, "", min_depth_param, eframe::egui::Vec2::new(0.086, 0.036), 0.3) {
+                if let Some(value) = pedal_knob(ui, "", "Min Depth", min_depth_param, eframe::egui::Vec2::new(0.086, 0.036), 0.3, self.id) {
                     to_change =  Some(("Min Depth".to_string(), value));
                 }
 
                 let max_depth_param = self.get_parameters().get("Max Depth").unwrap();
-                if let Some(value) = pedal_knob(ui, "", max_depth_param, eframe::egui::Vec2::new(0.61, 0.036), 0.3) {
+                if let Some(value) = pedal_knob(ui, "", "Max Depth", max_depth_param, eframe::egui::Vec2::new(0.61, 0.036), 0.3, self.id) {
                     to_change =  Some(("Max Depth".to_string(), value));
                 }
 
                 if $incl_feedback {
                     let feedback_param = self.get_parameters().get("Feedback").unwrap();
-                    if let Some(value) = pedal_knob(ui, "", feedback_param, Vec2::new(0.095, 0.3), 0.3) {
+                    if let Some(value) = pedal_knob(ui, "", "Feedback", feedback_param, Vec2::new(0.095, 0.3), 0.3, self.id) {
                         to_change = Some(("Feedback".to_string(), value));
                     }
 
                     let dry_wet_param = self.get_parameters().get("Dry/Wet").unwrap();
-                    if let Some(value) = pedal_knob(ui, "", dry_wet_param, eframe::egui::Vec2::new(0.605, 0.3), 0.3) {
+                    if let Some(value) = pedal_knob(ui, "", "Dry/Wet", dry_wet_param, eframe::egui::Vec2::new(0.605, 0.3), 0.3, self.id) {
                         to_change =  Some(("Dry/Wet".to_string(), value));
                     }
                 } else {
                     let dry_wet_param = self.get_parameters().get("Dry/Wet").unwrap();
-                    if let Some(value) = pedal_knob(ui, "", dry_wet_param, eframe::egui::Vec2::new(0.35, 0.3), 0.3) {
+                    if let Some(value) = pedal_knob(ui, "", "Dry/Wet", dry_wet_param, eframe::egui::Vec2::new(0.35, 0.3), 0.3, self.id) {
                         to_change =  Some(("Dry/Wet".to_string(), value));
                     }
                 }

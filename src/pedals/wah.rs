@@ -186,22 +186,22 @@ impl PedalTrait for Wah {
         let mut to_change = None;
 
         let base_freq_param = self.get_parameters().get("Base Frequency").unwrap();
-        if let Some(value) = pedal_knob(ui, "", base_freq_param, egui::Vec2::new(0.68, 0.04), 0.25) {
+        if let Some(value) = pedal_knob(ui, "", "Base Frequency", base_freq_param, egui::Vec2::new(0.68, 0.04), 0.25, self.id) {
             to_change = Some(("Base Frequency".to_string(), value));
         }
 
         let sensitivity_param = self.get_parameters().get("Sensitivity").unwrap();
-        if let Some(value) = pedal_knob(ui, "", sensitivity_param, egui::Vec2::new(0.68, 0.165), 0.25) {
+        if let Some(value) = pedal_knob(ui, "", "Sensitivity", sensitivity_param, egui::Vec2::new(0.68, 0.165), 0.25, self.id) {
             to_change = Some(("Sensitivity".to_string(), value));
         }
 
         let width_param = self.get_parameters().get("Width").unwrap();
-        if let Some(value) = pedal_knob(ui, "", width_param, egui::Vec2::new(0.68, 0.29), 0.25) {
+        if let Some(value) = pedal_knob(ui, "", "Width", width_param, egui::Vec2::new(0.68, 0.29), 0.25, self.id) {
             to_change = Some(("Width".to_string(), value));
         }
 
         let position_param = self.get_parameters().get("Position").unwrap();
-        if let Some(value) = pedal_knob(ui, "", position_param, egui::Vec2::new(0.68, 0.42), 0.25) {
+        if let Some(value) = pedal_knob(ui, "", "Position", position_param, egui::Vec2::new(0.68, 0.42), 0.25, self.id) {
             to_change = Some(("Position".to_string(), value));
         }
 

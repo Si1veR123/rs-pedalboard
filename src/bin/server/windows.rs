@@ -1,5 +1,4 @@
 use cpal::{traits::{DeviceTrait, HostTrait}, Device, Host};
-use crossbeam::channel;
 use crate::ServerSettings;
 use super::device_select::device_select_menu;
 use rs_pedalboard::audio_devices::{get_input_devices, get_output_devices};

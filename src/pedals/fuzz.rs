@@ -143,22 +143,22 @@ impl PedalTrait for Fuzz {
 
         let mut to_change = None;
         let gain_param = self.get_parameters().get("Gain").unwrap();
-        if let Some(value) = pedal_knob(ui, "", gain_param, Vec2::new(0.1, 0.07), 0.35) {
+        if let Some(value) = pedal_knob(ui, "", "Gain", gain_param, Vec2::new(0.1, 0.07), 0.35, self.id) {
             to_change = Some(("Gain".to_string(), value));
         }
 
         let level_param = self.get_parameters().get("Level").unwrap();
-        if let Some(value) = pedal_knob(ui, "", level_param, Vec2::new(0.52, 0.07), 0.35) {
+        if let Some(value) = pedal_knob(ui, "", "Level", level_param, Vec2::new(0.52, 0.07), 0.35, self.id) {
             to_change = Some(("Level".to_string(), value));
         }
 
         let type_param = self.get_parameters().get("Type").unwrap();
-        if let Some(value) = pedal_knob(ui, "", type_param, Vec2::new(0.1, 0.3), 0.35) {
+        if let Some(value) = pedal_knob(ui, "", "Type", type_param, Vec2::new(0.1, 0.3), 0.35, self.id) {
             to_change = Some(("Type".to_string(), value));
         }
 
         let dry_wet_param = self.get_parameters().get("Dry/Wet").unwrap();
-        if let Some(value) = pedal_knob(ui, "", dry_wet_param, Vec2::new(0.52, 0.3), 0.35) {
+        if let Some(value) = pedal_knob(ui, "", "Dry/Wet", dry_wet_param, Vec2::new(0.52, 0.3), 0.35, self.id) {
             to_change = Some(("Dry/Wet".to_string(), value));
         }
 

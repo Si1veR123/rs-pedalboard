@@ -270,39 +270,40 @@ impl PedalTrait for Compressor {
 
         let mut to_change = None;
         let ratio_param = self.get_parameters().get("Ratio").unwrap();
-        if let Some(value) = pedal_knob(ui, "", ratio_param, egui::Vec2::new(0.0625, 0.03), 0.25) {
+        if let Some(value) = pedal_knob(ui, "", "Ratio", ratio_param, egui::Vec2::new(0.0625, 0.03), 0.25, self.id) {
             to_change = Some(("Ratio".to_string(), value));
         }
 
         let threshold_param = self.get_parameters().get("Threshold").unwrap();
-        if let Some(value) = pedal_knob(ui, "", threshold_param, egui::Vec2::new(0.375, 0.014), 0.25) {
+        if let Some(value) = pedal_knob(ui, "", "Threshold", threshold_param, egui::Vec2::new(0.375, 0.014), 0.25, self.id) {
             to_change = Some(("Threshold".to_string(), value));
         }
 
         let level_param = self.get_parameters().get("Level").unwrap();
-        if let Some(value) = pedal_knob(ui, "", level_param, egui::Vec2::new(0.6875, 0.03), 0.25) {
+        if let Some(value) = pedal_knob(ui, "", "Level", level_param, egui::Vec2::new(0.6875, 0.03), 0.25, self.id) {
             to_change = Some(("Level".to_string(), value));
         }
 
         let attack_param = self.get_parameters().get("Attack").unwrap();
-        if let Some(value) = pedal_knob(ui, "", attack_param, egui::Vec2::new(0.09, 0.207), 0.2) {
+        if let Some(value) = pedal_knob(ui, "", "Attack", attack_param, egui::Vec2::new(0.09, 0.207), 0.2, self.id) {
             to_change = Some(("Attack".to_string(), value));
         }
 
         let release_param = self.get_parameters().get("Release").unwrap();
-        if let Some(value) = pedal_knob(ui, "", release_param, egui::Vec2::new(0.3, 0.207), 0.2) {
+        if let Some(value) = pedal_knob(ui, "", "Release", release_param, egui::Vec2::new(0.3, 0.207), 0.2, self.id) {
             to_change = Some(("Release".to_string(), value));
         }
 
         let soft_knee_param = self.get_parameters().get("Soft Knee").unwrap();
-        if let Some(value) = pedal_knob(ui, "", soft_knee_param, egui::Vec2::new(0.50, 0.207), 0.2) {
+        if let Some(value) = pedal_knob(ui, "", "Soft Knee", soft_knee_param, egui::Vec2::new(0.50, 0.207), 0.2, self.id) {
             to_change = Some(("Soft Knee".to_string(), value));
         }
 
         let dry_wet_param = self.get_parameters().get("Dry/Wet").unwrap();
-        if let Some(value) = pedal_knob(ui, "", dry_wet_param, egui::Vec2::new(0.71, 0.207), 0.2) {
+        if let Some(value) = pedal_knob(ui, "", "Dry/Wet", dry_wet_param, egui::Vec2::new(0.71, 0.207), 0.2, self.id) {
             to_change = Some(("Dry/Wet".to_string(), value));
         }
+
 
         let compressor_graph_rect = egui::Rect::from_min_size(
             pedal_rect.min + Vec2::new(0.2*pedal_rect.width(), 0.36*pedal_rect.height()),

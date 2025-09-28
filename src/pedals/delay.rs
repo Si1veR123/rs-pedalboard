@@ -221,22 +221,22 @@ impl PedalTrait for Delay {
 
         let mut to_change = None;
         let delay_param = self.get_parameters().get("Delay").unwrap();
-        if let Some(value) = pedal_knob(ui, "", delay_param, egui::Vec2::new(0.125, 0.038), 0.3) {
+        if let Some(value) = pedal_knob(ui, "", "Delay", delay_param, egui::Vec2::new(0.125, 0.038), 0.3, self.id) {
             to_change = Some(("Delay".to_string(), value));
         }
 
         let decay_param = self.get_parameters().get("Decay").unwrap();
-        if let Some(value) = pedal_knob(ui, "", decay_param, egui::Vec2::new(0.58, 0.145), 0.3) {
+        if let Some(value) = pedal_knob(ui, "", "Decay", decay_param, egui::Vec2::new(0.58, 0.145), 0.3, self.id) {
             to_change = Some(("Decay".to_string(), value));
         }
 
         let warmth_param = self.get_parameters().get("Warmth").unwrap();
-        if let Some(value) = pedal_knob(ui, "", warmth_param, egui::Vec2::new(0.125, 0.27), 0.3) {
+        if let Some(value) = pedal_knob(ui, "", "Warmth", warmth_param, egui::Vec2::new(0.125, 0.27), 0.3, self.id) {
             to_change = Some(("Warmth".to_string(), value));
         }
 
         let dry_wet_param = self.get_parameters().get("Dry/Wet").unwrap();
-        if let Some(value) = pedal_knob(ui, "", dry_wet_param, egui::Vec2::new(0.58, 0.365), 0.3) {
+        if let Some(value) = pedal_knob(ui, "", "Dry/Wet", dry_wet_param, egui::Vec2::new(0.58, 0.365), 0.3, self.id) {
             to_change = Some(("Dry/Wet".to_string(), value));
         }
 

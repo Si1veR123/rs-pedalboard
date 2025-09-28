@@ -470,25 +470,25 @@ impl PedalTrait for GraphicEq7 {
             ui.add_space(spacing/2.0);
 
             let mut changed_eq_param = None;
-            if let Some(change) = eq_knob(ui, self.parameters.get("Gain 1").unwrap(), self.parameters.get("Bandwidth 1").unwrap(), width) {
+            if let Some(change) = eq_knob(ui, self.parameters.get("Gain 1").unwrap(), self.parameters.get("Bandwidth 1").unwrap(), 1, width, self.id) {
                 changed_eq_param = Some((1, change));
             }
-            if let Some(change) = eq_knob(ui, self.parameters.get("Gain 2").unwrap(), self.parameters.get("Bandwidth 2").unwrap(), width) {
+            if let Some(change) = eq_knob(ui, self.parameters.get("Gain 2").unwrap(), self.parameters.get("Bandwidth 2").unwrap(), 2, width, self.id) {
                 changed_eq_param = Some((2, change));
             }
-            if let Some(change) = eq_knob(ui, self.parameters.get("Gain 3").unwrap(), self.parameters.get("Bandwidth 3").unwrap(), width) {
+            if let Some(change) = eq_knob(ui, self.parameters.get("Gain 3").unwrap(), self.parameters.get("Bandwidth 3").unwrap(), 3, width, self.id) {
                 changed_eq_param = Some((3, change));
             }
-            if let Some(change) = eq_knob(ui, self.parameters.get("Gain 4").unwrap(), self.parameters.get("Bandwidth 4").unwrap(), width) {
+            if let Some(change) = eq_knob(ui, self.parameters.get("Gain 4").unwrap(), self.parameters.get("Bandwidth 4").unwrap(), 4, width, self.id) {
                 changed_eq_param = Some((4, change));
             }
-            if let Some(change) = eq_knob(ui, self.parameters.get("Gain 5").unwrap(), self.parameters.get("Bandwidth 5").unwrap(), width) {
+            if let Some(change) = eq_knob(ui, self.parameters.get("Gain 5").unwrap(), self.parameters.get("Bandwidth 5").unwrap(), 5, width, self.id) {
                 changed_eq_param = Some((5, change));
             }
-            if let Some(change) = eq_knob(ui, self.parameters.get("Gain 6").unwrap(), self.parameters.get("Bandwidth 6").unwrap(), width) {
+            if let Some(change) = eq_knob(ui, self.parameters.get("Gain 6").unwrap(), self.parameters.get("Bandwidth 6").unwrap(), 6, width, self.id) {
                 changed_eq_param = Some((6, change));
             }
-            if let Some(change) = eq_knob(ui, self.parameters.get("Gain 7").unwrap(), self.parameters.get("Bandwidth 7").unwrap(), width) {
+            if let Some(change) = eq_knob(ui, self.parameters.get("Gain 7").unwrap(), self.parameters.get("Bandwidth 7").unwrap(), 7, width, self.id) {
                 changed_eq_param = Some((7, change));
             }
 
@@ -582,7 +582,7 @@ enum EqChange {
     Bandwidth(f32),
 }
 
-fn eq_knob(ui: &mut eframe::egui::Ui, param: &PedalParameter, bandwidth_param: &PedalParameter, width: f32) -> Option<EqChange> {
+fn eq_knob(ui: &mut eframe::egui::Ui, param: &PedalParameter, bandwidth_param: &PedalParameter, param_num: usize, width: f32, id: u32) -> Option<EqChange> {
     ui.vertical(|ui| {
         let mut changed_param = None;
 
@@ -630,7 +630,7 @@ fn eq_knob(ui: &mut eframe::egui::Ui, param: &PedalParameter, bandwidth_param: &
             UiBuilder::new().max_rect(knob_rect)
         );
 
-        if let Some(value) = pedal_knob(&mut bandwidth_knob_ui, "", bandwidth_param, Vec2::ZERO, 1.0) {
+        if let Some(value) = pedal_knob(&mut bandwidth_knob_ui, "", &format!("Bandwidth {param_num}"), bandwidth_param, Vec2::ZERO, 1.0, id) {
             changed_param = Some(EqChange::Bandwidth(value.as_float().unwrap()));
         }
 

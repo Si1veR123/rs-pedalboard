@@ -2,6 +2,13 @@ use serde::{Deserialize, Serialize};
 use crate::{pedals::{Pedal, PedalTrait}, unique_time_id};
 use std::{fmt::Write, hash::Hash};
 
+/// Can uniquely identify a parameter.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ParameterPath {
+    pub pedalboard_id: u32,
+    pub pedal_id: u32,
+    pub parameter_name: String,
+}
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Pedalboard {

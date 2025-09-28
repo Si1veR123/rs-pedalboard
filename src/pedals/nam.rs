@@ -512,15 +512,16 @@ impl PedalTrait for Nam {
             }
         };
 
-        if let Some(value) = pedal_knob(ui, "", self.parameters.get("Gain").unwrap(), Vec2::new(0.05, 0.06), 0.25) {
+        if let Some(value) = pedal_knob(ui, "", "Gain", self.parameters.get("Gain").unwrap(), Vec2::new(0.05, 0.06), 0.25, self.id) {
             to_change = Some(("Gain".to_string(), value));
         }
-        if let Some(value) = pedal_knob(ui, "", self.parameters.get("Dry/Wet").unwrap(), Vec2::new(0.375, 0.06), 0.25) {
+        if let Some(value) = pedal_knob(ui, "", "Dry/Wet", self.parameters.get("Dry/Wet").unwrap(), Vec2::new(0.375, 0.06), 0.25, self.id) {
             to_change = Some(("Dry/Wet".to_string(), value));
         }
-        if let Some(value) = pedal_knob(ui, "", self.parameters.get("Level").unwrap(), Vec2::new(0.7, 0.06), 0.25) {
+        if let Some(value) = pedal_knob(ui, "", "Level", self.parameters.get("Level").unwrap(), Vec2::new(0.7, 0.06), 0.25, self.id) {
             to_change = Some(("Level".to_string(), value));
         }
+
 
         let active_param = self.get_parameters().get("Active").unwrap().value.as_bool().unwrap();
         if let Some(value) = pedal_switch(ui, active_param, egui::Vec2::new(0.33, 0.72), 0.16) {

@@ -1,7 +1,7 @@
 use std::{cell::{Cell, RefCell}, collections::HashSet, time::Instant};
 use crossbeam::channel::Receiver;
-use rs_pedalboard::{pedalboard::Pedalboard, pedals::{Pedal, PedalParameterValue, PedalTrait}, server_settings::ServerSettingsSave};
-use crate::{midi::{MidiSettings, MidiState}, saved_pedalboards::SavedPedalboards, settings::{ClientSettings, VolumeNormalizationMode}, socket::{ClientSocket, Command, ParameterPath}};
+use rs_pedalboard::{pedalboard::{Pedalboard, ParameterPath}, pedals::{Pedal, PedalParameterValue, PedalTrait}, server_settings::ServerSettingsSave};
+use crate::{midi::{MidiSettings, MidiState}, saved_pedalboards::SavedPedalboards, settings::{ClientSettings, VolumeNormalizationMode}, socket::{ClientSocket, Command}, Screen};
 use eframe::egui;
 
 pub struct State {
@@ -20,9 +20,23 @@ pub struct State {
     pub metronome_bpm: Cell<u32>,
     pub metronome_volume: Cell<f32>,
     pub tuner_active: Cell<bool>,
+
+    pub selected_screen: Cell<Screen>
 }
 
 impl State {
+    pub fn get_active_parameter(ctx: &eframe::egui::Context) -> Option<ParameterPath> {
+        ctx.data(|reader| {
+            reader.get_temp::<Option<ParameterPath>>(eframe::egui::Id::new("active_parameter")).clone().unwrap_or(None)
+        })
+    }
+
+    pub fn set_active_parameter(ctx: &eframe::egui::Context, path: Option<ParameterPath>) {
+        ctx.memory_mut(|writer| {
+            writer.data.insert_temp(eframe::egui::Id::new("active_parameter"), path);
+        });
+    }
+
     /// Get a set of all pedalboard IDs in the active pedalboard stage and in the pedalboard library
     /// 
     /// Requires a lock on active_pedalboardstage and pedalboard_library
@@ -248,20 +262,22 @@ impl State {
     /// Set a parameter on all pedalboards, on stage and in library, with the same name
     /// 
     /// Requires a lock on active_pedalboardstage, pedalboard_library and socket
-    pub fn set_parameter(&self, pedalboard_id: u32, pedal_id: u32, parameter_name: String, parameter_value: PedalParameterValue, local: bool) {
+    pub fn set_parameter(&self, pedalboard_id: u32, pedal_id: u32, parameter_name: String, parameter_value: PedalParameterValue, local: bool, ctx: &eframe::egui::Context) {
         // Set parameter on pedalboard stage
         for pedalboard in self.pedalboards.active_pedalboardstage.borrow_mut().pedalboards.iter_mut() {
             if pedalboard.get_id() == pedalboard_id {
-                let pedal = pedalboard.pedals.iter_mut().find(|p| p.get_id() == pedal_id).unwrap();
-                pedal.set_parameter_value(&parameter_name, parameter_value.clone());
+                if let Some(pedal) = pedalboard.pedals.iter_mut().find(|p| p.get_id() == pedal_id) {
+                    pedal.set_parameter_value(&parameter_name, parameter_value.clone());
+                }
             }
         }
 
         // Set parameter on pedalboard library
         for pedalboard in self.pedalboards.pedalboard_library.borrow_mut().iter_mut() {
             if pedalboard.get_id() == pedalboard_id {
-                let pedal = pedalboard.pedals.iter_mut().find(|p| p.get_id() == pedal_id).unwrap();
-                pedal.set_parameter_value(&parameter_name, parameter_value.clone());
+                if let Some(pedal) = pedalboard.pedals.iter_mut().find(|p| p.get_id() == pedal_id) {
+                    pedal.set_parameter_value(&parameter_name, parameter_value.clone());
+                }
             }
         }
 
@@ -270,8 +286,16 @@ impl State {
             socket.send(Command::ParameterUpdate(ParameterPath {
                 pedalboard_id,
                 pedal_id,
-                parameter_name
+                parameter_name: parameter_name.clone()
             }, parameter_value));
+
+            // if !local, UI is setting parameter, so set active parameter to this
+            let path = ParameterPath {
+                pedalboard_id,
+                pedal_id,
+                parameter_name
+            };
+            Self::set_active_parameter(ctx, Some(path));
         }
     }
 
@@ -458,6 +482,7 @@ impl State {
             metronome_bpm: Cell::new(120),
             metronome_volume: Cell::new(0.5),
             tuner_active: Cell::new(false),
+            selected_screen: Cell::new(Screen::Stage)
         }
     }
 
@@ -509,8 +534,18 @@ impl State {
         socket.kill();
     }
 
+    pub fn set_screen(&self, screen: Screen) {
+        if screen == Screen::Utilities {
+            self.set_tuner_active(true);
+        } else if self.selected_screen.get() == Screen::Utilities {
+            self.set_tuner_active(false);
+        }
+
+        self.selected_screen.set(screen);
+    }
+
     /// Update the state with commands that other threads have sent to the server
-    pub fn handle_other_thread_commands(&self) {
+    pub fn handle_other_thread_commands(&self, ctx: &eframe::egui::Context) {
         for command in self.midi_command_receiver.try_iter() {
             match command {
                 Command::LoadSet(pedalboard_set_json) => {
@@ -647,12 +682,66 @@ impl State {
                         path.pedal_id,
                         path.parameter_name,
                         value,
-                        true
+                        true,
+                        ctx
                     );
                 },
                 Command::VolumeNormalizationReset => {},
                 Command::SetMute(mute) => { tracing::info!("Set mute to {mute}") },
                 Command::ToggleMute => { tracing::info!("Toggled mute") },
+                Command::ChangeActiveParameter(value) => {
+                    let active_parameter = Self::get_active_parameter(ctx);
+                    if let Some(path) = active_parameter {
+                        let stage_pedalboards = self.pedalboards.active_pedalboardstage.borrow();
+                        if let Some(pedalboard) = stage_pedalboards.pedalboards.iter().find(|pb| pb.get_id() == path.pedalboard_id) {
+                            if let Some(pedal) = pedalboard.pedals.iter().find(|p| p.get_id() == path.pedal_id) {
+                                if let Some((_name, param)) = pedal.get_parameters().iter().find(|(name, _p)| *name == &path.parameter_name) {
+                                    match param.value {
+                                        PedalParameterValue::Bool(_) => {
+                                            let new_value = if value > 0.5 { true } else { false };
+                                            let path = path.clone();
+                                            drop(stage_pedalboards);
+                                            self.set_parameter(path.pedalboard_id, path.pedal_id, path.parameter_name, PedalParameterValue::Bool(new_value), false, ctx);
+                                        },
+                                        PedalParameterValue::Int(_) => {
+                                            let min_param = param.min.as_ref().expect("Int parameter should have min").as_int().unwrap();
+                                            let max_param = param.max.as_ref().expect("Int parameter should have max").as_int().unwrap();
+                                            let int_value = ((value * (max_param - min_param) as f32).round() as i16) + min_param;
+                                            let path = path.clone();
+                                            drop(stage_pedalboards);
+                                            self.set_parameter(path.pedalboard_id, path.pedal_id, path.parameter_name, PedalParameterValue::Int(int_value), false, ctx);
+                                        },
+                                        PedalParameterValue::Float(_) => {
+                                            let min_param = param.min.as_ref().expect("Float parameter should have min").as_float().unwrap();
+                                            let max_param = param.max.as_ref().expect("Float parameter should have max").as_float().unwrap();
+                                            let float_value = (value * (max_param - min_param)) + min_param;
+                                            let path = path.clone();
+                                            drop(stage_pedalboards);
+                                            self.set_parameter(path.pedalboard_id, path.pedal_id, path.parameter_name, PedalParameterValue::Float(float_value), false, ctx);
+                                        },
+                                        _ => tracing::warn!("Unsupported active parameter type")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                Command::StageView => {
+                    self.set_screen(Screen::Stage);
+                },
+                Command::LibraryView => {
+                    self.set_screen(Screen::Library);
+                },
+                Command::UtilitiesView => {
+                    self.set_screen(Screen::Utilities);
+                },
+                Command::SongsView => {
+                    self.set_screen(Screen::Songs);
+                },
+                Command::SettingsView => {
+                    self.set_screen(Screen::Settings);
+                },
+
                 Command::RequestSampleRate => tracing::error!("Unexpected RequestSampleRate command in other thread commands"),
                 Command::ThreadAliveTest => tracing::error!("Unexpected ThreadAliveTest command in other thread commands"),
                 Command::SubscribeToResponses(_) => tracing::error!("Unexpected SubscribeToResponses command in other thread commands"),

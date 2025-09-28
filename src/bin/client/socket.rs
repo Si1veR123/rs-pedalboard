@@ -2,25 +2,17 @@ use std::time::Duration;
 
 use futures::{pin_mut, select, FutureExt};
 use ringbuf::traits::{Consumer, Split};
-use serde::{Deserialize, Serialize};
 use smol::channel::{Receiver, Sender, TryRecvError};
 use smol::io::{AsyncWriteExt, AsyncWrite};
 use smol::net::{TcpStream, Ipv4Addr};
 
 use rs_pedalboard::pedals::PedalParameterValue;
 use rs_pedalboard::socket_helper::CommandReceiver;
+use rs_pedalboard::pedalboard::ParameterPath;
 
 use crate::settings::VolumeNormalizationMode;
 
 pub const RESPONSE_TIMEOUT: Duration = Duration::from_secs(5);
-
-/// Can uniquely identify a parameter.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct ParameterPath {
-    pub pedalboard_id: u32,
-    pub pedal_id: u32,
-    pub parameter_name: String,
-}
 
 /// Manages a handle to a client socket thread, when connected.
 pub struct ClientSocket {
@@ -159,6 +151,14 @@ pub enum Command {
 
     SubscribeToResponses(Sender<String>),
     ThreadAliveTest,
+
+    // Client only commands
+    StageView,
+    LibraryView,
+    UtilitiesView,
+    SongsView,
+    SettingsView,
+    ChangeActiveParameter(f32),
 }
 
 pub struct ClientSocketThreadHandle {
@@ -584,6 +584,8 @@ async fn client_socket_event_loop(
                         }
                     },
                     Command::ThreadAliveTest => { },
+                    // Client only
+                    Command::StageView | Command::LibraryView | Command::UtilitiesView | Command::SongsView | Command::SettingsView | Command::ChangeActiveParameter(_) => {}
                 }
             }
         }

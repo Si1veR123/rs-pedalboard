@@ -200,22 +200,22 @@ impl PedalTrait for AutoWah {
         let mut to_change = None;
 
         let base_freq_param = self.get_parameters().get("Base Freq").unwrap();
-        if let Some(value) = pedal_knob(ui, "", base_freq_param, egui::Vec2::new(0.68, 0.045), 0.25) {
+        if let Some(value) = pedal_knob(ui, "", "Base Freq", base_freq_param, egui::Vec2::new(0.68, 0.045), 0.25, self.id) {
             to_change = Some(("Base Freq".to_string(), value));
         }
 
         let sensitivity_param = self.get_parameters().get("Sensitivity").unwrap();
-        if let Some(value) = pedal_knob(ui, "", sensitivity_param, egui::Vec2::new(0.68, 0.17), 0.25) {
+        if let Some(value) = pedal_knob(ui, "", "Sensitivity", sensitivity_param, egui::Vec2::new(0.68, 0.17), 0.25, self.id) {
             to_change = Some(("Sensitivity".to_string(), value));
         }
 
         let width_param = self.get_parameters().get("Width").unwrap();
-        if let Some(value) = pedal_knob(ui, "", width_param, egui::Vec2::new(0.68, 0.295), 0.25) {
+        if let Some(value) = pedal_knob(ui, "", "Width", width_param, egui::Vec2::new(0.68, 0.295), 0.25, self.id) {
             to_change = Some(("Width".to_string(), value));
         }
 
         let envelope_smoothing_param = self.get_parameters().get("Envelope Smoothing").unwrap();
-        if let Some(value) = pedal_knob(ui, "", envelope_smoothing_param, egui::Vec2::new(0.68, 0.425), 0.25) {
+        if let Some(value) = pedal_knob(ui, "", "Envelope Smoothing", envelope_smoothing_param, egui::Vec2::new(0.68, 0.425), 0.25, self.id) {
             to_change = Some(("Envelope Smoothing".to_string(), value));
         }
 

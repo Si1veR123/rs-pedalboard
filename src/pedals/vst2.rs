@@ -575,7 +575,7 @@ impl PedalTrait for Vst2 {
 
                 ui.add_space(5.0);
                     
-                if let Some(value) = pedal_knob(ui, RichText::new("Dry/Wet").color(Color32::WHITE).size(8.0), self.parameters.get("Dry/Wet").unwrap(), Vec2::new(0.325, 0.55), 0.35) {
+                if let Some(value) = pedal_knob(ui, RichText::new("Dry/Wet").color(Color32::WHITE).size(8.0), "Dry/Wet", self.parameters.get("Dry/Wet").unwrap(), Vec2::new(0.325, 0.55), 0.35, self.id) {
                     to_change = Some(("Dry/Wet".to_string(), value));
                 }
             }

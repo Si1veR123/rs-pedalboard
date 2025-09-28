@@ -208,22 +208,22 @@ impl PedalTrait for NoiseGate {
         let mut to_change = None;
 
         let threshold_db_param = self.get_parameters().get("Threshold Db").unwrap();
-        if let Some(value) = pedal_knob(ui, "", threshold_db_param, egui::Vec2::new(0.08, 0.03), 0.35) {
+        if let Some(value) = pedal_knob(ui, "", "Threshold Db", threshold_db_param, egui::Vec2::new(0.08, 0.03), 0.35, self.id) {
             to_change = Some(("Threshold Db".to_string(), value));
         }
 
         let reduction_param = self.get_parameters().get("Reduction").unwrap();
-        if let Some(value) = pedal_knob(ui, "", reduction_param, egui::Vec2::new(0.57, 0.03), 0.35) {
+        if let Some(value) = pedal_knob(ui, "", "Reduction", reduction_param, egui::Vec2::new(0.57, 0.03), 0.35, self.id) {
             to_change = Some(("Reduction".to_string(), value));
         }
 
         let attack_param = self.get_parameters().get("Attack").unwrap();
-        if let Some(value) = pedal_knob(ui, "", attack_param, egui::Vec2::new(0.08, 0.34), 0.35) {
+        if let Some(value) = pedal_knob(ui, "", "Attack", attack_param, egui::Vec2::new(0.08, 0.34), 0.35, self.id) {
             to_change = Some(("Attack".to_string(), value));
         }
 
         let release_param = self.get_parameters().get("Release").unwrap();
-        if let Some(value) = pedal_knob(ui, "", release_param, egui::Vec2::new(0.57, 0.34), 0.35) {
+        if let Some(value) = pedal_knob(ui, "", "Release", release_param, egui::Vec2::new(0.57, 0.34), 0.35, self.id) {
             to_change = Some(("Release".to_string(), value));
         }
 

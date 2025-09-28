@@ -2,7 +2,8 @@ use std::collections::HashMap;
 
 use eframe::egui::{self, include_image};
 use rs_pedalboard::pedals::{ParameterUILocation, Pedal, PedalDiscriminants, PedalParameter, PedalParameterValue, PedalTrait};
-use crate::{midi::functions::ParameterMidiFunctionValues, socket::ParameterPath};
+use rs_pedalboard::pedalboard::ParameterPath;
+use crate::{midi::functions::ParameterMidiFunctionValues};
 
 pub fn get_window_id(pedal: &Pedal) -> egui::Id {
     egui::Id::new("parameter_window").with(pedal.get_id())

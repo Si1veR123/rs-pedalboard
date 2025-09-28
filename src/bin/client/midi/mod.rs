@@ -1,5 +1,6 @@
 pub mod functions;
 use rs_pedalboard::unique_time_id;
+use rs_pedalboard::pedalboard::ParameterPath;
 use strum::IntoEnumIterator;
 
 use std::{collections::{HashMap, HashSet}, sync::{atomic::AtomicU32, Arc, Mutex}};
@@ -9,7 +10,7 @@ use eframe::egui::{self, Id, Rangef, RichText};
 use egui_extras::{Size, StripBuilder};
 use crossbeam::channel::Sender;
 
-use crate::{midi::{functions::{GlobalMidiFunction, ParameterMidiFunctionValues}}, socket::{ClientSocketThreadHandle, Command, ParameterPath}, SAVE_DIR};
+use crate::{midi::{functions::{GlobalMidiFunction, ParameterMidiFunctionValues}}, socket::{ClientSocketThreadHandle, Command}, SAVE_DIR};
 
 pub const MIDI_SETTINGS_SAVE_NAME: &'static str = "midi_settings.json";
 

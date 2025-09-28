@@ -175,6 +175,14 @@ fn main() {
     )).expect("Failed to run app");
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Screen {
+    Stage,
+    Library,
+    Utilities,
+    Songs,
+    Settings
+}
 
 pub struct PedalboardClientApp {
     state: &'static State,
@@ -182,7 +190,6 @@ pub struct PedalboardClientApp {
     #[cfg(feature = "virtual_keyboard")]
     keyboard: Keyboard,
 
-    selected_screen: usize,
     pedalboard_stage_screen: PedalboardStageScreen,
     pedalboard_library_screen: PedalboardLibraryScreen,
     utilities_screen: UtilitiesScreen,
@@ -226,7 +233,6 @@ impl PedalboardClientApp {
         leaked_state.midi_state.borrow_mut().connect_to_auto_connect_ports();
 
         PedalboardClientApp {
-            selected_screen: 0,
             pedalboard_stage_screen: PedalboardStageScreen::new(leaked_state),
             pedalboard_library_screen: PedalboardLibraryScreen::new(leaked_state),
             songs_screen: SongsScreen::new(leaked_state),
@@ -251,7 +257,7 @@ impl eframe::App for PedalboardClientApp {
         set_font_size(ctx.available_rect().width(), ctx);
 
         self.state.update_socket_responses();
-        self.state.handle_other_thread_commands();
+        self.state.handle_other_thread_commands(ctx);
 
         let mut sr_buf = Vec::new();
         self.state.get_commands("sr", &mut sr_buf);
@@ -262,16 +268,28 @@ impl eframe::App for PedalboardClientApp {
         let bottom_window_select_height = ctx.screen_rect().height() * 0.1;
         let padding = 10.0;
 
+        let selected_screen = self.state.selected_screen.get();
+
         let span = trace_span!("TopBottomPanel");
         let enter = span.enter();
         egui::TopBottomPanel::bottom(Id::new("bottom_window_select"))
             .min_height(bottom_window_select_height)
             .show(&ctx, |ui| {
                 ui.horizontal_centered(|ui| {
-                    let mut button_outline = [egui::Stroke::new(0.3, INACTIVE_BG_STROKE_COLOR); 5];
-                    button_outline[self.selected_screen] = egui::Stroke::new(1.0, THEME_COLOR);
-                    let mut button_bg = [egui::Color32::from_gray(19); 5];
-                    button_bg[self.selected_screen] = egui::Color32::from_gray(33);
+                    let button_outline = |screen: Screen| {
+                        if screen == selected_screen {
+                            egui::Stroke::new(1.0, THEME_COLOR)
+                        } else {
+                            egui::Stroke::new(0.3, INACTIVE_BG_STROKE_COLOR)
+                        }
+                    };
+                    let button_bg = |screen: Screen| {
+                        if screen == selected_screen {
+                            WIDGET_HOVER_BACKGROUND_COLOR
+                        } else {
+                            WIDGET_BACKGROUND_COLOR
+                        }
+                    };
 
                     ui.allocate_ui(Vec2::new(ui.available_width()-(bottom_window_select_height*2.0), ui.available_height()), |ui| {
                         ui.columns_const(|[column0, column1, column2]| {
@@ -280,21 +298,15 @@ impl eframe::App for PedalboardClientApp {
                             column0.horizontal_centered(|ui| {
                                 if ui.add_sized(button_size, Button::new(
                                     RichText::new("Stage View")
-                                ).stroke(button_outline[0]).fill(button_bg[0])).clicked() {
-                                    if self.selected_screen == 2 {
-                                        self.state.set_tuner_active(false);
-                                    }
-                                    self.selected_screen = 0;
+                                ).stroke(button_outline(Screen::Stage)).fill(button_bg(Screen::Stage))).clicked() {
+                                    self.state.set_screen(Screen::Stage);
                                 }
                             });
                             column1.horizontal_centered(|ui| {
                                 if ui.add_sized(button_size, Button::new(
                                     RichText::new("Library")
-                                ).stroke(button_outline[1]).fill(button_bg[1])).clicked() {
-                                    if self.selected_screen == 2 {
-                                        self.state.set_tuner_active(false);
-                                    }
-                                    self.selected_screen = 1;
+                                ).stroke(button_outline(Screen::Library)).fill(button_bg(Screen::Library))).clicked() {
+                                    self.state.set_screen(Screen::Library);
                                 }
                             });
                             column2.horizontal_centered(|ui| {
@@ -307,9 +319,8 @@ impl eframe::App for PedalboardClientApp {
 
                                 if ui.add_sized(button_size, Button::new(
                                     RichText::new("Utilities").color(text_color)
-                                ).stroke(button_outline[2]).fill(button_bg[2])).clicked() {
-                                    self.state.set_tuner_active(true);
-                                    self.selected_screen = 2;
+                                ).stroke(button_outline(Screen::Utilities)).fill(button_bg(Screen::Utilities))).clicked() {
+                                    self.state.set_screen(Screen::Utilities);
                                 }
                             });
                         });
@@ -319,26 +330,23 @@ impl eframe::App for PedalboardClientApp {
 
                     // Smaller songs and settings buttons
                     // ImageButton doesnt have methods for stroke and fill, so we use style_mut() to set the style
-                    ui.style_mut().visuals.widgets.inactive.weak_bg_fill = button_bg[3];
-                    ui.style_mut().visuals.widgets.inactive.bg_stroke = button_outline[3];
+                    ui.style_mut().visuals.widgets.inactive.weak_bg_fill = button_bg(Screen::Songs);
+                    ui.style_mut().visuals.widgets.inactive.bg_stroke = button_outline(Screen::Songs);
                     if ui.add_sized(
                         Vec2::splat(bottom_window_select_height-padding-5.0), // why -5.0? idk
                         ImageButton::new(include_image!("files/songs_icon.png"))
                             .corner_radius(3.0)
                             .tint(Color32::from_white_alpha(200))
                     ).clicked() {
-                        if self.selected_screen == 2 {
-                            self.state.set_tuner_active(false);
-                        }
-                        self.selected_screen = 3;
+                        self.state.set_screen(Screen::Songs);
                     }
 
-                    ui.style_mut().visuals.widgets.inactive.weak_bg_fill = button_bg[4];
-                    let settings_button_outline = if self.selected_screen == 4 {
-                        button_outline[4]
+                    ui.style_mut().visuals.widgets.inactive.weak_bg_fill = button_bg(Screen::Settings);
+                    let settings_button_outline = if selected_screen == Screen::Settings {
+                        button_outline(Screen::Settings)
                     } else {
                         if self.state.is_connected() {
-                            button_outline[4]
+                            button_outline(Screen::Settings)
                         } else {
                             egui::Stroke::new(2.5, Color32::RED)
                         }
@@ -350,36 +358,30 @@ impl eframe::App for PedalboardClientApp {
                             .corner_radius(3.0)
                             .tint(Color32::from_white_alpha(200))
                     ).clicked() {
-                        if self.selected_screen == 2 {
-                            self.state.set_tuner_active(false);
-                        }
-                        self.selected_screen = 4;
+                        self.state.set_screen(Screen::Settings);
                     };
                 });
         });
         drop(enter);
 
-        let span = trace_span!("CentralPanel", screen = self.selected_screen);
+        let span = trace_span!("CentralPanel");
         let enter = span.enter();
         egui::CentralPanel::default().show(&ctx, |ui| {
-            match self.selected_screen {
-                0 => {
+            match selected_screen {
+                Screen::Stage => {
                     ui.add(&mut self.pedalboard_stage_screen);
                 },
-                1 => {
+                Screen::Library => {
                     ui.add(&mut self.pedalboard_library_screen);
                 },
-                2 => {
+                Screen::Utilities => {
                     ui.add(&mut self.utilities_screen);
                 },
-                3 => {
+                Screen::Songs => {
                     ui.add(&mut self.songs_screen);
                 },
-                4 => {
+                Screen::Settings => {
                     ui.add(&mut self.settings_screen);
-                },
-                _ => {
-                    ui.label("Invalid screen selected");
                 }
             };
         });

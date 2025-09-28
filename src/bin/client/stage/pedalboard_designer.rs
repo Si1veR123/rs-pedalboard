@@ -359,7 +359,8 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
             pedal_id,
             name,
             value,
-            false
+            false,
+            ui.ctx()
         );
     }
 

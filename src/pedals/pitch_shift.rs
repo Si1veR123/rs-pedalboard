@@ -241,22 +241,22 @@ impl PedalTrait for PitchShift {
 
         let mut to_change = None;
         let semitones_param = self.get_parameters().get("Semitones").unwrap();
-        if let Some(value) = pedal_knob(ui, "", semitones_param, eframe::egui::Vec2::new(0.05, 0.022), 0.3) {
+        if let Some(value) = pedal_knob(ui, "", "Semitones", semitones_param, eframe::egui::Vec2::new(0.05, 0.022), 0.3, self.id) {
             to_change = Some(("Semitones".to_string(), value));
         }
 
         let block_size_param = self.get_parameters().get("Block Size").unwrap();
-        if let Some(value) = pedal_knob(ui, "", block_size_param, eframe::egui::Vec2::new(0.05, 0.171), 0.3) {
+        if let Some(value) = pedal_knob(ui, "", "Block Size", block_size_param, eframe::egui::Vec2::new(0.05, 0.171), 0.3, self.id) {
             to_change =  Some(("Block Size".to_string(), value));
         }
 
         let tonality_limit_param = self.get_parameters().get("Tonality Limit").unwrap();
-        if let Some(value) = pedal_knob(ui, "", tonality_limit_param, eframe::egui::Vec2::new(0.05, 0.32), 0.3) {
+        if let Some(value) = pedal_knob(ui, "", "Tonality Limit", tonality_limit_param, eframe::egui::Vec2::new(0.05, 0.32), 0.3, self.id) {
             to_change =  Some(("Tonality Limit".to_string(), value));
         }
 
         let presence_param = self.get_parameters().get("Presence").unwrap();
-        if let Some(value) = pedal_knob(ui, "", presence_param, eframe::egui::Vec2::new(0.05, 0.469), 0.3) {
+        if let Some(value) = pedal_knob(ui, "", "Presence", presence_param, eframe::egui::Vec2::new(0.05, 0.469), 0.3, self.id) {
             to_change =  Some(("Presence".to_string(), value));
         }
 

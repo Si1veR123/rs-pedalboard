@@ -1,6 +1,6 @@
 use eframe::egui::{self, Color32, Id, Vec2, WidgetText};
 
-use crate::dsp_algorithms::oscillator::{self, Oscillator};
+use crate::{dsp_algorithms::oscillator::{self, Oscillator}, pedalboard::ParameterPath};
 
 use super::{PedalParameter, PedalParameterValue};
 
@@ -16,10 +16,12 @@ pub fn float_round(value: f32, step: f32) -> f32 {
 
 pub fn pedal_knob(
     ui: &mut egui::Ui,
-    name: impl Into<WidgetText>,
+    text: impl Into<WidgetText>,
+    name: &str,
     parameter: &PedalParameter,
     at: egui::Vec2,
-    size: f32
+    size: f32,
+    pedal_id: u32
 ) -> Option<PedalParameterValue> {
     let pedal_parameter_float;
 
@@ -35,6 +37,14 @@ pub fn pedal_knob(
             return None;
         }
     };
+
+    let active_param = ui.ctx().memory(|m| m.data.get_temp::<Option<ParameterPath>>(egui::Id::new("active_parameter")).unwrap_or(None));
+    let is_active = if let Some(active) = &active_param {
+        active.pedal_id == pedal_id && &active.parameter_name == name
+    } else {
+        false
+    };
+    let tint = if is_active { Color32::from_rgb(150, 150, 255) } else { Color32::WHITE };
 
     let value = pedal_parameter_float.value.as_float().unwrap();
     let min = pedal_parameter_float.min.unwrap().as_float().unwrap();
@@ -65,6 +75,7 @@ pub fn pedal_knob(
             main_knob_im_ui.add(egui::Image::new(egui::include_image!("images/pedal_knob_blender_base.png"))
                 .rotate(knob_rotate, Vec2::splat(0.5))
                 .max_width(size_px)
+                .tint(tint)
             );
 
             let knob_im_shine_overlay = ui.add(egui::Image::new(egui::include_image!("images/pedal_knob_blender_shine.png"))
@@ -101,7 +112,7 @@ pub fn pedal_knob(
                 ui.ctx().output_mut(|o| o.cursor_icon = egui::CursorIcon::ResizeVertical);
             }
 
-            ui.label(name);
+            ui.label(text);
         },
     );
 

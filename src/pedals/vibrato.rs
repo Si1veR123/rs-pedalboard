@@ -154,7 +154,7 @@ impl PedalTrait for Vibrato {
         let mut to_change = None;
 
         let depth_param = self.get_parameters().get("Depth").unwrap();
-        if let Some(value) = pedal_knob(ui, "", depth_param, egui::Vec2::new(0.3, 0.11), 0.4) {
+        if let Some(value) = pedal_knob(ui, "", "Depth", depth_param, egui::Vec2::new(0.3, 0.11), 0.4, self.id) {
             to_change =  Some(("Depth".to_string(), value));
         }
 

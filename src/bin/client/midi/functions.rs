@@ -13,7 +13,14 @@ pub enum GlobalMidiFunction {
     PrevPedalboard,
     ToggleRecording,
     ToggleMetronome,
-    DeleteActivePedalboard
+    DeleteActivePedalboard,
+    StageView,
+    LibraryView,
+    UtilitiesView,
+    SongsView,
+    SettingsView,
+    ChangeActiveParameter,
+    ResetVolumeNormalization
 }
 
 impl std::fmt::Display for GlobalMidiFunction {
@@ -26,7 +33,14 @@ impl std::fmt::Display for GlobalMidiFunction {
             GlobalMidiFunction::PrevPedalboard => "Previous Pedalboard",
             GlobalMidiFunction::ToggleRecording => "Toggle Recording",
             GlobalMidiFunction::ToggleMetronome => "Toggle Metronome",
-            GlobalMidiFunction::DeleteActivePedalboard => "Delete Active Pedalboard"
+            GlobalMidiFunction::DeleteActivePedalboard => "Delete Active Pedalboard",
+            GlobalMidiFunction::StageView => "Stage View",
+            GlobalMidiFunction::LibraryView => "Library View",
+            GlobalMidiFunction::UtilitiesView => "Utilities View",
+            GlobalMidiFunction::SongsView => "Songs View",
+            GlobalMidiFunction::SettingsView => "Settings View",
+            GlobalMidiFunction::ChangeActiveParameter => "Change Active Parameter",
+            GlobalMidiFunction::ResetVolumeNormalization => "Reset Volume Normalization"
         };
         write!(f, "{name}")
     }
@@ -42,7 +56,14 @@ impl GlobalMidiFunction {
             GlobalMidiFunction::PrevPedalboard => Command::PrevPedalboard,
             GlobalMidiFunction::ToggleRecording => Command::ToggleRecording,
             GlobalMidiFunction::ToggleMetronome => Command::ToggleMetronome,
-            GlobalMidiFunction::DeleteActivePedalboard => Command::DeleteActivePedalboard
+            GlobalMidiFunction::DeleteActivePedalboard => Command::DeleteActivePedalboard,
+            GlobalMidiFunction::StageView => Command::StageView,
+            GlobalMidiFunction::LibraryView => Command::LibraryView,
+            GlobalMidiFunction::UtilitiesView => Command::UtilitiesView,
+            GlobalMidiFunction::SongsView => Command::SongsView,
+            GlobalMidiFunction::SettingsView => Command::SettingsView,
+            GlobalMidiFunction::ChangeActiveParameter => Command::ChangeActiveParameter(value),
+            GlobalMidiFunction::ResetVolumeNormalization => Command::VolumeNormalizationReset
         }
     }
 }

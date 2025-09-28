@@ -84,7 +84,7 @@ impl PedalTrait for Volume {
 
         let volume_param = self.get_parameters().get("Volume").unwrap();
         let mut changed = None;
-        if let Some(value) = pedal_knob(ui, RichText::new(&format!("{:.2}", volume_param.value.as_float().unwrap())).color(Color32::BLACK).size(10.0), volume_param, Vec2::new(0.3, 0.2), 0.4) {
+        if let Some(value) = pedal_knob(ui, RichText::new(&format!("{:.2}", volume_param.value.as_float().unwrap())).color(Color32::BLACK).size(10.0), "Volume", volume_param, Vec2::new(0.3, 0.2), 0.4, self.id) {
             changed = Some(("Volume".to_string(), value));
         }
         let active_param = self.get_parameters().get("Active").unwrap().value.as_bool().unwrap();

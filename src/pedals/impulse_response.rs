@@ -497,7 +497,7 @@ impl PedalTrait for ImpulseResponse {
             }
         };
 
-        if let Some(value) = pedal_knob(ui, "", self.parameters.get("Dry/Wet").unwrap(), Vec2::new(0.325, 0.037), 0.35) {
+        if let Some(value) = pedal_knob(ui, "", "Dry/Wet", self.parameters.get("Dry/Wet").unwrap(), Vec2::new(0.325, 0.037), 0.35, self.id) {
             to_change = Some(("Dry/Wet".to_string(), value));
         }
 
