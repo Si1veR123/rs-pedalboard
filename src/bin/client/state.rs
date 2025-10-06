@@ -21,6 +21,7 @@ pub struct State {
     pub metronome_volume: Cell<f32>,
     pub tuner_active: Cell<bool>,
 
+    pub prev_selected_screen: Cell<Option<Screen>>,
     pub selected_screen: Cell<Screen>
 }
 
@@ -482,6 +483,7 @@ impl State {
             metronome_bpm: Cell::new(120),
             metronome_volume: Cell::new(0.5),
             tuner_active: Cell::new(false),
+            prev_selected_screen: Cell::new(None),
             selected_screen: Cell::new(Screen::Stage)
         }
     }
@@ -541,6 +543,10 @@ impl State {
             self.set_tuner_active(false);
         }
 
+        if self.selected_screen.get() != screen {
+            self.prev_selected_screen.set(Some(self.selected_screen.get()));
+        }
+        
         self.selected_screen.set(screen);
     }
 
@@ -727,19 +733,41 @@ impl State {
                     }
                 },
                 Command::StageView => {
-                    self.set_screen(Screen::Stage);
+                    // If we are already on this screen, go back to the previous screen
+                    if self.selected_screen.get() == Screen::Stage {
+                        self.set_screen(self.prev_selected_screen.get().unwrap_or(Screen::Stage));
+                    } else {
+                        self.set_screen(Screen::Stage);
+                    }
                 },
                 Command::LibraryView => {
-                    self.set_screen(Screen::Library);
+                    if self.selected_screen.get() == Screen::Library {
+                        self.set_screen(self.prev_selected_screen.get().unwrap_or(Screen::Library));
+                    } else {
+                        self.set_screen(Screen::Library);
+                    }
                 },
                 Command::UtilitiesView => {
-                    self.set_screen(Screen::Utilities);
+                    if self.selected_screen.get() == Screen::Utilities {
+                        let switching_to = self.prev_selected_screen.get().unwrap_or(Screen::Utilities);
+                        self.set_screen(self.prev_selected_screen.get().unwrap_or(Screen::Utilities));
+                    } else {
+                        self.set_screen(Screen::Utilities);
+                    }
                 },
                 Command::SongsView => {
-                    self.set_screen(Screen::Songs);
+                    if self.selected_screen.get() == Screen::Songs {
+                        self.set_screen(self.prev_selected_screen.get().unwrap_or(Screen::Songs));
+                    } else {
+                        self.set_screen(Screen::Songs);
+                    }
                 },
                 Command::SettingsView => {
-                    self.set_screen(Screen::Settings);
+                    if self.selected_screen.get() == Screen::Settings {
+                        self.set_screen(self.prev_selected_screen.get().unwrap_or(Screen::Settings));
+                    } else {
+                        self.set_screen(Screen::Settings);
+                    }
                 },
 
                 Command::RequestSampleRate => tracing::error!("Unexpected RequestSampleRate command in other thread commands"),
