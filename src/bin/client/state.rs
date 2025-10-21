@@ -514,6 +514,10 @@ impl State {
                 self.set_volume_monitor_active_server(client_settings.show_volume_monitor);
                 self.set_volume_normalization_server(client_settings.volume_normalization, client_settings.auto_volume_normalization_decay);
                 self.master_in_server(client_settings.input_volume);
+                self.set_recorder_clean(self.recording_save_clean.get());
+                self.set_metronome(self.metronome_active.get(), self.metronome_bpm.get(), self.metronome_volume.get());
+                self.recording_time.set(None);
+                self.tuner_active.set(false);
                 self.load_active_set();
             }
         }
