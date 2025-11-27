@@ -298,7 +298,7 @@ pub trait PedalTrait {
 
 /// Wrapper enum type for serialization in Vec
 #[derive(Serialize, Deserialize, Clone, Hash, EnumDiscriminants)]
-#[strum_discriminants(derive(EnumIter, Serialize, Deserialize, Hash, Clone))]
+#[strum_discriminants(derive(EnumIter, Serialize, Deserialize, Hash))]
 #[enum_dispatch(PedalTrait)]
 pub enum Pedal {
     AutoWah(AutoWah),
