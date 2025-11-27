@@ -16,7 +16,9 @@ pub struct Pedalboard {
     // This ID is not necessarily unique in a PedalboardSet,
     // however Pedalboards with the same ID should be functionally equal
     // (same pedals, same parameters, same name, etc)
+    #[serde(default)]
     id: u32,
+    #[serde(default)]
     pub name: String,
     pub pedals: Vec<Pedal>,
 
