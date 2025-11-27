@@ -3,8 +3,8 @@ use num_complex::Complex;
 use rubato::{Resampler, SincFixedIn, SincInterpolationParameters};
 use std::{path::Path, sync::Arc};
 
-pub fn load_ir<P: AsRef<Path>>(ir_path: P, sample_rate: f32) -> Result<Vec<Vec<f32>>, String> {
-    let mut reader = hound::WavReader::open(ir_path).unwrap();
+pub fn load_wav<P: AsRef<Path>>(wav_path: P, sample_rate: f32, normalise: bool) -> Result<Vec<Vec<f32>>, String> {
+    let mut reader = hound::WavReader::open(wav_path).unwrap();
     
     let spec = reader.spec();
     if spec.bits_per_sample > 32 {
@@ -57,23 +57,24 @@ pub fn load_ir<P: AsRef<Path>>(ir_path: P, sample_rate: f32) -> Result<Vec<Vec<f
         let mut resampled_channels = resampler.process(&channel_refs, None)
             .map_err(|e| e.to_string())?;
 
-        // Normalize IR by RMS
-        let rms = resampled_channels
-            .iter()
-            .flat_map(|ch| ch.iter())
-            .map(|&x| x * x)
-            .sum::<f32>()
-            .sqrt();
+        if normalise {
+            // Normalize WAV by RMS
+            let rms = resampled_channels
+                .iter()
+                .flat_map(|ch| ch.iter())
+                .map(|&x| x * x)
+                .sum::<f32>()
+                .sqrt();
 
-        if rms > 1e-12 {
-            let scale = 1.0 / rms;
-            for ch in &mut resampled_channels {
-                for s in ch.iter_mut() {
-                    *s *= scale;
+            if rms > 1e-12 {
+                let scale = 1.0 / rms;
+                for ch in &mut resampled_channels {
+                    for s in ch.iter_mut() {
+                        *s *= scale;
+                    }
                 }
             }
         }
-
         Ok(resampled_channels)
     })
 }

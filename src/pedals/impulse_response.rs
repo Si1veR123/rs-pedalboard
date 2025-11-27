@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::hash::Hash;
 use std::sync::Arc;
 
-use crate::dsp_algorithms::impluse_response::{IRConvolver, load_ir};
+use crate::dsp_algorithms::impluse_response::{IRConvolver, load_wav};
 use crate::pedals::ui::{pedal_switch, sideways_arrow};
 use crate::pedals::ParameterUILocation;
 use crate::{forward_slash_path, unique_time_id, SAVE_DIR};
@@ -223,7 +223,7 @@ impl ImpulseResponse {
             }
         };
 
-        match load_ir(ir_path.as_ref(), sample_rate) {
+        match load_wav(ir_path.as_ref(), sample_rate, true) {
             Ok(ir) => {
                 self.ir = Some(IRConvolver::new(ir.first().expect("IR has no channels").as_slice(), self.max_buffer_size));
 

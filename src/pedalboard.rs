@@ -11,6 +11,7 @@ pub struct ParameterPath {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
+#[serde(default)]
 pub struct Pedalboard {
     // This ID is not necessarily unique in a PedalboardSet,
     // however Pedalboards with the same ID should be functionally equal
@@ -19,7 +20,9 @@ pub struct Pedalboard {
     pub name: String,
     pub pedals: Vec<Pedal>,
 
+    #[serde(skip)]
     prepend_message: String,
+    #[serde(skip)]
     pedal_message_buffer: Vec<String>,
 }
 
