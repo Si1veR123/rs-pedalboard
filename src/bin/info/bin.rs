@@ -13,7 +13,7 @@ fn main() {
         let mut init_pedal = pedal_type.new_pedal();
 
         let mut pedal_info = PedalInfo {
-            name: format!("{pedal_type:?}"),
+            name: pedal_type.display_name().to_string(),
             parameters: HashMap::new()
         };
 
