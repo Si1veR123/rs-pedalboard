@@ -4,8 +4,8 @@ use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize)]
 pub enum ParameterInfo {
-    Continuous(PedalParameter),
-    Discrete(Vec<PedalParameterValue>),
+    Numerical(PedalParameter),
+    String(Vec<PedalParameterValue>),
     Oscillator(Oscillator)
 }
 

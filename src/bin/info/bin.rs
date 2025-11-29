@@ -29,7 +29,7 @@ fn main() {
                 PedalParameterValue::Bool(_) => {
                     pedal_info.parameters.insert(
                         param_name,
-                        ParameterInfo::Discrete(vec![
+                        ParameterInfo::String(vec![
                             PedalParameterValue::Bool(false),
                             PedalParameterValue::Bool(true)
                         ])
@@ -38,19 +38,19 @@ fn main() {
                 PedalParameterValue::Int(_) => {
                     pedal_info.parameters.insert(
                         param_name,
-                        ParameterInfo::Continuous(param.clone())
+                        ParameterInfo::Numerical(param.clone())
                     );
                 },
                 PedalParameterValue::Float(_) => {
                     pedal_info.parameters.insert(
                         param_name,
-                        ParameterInfo::Continuous(param.clone())
+                        ParameterInfo::Numerical(param.clone())
                     );
                 },
                 PedalParameterValue::String(_) => {
                     pedal_info.parameters.insert(
                         param_name,
-                        ParameterInfo::Discrete(
+                        ParameterInfo::String(
                             init_pedal.get_string_values(&name)
                                 .expect("PedalParameterValue::String must have discrete values")
                                 .into_iter()
