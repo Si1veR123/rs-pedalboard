@@ -26,8 +26,6 @@ struct Info {
 }
 
 fn main() {
-    let out_file = std::env::args().nth(1).expect("Output file path required as first argument");
-    
     let mut info = Info { pedals: Vec::new() };
 
     for pedal_type in PedalDiscriminants::iter() {
@@ -93,5 +91,9 @@ fn main() {
     }
 
     let json_str = serde_json::to_string_pretty(&info).expect("Failed to serialize info to JSON");
-    std::fs::write(out_file, json_str).expect("Failed to write info JSON to file");
+
+    match std::env::args().nth(1) {
+        Some(path) => std::fs::write(path, json_str).expect("Failed to write info JSON to file"),
+        None => println!("{}", json_str),
+    }
 }
