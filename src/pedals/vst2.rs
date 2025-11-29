@@ -219,7 +219,14 @@ impl Vst2 {
     }
 
     fn get_empty_directory_combo_box(id: impl std::hash::Hash) -> DirectoryComboBox {
-        DirectoryComboBox::new_from_nodes(vec![])
+        let roots = DirectoryNode::try_from_path(VST2_PLUGIN_PATH)
+            .map(|node| vec![node])
+            .unwrap_or_else(|| {
+                tracing::warn!("Failed to get default VST2 save directory: {}", VST2_PLUGIN_PATH);
+                vec![]
+            });
+
+        DirectoryComboBox::new_from_nodes(roots)
             .with_id(egui::Id::new("vst2_combobox").with(id))
             .with_wrap_mode(egui::TextWrapMode::Truncate)
             .show_extensions(false)
@@ -515,6 +522,10 @@ impl PedalTrait for Vst2 {
                 }
             }
         }
+    }
+
+    fn get_string_values(&self,_parameter_name: &str) -> Option<Vec<String>> {
+        Some(self.combobox_widget.get_all_paths().iter().map(|p| p.to_string_lossy().to_string()).collect())
     }
 
     fn parameter_editor_ui(&mut self, ui: &mut egui::Ui, name: &str, parameter: &PedalParameter, location: ParameterUILocation) -> egui::InnerResponse<Option<PedalParameterValue>> {

@@ -19,6 +19,10 @@ name = "client"
 path = "src/bin/client/bin.rs"
 required-features = ["client"]
 
+[[bin]]
+name = "info"
+path = "src/bin/info/bin.rs"
+
 [dependencies]
 cpal = { version = "0.15.3", features=["jack", "asio"] }
 ringbuf = "0.4.8"

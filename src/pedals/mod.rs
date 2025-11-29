@@ -294,6 +294,10 @@ pub trait PedalTrait {
     fn parameter_editor_ui(&mut self, ui: &mut egui::Ui, _name: &str, parameter: &PedalParameter, _location: ParameterUILocation) -> egui::InnerResponse<Option<PedalParameterValue>> {
         parameter.parameter_editor_ui(ui)
     }
+
+    fn get_string_values(&self, _parameter_name: &str) -> Option<Vec<String>> {
+        None
+    }
 }
 
 /// Wrapper enum type for serialization in Vec

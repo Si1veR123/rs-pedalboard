@@ -7,7 +7,7 @@ use crate::dsp_algorithms::impluse_response::{IRConvolver, load_wav};
 use crate::pedals::ui::{pedal_switch, sideways_arrow};
 use crate::pedals::ParameterUILocation;
 use crate::{forward_slash_path, unique_time_id, SAVE_DIR};
-use egui_directory_combobox::DirectoryComboBox;
+use egui_directory_combobox::{DirectoryComboBox, DirectoryNode};
 use serde::{ser::SerializeMap, Deserialize, Serialize};
 use eframe::egui::{self, include_image, Vec2};
 
@@ -162,12 +162,18 @@ impl ImpulseResponse {
         );
 
         let id = unique_time_id();
+        let mut combobox_widget = Self::get_empty_directory_combo_box(id);
+        if let Some(main_save_dir) = Self::get_save_directory() {
+            combobox_widget.roots.push(DirectoryNode::from_path(&main_save_dir));
+        } else {
+            tracing::warn!("Failed to get main save directory");
+        }
 
         Self {
             ir: None,
             parameters,
             dry_buffer: Vec::new(),
-            combobox_widget: Self::get_empty_directory_combo_box(id),
+            combobox_widget,
             midi_min_combobox_widget: Self::get_empty_directory_combo_box(egui::Id::new(id).with("midi_min")),
             midi_max_combobox_widget: Self::get_empty_directory_combo_box(egui::Id::new(id).with("midi_max")),
             folders_state: 0,
@@ -184,7 +190,15 @@ impl ImpulseResponse {
     }
 
     fn get_empty_directory_combo_box(id: impl std::hash::Hash) -> DirectoryComboBox {
-        DirectoryComboBox::new_from_nodes(vec![])
+        let roots = match Self::get_save_directory() {
+            Some(main_save_dir) => vec![DirectoryNode::from_path(&main_save_dir)],
+            None => {
+                tracing::warn!("Failed to get main save directory");
+                vec![]
+            }
+        };
+
+        DirectoryComboBox::new_from_nodes(roots)
             .with_id(egui::Id::new("ir_combobox").with(id))
             .with_wrap_mode(egui::TextWrapMode::Truncate)
             .show_extensions(false)
@@ -419,6 +433,10 @@ impl PedalTrait for ImpulseResponse {
         } else {
             tracing::error!("Parameter {} not found", name);
         }
+    }
+
+    fn get_string_values(&self,_parameter_name: &str) -> Option<Vec<String>> {
+        Some(self.combobox_widget.get_all_paths().iter().map(|p| p.to_string_lossy().to_string()).collect())
     }
 
     fn parameter_editor_ui(&mut self, ui: &mut egui::Ui, name: &str, parameter: &PedalParameter, location: ParameterUILocation) -> egui::InnerResponse<Option<PedalParameterValue>> {
