@@ -3,27 +3,8 @@ use std::collections::HashMap;
 use strum::IntoEnumIterator;
 
 use serde_json;
-use serde::{Serialize, Deserialize};
 
-use rs_pedalboard::{dsp_algorithms::oscillator::Oscillator, pedals::{PedalDiscriminants, PedalParameter, PedalParameterValue, PedalTrait}};
-
-#[derive(Serialize, Deserialize)]
-enum ParameterInfo {
-    Continuous(PedalParameter),
-    Discrete(Vec<PedalParameterValue>),
-    Oscillator(Oscillator)
-}
-
-#[derive(Serialize, Deserialize)]
-struct PedalInfo {
-    name: String,
-    parameters: HashMap<String, ParameterInfo>
-}
-
-#[derive(Serialize, Deserialize)]
-struct Info {
-    pedals: Vec<PedalInfo>
-}
+use rs_pedalboard::pedals::{PedalDiscriminants, PedalParameter, PedalParameterValue, PedalTrait, info::{PedalInfo, ParameterInfo, Info}};
 
 fn main() {
     let mut info = Info { pedals: Vec::new() };

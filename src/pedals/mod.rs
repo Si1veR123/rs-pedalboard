@@ -44,6 +44,7 @@ mod distortion;
 pub use distortion::Distortion;
 
 mod ui;
+pub mod info;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PedalParameter {
