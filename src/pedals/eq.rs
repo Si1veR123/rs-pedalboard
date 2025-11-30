@@ -49,7 +49,7 @@ pub struct GraphicEq7 {
     id: u32,
     response_plot: Vec<PlotPoint>,
 
-    // Only exists on server
+    // Only exists on processor
     frequency_analyser: Option<FrequencyAnalyser>,
     last_frequencies_sent: Instant,
 
@@ -317,7 +317,7 @@ impl PedalTrait for GraphicEq7 {
         }
 
         if self.parameters.get("Live Frequency Plot").unwrap().value.as_bool().unwrap() {
-            let frequency_analyser = self.frequency_analyser.as_mut().expect("Frequency Analyser should not be None on server");
+            let frequency_analyser = self.frequency_analyser.as_mut().expect("Frequency Analyser should not be None on processor");
             frequency_analyser.push_samples(buffer);
 
             // Check if enough time has passed since the last update

@@ -13,7 +13,7 @@ use crate::audio_processor::AudioProcessor;
 use crate::metronome_player::MetronomePlayer;
 use crate::recording::RecordingHandle;
 use crate::sample_conversion::*;
-use crate::settings::ServerSettings;
+use crate::settings::ProcessorSettings;
 use crate::stream_config::get_compatible_configs;
 use crate::volume_monitor::PeakVolumeMonitor;
 
@@ -301,7 +301,7 @@ pub fn create_linked_streams(
     out_device: Device,
     command_receiver: Receiver<Box<str>>,
     command_sender: Sender<Box<str>>,
-    settings: ServerSettings
+    settings: ProcessorSettings
 ) -> (Stream, (Stream, cpal::ChannelCount)) {
     let in_command_sender = command_sender.clone();
 

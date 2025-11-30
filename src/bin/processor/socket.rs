@@ -4,16 +4,16 @@ use futures::{FutureExt, select, pin_mut};
 use smol::channel::{Sender, Receiver};
 use rs_pedalboard::socket_helper::CommandReceiver;
 
-pub struct ServerSocket {
+pub struct ProcessorSocket {
     port: u16,
     command_sender: Sender<Box<str>>,
     command_receiver: Receiver<Box<str>>,
     command_receive_helper: CommandReceiver
 }
 
-impl ServerSocket {
+impl ProcessorSocket {
     pub fn new(port: u16, command_sender: Sender<Box<str>>, command_receiver: Receiver<Box<str>>) -> Self {
-        ServerSocket {
+        ProcessorSocket {
             port,
             command_sender,
             command_receiver,
@@ -23,9 +23,9 @@ impl ServerSocket {
 
     pub fn start(&mut self) -> std::io::Result<()> {
         smol::block_on(async {
-            tracing::info!("Starting server on port {}", self.port);
+            tracing::info!("Starting processor on port {}", self.port);
             let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, self.port)).await?;
-            tracing::info!("Server listening on port {}", self.port);
+            tracing::info!("Processor listening on port {}", self.port);
 
             while let Some(stream) = listener.incoming().next().await {
                 match stream {

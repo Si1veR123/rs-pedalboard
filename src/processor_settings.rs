@@ -3,7 +3,7 @@ use serde::{Serialize, Deserialize};
 use std::{fmt::Display, path::PathBuf, str::FromStr};
 use strum_macros::EnumIter;
 
-const SAVE_NAME: &str = "server_settings.json";
+const SAVE_NAME: &str = "processor_settings.json";
 
 #[cfg(target_os = "linux")]
 #[derive(Serialize, Deserialize, Clone, Copy, Default, Debug, EnumIter, PartialEq)]
@@ -62,10 +62,10 @@ impl From<SupportedHost> for cpal::HostId {
     }
 }
 
-/// Server settings that will be saved to a file.
+/// Processor settings that will be saved to a file.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(default)]
-pub struct ServerSettingsSave {
+pub struct ProcessorSettingsSave {
     pub host: SupportedHost,
     // Buffer size is this value ^2
     pub buffer_size: usize,
@@ -84,7 +84,7 @@ pub struct ServerSettingsSave {
     pub recording_dir: Option<PathBuf>
 }
 
-impl Default for ServerSettingsSave {
+impl Default for ProcessorSettingsSave {
     fn default() -> Self {
         Self {
             host: SupportedHost::default(),
@@ -101,7 +101,7 @@ impl Default for ServerSettingsSave {
     }
 }
 
-impl ServerSettingsSave {
+impl ProcessorSettingsSave {
     fn get_save_path() -> Option<PathBuf> {
         Some(homedir::my_home().ok()??.join(SAVE_DIR).join(SAVE_NAME))
     }
@@ -110,20 +110,20 @@ impl ServerSettingsSave {
         let save_path = match Self::get_save_path() {
             Some(path) => path,
             None => {
-                tracing::error!("Failed to get server settings save path, using default");
+                tracing::error!("Failed to get processor settings save path, using default");
                 return Default::default();
             }
         };
 
         if !save_path.exists() {
-            tracing::info!("Server settings save file not found, using default");
+            tracing::info!("Processor settings save file not found, using default");
             return Default::default();
         }
 
         let data = match std::fs::read_to_string(&save_path) {
             Ok(d) => d,
             Err(e) => {
-                tracing::error!("Failed to read server settings from {:?}: {e}, using default", save_path);
+                tracing::error!("Failed to read processor settings from {:?}: {e}, using default", save_path);
                 return Default::default();
             }
         };
@@ -131,15 +131,15 @@ impl ServerSettingsSave {
         match serde_json::from_str(&data) {
             Ok(settings) => settings,
             Err(e) => {
-                tracing::error!("Failed to deserialize server settings from {:?}: {e}, using default", save_path);
+                tracing::error!("Failed to deserialize processor settings from {:?}: {e}, using default", save_path);
                 Default::default()
             }
         }
     }
 
     pub fn save(&self) -> Result<(), std::io::Error> {
-        let data = serde_json::to_string(self).expect("Failed to serialize server settings");
-        std::fs::write(Self::get_save_path().expect("Failed to get server settings save path"), data)?;
+        let data = serde_json::to_string(self).expect("Failed to serialize processor settings");
+        std::fs::write(Self::get_save_path().expect("Failed to get processor settings save path"), data)?;
         Ok(())
     }
 

@@ -9,10 +9,10 @@ pub mod dsp_algorithms;
 pub mod plugin;
 pub mod socket_helper;
 pub mod audio_devices;
-pub mod server_settings;
+pub mod processor_settings;
 
 pub const SAVE_DIR: &str = "rs_pedalboard";
-// Required by both server and client so define it here
+// Required by both processor and client so define it here
 pub const DEFAULT_VOLUME_MONITOR_UPDATE_RATE: Duration = Duration::from_millis(100);
 
 // For pedals such as EQ/Compressor, or when volume monitors are active, how often to update the UI

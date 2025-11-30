@@ -25,8 +25,8 @@ pub struct ImpulseResponse {
     folders_state: u32,
     id: u32,
 
-    // Server only
-    // IRConvolver requires block size. This is set on the server after being created, and not set on client at all.
+    // Processor only
+    // IRConvolver requires block size. This is set on the processor after being created, and not set on client at all.
     dry_buffer: Vec<f32>,
     max_buffer_size: usize,
     ir: Option<IRConvolver>,
@@ -368,7 +368,7 @@ impl PedalTrait for ImpulseResponse {
         self.id
     }
 
-    /// If `ir` parameter is set, but `ir` is None, this will set the IR as it is assumed that we are waiting on knowing the max buffer size and sample rate (on server).
+    /// If `ir` parameter is set, but `ir` is None, this will set the IR as it is assumed that we are waiting on knowing the max buffer size and sample rate (on processor).
     fn set_config(&mut self, buffer_size: usize, sample_rate: u32) {
         self.max_buffer_size = buffer_size;
         self.dry_buffer.resize(buffer_size, 0.0);
@@ -410,7 +410,7 @@ impl PedalTrait for ImpulseResponse {
 
     fn set_parameter_value(&mut self, name: &str, value: PedalParameterValue) {
         if name == "IR" {
-            // If sample rate is not set we are not on server, so don't need to set the IR convolver.
+            // If sample rate is not set we are not on processor, so don't need to set the IR convolver.
             let path = value.as_str().unwrap();
             if let Some(sample_rate) = self.sample_rate {
                 self.set_ir_convolver(path, sample_rate);

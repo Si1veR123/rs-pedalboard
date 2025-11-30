@@ -4,15 +4,15 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-server = ["dep:clap"]
+processor = ["dep:clap"]
 client = ["dep:egui_extras", "dep:image", "dep:egui_dnd", "dep:which", "dep:sysinfo", "dep:egui_file", "dep:serde_with"]
 virtual_keyboard = ["dep:egui_keyboard"]
 log_full_commands = []
 
 [[bin]]
-name = "pedalboard_server"
-path = "src/bin/server/bin.rs"
-required-features = ["server"]
+name = "pedalboard_processor"
+path = "src/bin/processor/bin.rs"
+required-features = ["processor"]
 
 [[bin]]
 name = "pedalboard_client"

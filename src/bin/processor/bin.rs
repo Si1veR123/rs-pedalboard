@@ -5,7 +5,7 @@ use linux::{setup, after_setup};
 
 #[cfg(target_os = "windows")]
 mod windows;
-use rs_pedalboard::server_settings::ServerSettingsSave;
+use rs_pedalboard::processor_settings::ProcessorSettingsSave;
 #[cfg(target_os = "windows")]
 use windows::{setup, after_setup};
 
@@ -23,7 +23,7 @@ mod settings;
 mod recording;
 mod file_processor;
 use file_processor::process_audio_file;
-use settings::{ServerSettings, ServerArguments};
+use settings::{ProcessorSettings, ProcessorArguments};
 
 use cpal::traits::StreamTrait;
 use smol::channel::bounded;
@@ -31,7 +31,7 @@ use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Lay
 use clap::Parser;
 use std::{fs::File, io};
 
-const LOG_FILE: &str = "pedalboard-server.log";
+const LOG_FILE: &str = "pedalboard-processor.log";
 
 pub fn init_tracing() {
     // Console layer
@@ -112,8 +112,8 @@ fn main() {
         }
     }
 
-    let settings = ServerSettings::new(ServerArguments::parse(), Some(ServerSettingsSave::load_or_default()));
-    tracing::info!("Server settings: {:?}", settings);
+    let settings = ProcessorSettings::new(ProcessorArguments::parse(), Some(ProcessorSettingsSave::load_or_default()));
+    tracing::info!("Processor settings: {:?}", settings);
 
     let (_host, input, output) = setup(
         settings.input_device.as_ref().map(|s| s.as_str()),
@@ -138,5 +138,5 @@ fn main() {
     after_setup(out_channels);
 
     // Will loop infinitely (unless panic)
-    socket::ServerSocket::new(29475, socket_command_sender, socket_command_receiver).start().expect("Failed to start server");
+    socket::ProcessorSocket::new(29475, socket_command_sender, socket_command_receiver).start().expect("Failed to start processor");
 }

@@ -12,7 +12,7 @@ macro_rules! var_delay_phaser {
     ($name:ident, ($default_rate:expr, $min_rate:expr, $max_rate:expr), ($default_min_depth:expr, $default_max_depth:expr, $min_depth: expr, $max_depth: expr), ($incl_feedback: expr, $default_feedback:expr, $max_feedback:expr), $default_dry_wet: expr) => {
         #[derive(Clone)]
         pub struct $name {
-            variable_delay_phaser: Option<VariableDelayPhaser>, // Server only
+            variable_delay_phaser: Option<VariableDelayPhaser>, // Processor only
             parameters: HashMap<String, PedalParameter>,
             id: u32,
         }

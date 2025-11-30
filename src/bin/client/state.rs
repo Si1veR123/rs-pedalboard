@@ -1,6 +1,6 @@
 use std::{cell::{Cell, RefCell}, collections::HashSet, time::Instant};
 use crossbeam::channel::Receiver;
-use rs_pedalboard::{pedalboard::{Pedalboard, ParameterPath}, pedals::{Pedal, PedalParameterValue, PedalTrait}, server_settings::ServerSettingsSave};
+use rs_pedalboard::{pedalboard::{Pedalboard, ParameterPath}, pedals::{Pedal, PedalParameterValue, PedalTrait}, processor_settings::ProcessorSettingsSave};
 use crate::{midi::{MidiSettings, MidiState}, saved_pedalboards::SavedPedalboards, settings::{ClientSettings, VolumeNormalizationMode}, socket::{ClientSocket, Command}, Screen};
 use eframe::egui;
 
@@ -9,7 +9,7 @@ pub struct State {
     socket: RefCell<ClientSocket>,
 
     pub client_settings: RefCell<ClientSettings>,
-    pub server_settings: RefCell<ServerSettingsSave>,
+    pub processor_settings: RefCell<ProcessorSettingsSave>,
     pub midi_state: RefCell<MidiState>,
     pub midi_command_receiver: Receiver<Command>,
 
@@ -300,7 +300,7 @@ impl State {
         }
     }
 
-    /// Tell the server to load the client's active pedalboard stage
+    /// Tell the processor to load the client's active pedalboard stage
     pub fn load_active_set(&self) {
         let mut socket = self.socket.borrow_mut();
         let active_pedalboardstage = self.pedalboards.active_pedalboardstage.borrow();
@@ -331,14 +331,14 @@ impl State {
         socket.update_socket_responses();
     }
 
-    /// Get a received command from the server, beginning with the given prefix.
+    /// Get a received command from the processor, beginning with the given prefix.
     /// 
     /// Requires a lock on socket
     pub fn get_commands(&self, prefix: &str, into: &mut Vec<String>) {
         let mut socket = self.socket.borrow_mut();
 
         // TODO: remove cloning with nightly `drain_filter`? 
-        socket.received_server_commands.retain(|cmd| {
+        socket.received_processor_commands.retain(|cmd| {
             if cmd.starts_with(prefix) {
                 // Remove the prefix and push the command into the vector
                 let cmd_trim = cmd.trim_start_matches(prefix).trim().to_string();
@@ -373,15 +373,15 @@ impl State {
         socket.send(Command::Metronome(active, bpm, rounded_volume));
     }
 
-    /// Set whether the volume monitor is active on the server.
+    /// Set whether the volume monitor is active on the processor.
     /// 
     /// Requires a lock on socket.
-    pub fn set_volume_monitor_active_server(&self, active: bool) {
+    pub fn set_volume_monitor_active_processor(&self, active: bool) {
         let mut socket = self.socket.borrow_mut();
         socket.send(Command::VolumeMonitor(active));
     }
 
-    pub fn set_volume_normalization_server(&self, mode: crate::settings::VolumeNormalizationMode, auto_decay: f32) {
+    pub fn set_volume_normalization_processor(&self, mode: crate::settings::VolumeNormalizationMode, auto_decay: f32) {
         let mut socket = self.socket.borrow_mut();
         let rounded_auto_decay = (auto_decay * 1000.0).round() / 1000.0;
         
@@ -397,13 +397,13 @@ impl State {
         socket.send(Command::VolumeNormalizationReset);
     }
 
-    pub fn master_in_server(&self, volume: f32) {
+    pub fn master_in_processor(&self, volume: f32) {
         let mut socket = self.socket.borrow_mut();
         let rounded_volume = (volume * 100.0).round() / 100.0;
         socket.send(Command::MasterIn(rounded_volume));
     }
 
-    pub fn master_out_server(&self, volume: f32) {
+    pub fn master_out_processor(&self, volume: f32) {
         let mut socket = self.socket.borrow_mut();
         let rounded_volume = (volume * 100.0).round() / 100.0;
         socket.send(Command::MasterOut(rounded_volume));
@@ -432,7 +432,7 @@ impl State {
         let active_pedalboard_id = active_pedalboard.pedalboards[active_pedalboard_index].get_id();
         drop(active_pedalboard);
 
-        let socket = ClientSocket::new(crate::SERVER_PORT);
+        let socket = ClientSocket::new(crate::PROCESSOR_PORT);
         let client_settings = ClientSettings::load_or_default();
 
         // Set NAM folders, IR folders and VST2 in ctx memory so pedals can access
@@ -458,7 +458,7 @@ impl State {
             writer.data.insert_temp(egui::Id::new("vst2_folders"), vst2_root_nodes);
         });
 
-        let server_settings = ServerSettingsSave::load_or_default();
+        let processor_settings = ProcessorSettingsSave::load_or_default();
         let midi_settings = MidiSettings::load_or_default();
         let (midi_command_sender, midi_command_receiver) = crossbeam::channel::unbounded();
 
@@ -474,7 +474,7 @@ impl State {
             pedalboards,
             socket: RefCell::new(socket),
             client_settings: RefCell::new(client_settings),
-            server_settings: RefCell::new(server_settings),
+            processor_settings: RefCell::new(processor_settings),
             midi_state: RefCell::new(midi_state),
             midi_command_receiver,
             recording_time: Cell::new(None),
@@ -491,12 +491,12 @@ impl State {
     pub fn save_state(&self) -> Result<(), std::io::Error> {
         self.pedalboards.save()?;
         self.client_settings.borrow().save()?;
-        self.server_settings.borrow().save()?;
+        self.processor_settings.borrow().save()?;
         self.midi_state.borrow().save_settings()?;
         Ok(())
     }
 
-    pub fn connect_to_server(&self) -> Result<(), std::io::Error> {
+    pub fn connect_to_processor(&self) -> Result<(), std::io::Error> {
         let mut socket = self.socket.borrow_mut();
         if !socket.is_connected() {
             socket.connect()?;
@@ -511,9 +511,9 @@ impl State {
                 midi_state.connect_to_auto_connect_ports();
 
                 let client_settings = self.client_settings.borrow();
-                self.set_volume_monitor_active_server(client_settings.show_volume_monitor);
-                self.set_volume_normalization_server(client_settings.volume_normalization, client_settings.auto_volume_normalization_decay);
-                self.master_in_server(client_settings.input_volume);
+                self.set_volume_monitor_active_processor(client_settings.show_volume_monitor);
+                self.set_volume_normalization_processor(client_settings.volume_normalization, client_settings.auto_volume_normalization_decay);
+                self.master_in_processor(client_settings.input_volume);
                 self.set_recorder_clean(self.recording_save_clean.get());
                 self.set_metronome(self.metronome_active.get(), self.metronome_bpm.get(), self.metronome_volume.get());
                 self.recording_time.set(None);
@@ -530,12 +530,12 @@ impl State {
     }
 
     /// Requires a lock on socket
-    pub fn is_server_available(&self) -> bool {
-        self.socket.borrow_mut().is_server_available()
+    pub fn is_processor_available(&self) -> bool {
+        self.socket.borrow_mut().is_processor_available()
     }
 
     /// Requires a lock on socket
-    pub fn kill_server(&self) {
+    pub fn kill_processor(&self) {
         let mut socket = self.socket.borrow_mut();
         socket.kill();
     }
@@ -554,7 +554,7 @@ impl State {
         self.selected_screen.set(screen);
     }
 
-    /// Update the state with commands that other threads have sent to the server
+    /// Update the state with commands that other threads have sent to the processor
     pub fn handle_other_thread_commands(&self, ctx: &eframe::egui::Context) {
         for command in self.midi_command_receiver.try_iter() {
             match command {
@@ -564,7 +564,7 @@ impl State {
                             self.pedalboards.active_pedalboardstage.replace(pedalboard_set);
                         },
                         Err(e) => {
-                            tracing::error!("Failed to parse pedalboard set JSON from server: {}", e);
+                            tracing::error!("Failed to parse pedalboard set JSON from processor: {}", e);
                         }
                     }
                 },
@@ -625,7 +625,7 @@ impl State {
                         }
                     }
                 },
-                Command::KillServer => {
+                Command::KillProcessor => {
                     self.socket.borrow_mut().handle = None;
                 },
                 Command::MasterIn(vol) => {
@@ -754,7 +754,7 @@ impl State {
                 Command::UtilitiesView => {
                     if self.selected_screen.get() == Screen::Utilities {
                         let switching_to = self.prev_selected_screen.get().unwrap_or(Screen::Utilities);
-                        self.set_screen(self.prev_selected_screen.get().unwrap_or(Screen::Utilities));
+                        self.set_screen(switching_to);
                     } else {
                         self.set_screen(Screen::Utilities);
                     }

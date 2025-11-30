@@ -18,7 +18,7 @@ pub const RESPONSE_TIMEOUT: Duration = Duration::from_secs(5);
 pub struct ClientSocket {
     port: u16,
     socket_thread_responses: Vec<String>,
-    pub received_server_commands: Vec<String>,
+    pub received_processor_commands: Vec<String>,
     pub handle: Option<ClientSocketThreadHandle>
 }
 
@@ -27,14 +27,14 @@ impl ClientSocket {
         ClientSocket {
             port,
             handle: None,
-            received_server_commands: Vec::new(),
+            received_processor_commands: Vec::new(),
             socket_thread_responses: Vec::new()
         }
     }
 
     pub fn connect(&mut self) -> std::io::Result<()> {
         if self.is_connected() {
-            tracing::info!("Already connected to server on port {}", self.port);
+            tracing::info!("Already connected to processor on port {}", self.port);
             return Ok(());
         }
 
@@ -49,14 +49,14 @@ impl ClientSocket {
         }
     }
 
-    /// Check if socket is connected to the server.
+    /// Check if socket is connected to the processor.
     /// Note that this does not actually check the connection status, it only checks if the handle is present.
     /// If the connection is closed, this will not update until a method such as `is_connected_test`, `send`, `update_socket_responses` is called.
     pub fn is_connected(&self) -> bool {
         self.handle.is_some()
     }
 
-    /// Check if socket is connected to the server.
+    /// Check if socket is connected to the processor.
     /// This will actually check the connection status by sending a dummy message over the socket thread channel.
     /// Often `is_connected` is sufficient if other methods that use channels are called frequently enough.
     #[allow(dead_code)]
@@ -87,7 +87,7 @@ impl ClientSocket {
                 self.handle = None;
             } else {
                 for response in self.socket_thread_responses.drain(..) {
-                    self.received_server_commands.push(response);
+                    self.received_processor_commands.push(response);
                 }
             }
         }
@@ -96,11 +96,11 @@ impl ClientSocket {
     pub fn kill(&mut self) {
         if let Some(handle) = self.handle.take() {
             handle.kill();
-            self.received_server_commands.clear();
+            self.received_processor_commands.clear();
         }
     }
 
-    pub fn is_server_available(&mut self) -> bool {
+    pub fn is_processor_available(&mut self) -> bool {
         if self.is_connected() {
             true
         } else {
@@ -111,7 +111,7 @@ impl ClientSocket {
 
 #[derive(Debug, Clone)]
 pub enum Command {
-    // === Server Commands ===
+    // === Processor Commands ===
     ParameterUpdate(ParameterPath, PedalParameterValue),
     // pedalboard id, pedal id, new pedal index
     MovePedal(u32, u32, usize),
@@ -125,7 +125,7 @@ pub enum Command {
     AddPedalboard(String),
     // pedalboard id, serialized pedal
     AddPedal(u32, String),
-    KillServer,
+    KillProcessor,
     MasterIn(f32),
     MasterOut(f32),
     VolumeNormalization(VolumeNormalizationMode, Option<f32>),
@@ -187,7 +187,7 @@ impl ClientSocketThreadHandle {
     }
 
     pub fn kill(&self) {
-        if smol::block_on(self.message_sender.send(Command::KillServer)).is_err() {
+        if smol::block_on(self.message_sender.send(Command::KillProcessor)).is_err() {
             tracing::error!("Failed to send kill command");
         }
     }
@@ -249,17 +249,17 @@ pub fn new_client_socket_thread(port: u16, subscribe_to_responses: bool) -> std:
 
     std::thread::spawn(move || {
         smol::block_on(async {
-            tracing::info!("Attempting to connect to server on port {}", port);
+            tracing::info!("Attempting to connect to processor on port {}", port);
             let stream = match TcpStream::connect((Ipv4Addr::LOCALHOST, port)).await {
                 Ok(s) => s,
                 Err(e) => {
-                    tracing::warn!("Failed to connect to server: {}", e);
+                    tracing::warn!("Failed to connect to processor: {}", e);
                     let _ = connected_status_oneshot_sender.send(Err(e));
                     return;
                 }
             };
 
-            tracing::info!("Connected to server on port {}", port);
+            tracing::info!("Connected to processor on port {}", port);
             let response_senders = if subscribe_to_responses {
                 vec![response_sender.clone()]
             } else {
@@ -285,7 +285,7 @@ pub fn new_client_socket_thread(port: u16, subscribe_to_responses: bool) -> std:
         Err(e) => {
             Err(std::io::Error::new(
                 std::io::ErrorKind::TimedOut,
-                format!("Failed to connect to server within timeout: {}", e)
+                format!("Failed to connect to processor within timeout: {}", e)
             ))
         }
     }
@@ -356,7 +356,7 @@ async fn client_socket_event_loop(
                 }
 
                 match command.unwrap() {
-                    Command::KillServer => {
+                    Command::KillProcessor => {
                         tracing::info!("Received kill command from channel. Closing connection.");
                         socket_send(&mut stream_writer, "kill\n").await;
                         let _ = stream_writer.flush().await;

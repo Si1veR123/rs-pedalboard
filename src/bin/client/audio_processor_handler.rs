@@ -1,26 +1,26 @@
 use std::{env::var, path::PathBuf, process::Child};
-use rs_pedalboard::server_settings::ServerSettingsSave;
+use rs_pedalboard::processor_settings::ProcessorSettingsSave;
 use which::which;
 
-pub const SERVER_EXE_NAME: &str = "pedalboard_server";
-pub const SERVER_ENV_VAR: &str = "RSPEDALBOARD_SERVER";
+pub const PROCESSOR_EXE_NAME: &str = "pedalboard_processor";
+pub const PROCESSOR_ENV_VAR: &str = "RSPEDALBOARD_PROCESSOR";
 
-pub fn get_server_executable_path() -> Option<PathBuf> {
-    var(SERVER_ENV_VAR).ok().and_then(|path| {
+pub fn get_processor_executable_path() -> Option<PathBuf> {
+    var(PROCESSOR_ENV_VAR).ok().and_then(|path| {
         let path = PathBuf::from(path);
         if path.exists() && path.is_file() {
             Some(path)
         } else {
-            tracing::warn!("Server executable path from environment variable {} does not exist: {}", SERVER_ENV_VAR, path.display());
+            tracing::warn!("Processor executable path from environment variable {} does not exist: {}", PROCESSOR_ENV_VAR, path.display());
             None
         }
     }).or_else(|| {
-        which(SERVER_EXE_NAME).ok()
+        which(PROCESSOR_EXE_NAME).ok()
     })
 }
 
-pub fn start_server_process(settings: &ServerSettingsSave) -> Option<Child> {
-    match get_server_executable_path() {
+pub fn start_processor_process(settings: &ProcessorSettingsSave) -> Option<Child> {
+    match get_processor_executable_path() {
         Some(path) => {
             let mut command = std::process::Command::new(path);
             let full_command = command.arg("--frames-per-period").arg(settings.buffer_size_samples().to_string())
@@ -44,22 +44,22 @@ pub fn start_server_process(settings: &ServerSettingsSave) -> Option<Child> {
                 full_command.arg("--preferred-sample-rate").arg(preferred_sample_rate.to_string());
             }
 
-            tracing::info!("Full command to start server: {:?}", full_command);
+            tracing::info!("Full command to start processor: {:?}", full_command);
             let process = full_command.spawn();
 
             match process {
                 Ok(child) => {
-                    tracing::info!("Server process started successfully with PID: {}", child.id());
+                    tracing::info!("Processor process started successfully with PID: {}", child.id());
                     Some(child)
                 },
                 Err(e) => {
-                    tracing::error!("Failed to start server process: {}", e);
+                    tracing::error!("Failed to start processor process: {}", e);
                     None
                 }
             }
         },
         None => {
-            tracing::error!("Server executable not found. Please set the {} environment variable or ensure the executable ({}) is in your PATH.", SERVER_ENV_VAR, SERVER_EXE_NAME);
+            tracing::error!("Processor executable not found. Please set the {} environment variable or ensure the executable ({}) is in your PATH.", PROCESSOR_ENV_VAR, PROCESSOR_EXE_NAME);
             None
         }
     }

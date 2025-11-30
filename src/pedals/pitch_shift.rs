@@ -19,7 +19,7 @@ use signalsmith_stretch::Stretch;
 pub struct PitchShift {
     parameters: HashMap<String, PedalParameter>,
 
-    // Server only
+    // Processor only
     signalsmith_stretch: Option<Stretch>,
     // (eq, sample rate)
     eq: Option<(Equalizer, u32)>,

@@ -1,5 +1,5 @@
 use cpal::{traits::{DeviceTrait, HostTrait}, Device, Host};
-use crate::ServerSettings;
+use crate::ProcessorSettings;
 use super::device_select::device_select_menu;
 use rs_pedalboard::audio_devices::{get_input_devices, get_output_devices};
 
@@ -9,7 +9,7 @@ fn find_device_by_name(host: &Host, name: &str) -> Option<Device> {
 }
 
 #[tracing::instrument(level = "trace")]
-pub fn setup(input: Option<&str>, output: Option<&str>, args: &ServerSettings) -> (Host, Device, Device) {
+pub fn setup(input: Option<&str>, output: Option<&str>, args: &ProcessorSettings) -> (Host, Device, Device) {
     let host_id = args.host.into();
 
     if !cpal::available_hosts().contains(&host_id) {

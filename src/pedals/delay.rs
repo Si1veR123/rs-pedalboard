@@ -15,7 +15,7 @@ use serde::{Serialize, Deserialize};
 #[derive(Clone)]
 pub struct Delay {
     pub parameters: HashMap<String, PedalParameter>,
-    // Server only
+    // Processor only
     delay_buffer: Option<VecDeque<f32>>,
     tone_eq: Option<eq::Equalizer>,
     sample_rate: Option<f32>,

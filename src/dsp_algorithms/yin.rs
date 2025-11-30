@@ -3,8 +3,8 @@ use std::fmt::Display;
 /// Credit to https://github.com/saresend/yin/ for some functions
 use ringbuf::{traits::{Consumer, Observer}, HeapCons};
 
-// How often in milliseconds the server should calculate and send the tuner frequency when active
-pub const SERVER_UPDATE_FREQ_MS: u64 = 100;
+// How often in milliseconds the processor should calculate and send the tuner frequency when active
+pub const PROCESSOR_UPDATE_FREQ_MS: u64 = 100;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Note {

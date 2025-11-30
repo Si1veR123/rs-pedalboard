@@ -56,7 +56,7 @@ impl<'a> Deserialize<'a> for Vibrato {
 
 impl Vibrato {
     pub fn new() -> Self {
-        // Oscilallator sample rate not used on client, and is set later in `set_config` on server, so its ok to be hardcoded
+        // Oscilallator sample rate not used on client, and is set later in `set_config` on processor, so its ok to be hardcoded
         let oscillator = Oscillator::Sine(Sine::new(48000.0, 5.0, 0.0, 0.0));
 
         let mut parameters = HashMap::new();

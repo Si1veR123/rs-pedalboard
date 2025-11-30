@@ -28,7 +28,7 @@ impl Widget for &mut UtilitiesScreen {
     fn ui(self, ui: &mut egui::Ui) -> egui::Response {
         if !self.state.is_connected() {
             return ui.centered_and_justified(|ui| {
-                ui.label(RichText::from("Not connected to server")
+                ui.label(RichText::from("Not connected to processor")
                     .color(crate::FAINT_TEXT_COLOR)
                     .size(50.0)
                 );

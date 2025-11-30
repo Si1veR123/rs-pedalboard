@@ -12,8 +12,8 @@ mod utilities;
 use tracing::trace_span;
 use utilities::UtilitiesScreen;
 mod settings;
-use settings::{SettingsScreen, ServerLaunchState};
-mod server_process;
+use settings::{SettingsScreen, ProcessorLaunchState};
+mod audio_processor_handler;
 mod midi;
 
 #[cfg(feature = "virtual_keyboard")]
@@ -24,7 +24,7 @@ use rs_pedalboard::SAVE_DIR;
 use std::{sync::Arc, time::Instant, io, fs::File};
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, filter::EnvFilter, Layer};
 
-const SERVER_PORT: u16 = 29475;
+const PROCESSOR_PORT: u16 = 29475;
 const WINDOW_HEIGHT: f32 = 1080.0;
 const WINDOW_WIDTH: f32 = 1920.0;
 
@@ -201,35 +201,35 @@ impl PedalboardClientApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let loaded_state = State::load_state(cc.egui_ctx.clone());
         let leaked_state = Box::leak(Box::new(loaded_state));
-        let _ = leaked_state.connect_to_server();
+        let _ = leaked_state.connect_to_processor();
 
         let mut settings_screen = SettingsScreen::new(leaked_state);
 
-        let no_server_start_arg = std::env::args().any(|arg| arg == "--no-server");
-        // Start up the server process if configured to do so, not already connected and not running with the `--no-server` argument
-        if leaked_state.client_settings.borrow().startup_server && !leaked_state.is_connected() && !no_server_start_arg {
-            tracing::info!("Starting server on startup");
-            if settings_screen.ready_to_start_server(&leaked_state.server_settings.borrow()) {
-                match server_process::start_server_process(&leaked_state.server_settings.borrow()) {
+        let no_processor_start_arg = std::env::args().any(|arg| arg == "--no-processor");
+        // Start up the audio processor process if configured to do so, not already connected and not running with the `--no-processor` argument
+        if leaked_state.client_settings.borrow().startup_processor && !leaked_state.is_connected() && !no_processor_start_arg {
+            tracing::info!("Starting processor on startup");
+            if settings_screen.ready_to_start_processor(&leaked_state.processor_settings.borrow()) {
+                match audio_processor_handler::start_processor_process(&leaked_state.processor_settings.borrow()) {
                     Some(child) => {
-                        settings_screen.server_launch_state = ServerLaunchState::AwaitingStart { start_time: Instant::now(), process: child };
+                        settings_screen.processor_launch_state = ProcessorLaunchState::AwaitingStart { start_time: Instant::now(), process: child };
                         loop {
-                            settings_screen.handle_server_launch();
-                            if !settings_screen.server_launch_state.is_awaiting() {
+                            settings_screen.handle_processor_launch();
+                            if !settings_screen.processor_launch_state.is_awaiting() {
                                 break;
                             }
                             std::thread::sleep(std::time::Duration::from_millis(100));
                         }
                     },
-                    None => tracing::error!("Failed to start server process")
+                    None => tracing::error!("Failed to start processor process")
                 }
             } else {
-                tracing::error!("Set input and output device to launch server on start");
+                tracing::error!("Set input and output device to launch processor on start");
             }
         }
 
-        // Linux (JACK) requires jack server to be running before connecting MIDI ports
-        // This is started by the server app
+        // Linux (JACK) requires jack processor to be running before connecting MIDI ports
+        // This is started by the processor app
         leaked_state.midi_state.borrow_mut().connect_to_auto_connect_ports();
 
         PedalboardClientApp {
@@ -262,7 +262,7 @@ impl eframe::App for PedalboardClientApp {
         let mut sr_buf = Vec::new();
         self.state.get_commands("sr", &mut sr_buf);
         if !sr_buf.is_empty() {
-            tracing::info!("Server is using sample rate: {}hz", sr_buf[0]);
+            tracing::info!("Processor is using sample rate: {}hz", sr_buf[0]);
         }
 
         let bottom_window_select_height = ctx.screen_rect().height() * 0.1;
@@ -403,9 +403,9 @@ impl eframe::App for PedalboardClientApp {
 
     #[tracing::instrument(level = "debug", skip_all)]
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
-        if self.state.client_settings.borrow().kill_server_on_close {
-            tracing::info!("Killing server on exit");
-            self.state.kill_server();
+        if self.state.client_settings.borrow().kill_processor_on_close {
+            tracing::info!("Killing processor on exit");
+            self.state.kill_processor();
         }
     }
 }

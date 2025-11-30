@@ -20,7 +20,7 @@ use serde::{Serialize, Deserialize};
 #[derive(Clone)]
 pub struct Distortion {
     parameters: HashMap<String, PedalParameter>,
-    // Server only
+    // Processor only
     highpass: Option<BiquadFilter>,
     post_eq: Option<eq::Equalizer>,
     sample_rate: Option<f32>,

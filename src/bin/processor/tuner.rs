@@ -25,7 +25,7 @@ pub fn start_tuner(mut yin: Yin, kill: Arc<AtomicBool>, send_to: Sender<f32>) ->
                 }
             }
 
-            std::thread::sleep(std::time::Duration::from_millis(rs_pedalboard::dsp_algorithms::yin::SERVER_UPDATE_FREQ_MS));
+            std::thread::sleep(std::time::Duration::from_millis(rs_pedalboard::dsp_algorithms::yin::PROCESSOR_UPDATE_FREQ_MS));
         }
         tracing::info!("Tuner thread stopped");
     })

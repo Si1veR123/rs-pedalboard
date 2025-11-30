@@ -469,7 +469,7 @@ impl PedalTrait for Vst2 {
     }
 
     fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
-        // Config will be set on the server. If it is not set, we cannot process audio.
+        // Config will be set on the processor. If it is not set, we cannot process audio.
         match self.config {
             Some((b, _)) => assert!(buffer.len() <= b, "Buffer size exceeds configured max buffer size"),
             None => return

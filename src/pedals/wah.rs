@@ -11,7 +11,7 @@ use eframe::egui::{self, include_image};
 #[derive(Clone)]
 pub struct Wah {
     parameters: HashMap<String, PedalParameter>,
-    // Server only
+    // Processor only
     sample_rate: Option<f32>,
     moving_bandpass_filter: Option<MovingBandPass>,
 

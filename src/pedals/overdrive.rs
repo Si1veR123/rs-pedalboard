@@ -19,7 +19,7 @@ use serde::{Serialize, Deserialize};
 #[derive(Clone)]
 pub struct Overdrive {
     parameters: HashMap<String, PedalParameter>,
-    // Server only
+    // Processor only
     highpass: Option<BiquadFilter>,
     lowpass: Option<BiquadFilter>,
     sample_rate: Option<f32>,

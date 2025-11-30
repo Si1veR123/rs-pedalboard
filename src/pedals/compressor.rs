@@ -23,7 +23,7 @@ pub struct Compressor {
     // Client only, used for smoothing
     current_envelope: f32,
 
-    // Server only
+    // Processor only
     envelope_last_sent_time: Instant,
     envelope_last_sent_value: f32,
 

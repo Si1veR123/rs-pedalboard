@@ -1,7 +1,7 @@
 use std::{path::PathBuf, str::FromStr};
 
 use clap::Parser;
-use rs_pedalboard::server_settings::{ServerSettingsSave, SupportedHost};
+use rs_pedalboard::processor_settings::{ProcessorSettingsSave, SupportedHost};
 
 #[cfg(target_os = "linux")]
 mod constants {
@@ -18,8 +18,8 @@ mod constants {
 }
 
 #[derive(Parser, Clone, Debug)]
-#[command(name = "Pedalboard Server")]
-pub struct ServerArguments {
+#[command(name = "Pedalboard Processor")]
+pub struct ProcessorArguments {
     #[arg(short, long, help=constants::HOST_HELP_STR)]
     pub host: Option<String>,
     #[arg(short, long, help="Number of frames (samples) processed at a time")]
@@ -48,9 +48,9 @@ pub struct ServerArguments {
     pub recording_dir: Option<PathBuf>
 }
 
-/// All server settings, compiled from args, save file and default values.
+/// All processor settings, compiled from args, save file and default values.
 #[derive(Clone, Debug)]
-pub struct ServerSettings {
+pub struct ProcessorSettings {
     pub host: SupportedHost,
     pub frames_per_period: usize,
     pub buffer_latency: f32,
@@ -66,8 +66,8 @@ pub struct ServerSettings {
     pub recording_dir: PathBuf
 }
 
-impl ServerSettings {
-    pub fn new(args: ServerArguments, mut saved: Option<ServerSettingsSave>) -> Self {
+impl ProcessorSettings {
+    pub fn new(args: ProcessorArguments, mut saved: Option<ProcessorSettingsSave>) -> Self {
         if args.ignore_save {
             saved = None;
         }
@@ -131,7 +131,7 @@ impl ServerSettings {
             )
         });
 
-        ServerSettings {
+        ProcessorSettings {
             host,
             frames_per_period,
             buffer_latency,
@@ -178,8 +178,8 @@ impl ServerSettings {
     }
 }
 
-impl From<ServerSettings> for ServerSettingsSave {
-    fn from(value: ServerSettings) -> Self {
+impl From<ProcessorSettings> for ProcessorSettingsSave {
+    fn from(value: ProcessorSettings) -> Self {
         Self {
             host: value.host,
             buffer_size: value.frames_per_period,

@@ -275,7 +275,7 @@ pub trait PedalTrait {
 
     /// Returns the name of the parameter that needs to be changed, and its value
     /// 
-    /// `message_buffer` contains messages from the pedal on the server to the client
+    /// `message_buffer` contains messages from the pedal on the processor to the client
     fn ui(&mut self, _ui: &mut egui::Ui, _message_buffer: &[String]) -> Option<(String, PedalParameterValue)> { None }
 
     /// Call after creating a pedal so that it can set up its internal state

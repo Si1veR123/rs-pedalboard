@@ -9,7 +9,7 @@ use rs_pedalboard::{
 use tracing::trace_span;
 
 use crate::{
-    metronome_player::MetronomePlayer, recording::RecordingHandle, settings::ServerSettings, volume_monitor::PeakVolumeMonitor, volume_normalization::PeakNormalizer
+    metronome_player::MetronomePlayer, recording::RecordingHandle, settings::ProcessorSettings, volume_monitor::PeakVolumeMonitor, volume_normalization::PeakNormalizer
 };
 
 pub struct AudioProcessor {
@@ -23,7 +23,7 @@ pub struct AudioProcessor {
     pub master_in_volume: f32,
     pub master_out_volume: f32,
     pub pre_mute_volume: f32,
-    pub settings: ServerSettings,
+    pub settings: ProcessorSettings,
     // If tuner is enabled, this will contain the writer to the tuner buffer,
     // a receiver for frequency updates, and a kill flag
     pub tuner_handle: Option<(HeapProd<f32>, Receiver<f32>, Arc<AtomicBool>)>,
@@ -192,7 +192,7 @@ impl AudioProcessor {
 
         match command_name {
             "kill" => {
-                tracing::info!("Received kill command, shutting down server.");
+                tracing::info!("Received kill command, shutting down processor.");
                 std::process::exit(0);
             },
             "disconnect" => {
@@ -220,7 +220,7 @@ impl AudioProcessor {
                 let mut parameter_value: PedalParameterValue = serde_json::from_str(&pedal_parameter_str)
                     .map_err(|e| format!("setparameter: Failed to deserialize parameter value: {}", e))?;
 
-                // If the parameter is an oscillator, we must change the sample rate to whatever the server is using
+                // If the parameter is an oscillator, we must change the sample rate to whatever the processor is using
                 if let Some(oscillator) = parameter_value.as_oscillator_mut() {
                     oscillator.set_sample_rate(self.processing_sample_rate as f32);
                 }

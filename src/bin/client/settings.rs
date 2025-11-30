@@ -2,14 +2,14 @@ use std::{process::Child, time::Instant, path::PathBuf};
 
 use cpal::{Host, HostId};
 use eframe::egui::{self, Color32, Layout, Response, RichText, Vec2, Widget};
-use rs_pedalboard::server_settings::ServerSettingsSave;
+use rs_pedalboard::processor_settings::ProcessorSettingsSave;
 use serde::{Deserialize, Serialize};
 use strum::{IntoEnumIterator};
 use strum_macros::EnumIter;
 
 use crate::state::State;
-use crate::server_process::start_server_process;
-use rs_pedalboard::{audio_devices::{get_input_devices, get_output_devices}, server_settings::{SupportedHost}, SAVE_DIR};
+use crate::audio_processor_handler::start_processor_process;
+use rs_pedalboard::{audio_devices::{get_input_devices, get_output_devices}, processor_settings::{SupportedHost}, SAVE_DIR};
 
 pub const CLIENT_SAVE_NAME: &'static str = "client_settings.json";
 
@@ -24,8 +24,8 @@ pub enum VolumeNormalizationMode {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(default)]
 pub struct ClientSettings {
-    pub startup_server: bool,
-    pub kill_server_on_close: bool,
+    pub startup_processor: bool,
+    pub kill_processor_on_close: bool,
     pub show_volume_monitor: bool,
     pub volume_normalization: VolumeNormalizationMode,
     // Only used if volume_normalization is set to Automatic
@@ -81,8 +81,8 @@ impl ClientSettings {
 impl Default for ClientSettings {
     fn default() -> Self {
         Self {
-            startup_server: true,
-            kill_server_on_close: true,
+            startup_processor: true,
+            kill_processor_on_close: true,
             show_volume_monitor: true,
             volume_normalization: VolumeNormalizationMode::None,
             auto_volume_normalization_decay: 0.95,
@@ -95,7 +95,7 @@ impl Default for ClientSettings {
     }
 }
 
-pub enum ServerLaunchState {
+pub enum ProcessorLaunchState {
     AwaitingKill(Instant),
     KillError,
     AwaitingStart {
@@ -106,9 +106,9 @@ pub enum ServerLaunchState {
     None
 }
 
-impl ServerLaunchState {
+impl ProcessorLaunchState {
     pub fn is_awaiting(&self) -> bool {
-        matches!(self, ServerLaunchState::AwaitingKill(_) | ServerLaunchState::AwaitingStart { .. })
+        matches!(self, ProcessorLaunchState::AwaitingKill(_) | ProcessorLaunchState::AwaitingStart { .. })
     }
 }
 
@@ -154,7 +154,7 @@ impl AudioDevices {
 
 pub struct SettingsScreen {
     state: &'static State,
-    pub server_launch_state: ServerLaunchState,
+    pub processor_launch_state: ProcessorLaunchState,
     audio_devices: AudioDevices,
 
     nam_file_dialog: egui_file::FileDialog,
@@ -165,9 +165,9 @@ pub struct SettingsScreen {
 impl SettingsScreen {
     pub fn new(state: &'static State) -> Self {
         Self {
-            audio_devices: AudioDevices::new(state.server_settings.borrow().host.into()),
+            audio_devices: AudioDevices::new(state.processor_settings.borrow().host.into()),
             state,
-            server_launch_state: ServerLaunchState::None,
+            processor_launch_state: ProcessorLaunchState::None,
             nam_file_dialog: egui_file::FileDialog::select_folder(None),
             ir_file_dialog: egui_file::FileDialog::select_folder(None),
             vst2_file_dialog: egui_file::FileDialog::select_folder(None),
@@ -175,64 +175,64 @@ impl SettingsScreen {
     }
 
     #[cfg(target_os = "linux")]
-    pub fn ready_to_start_server(&self, server_settings: &ServerSettingsSave) -> bool {
-        server_settings.input_device.is_some() && server_settings.output_device.is_some() &&
+    pub fn ready_to_start_processor(&self, processor_settings: &ProcessorSettingsSave) -> bool {
+        processor_settings.input_device.is_some() && processor_settings.output_device.is_some() &&
         matches!(
-            self.server_launch_state,
-            ServerLaunchState::None | ServerLaunchState::StartError | ServerLaunchState::KillError
+            self.processor_launch_state,
+            ProcessorLaunchState::None | ProcessorLaunchState::StartError | ProcessorLaunchState::KillError
         )
     }
 
     #[cfg(target_os = "windows")]
     // On windows, we have the possibility of ASIO which only requires output device to be set
-    pub fn ready_to_start_server(&self, server_settings: &ServerSettingsSave) -> bool {
+    pub fn ready_to_start_processor(&self, processor_settings: &ProcessorSettingsSave) -> bool {
         let correct_state = matches!(
-            self.server_launch_state,
-            ServerLaunchState::None | ServerLaunchState::StartError | ServerLaunchState::KillError
+            self.processor_launch_state,
+            ProcessorLaunchState::None | ProcessorLaunchState::StartError | ProcessorLaunchState::KillError
         );
         
-        if server_settings.host == SupportedHost::ASIO {
-            server_settings.output_device.is_some() && correct_state
+        if processor_settings.host == SupportedHost::ASIO {
+            processor_settings.output_device.is_some() && correct_state
         } else {
-            server_settings.input_device.is_some() && server_settings.output_device.is_some() && correct_state
+            processor_settings.input_device.is_some() && processor_settings.output_device.is_some() && correct_state
         }
     }
 
-    /// Must be able to get a lock on socket and server_settings
-    pub fn handle_server_launch(&mut self) {
+    /// Must be able to get a lock on socket and processor_settings
+    pub fn handle_processor_launch(&mut self) {
         // Remove error state if now connected
         if self.state.is_connected() {
-            if matches!(self.server_launch_state, ServerLaunchState::KillError | ServerLaunchState::StartError) {
-                self.server_launch_state = ServerLaunchState::None;
+            if matches!(self.processor_launch_state, ProcessorLaunchState::KillError | ProcessorLaunchState::StartError) {
+                self.processor_launch_state = ProcessorLaunchState::None;
             }
         }
 
-        if let ServerLaunchState::AwaitingKill(start_time) = self.server_launch_state {
+        if let ProcessorLaunchState::AwaitingKill(start_time) = self.processor_launch_state {
             if start_time.elapsed().as_secs() > 5 {
-                tracing::error!("Failed to stop server");
-                self.server_launch_state = ServerLaunchState::KillError;
+                tracing::error!("Failed to stop processor");
+                self.processor_launch_state = ProcessorLaunchState::KillError;
             } else if start_time.elapsed().as_secs() > 1 {
-                if !self.state.is_server_available() {
-                    if let Some(process) = start_server_process(&self.state.server_settings.borrow()) {
-                        self.server_launch_state = ServerLaunchState::AwaitingStart {
+                if !self.state.is_processor_available() {
+                    if let Some(process) = start_processor_process(&self.state.processor_settings.borrow()) {
+                        self.processor_launch_state = ProcessorLaunchState::AwaitingStart {
                             start_time: Instant::now(),
                             process
                         };
                     } else {
-                        tracing::error!("Failed to start server process");
-                        self.server_launch_state = ServerLaunchState::None;
+                        tracing::error!("Failed to start processor process");
+                        self.processor_launch_state = ProcessorLaunchState::None;
                     }
                 }
             }
-        } else if let ServerLaunchState::AwaitingStart { start_time, process  } = &mut self.server_launch_state {
+        } else if let ProcessorLaunchState::AwaitingStart { start_time, process  } = &mut self.processor_launch_state {
             // `try_wait` returns Ok(Some(status)) if the process has exited
             if start_time.elapsed().as_secs() > 5 || matches!(process.try_wait(), Ok(Some(_))) {
-                tracing::error!("Server process started but did not connect, or closed. Check server logs");
-                self.server_launch_state = ServerLaunchState::StartError;
+                tracing::error!("Processor process started but did not connect, or closed. Check processor logs");
+                self.processor_launch_state = ProcessorLaunchState::StartError;
             } else {
-                if self.state.connect_to_server().is_ok() {
-                    self.server_launch_state = ServerLaunchState::None;
-                    tracing::info!("Server started successfully");
+                if self.state.connect_to_processor().is_ok() {
+                    self.processor_launch_state = ProcessorLaunchState::None;
+                    tracing::info!("Processor started successfully");
                 }
             }
         }
@@ -245,9 +245,9 @@ const SECTION_SPACE: f32 = 40.0;
 
 impl Widget for &mut SettingsScreen {
     fn ui(self, ui: &mut egui::Ui) -> Response {
-        self.handle_server_launch();
+        self.handle_processor_launch();
 
-        let mut server_settings = self.state.server_settings.borrow_mut();
+        let mut processor_settings = self.state.processor_settings.borrow_mut();
         let mut client_settings = self.state.client_settings.borrow_mut();
 
         ui.allocate_ui_with_layout(ui.available_size(), Layout::left_to_right(egui::Align::Center), |ui| {
@@ -263,10 +263,10 @@ impl Widget for &mut SettingsScreen {
 
                     ui.add_space(SECTION_SPACE);
 
-                    ui.label(RichText::new("Server Settings").font(egui::TextStyle::Heading.resolve(ui.style())));
+                    ui.label(RichText::new("Processor Settings").font(egui::TextStyle::Heading.resolve(ui.style())));
                     ui.separator();
 
-                    egui::Grid::new("server_settings_grid")
+                    egui::Grid::new("processor_settings_grid")
                         .num_columns(2)
                         .min_col_width(ui.available_width()*0.5)
                         .min_row_height(SETTING_ROW_HEIGHT_FRACT * ui.ctx().screen_rect().height())
@@ -276,26 +276,26 @@ impl Widget for &mut SettingsScreen {
                             // Only show if the platform has multiple host options
                             if SupportedHost::iter().count() > 1 {
                                 ui.label("\tHost");
-                                let prev_host = server_settings.host;
+                                let prev_host = processor_settings.host;
                                 egui::ComboBox::new("host_dropdown", "")
-                                    .selected_text(server_settings.host.to_string())
+                                    .selected_text(processor_settings.host.to_string())
                                     .show_ui(ui, |ui| {
                                         for host in SupportedHost::iter() {
-                                            ui.selectable_value(&mut server_settings.host, host, host.to_string());
+                                            ui.selectable_value(&mut processor_settings.host, host, host.to_string());
                                         }
                                     });
                                 // Selection has changed
-                                if prev_host != server_settings.host {
-                                    self.audio_devices = AudioDevices::new(server_settings.host.into());
-                                    server_settings.input_device = None;
-                                    server_settings.output_device = None;
+                                if prev_host != processor_settings.host {
+                                    self.audio_devices = AudioDevices::new(processor_settings.host.into());
+                                    processor_settings.input_device = None;
+                                    processor_settings.output_device = None;
                                 }
                                 ui.end_row();
                             }
 
                             // If on windows, and using ASIO host, we cannot control audio devices. Instead, we select the ASIO driver
                             #[cfg(target_os = "windows")]
-                            let show_asio_driver = server_settings.host == SupportedHost::ASIO;
+                            let show_asio_driver = processor_settings.host == SupportedHost::ASIO;
                             #[cfg(not(target_os = "windows"))]
                             let show_asio_driver = false;
 
@@ -304,11 +304,11 @@ impl Widget for &mut SettingsScreen {
                                 ui.label("\tASIO Driver");
                                 if egui::ComboBox::from_id_salt("output_device_dropdown")
                                     .wrap_mode(egui::TextWrapMode::Truncate)
-                                    .selected_text(server_settings.output_device.clone().unwrap_or_else(|| "None".to_string()))
+                                    .selected_text(processor_settings.output_device.clone().unwrap_or_else(|| "None".to_string()))
                                     .show_ui(ui, |ui| {
-                                        ui.selectable_value(&mut server_settings.output_device, None, "None");
+                                        ui.selectable_value(&mut processor_settings.output_device, None, "None");
                                         for device in &self.audio_devices.output_devices {
-                                            ui.selectable_value(&mut server_settings.output_device, Some(device.clone()), device);
+                                            ui.selectable_value(&mut processor_settings.output_device, Some(device.clone()), device);
                                         }
                                 }).response.clicked() {
                                     self.audio_devices.update();
@@ -319,11 +319,11 @@ impl Widget for &mut SettingsScreen {
                                 ui.label("\tInput Device");
                                 if egui::ComboBox::from_id_salt("input_device_dropdown")
                                     .wrap_mode(egui::TextWrapMode::Truncate)
-                                    .selected_text(server_settings.input_device.clone().unwrap_or_else(|| "None".to_string()))
+                                    .selected_text(processor_settings.input_device.clone().unwrap_or_else(|| "None".to_string()))
                                     .show_ui(ui, |ui| {
-                                        ui.selectable_value(&mut server_settings.input_device, None, "None");
+                                        ui.selectable_value(&mut processor_settings.input_device, None, "None");
                                         for device in &self.audio_devices.input_devices {
-                                            ui.selectable_value(&mut server_settings.input_device, Some(device.clone()), device);
+                                            ui.selectable_value(&mut processor_settings.input_device, Some(device.clone()), device);
                                         }
                                 }).response.clicked() {
                                     self.audio_devices.update();
@@ -334,11 +334,11 @@ impl Widget for &mut SettingsScreen {
                                 ui.label("\tOutput Device");
                                 if egui::ComboBox::from_id_salt("output_device_dropdown")
                                     .wrap_mode(egui::TextWrapMode::Truncate)
-                                    .selected_text(server_settings.output_device.clone().unwrap_or_else(|| "None".to_string()))
+                                    .selected_text(processor_settings.output_device.clone().unwrap_or_else(|| "None".to_string()))
                                     .show_ui(ui, |ui| {
-                                        ui.selectable_value(&mut server_settings.output_device, None, "None");
+                                        ui.selectable_value(&mut processor_settings.output_device, None, "None");
                                         for device in &self.audio_devices.output_devices {
-                                            ui.selectable_value(&mut server_settings.output_device, Some(device.clone()), device);
+                                            ui.selectable_value(&mut processor_settings.output_device, Some(device.clone()), device);
                                         }
                                 }).response.clicked() {
                                     self.audio_devices.update();
@@ -350,7 +350,7 @@ impl Widget for &mut SettingsScreen {
                             ui.label("\tBuffer Size");
                             ui.add_sized(
                                 Vec2::new(ui.available_width(), 45.0),
-                                egui::Slider::new(&mut server_settings.buffer_size, 6..=12)
+                                egui::Slider::new(&mut processor_settings.buffer_size, 6..=12)
                                     .custom_formatter(|value, _| format!("{}", 2_u32.pow(value as u32)))
                             );
                             ui.end_row();
@@ -359,7 +359,7 @@ impl Widget for &mut SettingsScreen {
                             ui.label("\tLatency");
                             ui.add_sized(
                                 Vec2::new(ui.available_width(), 45.0),
-                                egui::Slider::new(&mut server_settings.latency, 0.0..=25.0)
+                                egui::Slider::new(&mut processor_settings.latency, 0.0..=25.0)
                                     .custom_formatter(|value, _| format!("{:.2}ms", value))
                             ).on_hover_text("Internal buffer latency. Increase latency if you experience X Runs (in this app)");
                             ui.end_row();
@@ -369,7 +369,7 @@ impl Widget for &mut SettingsScreen {
                                 ui.label("\tPeriods per Buffer");
                                 ui.add_sized(
                                     Vec2::new(ui.available_width(), 45.0),
-                                    egui::Slider::new(&mut server_settings.periods_per_buffer, 1..=4)
+                                    egui::Slider::new(&mut processor_settings.periods_per_buffer, 1..=4)
                                 );
                                 ui.end_row();
                             };
@@ -378,26 +378,26 @@ impl Widget for &mut SettingsScreen {
                             ui.label("\tTuner Periods");
                             ui.add_sized(
                                 Vec2::new(ui.available_width(), 45.0),
-                                egui::Slider::new(&mut server_settings.tuner_periods, 1..=8)
+                                egui::Slider::new(&mut processor_settings.tuner_periods, 1..=8)
                             ).on_hover_text("Higher values may improve accuracy but increase computation, and decrease update time.");
                             ui.end_row();
 
                             // Preferred Sample Rate
                             ui.label("\tPreferred Sample Rate");
                             egui::ComboBox::from_id_salt("preferred_sample_rate_dropdown")
-                                .selected_text(match server_settings.preferred_sample_rate {
+                                .selected_text(match processor_settings.preferred_sample_rate {
                                     Some(rate) => format!("{rate}hz"),
                                     None => "Default".to_string()
                                 })
                                 .wrap_mode(egui::TextWrapMode::Truncate)
                                 .show_ui(ui, |ui| {
-                                    let mut response = ui.selectable_value(&mut server_settings.preferred_sample_rate, None, "Default");
-                                    response |= ui.selectable_value(&mut server_settings.preferred_sample_rate, Some(44100), "44100hz");
-                                    response |= ui.selectable_value(&mut server_settings.preferred_sample_rate, Some(48000), "48000hz");
-                                    response |= ui.selectable_value(&mut server_settings.preferred_sample_rate, Some(88200), "88200hz");
-                                    response |= ui.selectable_value(&mut server_settings.preferred_sample_rate, Some(96000), "96000hz");
-                                    response |= ui.selectable_value(&mut server_settings.preferred_sample_rate, Some(176400), "176400hz");
-                                    response |= ui.selectable_value(&mut server_settings.preferred_sample_rate, Some(192000), "192000hz");
+                                    let mut response = ui.selectable_value(&mut processor_settings.preferred_sample_rate, None, "Default");
+                                    response |= ui.selectable_value(&mut processor_settings.preferred_sample_rate, Some(44100), "44100hz");
+                                    response |= ui.selectable_value(&mut processor_settings.preferred_sample_rate, Some(48000), "48000hz");
+                                    response |= ui.selectable_value(&mut processor_settings.preferred_sample_rate, Some(88200), "88200hz");
+                                    response |= ui.selectable_value(&mut processor_settings.preferred_sample_rate, Some(96000), "96000hz");
+                                    response |= ui.selectable_value(&mut processor_settings.preferred_sample_rate, Some(176400), "176400hz");
+                                    response |= ui.selectable_value(&mut processor_settings.preferred_sample_rate, Some(192000), "192000hz");
                                     response
                                 });
                             ui.end_row();
@@ -405,7 +405,7 @@ impl Widget for &mut SettingsScreen {
                             // Upsample Passes
                             ui.label("\tUpsample");
                             egui::ComboBox::from_id_salt("upsample_dropdown")
-                                .selected_text(match server_settings.upsample_passes {
+                                .selected_text(match processor_settings.upsample_passes {
                                     0 => "None",
                                     1 => "2x",
                                     2 => "4x",
@@ -414,10 +414,10 @@ impl Widget for &mut SettingsScreen {
                                 })
                                 .wrap_mode(egui::TextWrapMode::Truncate)
                                 .show_ui(ui, |ui| {
-                                    let mut response = ui.selectable_value(&mut server_settings.upsample_passes, 0, "None");
-                                    response |= ui.selectable_value(&mut server_settings.upsample_passes, 1, "2x");
-                                    response |= ui.selectable_value(&mut server_settings.upsample_passes, 2, "4x");
-                                    response |= ui.selectable_value(&mut server_settings.upsample_passes, 3, "8x");
+                                    let mut response = ui.selectable_value(&mut processor_settings.upsample_passes, 0, "None");
+                                    response |= ui.selectable_value(&mut processor_settings.upsample_passes, 1, "2x");
+                                    response |= ui.selectable_value(&mut processor_settings.upsample_passes, 2, "4x");
+                                    response |= ui.selectable_value(&mut processor_settings.upsample_passes, 3, "8x");
                                     response
                                 });
 
@@ -443,28 +443,28 @@ impl Widget for &mut SettingsScreen {
 
                         let currently_connected = self.state.is_connected();
                         let button_text = if currently_connected {
-                            "Restart Server"
+                            "Restart Processor"
                         } else {
-                            "Start Server"
+                            "Start Processor"
                         };
                         if ui.add_enabled(
-                            self.ready_to_start_server(&server_settings), 
+                            self.ready_to_start_processor(&processor_settings), 
                             egui::Button::new(button_text)
                                 .stroke(egui::Stroke::new(1.0, crate::THEME_COLOR))
                                 .min_size(button_size)
                         ).clicked() {
                             ui.ctx().request_repaint();
                             if currently_connected {
-                                self.state.kill_server();
-                                self.server_launch_state = ServerLaunchState::AwaitingKill(Instant::now());
+                                self.state.kill_processor();
+                                self.processor_launch_state = ProcessorLaunchState::AwaitingKill(Instant::now());
                             } else {
-                                if let Some(process) = start_server_process(&server_settings) {
-                                    self.server_launch_state = ServerLaunchState::AwaitingStart {
+                                if let Some(process) = start_processor_process(&processor_settings) {
+                                    self.processor_launch_state = ProcessorLaunchState::AwaitingStart {
                                         start_time: Instant::now(),
                                         process
                                     };
                                 } else {
-                                    tracing::error!("Failed to start server process");
+                                    tracing::error!("Failed to start processor process");
                                 }
                             }
                         };
@@ -481,11 +481,11 @@ impl Widget for &mut SettingsScreen {
 
                     ui.add_space(15.0);
 
-                    match self.server_launch_state {
-                        ServerLaunchState::StartError => { ui.label(RichText::new("Failed to start server. Check the logs for more details.").color(Color32::RED)); },
-                        ServerLaunchState::KillError => { ui.label(RichText::new("Failed to stop server. Check the logs for more details.").color(Color32::RED)); },
-                        ServerLaunchState::AwaitingKill(_) | ServerLaunchState::AwaitingStart { .. } => { ui.ctx().request_repaint_after(rs_pedalboard::DEFAULT_REFRESH_DURATION); }
-                        ServerLaunchState::None => {}
+                    match self.processor_launch_state {
+                        ProcessorLaunchState::StartError => { ui.label(RichText::new("Failed to start processor. Check the logs for more details.").color(Color32::RED)); },
+                        ProcessorLaunchState::KillError => { ui.label(RichText::new("Failed to stop processor. Check the logs for more details.").color(Color32::RED)); },
+                        ProcessorLaunchState::AwaitingKill(_) | ProcessorLaunchState::AwaitingStart { .. } => { ui.ctx().request_repaint_after(rs_pedalboard::DEFAULT_REFRESH_DURATION); }
+                        ProcessorLaunchState::None => {}
                     }
 
                     ui.add_space(SECTION_SPACE);
@@ -517,7 +517,7 @@ impl Widget for &mut SettingsScreen {
                                 });
 
                             if normalization_mode_change {
-                                self.state.set_volume_normalization_server(client_settings.volume_normalization, client_settings.auto_volume_normalization_decay);
+                                self.state.set_volume_normalization_processor(client_settings.volume_normalization, client_settings.auto_volume_normalization_decay);
                             };
                             ui.end_row();
 
@@ -529,7 +529,7 @@ impl Widget for &mut SettingsScreen {
                                         .show_value(true)
                                         .fixed_decimals(3)
                                 ).on_hover_text("The decay of the peak per second. Lower values respond to decreases in volume quicker but cause more overall fluctuations. 1.0 = Manual.").changed() {
-                                    self.state.set_volume_normalization_server(client_settings.volume_normalization, client_settings.auto_volume_normalization_decay);
+                                    self.state.set_volume_normalization_processor(client_settings.volume_normalization, client_settings.auto_volume_normalization_decay);
                                 };
                                 ui.end_row();
                             }
@@ -541,7 +541,7 @@ impl Widget for &mut SettingsScreen {
                                     .show_value(true)
                                     .fixed_decimals(2)
                             ).changed() {
-                                self.state.master_in_server(client_settings.input_volume);
+                                self.state.master_in_processor(client_settings.input_volume);
                             };
                             ui.end_row();
 
@@ -552,7 +552,7 @@ impl Widget for &mut SettingsScreen {
                                     .show_value(true)
                                     .fixed_decimals(2)
                             ).changed() {
-                                self.state.master_out_server(client_settings.output_volume);
+                                self.state.master_out_processor(client_settings.output_volume);
                             };
                             ui.end_row();
 
@@ -571,18 +571,18 @@ impl Widget for &mut SettingsScreen {
 
                             set_large_checkbox_style(ui);
 
-                            ui.label("Startup Server");
-                            ui.checkbox(&mut client_settings.startup_server, "");
+                            ui.label("Startup Processor");
+                            ui.checkbox(&mut client_settings.startup_processor, "");
                             ui.end_row();
 
-                            ui.label("Kill Server on Close");
-                            ui.checkbox(&mut client_settings.kill_server_on_close, "");
+                            ui.label("Kill Processor on Close");
+                            ui.checkbox(&mut client_settings.kill_processor_on_close, "");
                             ui.end_row();
 
                             ui.label("Show Volume Monitor");
                             let volume_monitor_message = "This can affect performance as the UI will have to frequently update";
                             if ui.checkbox(&mut client_settings.show_volume_monitor, "").on_hover_text(volume_monitor_message).changed() {
-                                self.state.set_volume_monitor_active_server(client_settings.show_volume_monitor);
+                                self.state.set_volume_monitor_active_processor(client_settings.show_volume_monitor);
                             }
                             ui.end_row();
                         });
@@ -665,7 +665,7 @@ impl Widget for &mut SettingsScreen {
 
                     if connect_button.is_some_and(|r| r.clicked()) {
                         drop(client_settings);
-                        let _ = self.state.connect_to_server();
+                        let _ = self.state.connect_to_processor();
                     }
                 })
             });
