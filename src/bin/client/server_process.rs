@@ -2,7 +2,7 @@ use std::{env::var, path::PathBuf, process::Child};
 use rs_pedalboard::server_settings::ServerSettingsSave;
 use which::which;
 
-pub const SERVER_EXE_NAME: &str = "rs_pedalboard_server";
+pub const SERVER_EXE_NAME: &str = "pedalboard_server";
 pub const SERVER_ENV_VAR: &str = "RSPEDALBOARD_SERVER";
 
 pub fn get_server_executable_path() -> Option<PathBuf> {
