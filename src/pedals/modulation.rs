@@ -291,5 +291,6 @@ macro_rules! var_delay_phaser {
     };
 }
 
+// name, (default_rate, min_rate, max_rate) hz, (default_min_depth, default_max_depth, min_depth, max_depth) ms, (incl_feedback, default_feedback, max_feedback), default_dry_wet
 var_delay_phaser!(Chorus, (1.0, 0.1, 5.0), (5.0, 15.0, 3.0, 40.0), (false, 0.0, 0.0), 0.5);
 var_delay_phaser!(Flanger, (0.25, 0.05, 2.0), (0.3, 2.0, 0.1, 6.0), (true, 0.0, 0.95), 0.5);

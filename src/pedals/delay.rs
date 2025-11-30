@@ -66,16 +66,15 @@ impl Delay {
     pub fn new() -> Self {
         let mut parameters = HashMap::new();
 
-        // Units of 10ms for faster pedal knobs
-        let init_delay_ten_ms = 430.0 / 10.0;
+        let init_delay = 430.0;
         let init_warmth = 0.0;
 
         parameters.insert(
             "Delay".to_string(),
             PedalParameter {
-                value: PedalParameterValue::Float(init_delay_ten_ms),
-                min: Some(PedalParameterValue::Float(1.0)),
-                max: Some(PedalParameterValue::Float(100.0)),
+                value: PedalParameterValue::Float(init_delay),
+                min: Some(PedalParameterValue::Float(10.0)),
+                max: Some(PedalParameterValue::Float(1000.0)),
                 step: None
             },
         );
@@ -187,12 +186,12 @@ impl PedalTrait for Delay {
         if let Some(parameter) = parameters.get_mut(name) {
             if parameter.is_valid(&value) {
                 if name == "Delay" {
-                    let delay_ten_ms = value.as_float().unwrap();
+                    let delay_ms = value.as_float().unwrap();
                     parameter.value = value;
 
                     if let Some(delay_buffer) = &mut self.delay_buffer {
                         if let Some(sample_rate) = self.sample_rate {
-                            let delay_samples = ((delay_ten_ms / 100.0) * sample_rate) as usize;
+                            let delay_samples = ((delay_ms / 1000.0) * sample_rate) as usize;
                             if delay_samples > delay_buffer.len() {
                                 delay_buffer.extend(iter::repeat(0.0).take(delay_samples - delay_buffer.len()));
                             } else {
