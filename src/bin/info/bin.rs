@@ -29,7 +29,7 @@ fn main() {
                 PedalParameterValue::Bool(_) => {
                     pedal_info.parameters.insert(
                         param_name,
-                        ParameterInfo::String(vec![
+                        ParameterInfo::Options(vec![
                             PedalParameterValue::Bool(false),
                             PedalParameterValue::Bool(true)
                         ])
@@ -50,7 +50,7 @@ fn main() {
                 PedalParameterValue::String(_) => {
                     pedal_info.parameters.insert(
                         param_name,
-                        ParameterInfo::String(
+                        ParameterInfo::Options(
                             init_pedal.get_string_values(&name)
                                 .expect("PedalParameterValue::String must have discrete values")
                                 .into_iter()
