@@ -407,7 +407,7 @@ impl PedalTrait for ImpulseResponse {
         self.ir.as_mut().unwrap().process(buffer);
 
         for (i, sample) in buffer.iter_mut().enumerate() {
-            *sample = (*sample * dry_wet) + (self.dry_buffer[i] * (1.0 - dry_wet)) * level;
+            *sample = ((*sample * dry_wet) + (self.dry_buffer[i] * (1.0 - dry_wet))) * level;
         }
     }
 
