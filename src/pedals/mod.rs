@@ -299,6 +299,9 @@ pub trait PedalTrait {
     fn get_string_values(&self, _parameter_name: &str) -> Option<Vec<String>> {
         None
     }
+
+    /// Only call after set_config
+    fn reset_buffer(&mut self) {}
 }
 
 /// Wrapper enum type for serialization in Vec

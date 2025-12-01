@@ -411,6 +411,12 @@ impl PedalTrait for ImpulseResponse {
         }
     }
 
+    fn reset_buffer(&mut self) {
+        if let Some(ir) = &mut self.ir {
+            ir.reset();
+        }
+    }
+
     fn get_parameters(&self) -> &HashMap<String, PedalParameter> {
         &self.parameters
     }

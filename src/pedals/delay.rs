@@ -173,6 +173,12 @@ impl PedalTrait for Delay {
         }
     }
 
+    fn reset_buffer(&mut self) {
+        if let Some(delay_buffer) = &mut self.delay_buffer {
+            delay_buffer.iter_mut().for_each(|s| *s = 0.0);
+        }
+    }
+
     fn get_parameters(&self) -> &HashMap<String, PedalParameter> {
         &self.parameters
     }

@@ -230,6 +230,10 @@ impl PedalTrait for Compressor {
         }
     }
 
+    fn reset_buffer(&mut self) {
+        self.envelope = 0.0;
+    }
+
     fn get_parameters(&self) -> &HashMap<String, PedalParameter> {
         &self.parameters
     }

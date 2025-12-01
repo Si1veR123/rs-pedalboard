@@ -152,6 +152,12 @@ macro_rules! var_delay_phaser {
                 }
                 self.variable_delay_phaser.as_mut().unwrap().process_audio(buffer);
             }
+
+            fn reset_buffer(&mut self) {
+                if let Some(variable_delay_phaser) = &mut self.variable_delay_phaser {
+                    variable_delay_phaser.reset();
+                }
+            }
         
             fn get_parameters(&self) -> &HashMap<String, PedalParameter> {
                 &self.parameters

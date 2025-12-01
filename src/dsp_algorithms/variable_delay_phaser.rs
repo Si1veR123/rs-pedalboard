@@ -57,4 +57,8 @@ impl VariableDelayPhaser {
         let depth_samples = ((depth_ms / 1000.0) * self.sample_rate) as usize;
         self.delay = VariableDelayLine::new(depth_samples);
     }
+
+    pub fn reset(&mut self) {
+        self.delay.buffer.iter_mut().for_each(|s| *s = 0.0);
+    }
 }

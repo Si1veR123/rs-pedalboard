@@ -177,6 +177,13 @@ impl PedalTrait for Reverb {
         }
     }
 
+    fn reset_buffer(&mut self) {
+        if let Some((ref mut reverb, sample_rate)) = self.reverb {
+            *reverb = Freeverb::new(sample_rate as usize);
+            self.sync_parameters();
+        }
+    }
+
     fn get_parameters(&self) -> &HashMap<String, PedalParameter> {
         &self.parameters
     }

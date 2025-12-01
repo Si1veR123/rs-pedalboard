@@ -194,6 +194,11 @@ impl PedalTrait for NoiseGate {
         self.level = level;
     }
 
+    fn reset_buffer(&mut self) {
+        self.gain = 1.0;
+        self.level = 0.0;
+    }
+
     fn get_parameters(&self) -> &HashMap<String, PedalParameter> {
         &self.parameters
     }

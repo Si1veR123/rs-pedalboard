@@ -140,6 +140,12 @@ impl PedalTrait for Vibrato {
         }
     }
 
+    fn reset_buffer(&mut self) {
+        if let Some(delay_line) = &mut self.delay_line {
+            delay_line.reset();
+        }
+    }
+
     fn get_parameters(&self) -> &HashMap<String, PedalParameter> {
         &self.parameters
     }

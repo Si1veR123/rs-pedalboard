@@ -171,6 +171,12 @@ impl PedalTrait for Wah {
             *sample = filter.process(*sample) * dry_wet + *sample * (1.0 - dry_wet);
         }
     }
+    
+    fn reset_buffer(&mut self) {
+        if let Some(filter) = &mut self.moving_bandpass_filter {
+            filter.reset();
+        }
+    }
 
     fn get_parameters(&self) -> &HashMap<String, PedalParameter> {
         &self.parameters

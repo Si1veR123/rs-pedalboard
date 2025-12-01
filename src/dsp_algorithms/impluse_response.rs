@@ -161,6 +161,13 @@ impl IRConvolver {
             self.overlap[i-buffer.len()] = self.ifft_out[i];
         }
     }
+
+    pub fn reset(&mut self) {
+        self.input_buffer.fill(0.0);
+        self.overlap.fill(0.0);
+        self.input_freq.fill(Complex::default());
+        self.ifft_out.fill(0.0);
+    }
 }
 
 #[cfg(test)]

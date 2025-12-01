@@ -412,6 +412,10 @@ impl PedalTrait for Nam {
         }
     }
 
+    fn reset_buffer(&mut self) {
+        self.modeler.reset_and_prewarm_model(self.modeler.expected_sample_rate(), self.modeler.get_maximum_buffer_size());
+    }
+
     fn get_parameters(&self) -> &HashMap<String, PedalParameter> {
         &self.parameters
     }

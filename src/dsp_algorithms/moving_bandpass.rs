@@ -66,4 +66,11 @@ impl MovingBandPass {
         self.counter = self.counter.wrapping_add(1);
         self.filter.process(sample)
     }
+
+    pub fn reset(&mut self) {
+        self.filter.x.iter_mut().for_each(|s| *s = 0.0);
+        self.filter.y.iter_mut().for_each(|s| *s = 0.0);
+        self.current_freq = self.target_freq;
+        self.counter = 0;
+    }
 }

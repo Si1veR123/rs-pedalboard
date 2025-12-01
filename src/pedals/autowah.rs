@@ -155,6 +155,13 @@ impl PedalTrait for AutoWah {
         }
     }
 
+    fn reset_buffer(&mut self) {
+        self.envelope = 0.0;
+        if let Some((filter, _)) = &mut self.filter {
+            filter.reset();
+        }
+    }
+
     fn get_parameters(&self) -> &HashMap<String, PedalParameter> {
         &self.parameters
     }

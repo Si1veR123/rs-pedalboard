@@ -208,6 +208,12 @@ impl PedalTrait for PitchShift {
         buffer.copy_from_slice(&self.output_buffer);
     }
 
+    fn reset_buffer(&mut self) {
+        if let Some(stretch) = &mut self.signalsmith_stretch {
+            stretch.reset();
+        }
+    }
+
     fn get_parameters(&self) -> &HashMap<String, PedalParameter> {
         &self.parameters
     }

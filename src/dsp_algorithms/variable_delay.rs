@@ -24,4 +24,8 @@ impl VariableDelayLine {
         let interpolation = prev_value + delay.fract() * (next_value - prev_value);
         interpolation
     }
+
+    pub fn reset(&mut self) {
+        self.buffer.iter_mut().for_each(|s| *s = 0.0);
+    }
 }
