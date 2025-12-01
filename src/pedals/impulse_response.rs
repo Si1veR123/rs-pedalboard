@@ -161,6 +161,16 @@ impl ImpulseResponse {
             },
         );
 
+        parameters.insert(
+            "Level".to_string(),
+            PedalParameter {
+                value: PedalParameterValue::Float(1.0),
+                min: Some(PedalParameterValue::Float(0.0)),
+                max: Some(PedalParameterValue::Float(1.0)),
+                step: None,
+            },
+        );
+
         let id = unique_time_id();
         let mut combobox_widget = Self::get_empty_directory_combo_box(id);
         if let Some(main_save_dir) = Self::get_save_directory() {
@@ -389,6 +399,7 @@ impl PedalTrait for ImpulseResponse {
         }
 
         let dry_wet = self.parameters.get("Dry/Wet").unwrap().value.as_float().unwrap();
+        let level = self.parameters.get("Level").unwrap().value.as_float().unwrap();
 
         self.dry_buffer.clear();
         self.dry_buffer.extend_from_slice(buffer);
@@ -396,7 +407,7 @@ impl PedalTrait for ImpulseResponse {
         self.ir.as_mut().unwrap().process(buffer);
 
         for (i, sample) in buffer.iter_mut().enumerate() {
-            *sample = (*sample * dry_wet) + (self.dry_buffer[i] * (1.0 - dry_wet));
+            *sample = (*sample * dry_wet) + (self.dry_buffer[i] * (1.0 - dry_wet)) * level;
         }
     }
 
