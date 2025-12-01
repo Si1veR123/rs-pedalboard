@@ -21,7 +21,6 @@ mod volume_monitor;
 mod volume_normalization;
 mod settings;
 mod recording;
-use file_processor::process_audio_file;
 use settings::{ProcessorSettings, ProcessorArguments};
 
 use cpal::traits::StreamTrait;

@@ -10,17 +10,17 @@ virtual_keyboard = ["dep:egui_keyboard"]
 log_full_commands = []
 
 [[bin]]
-name = "pedalboard_processor"
+name = "pedalboard-processor"
 path = "src/bin/processor/bin.rs"
 required-features = ["processor"]
 
 [[bin]]
-name = "pedalboard_client"
+name = "pedalboard-client"
 path = "src/bin/client/bin.rs"
 required-features = ["client"]
 
 [[bin]]
-name = "pedalboard_info"
+name = "pedalboard-info"
 path = "src/bin/info/bin.rs"
 
 [dependencies]
