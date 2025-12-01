@@ -10,6 +10,7 @@ pub mod plugin;
 pub mod socket_helper;
 pub mod audio_devices;
 pub mod processor_settings;
+pub mod file_processor;
 
 pub const SAVE_DIR: &str = "rs_pedalboard";
 // Required by both processor and client so define it here

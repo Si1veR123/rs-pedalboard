@@ -1,8 +1,8 @@
-use rs_pedalboard::dsp_algorithms::impluse_response::load_wav;
-use rs_pedalboard::pedalboard::Pedalboard;
-use rs_pedalboard::pedals::PedalTrait;
+use crate::dsp_algorithms::impluse_response::load_wav;
+use crate::pedalboard::Pedalboard;
+use crate::pedals::PedalTrait;
 
-const PROCESSING_BUFFER_SIZE: usize = 1024;
+pub const PROCESSING_BUFFER_SIZE: usize = 1024;
 
 fn save_wav<P: AsRef<std::path::Path>>(wav_path: P, buffer: &[f32], sample_rate: f32) -> Result<(), String> {
     let spec = hound::WavSpec {

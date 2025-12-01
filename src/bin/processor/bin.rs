@@ -21,7 +21,6 @@ mod volume_monitor;
 mod volume_normalization;
 mod settings;
 mod recording;
-mod file_processor;
 use file_processor::process_audio_file;
 use settings::{ProcessorSettings, ProcessorArguments};
 
@@ -75,42 +74,6 @@ fn main() {
     init_tracing();
     tracing::info!("Started logging...");
     init_panic_logging();
-    
-    // Check if we are processing a file (1st arg == 'process')
-    if let Some(first_arg) = std::env::args().nth(1) {
-        if first_arg == "process" {
-            let args: Vec<String> = std::env::args().collect();
-            if args.len() != 6 {
-                tracing::info!("Received {} arguments, expected 5.", args.len() - 1);
-                tracing::info!("Usage: {} process <src_wav_path> <to_wav_path> <sample_rate> <pedalboard_json>", args[0]);
-                std::process::exit(1);
-            }
-
-            let src_path = std::path::Path::new(&args[2]);
-            let to_path = std::path::Path::new(&args[3]);
-            let sample_rate: f32 = args[4].parse().expect("Sample rate is not a valid float");
-
-            let pedalboard_str = &args[5].trim();
-            let mut pedalboard: rs_pedalboard::pedalboard::Pedalboard;
-            if pedalboard_str.ends_with(".json") {
-                let file = File::open(pedalboard_str).expect("Failed to open pedalboard JSON file");
-                pedalboard = serde_json::from_reader(file).expect("Failed to deserialize pedalboard JSON from file");
-            } else {
-                pedalboard = serde_json::from_str(&args[5]).expect("Failed to deserialize pedalboard JSON");
-            }
-
-            match process_audio_file(src_path, to_path, &mut pedalboard, sample_rate) {
-                Ok(_) => {
-                    tracing::info!("Successfully processed audio file and saved to {}", to_path.display());
-                    std::process::exit(0);
-                },
-                Err(e) => {
-                    tracing::error!("Failed to process audio file: {}", e);
-                    std::process::exit(1);
-                }
-            }
-        }
-    }
 
     let settings = ProcessorSettings::new(ProcessorArguments::parse(), Some(ProcessorSettingsSave::load_or_default()));
     tracing::info!("Processor settings: {:?}", settings);
