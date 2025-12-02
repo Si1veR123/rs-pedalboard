@@ -3,9 +3,9 @@ mod jack_server;
 use cpal::{Host, Device};
 use rs_pedalboard::audio_devices::{get_input_devices, get_output_devices};
 use super::device_select::device_select_menu;
-use crate::settings::ServerSettings;
+use crate::settings::ProcessorSettings;
 
-pub fn setup(input: Option<&str>, output: Option<&str>, args: &ServerSettings) -> (Host, Device, Device) {
+pub fn setup(input: Option<&str>, output: Option<&str>, args: &ProcessorSettings) -> (Host, Device, Device) {
     let input_devices = get_input_devices(None).expect("Failed to get input devices");
     let output_devices = get_output_devices(None).expect("Failed to get output devices");
 
