@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use std::hash::Hash;
 
 use crate::dsp_algorithms::biquad::BiquadFilter;
-use crate::dsp_algorithms::eq;
 use crate::unique_time_id;
 
 use super::PedalTrait;
@@ -21,8 +20,8 @@ use serde::{Serialize, Deserialize};
 pub struct Distortion {
     parameters: HashMap<String, PedalParameter>,
     // Processor only
-    highpass: Option<BiquadFilter>,
-    post_eq: Option<eq::Equalizer>,
+    low_tilt: Option<BiquadFilter>,
+    high_tilt: Option<BiquadFilter>,
     sample_rate: Option<f32>,
     id: u32,
 }
@@ -54,8 +53,8 @@ impl<'de> Deserialize<'de> for Distortion {
         Ok(Distortion {
             id: helper.id,
             parameters: helper.parameters,
-            post_eq: None,
-            highpass: None,
+            low_tilt: None,
+            high_tilt: None,
             sample_rate: None,
         })
     }
@@ -106,7 +105,16 @@ impl Distortion {
                 step: None
             },
         );
-        Distortion { parameters, post_eq: None, highpass: None, sample_rate: None, id: unique_time_id() }
+        parameters.insert(
+        "Asymmetry".to_string(),
+        PedalParameter {
+            value: PedalParameterValue::Float(0.5),
+            min: Some(PedalParameterValue::Float(0.0)),
+            max: Some(PedalParameterValue::Float(1.0)),
+            step: None
+        },
+    );
+        Distortion { parameters, low_tilt: None, high_tilt: None, sample_rate: None, id: unique_time_id() }
     }
 
     pub fn clone_with_new_id(&self) -> Self {
@@ -115,16 +123,21 @@ impl Distortion {
         cloned
     }
 
-    pub fn highpass(sample_rate: f32) -> BiquadFilter {
-        BiquadFilter::high_pass(100.0, sample_rate, 0.707)
+    pub fn post_eq(sample_rate: f32) -> (BiquadFilter, BiquadFilter) {
+        let pivot = 1000.0;
+        let low = BiquadFilter::low_pass(pivot, sample_rate, 0.707);
+        let high = BiquadFilter::high_pass(pivot, sample_rate, 0.707);
+        (low, high)
     }
 
-    pub fn post_eq_from_tone(sample_rate: f32, tone: f32) -> eq::Equalizer {
-        let lpf = BiquadFilter::low_pass(8000.0, sample_rate, 0.707);
-        let mid_scoop = BiquadFilter::peaking(1000.0, sample_rate, 2.707, -5.0);
-        let tone_control_freq = 100.0 + (4000.0 - 100.0) * tone;
-        let tone_control = BiquadFilter::peaking(tone_control_freq, sample_rate, 0.707, 3.0);
-        eq::Equalizer::new(vec![lpf, mid_scoop, tone_control])
+    pub fn hard_diode(x: f32, threshold: f32, knee: f32) -> f32 {
+        if x > threshold {
+            threshold + (x - threshold) / (1.0 + knee * (x - threshold).abs())
+        } else if x < -threshold {
+            -threshold + (x + threshold) / (1.0 + knee * (x + threshold).abs())
+        } else {
+            x
+        }
     }
 }
 
@@ -135,33 +148,46 @@ impl PedalTrait for Distortion {
 
     fn set_config(&mut self,_buffer_size:usize, sample_rate: u32) {
         self.sample_rate = Some(sample_rate as f32);
-        self.highpass = Some(Self::highpass(sample_rate as f32));
-        let tone = self.get_parameters().get("Tone").unwrap().value.as_float().unwrap();
-        self.post_eq = Some(Self::post_eq_from_tone(sample_rate as f32, tone));
+        let (low_tilt, high_tilt) = Self::post_eq(sample_rate as f32);
+        self.low_tilt = Some(low_tilt);
+        self.high_tilt = Some(high_tilt);
     }
 
     fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
-        if self.highpass.is_none() || self.post_eq.is_none() {
+        if self.high_tilt.is_none() || self.low_tilt.is_none() {
             tracing::warn!("Distortion: Filters not initialized. Call set_config first.");
             return;
         }
 
         let drive = self.get_parameters().get("Drive").unwrap().value.as_float().unwrap();
         let volume = self.get_parameters().get("Level").unwrap().value.as_float().unwrap();
-        let pre_highpass = self.highpass.as_mut().unwrap();
-        let post_eq = self.post_eq.as_mut().unwrap();
-        
+        let asymmetry = self.get_parameters().get("Asymmetry")
+            .map(|p| p.value.as_float().unwrap())
+            .unwrap_or(0.5); // Default to 0.5 if not found, as this is a new parameter
+        let asymmetry_amount = (asymmetry - 0.5) * 2.0;
+
+        let tone = self.get_parameters().get("Tone").unwrap().value.as_float().unwrap();
+
         for sample in buffer.iter_mut() {
             let mut x = *sample;
-            x = pre_highpass.process(x);
 
-            x *= drive;
+            x *= 1.0 + drive * 0.5;
+            x *= 1.0 + asymmetry * 3.0; // Asymmetry makes it quiter, so boost here
 
-            // Hard clipping
-            x = x.tanh().tanh();
+            let asymmetry_scale = 1.5;
+            if x > 0.0 {
+                x = x * (1.0 + asymmetry_amount * asymmetry_scale);
+            } else {
+                x = x * (1.0 - asymmetry_amount * asymmetry_scale);
+            }
 
-            x = post_eq.process(x);
+            x = Self::hard_diode(x, 1.0, 5.0);
             
+            let low = self.low_tilt.as_mut().unwrap().process(x);
+            let high = self.high_tilt.as_mut().unwrap().process(x);
+
+            x = low * (1.0 - tone) + high * tone;
+
             x *= volume;
             *sample = x;
         }
@@ -171,15 +197,7 @@ impl PedalTrait for Distortion {
         let parameters = self.get_parameters_mut();
         if let Some(parameter) = parameters.get_mut(name) {
             if parameter.is_valid(&value) {
-                if name == "Tone" {
-                    let tone = value.as_float().unwrap();
-                    parameter.value = value;
-                    if let Some(sample_rate) = self.sample_rate {
-                        self.post_eq = Some(Self::post_eq_from_tone(sample_rate, tone));
-                    }
-                } else {
-                    parameter.value = value;
-                }
+                parameter.value = value;
             } else {
                 tracing::warn!("Attempted to set invalid value for parameter {}: {:?}", name, value);
             }
