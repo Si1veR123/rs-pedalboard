@@ -72,9 +72,9 @@ impl Distortion {
         parameters.insert(
             "Drive".to_string(),
             PedalParameter {
-                value: PedalParameterValue::Float(50.0),
+                value: PedalParameterValue::Float(10.0),
                 min: Some(PedalParameterValue::Float(0.0)),
-                max: Some(PedalParameterValue::Float(100.0)),
+                max: Some(PedalParameterValue::Float(50.0)),
                 step: None
             },
         );
