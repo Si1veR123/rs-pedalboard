@@ -14,6 +14,7 @@ use crate::pedals::ParameterUILocation;
 use crate::{forward_slash_path, unique_time_id, SAVE_DIR};
 
 const NAM_SAVE_PATH: &str = r"NAM";
+const OVERRIDE_DEFAULT_FOLDERS_ENV_VAR: &str = "RSPEDALBOARD_NAM_FOLDER";
 
 pub struct Nam {
     modeler: NeuralAmpModeler,
@@ -277,6 +278,10 @@ impl Nam {
     }
 
     pub fn get_save_directory() -> Option<PathBuf> {
+        if let Some(override_path) = std::env::var_os(OVERRIDE_DEFAULT_FOLDERS_ENV_VAR) {
+            let path_buf = PathBuf::from(override_path);
+            return Some(dunce::canonicalize(path_buf).ok()?);
+        }
         Some(dunce::canonicalize(homedir::my_home().ok()??.join(SAVE_DIR).join(NAM_SAVE_PATH)).ok()?)
     }
 

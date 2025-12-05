@@ -14,6 +14,7 @@ use eframe::egui::{self, include_image, Vec2};
 use super::{ui::pedal_knob, PedalParameter, PedalParameterValue, PedalTrait};
 
 const IR_SAVE_PATH: &str = r"IR";
+const OVERRIDE_DEFAULT_FOLDERS_ENV_VAR: &str = "RSPEDALBOARD_IR_FOLDER";
 
 #[derive(Clone)]
 pub struct ImpulseResponse {
@@ -270,6 +271,10 @@ impl ImpulseResponse {
     }
 
     pub fn get_save_directory() -> Option<PathBuf> {
+        if let Some(override_path) = std::env::var_os(OVERRIDE_DEFAULT_FOLDERS_ENV_VAR) {
+            let path_buf = PathBuf::from(override_path);
+            return Some(dunce::canonicalize(path_buf).ok()?);
+        }
         Some(dunce::canonicalize(homedir::my_home().ok()??.join(SAVE_DIR).join(IR_SAVE_PATH)).ok()?)
     }
 
