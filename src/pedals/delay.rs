@@ -147,8 +147,8 @@ impl PedalTrait for Delay {
             Self::eq_from_warmth(self.parameters.get("Warmth").unwrap().value.as_float().unwrap(), sample_rate as f32)
         );
         self.sample_rate = Some(sample_rate as f32);
-        let delay_ten_ms = self.parameters.get("Delay").unwrap().value.as_float().unwrap();
-        let delay_samples = ((delay_ten_ms / 100.0) * sample_rate as f32) as usize;
+        let delay_ms = self.parameters.get("Delay").unwrap().value.as_float().unwrap();
+        let delay_samples = ((delay_ms / 1000.0) * sample_rate as f32) as usize;
         self.delay_buffer = Some(
             VecDeque::from_iter(iter::repeat(0.0).take(delay_samples))
         );
