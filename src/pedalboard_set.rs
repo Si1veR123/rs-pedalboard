@@ -1,4 +1,4 @@
-use crate::pedalboard::Pedalboard;
+use crate::{pedalboard::Pedalboard, pedals::PedalTrait};
 use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -57,6 +57,11 @@ impl PedalboardSet {
 
     pub fn set_active_pedalboard(&mut self, index: usize) {
         if index < self.pedalboards.len() {
+            let current_pedalboard = &mut self.pedalboards[self.active_pedalboard];
+            for pedal in &mut current_pedalboard.pedals {
+                pedal.reset_buffer();
+            }
+
             self.active_pedalboard = index;
         } else {
             tracing::error!("Pedalboard index out of bounds");
