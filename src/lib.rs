@@ -34,8 +34,9 @@ pub fn forward_slash_path<P: AsRef<Path>>(path: P) -> PathBuf {
     PathBuf::from(s.replace('\\', "/"))
 }
 
-use tracing_subscriber::fmt::format::Writer;
-use tracing_subscriber::fmt::time::FormatTime;
+use tracing_subscriber::{fmt::{format::Writer, time::FormatTime, self}, filter::EnvFilter, prelude::*};
+use std::io;
+use std::fs::File;
 
 pub struct TimeOnlyFormat;
 impl FormatTime for TimeOnlyFormat {
@@ -43,4 +44,34 @@ impl FormatTime for TimeOnlyFormat {
         let now = chrono::Local::now();
         write!(w, "{}", now.format("%H:%M:%S"))
     }
+}
+
+pub fn init_tracing(file_path: &str) {
+    // Console layer
+    let console_filter_layer = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("info"));
+
+    let stdout_layer = fmt::layer()
+        .with_writer(io::stdout)
+        .with_target(false)
+        .with_timer(TimeOnlyFormat)
+        .with_filter(console_filter_layer);
+
+    // File layer
+    let file_filter_layer = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("debug"));
+
+    let file = File::create(file_path)
+        .expect("Failed to create log file");
+    let file_layer = fmt::layer()
+        .with_writer(file)
+        .with_thread_names(true)
+        .with_ansi(false)
+        .with_target(true)
+        .with_filter(file_filter_layer);
+
+    tracing_subscriber::registry()
+        .with(stdout_layer)
+        .with(file_layer)
+        .init();
 }

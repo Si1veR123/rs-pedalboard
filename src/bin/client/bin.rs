@@ -20,13 +20,14 @@ mod midi;
 use egui_keyboard::{Keyboard, layouts::KeyboardLayout};
 
 use eframe::egui::{self, include_image, Button, Color32, FontId, Id, ImageButton, RichText, Vec2, FontFamily};
-use rs_pedalboard::SAVE_DIR;
-use std::{sync::Arc, time::Instant, io, fs::File};
-use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, filter::EnvFilter, Layer};
+use rs_pedalboard::{SAVE_DIR, init_tracing};
+use std::{sync::Arc, time::Instant};
 
 const PROCESSOR_PORT: u16 = 29475;
 const WINDOW_HEIGHT: f32 = 1080.0;
 const WINDOW_WIDTH: f32 = 1920.0;
+
+const LOG_FILE: &str = "pedalboard-client.log";
 
 pub const THEME_COLOR: egui::Color32 = egui::Color32::from_rgb(255, 105, 46);
 pub const FAINT_THEME_COLOR_ALPHA: f32 = 0.5;
@@ -102,35 +103,6 @@ fn setup_custom_fonts(ctx: &egui::Context) {
     ctx.set_fonts(fonts);
 }
 
-pub fn init_tracing() {
-    // Console layer
-    let console_filter_layer = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info"));
-
-    let stdout_layer = fmt::layer()
-        .with_writer(io::stdout)
-        .with_timer(rs_pedalboard::TimeOnlyFormat)
-        .with_target(false)
-        .with_filter(console_filter_layer);
-
-    // File layer
-    let file_filter_layer = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("debug"));
-
-    let file = File::create("pedalboard-client.log")
-        .expect("Failed to create log file");
-    let file_layer = fmt::layer()
-        .with_writer(file)
-        .with_ansi(false)
-        .with_target(true)
-        .with_filter(file_filter_layer);
-
-    tracing_subscriber::registry()
-        .with(stdout_layer)
-        .with(file_layer)
-        .init();
-}
-
 pub fn init_panic_logging() {
     let default_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
@@ -140,7 +112,7 @@ pub fn init_panic_logging() {
 }
 
 fn main() {
-    init_tracing();
+    init_tracing(LOG_FILE);
     tracing::info!("Started logging...");
     init_panic_logging();
 
