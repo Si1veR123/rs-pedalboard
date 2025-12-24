@@ -4,7 +4,9 @@ use rubato::{Resampler, SincFixedIn, SincInterpolationParameters};
 use std::{path::Path, sync::Arc};
 
 pub fn load_wav<P: AsRef<Path>>(wav_path: P, sample_rate: f32, normalise: bool) -> Result<Vec<Vec<f32>>, String> {
-    let mut reader = hound::WavReader::open(wav_path).unwrap();
+    let mut reader = hound::WavReader::open(wav_path.as_ref()).map_err(
+        |e| format!("Failed to open WAV file '{}': {}", wav_path.as_ref().display(), e)
+    )?;
     
     let spec = reader.spec();
     if spec.bits_per_sample > 32 {
