@@ -110,7 +110,7 @@ impl Overdrive {
     }
 
     pub fn diode_soft_clip(x: f32, knee: f32) -> f32 {
-        x / (1.0 + (x / knee).powi(2)).sqrt()
+        x / (knee * (1.0 + (x / knee).powi(2)).sqrt())
     }
 
     pub fn pre_clip_eq(sample_rate: f32) -> eq::Equalizer {

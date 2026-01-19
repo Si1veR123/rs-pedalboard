@@ -25,41 +25,10 @@ use settings::{ProcessorSettings, ProcessorArguments};
 
 use cpal::traits::StreamTrait;
 use smol::channel::bounded;
-use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Layer, filter::EnvFilter};
 use clap::Parser;
-use std::{fs::File, io};
+use rs_pedalboard::init_tracing;
 
 const LOG_FILE: &str = "pedalboard-processor.log";
-
-pub fn init_tracing() {
-    // Console layer
-    let console_filter_layer = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info"));
-
-    let stdout_layer = fmt::layer()
-        .with_writer(io::stdout)
-        .with_target(false)
-        .with_timer(rs_pedalboard::TimeOnlyFormat)
-        .with_filter(console_filter_layer);
-
-    // File layer
-    let file_filter_layer = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("debug"));
-
-    let file = File::create(LOG_FILE)
-        .expect("Failed to create log file");
-    let file_layer = fmt::layer()
-        .with_writer(file)
-        .with_thread_names(true)
-        .with_ansi(false)
-        .with_target(true)
-        .with_filter(file_filter_layer);
-
-    tracing_subscriber::registry()
-        .with(stdout_layer)
-        .with(file_layer)
-        .init();
-}
 
 pub fn init_panic_logging() {
     let default_hook = std::panic::take_hook();
@@ -70,7 +39,7 @@ pub fn init_panic_logging() {
 }
 
 fn main() {
-    init_tracing();
+    init_tracing(LOG_FILE);
     tracing::info!("Started logging...");
     init_panic_logging();
 
