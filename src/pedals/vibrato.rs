@@ -154,6 +154,28 @@ impl PedalTrait for Vibrato {
         &mut self.parameters
     }
 
+    fn set_parameter_value(&mut self,name: &str,value:PedalParameterValue) {
+        let parameters = self.get_parameters_mut();
+        if let Some(parameter) = parameters.get_mut(name) {
+            if !parameter.is_valid(&value) {
+                tracing::warn!("Attempted to set invalid value for parameter {}: {:?}", name, value);
+                return;
+            }
+
+            parameter.value = value;
+            if (name == "Depth") {
+                let depth_ms = parameter.value.as_float().unwrap();
+                if let Some(osc) = parameters.get_mut("Oscillator") {
+                    let sample_rate = osc.value.as_oscillator().unwrap().get_sample_rate();
+                    if let Some(delay_line) = &mut self.delay_line {
+                        let max_delay_samples = (sample_rate as f32 * depth_ms / 1000.0).ceil() as usize;
+                        delay_line.buffer.resize(max_delay_samples, 0.0);
+                    }
+                }
+            }
+        }
+    }
+
     fn ui(&mut self, ui: &mut egui::Ui, _message_buffer: &[String]) -> Option<(String, PedalParameterValue)> {
         ui.add(egui::Image::new(include_image!("images/vibrato.png")));
 
