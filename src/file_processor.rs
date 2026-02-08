@@ -26,7 +26,7 @@ fn save_wav<P: AsRef<std::path::Path>>(wav_path: P, buffer: &[f32], sample_rate:
     Ok(())
 }
 
-pub fn process_audio_file(src_path: &std::path::Path, to_path: &std::path::Path, pedalboard: &mut Pedalboard, sample_rate: f32, normalise: bool) -> Result<f32, String> {
+pub fn process_audio_file(src_path: &std::path::Path, pedalboard: &mut Pedalboard, sample_rate: f32, normalise: bool) -> Result<Vec<f32>, String> {
     let mut pedal_command_to_client_buffer: Vec<String> = Vec::new();
 
     for pedal in &mut pedalboard.pedals {
@@ -71,10 +71,16 @@ pub fn process_audio_file(src_path: &std::path::Path, to_path: &std::path::Path,
         }
     }
 
+    Ok(processing_buffer)
+}
+
+pub fn process_audio_file_and_save(src_path: &std::path::Path, to_path: &std::path::Path, pedalboard: &mut Pedalboard, sample_rate: f32, normalise: bool) -> Result<(), String> {
+    let buffer = process_audio_file(src_path, pedalboard, sample_rate, normalise)?;
+
     // Save processed buffer to output file
-    if let Err(e) = save_wav(to_path, &processing_buffer, sample_rate) {
+    if let Err(e) = save_wav(to_path, &buffer, sample_rate) {
         return Err(e);
     }
 
-    Ok(peak_level)
+    Ok(())
 }

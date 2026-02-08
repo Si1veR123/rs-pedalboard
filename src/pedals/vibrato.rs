@@ -163,7 +163,7 @@ impl PedalTrait for Vibrato {
             }
 
             parameter.value = value;
-            if (name == "Depth") {
+            if name == "Depth" {
                 let depth_ms = parameter.value.as_float().unwrap();
                 if let Some(osc) = parameters.get_mut("Oscillator") {
                     let sample_rate = osc.value.as_oscillator().unwrap().get_sample_rate();
