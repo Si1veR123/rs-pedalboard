@@ -26,6 +26,31 @@ fn save_wav<P: AsRef<std::path::Path>>(wav_path: P, buffer: &[f32], sample_rate:
     Ok(())
 }
 
+pub fn process_audio(audio: &mut [f32], pedalboard: &mut Pedalboard, sample_rate: f32, normalise: bool) {
+    let mut pedal_command_to_client_buffer: Vec<String> = Vec::new();
+
+    for pedal in &mut pedalboard.pedals {
+        pedal.set_config(PROCESSING_BUFFER_SIZE, sample_rate as u32);
+    }
+
+    for i in 0..(audio.len() as f32 / PROCESSING_BUFFER_SIZE as f32).ceil() as usize {
+        let start = i * PROCESSING_BUFFER_SIZE;
+        let mut end = start + PROCESSING_BUFFER_SIZE;
+        end = end.min(audio.len());
+        let frame = &mut audio[start..end];
+        pedalboard.process_audio(frame, &mut pedal_command_to_client_buffer);
+    }
+
+    let peak_level = audio.iter().cloned().fold(f32::MIN, f32::max).abs();
+
+    if normalise && peak_level > 0.0 {
+        let normalisation_factor = 1.0 / peak_level;
+        for sample in audio {
+            *sample *= normalisation_factor;
+        }
+    }
+}
+
 pub fn process_audio_file(src_path: &std::path::Path, pedalboard: &mut Pedalboard, sample_rate: f32, normalise: bool) -> Result<Vec<f32>, String> {
     let mut pedal_command_to_client_buffer: Vec<String> = Vec::new();
 
@@ -54,22 +79,7 @@ pub fn process_audio_file(src_path: &std::path::Path, pedalboard: &mut Pedalboar
         }
     };
 
-    for i in 0..(processing_buffer.len() as f32 / PROCESSING_BUFFER_SIZE as f32).ceil() as usize {
-        let start = i * PROCESSING_BUFFER_SIZE;
-        let mut end = start + PROCESSING_BUFFER_SIZE;
-        end = end.min(processing_buffer.len());
-        let frame = &mut processing_buffer[start..end];
-        pedalboard.process_audio(frame, &mut pedal_command_to_client_buffer);
-    }
-
-    let peak_level = processing_buffer.iter().cloned().fold(f32::MIN, f32::max).abs();
-
-    if normalise && peak_level > 0.0 {
-        let normalisation_factor = 1.0 / peak_level;
-        for sample in &mut processing_buffer {
-            *sample *= normalisation_factor;
-        }
-    }
+    process_audio(&mut processing_buffer, pedalboard, sample_rate, normalise);
 
     Ok(processing_buffer)
 }
