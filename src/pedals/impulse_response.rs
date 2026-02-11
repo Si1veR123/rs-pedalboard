@@ -3,9 +3,10 @@ use std::collections::HashMap;
 use std::hash::Hash;
 use std::sync::Arc;
 
-use crate::dsp_algorithms::impluse_response::{IRConvolver, load_wav};
+use crate::dsp_algorithms::impluse_response::IRConvolver;
 use crate::pedals::ui::{pedal_switch, sideways_arrow};
 use crate::pedals::ParameterUILocation;
+use crate::processor_api::load_wav;
 use crate::{forward_slash_path, unique_time_id, SAVE_DIR};
 use egui_directory_combobox::{DirectoryComboBox, DirectoryNode};
 use serde::{ser::SerializeMap, Deserialize, Serialize};
