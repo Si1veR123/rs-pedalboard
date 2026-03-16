@@ -13,8 +13,12 @@ use crate::pedals::ui::{pedal_switch, sideways_arrow};
 use crate::pedals::ParameterUILocation;
 use crate::{forward_slash_path, unique_time_id, SAVE_DIR};
 
-const NAM_SAVE_PATH: &str = r"NAM";
-const OVERRIDE_DEFAULT_FOLDERS_ENV_VAR: &str = "RSPEDALBOARD_NAM_FOLDER";
+pub const NAM_SAVE_PATH: &str = r"NAM";
+pub const OVERRIDE_DEFAULT_FOLDERS_ENV_VAR: &str = "RSPEDALBOARD_NAM_FOLDER";
+
+pub fn set_nam_save_path(new_path: &str) {
+    std::env::set_var(OVERRIDE_DEFAULT_FOLDERS_ENV_VAR, new_path);
+}
 
 pub struct Nam {
     modeler: NeuralAmpModeler,

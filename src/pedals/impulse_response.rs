@@ -14,8 +14,12 @@ use eframe::egui::{self, include_image, Vec2};
 
 use super::{ui::pedal_knob, PedalParameter, PedalParameterValue, PedalTrait};
 
-const IR_SAVE_PATH: &str = r"IR";
-const OVERRIDE_DEFAULT_FOLDERS_ENV_VAR: &str = "RSPEDALBOARD_IR_FOLDER";
+pub const IR_SAVE_PATH: &str = r"IR";
+pub const OVERRIDE_DEFAULT_FOLDERS_ENV_VAR: &str = "RSPEDALBOARD_IR_FOLDER";
+
+pub fn set_ir_save_path(new_path: &str) {
+    std::env::set_var(OVERRIDE_DEFAULT_FOLDERS_ENV_VAR, new_path);
+}
 
 #[derive(Clone)]
 pub struct ImpulseResponse {
