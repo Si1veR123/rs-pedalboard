@@ -71,7 +71,7 @@ impl Serialize for Vst2 {
 
         let mut ser_map = serializer.serialize_map(Some(2))?;
         ser_map.serialize_entry("id", &self.id)?;
-        ser_map.serialize_entry("parameters", &parameters_with_idx)?;
+        ser_map.serialize_entry("parameters_with_idx", &parameters_with_idx)?;
         ser_map.end()
     }
 }

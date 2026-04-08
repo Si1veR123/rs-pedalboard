@@ -143,6 +143,11 @@ impl Vst2Instance {
         assert!(self.is_configured(), "VST instance must be configured with sample rate and buffer size before processing");
         assert!(input.len() <= self.buffer_size, "Input buffer length must not exceed configured buffer size");
 
+        output.fill(0.0);
+        for out_buf in &mut self.out_buffers {
+            out_buf[..input.len()].fill(0.0);
+        }
+
         for in_buf in &mut self.in_buffer_ptrs {
             // SAFETY: input.len() <= self.buffer_size, and the buffer was allocated with this size in set_config.
             // All pointers in in_buffer_ptrs point to valid buffers in in_buffers

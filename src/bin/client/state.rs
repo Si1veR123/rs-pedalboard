@@ -426,13 +426,16 @@ impl State {
     }
 
     pub fn load_state(egui_ctx: eframe::egui::Context) -> Self {
+        tracing::debug!("State::load_state: loading saved pedalboards");
         let pedalboards = SavedPedalboards::load_or_default();
         let active_pedalboard = pedalboards.active_pedalboardstage.borrow();
         let active_pedalboard_index = active_pedalboard.active_pedalboard;
         let active_pedalboard_id = active_pedalboard.pedalboards[active_pedalboard_index].get_id();
         drop(active_pedalboard);
 
+        tracing::debug!("State::load_state: creating client socket");
         let socket = ClientSocket::new(crate::PROCESSOR_PORT);
+        tracing::debug!("State::load_state: loading client settings");
         let client_settings = ClientSettings::load_or_default();
 
         // Set NAM folders, IR folders and VST2 in ctx memory so pedals can access
@@ -458,10 +461,13 @@ impl State {
             writer.data.insert_temp(egui::Id::new("vst2_folders"), vst2_root_nodes);
         });
 
+        tracing::debug!("State::load_state: loading processor settings");
         let processor_settings = ProcessorSettingsSave::load_or_default();
+        tracing::debug!("State::load_state: loading midi settings");
         let midi_settings = MidiSettings::load_or_default();
         let (midi_command_sender, midi_command_receiver) = crossbeam::channel::unbounded();
 
+        tracing::debug!("State::load_state: creating midi state");
         let midi_state = MidiState::new(
             midi_settings.clone(),
             egui_ctx.clone(),
@@ -470,6 +476,7 @@ impl State {
             active_pedalboard_id
         );
 
+        tracing::debug!("State::load_state: completed");
         State {
             pedalboards,
             socket: RefCell::new(socket),

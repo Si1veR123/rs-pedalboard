@@ -70,11 +70,17 @@ pub fn load_wav<P: AsRef<Path>>(wav_path: P, sample_rate: f32, normalise: bool) 
 
         if normalise {
             // Normalize WAV by RMS
-            let rms = resampled_channels
+            let sample_count = resampled_channels
+                .iter()
+                .map(|ch| ch.len())
+                .sum::<usize>();
+
+            let rms = (resampled_channels
                 .iter()
                 .flat_map(|ch| ch.iter())
                 .map(|&x| x * x)
                 .sum::<f32>()
+                / sample_count.max(1) as f32)
                 .sqrt();
 
             if rms > 1e-12 {
@@ -127,7 +133,7 @@ pub fn process_audio(audio: &mut [f32], pedalboard: &mut Pedalboard, sample_rate
         pedalboard.process_audio(frame, &mut pedal_command_to_client_buffer);
     }
 
-    let peak_level = audio.iter().cloned().fold(f32::MIN, f32::max).abs();
+    let peak_level = audio.iter().map(|sample| sample.abs()).fold(0.0, f32::max);
 
     if normalise && peak_level > 0.0 {
         let normalisation_factor = 1.0 / peak_level;

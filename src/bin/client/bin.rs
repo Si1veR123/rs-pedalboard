@@ -20,7 +20,7 @@ mod midi;
 use egui_keyboard::{Keyboard, layouts::KeyboardLayout};
 
 use eframe::egui::{self, include_image, Button, Color32, FontId, Id, ImageButton, RichText, Vec2, FontFamily};
-use rs_pedalboard::{SAVE_DIR, init_tracing};
+use rs_pedalboard::{init_tracing, SAVE_DIR};
 use std::{sync::Arc, time::Instant};
 
 const PROCESSOR_PORT: u16 = 29475;
@@ -118,11 +118,12 @@ fn main() {
 
     let mut native_options = eframe::NativeOptions::default();
     native_options.persist_window = false;
-    native_options.persistence_path = homedir::my_home().map(|d| d.unwrap().join(SAVE_DIR).join("egui_persistence")).ok();
+    native_options.persistence_path = None;
     native_options.viewport = native_options.viewport.with_inner_size((WINDOW_WIDTH, WINDOW_HEIGHT)).with_maximized(true).with_maximize_button(true);
 
     eframe::run_native("Pedalboard", native_options, Box::new(
         |cc| {
+            tracing::debug!("Client init stage: style setup");
             cc.egui_ctx.style_mut(|style| {
                 style.visuals.extreme_bg_color = EXTREME_BACKGROUND_COLOR.into();
                 style.visuals.panel_fill = BACKGROUND_COLOR.into();
@@ -140,8 +141,11 @@ fn main() {
                 style.visuals.widgets.inactive.bg_stroke = (1.0, INACTIVE_BG_STROKE_COLOR).into();
                 style.visuals.widgets.active.bg_stroke = (1.0, THEME_COLOR).into();
             });
+            tracing::debug!("Client init stage: install image loaders");
             egui_extras::install_image_loaders(&cc.egui_ctx);
+            tracing::debug!("Client init stage: setup custom fonts");
             setup_custom_fonts(&cc.egui_ctx);
+            tracing::debug!("Client init stage: construct app state");
             Ok(Box::new(PedalboardClientApp::new(cc)))
         }
     )).expect("Failed to run app");
@@ -171,10 +175,15 @@ pub struct PedalboardClientApp {
 
 impl PedalboardClientApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        tracing::debug!("PedalboardClientApp::new: load_state start");
         let loaded_state = State::load_state(cc.egui_ctx.clone());
+        tracing::debug!("PedalboardClientApp::new: load_state done");
         let leaked_state = Box::leak(Box::new(loaded_state));
+        tracing::debug!("PedalboardClientApp::new: connect_to_processor start");
         let _ = leaked_state.connect_to_processor();
+        tracing::debug!("PedalboardClientApp::new: connect_to_processor done");
 
+        tracing::debug!("PedalboardClientApp::new: settings screen init");
         let mut settings_screen = SettingsScreen::new(leaked_state);
 
         let no_processor_start_arg = std::env::args().any(|arg| arg == "--no-processor");
@@ -202,7 +211,9 @@ impl PedalboardClientApp {
 
         // Linux (JACK) requires jack processor to be running before connecting MIDI ports
         // This is started by the processor app
+        tracing::debug!("PedalboardClientApp::new: auto-connect MIDI ports");
         leaked_state.midi_state.borrow_mut().connect_to_auto_connect_ports();
+        tracing::debug!("PedalboardClientApp::new: completed");
 
         PedalboardClientApp {
             pedalboard_stage_screen: PedalboardStageScreen::new(leaked_state),

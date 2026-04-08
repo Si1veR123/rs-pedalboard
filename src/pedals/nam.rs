@@ -49,8 +49,10 @@ impl Clone for Nam {
             id: self.id
         };
 
-        if let Some(model_path) = self.modeler.get_model_path() {
-            new_nam.set_model(model_path.to_path_buf());
+        if cfg!(feature = "processor") {
+            if let Some(model_path) = self.modeler.get_model_path() {
+                new_nam.set_model(model_path.to_path_buf());
+            }
         }
         new_nam
     }
@@ -102,9 +104,12 @@ impl<'a> Deserialize<'a> for Nam {
         let parameters = helper.parameters;
         let model = parameters.get("Model").unwrap().value.as_str().unwrap();
 
-        // If model is a relative path, make it absolute based on the save directory
+        // If model is a relative path, make it absolute based on the save directory.
+        // Keep empty path empty (no model selected).
         let model_path = PathBuf::from(model);
-        let model = if model_path.is_relative() {
+        let model = if model_path.as_os_str().is_empty() {
+            PathBuf::new()
+        } else if model_path.is_relative() {
             if let Some(save_dir) = Self::get_save_directory() {
                 save_dir.join(model_path)
             } else {
@@ -129,7 +134,11 @@ impl<'a> Deserialize<'a> for Nam {
             id: helper.id
         };
 
-        pedal.set_model(model);
+        if cfg!(feature = "processor") {
+            pedal.set_model(model);
+        } else if !model.as_os_str().is_empty() {
+            pedal.parameters.get_mut("Model").unwrap().value = PedalParameterValue::String(model.to_string_lossy().to_string());
+        }
         
         Ok(pedal)
     }
@@ -395,15 +404,21 @@ impl PedalTrait for Nam {
     }
 
     fn set_config(&mut self, buffer_size: usize, sample_rate: u32) {
-        self.modeler.set_maximum_buffer_size(buffer_size);
-        let expected_sample_rate = self.modeler.expected_sample_rate() as u32;
-        if expected_sample_rate != 0 && expected_sample_rate != sample_rate {
-            tracing::warn!("NeuralAmpModeler expected sample rate {} does not match provided sample rate {}", self.modeler.expected_sample_rate(), sample_rate);
+        if self.modeler.get_model_path().is_some() {
+            self.modeler.set_maximum_buffer_size(buffer_size);
+            let expected_sample_rate = self.modeler.expected_sample_rate() as u32;
+            if expected_sample_rate != 0 && expected_sample_rate != sample_rate {
+                tracing::warn!("NeuralAmpModeler expected sample rate {} does not match provided sample rate {}", self.modeler.expected_sample_rate(), sample_rate);
+            }
         }
         self.dry_buffer.resize(buffer_size, 0.0);
     }
 
     fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
+        if self.modeler.get_model_path().is_none() {
+            return;
+        }
+
         let gain = self.parameters.get("Gain").unwrap().value.as_float().unwrap();
         let dry_wet = self.parameters.get("Dry/Wet").unwrap().value.as_float().unwrap();
         let level = self.parameters.get("Level").unwrap().value.as_float().unwrap();
@@ -423,7 +438,9 @@ impl PedalTrait for Nam {
     }
 
     fn reset_buffer(&mut self) {
-        self.modeler.reset_and_prewarm_model(self.modeler.expected_sample_rate(), self.modeler.get_maximum_buffer_size());
+        if self.modeler.get_model_path().is_some() {
+            self.modeler.reset_and_prewarm_model(self.modeler.expected_sample_rate(), self.modeler.get_maximum_buffer_size());
+        }
     }
 
     fn get_parameters(&self) -> &HashMap<String, PedalParameter> {
@@ -435,7 +452,12 @@ impl PedalTrait for Nam {
     }
 
     fn set_parameter_value(&mut self,name: &str, value: PedalParameterValue) {
-        if !self.parameters.get(name).unwrap().is_valid(&value) {
+        let Some(existing_param) = self.parameters.get(name) else {
+            tracing::error!("Parameter {} not found", name);
+            return;
+        };
+
+        if !existing_param.is_valid(&value) {
             tracing::warn!("Attempted to set invalid value for parameter {}: {:?}", name, value);
             return;
         }
@@ -443,6 +465,16 @@ impl PedalTrait for Nam {
         if let Some(param) = self.parameters.get_mut(name) {
             if name == "Model" {
                 let value_str = value.as_str().unwrap();
+
+                if !cfg!(feature = "processor") {
+                    param.value = PedalParameterValue::String(value_str.to_string());
+                    if value_str.is_empty() {
+                        self.combobox_widget.set_selection::<&str>(None);
+                    } else {
+                        self.combobox_widget.set_selection(Some(value_str));
+                    }
+                    return;
+                }
 
                 if value_str.is_empty() {
                     self.remove_model();

@@ -51,7 +51,7 @@ impl Fuzz {
             PedalParameter {
                 value: PedalParameterValue::Int(0),
                 min: Some(PedalParameterValue::Int(0)),
-                max: Some(PedalParameterValue::Int(4)),
+                max: Some(PedalParameterValue::Int(3)),
                 step: None
             },
         );
@@ -107,16 +107,6 @@ impl PedalTrait for Fuzz {
                 2 => x / (1.0 + x.abs()),
                 // 3: atan - smooth, tube-like but a bit brighter than tanh
                 3 => (2.0 / std::f32::consts::PI) * x.atan(),
-                // 4: Square (sign)
-                4 => {
-                    if x > 0.0 {
-                        1.0
-                    } else if x < 0.0 {
-                        -1.0
-                    } else {
-                        0.0
-                    }
-                },
                 _ => {
                     tracing::warn!("Fuzz: Unknown fuzz type {}.", fuzz_type);
                     x
