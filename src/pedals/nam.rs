@@ -219,7 +219,7 @@ impl Nam {
         let roots = match Self::get_save_directory() {
             Some(main_save_dir) => vec![DirectoryNode::from_path(&main_save_dir)],
             None => {
-                tracing::warn!("Failed to get main save directory");
+                tracing::warn!("Failed to get NAM save directory");
                 vec![]
             }
         };
@@ -283,7 +283,7 @@ impl Nam {
 
     pub fn get_save_directory() -> Option<PathBuf> {
         if let Some(override_path) = std::env::var_os(OVERRIDE_DEFAULT_FOLDERS_ENV_VAR) {
-            tracing::debug!("Using overridden IR save directory from env var {}: {:?}", OVERRIDE_DEFAULT_FOLDERS_ENV_VAR, override_path);
+            tracing::debug!("Using overridden NAM save directory from env var {}: {:?}", OVERRIDE_DEFAULT_FOLDERS_ENV_VAR, override_path);
             let path_buf = PathBuf::from(override_path);
             return Some(dunce::canonicalize(path_buf).ok()?);
         }

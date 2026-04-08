@@ -28,6 +28,7 @@ mod noise_gate;
 pub use noise_gate::NoiseGate;
 mod vst2;
 pub use vst2::Vst2;
+pub use vst2::set_vst2_save_path;
 mod reverb;
 pub use reverb::Reverb;
 mod vibrato;

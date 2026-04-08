@@ -178,18 +178,12 @@ impl ImpulseResponse {
         );
 
         let id = unique_time_id();
-        let mut combobox_widget = Self::get_empty_directory_combo_box(id);
-        if let Some(main_save_dir) = Self::get_save_directory() {
-            combobox_widget.roots.push(DirectoryNode::from_path(&main_save_dir));
-        } else {
-            tracing::warn!("Failed to get main save directory");
-        }
 
         Self {
             ir: None,
             parameters,
             dry_buffer: Vec::new(),
-            combobox_widget,
+            combobox_widget: Self::get_empty_directory_combo_box(id),
             midi_min_combobox_widget: Self::get_empty_directory_combo_box(egui::Id::new(id).with("midi_min")),
             midi_max_combobox_widget: Self::get_empty_directory_combo_box(egui::Id::new(id).with("midi_max")),
             folders_state: 0,
@@ -209,7 +203,7 @@ impl ImpulseResponse {
         let roots = match Self::get_save_directory() {
             Some(main_save_dir) => vec![DirectoryNode::from_path(&main_save_dir)],
             None => {
-                tracing::warn!("Failed to get main save directory");
+                tracing::warn!("Failed to get IR save directory");
                 vec![]
             }
         };

@@ -27,20 +27,6 @@ pub fn path_from_name(name: &str) -> Option<PathBuf> {
     }
 }
 
-pub fn available_plugins() -> Vec<String> {
-    let mut plugins = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(VST2_PLUGIN_PATH) {
-        for entry in entries.flatten() {
-            if let Some(name) = entry.path().file_name().and_then(|n| n.to_str()) {
-                if name.ends_with(".dll") {
-                    plugins.push(name.to_string());
-                }
-            }
-        }
-    }
-    plugins
-}
-
 struct PedalboardVst2Host;
 impl Host for PedalboardVst2Host {
     fn automate(&mut self, _index: i32, _value: f32) {

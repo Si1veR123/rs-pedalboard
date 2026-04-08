@@ -21,6 +21,12 @@ use serde::ser::SerializeMap;
 use serde::{Serialize, Deserialize};
 use egui_directory_combobox::{DirectoryComboBox, DirectoryNode};
 
+pub const OVERRIDE_DEFAULT_FOLDERS_ENV_VAR: &str = "RSPEDALBOARD_VST2_FOLDER";
+
+pub fn set_vst2_save_path(new_path: &str) {
+    std::env::set_var(OVERRIDE_DEFAULT_FOLDERS_ENV_VAR, new_path);
+}
+
 #[derive(Clone)]
 pub struct Vst2 {
     instance: Option<Vst2Instance>,
@@ -218,13 +224,23 @@ impl Vst2 {
         cloned
     }
 
+    pub fn get_save_directory() -> Option<PathBuf> {
+        if let Some(override_path) = std::env::var_os(OVERRIDE_DEFAULT_FOLDERS_ENV_VAR) {
+            tracing::debug!("Using overridden VST2 save directory from env var {}: {:?}", OVERRIDE_DEFAULT_FOLDERS_ENV_VAR, override_path);
+            let path_buf = PathBuf::from(override_path);
+            return Some(dunce::canonicalize(path_buf).ok()?);
+        }
+        Some(VST2_PLUGIN_PATH.into())
+    }
+
     fn get_empty_directory_combo_box(id: impl std::hash::Hash) -> DirectoryComboBox {
-        let roots = DirectoryNode::try_from_path(VST2_PLUGIN_PATH)
-            .map(|node| vec![node])
-            .unwrap_or_else(|| {
-                tracing::warn!("Failed to get default VST2 save directory: {}", VST2_PLUGIN_PATH);
+        let roots = match Self::get_save_directory() {
+            Some(main_save_dir) => vec![DirectoryNode::from_path(&main_save_dir)],
+            None => {
+                tracing::warn!("Failed to get main save directory");
                 vec![]
-            });
+            }
+        };
 
         DirectoryComboBox::new_from_nodes(roots)
             .with_id(egui::Id::new("vst2_combobox").with(id))
