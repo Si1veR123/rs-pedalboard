@@ -138,11 +138,7 @@ impl<'a> Deserialize<'a> for Nam {
             id: helper.id
         };
 
-        if cfg!(feature = "processor") {
-            pedal.set_model(model);
-        } else if !model.as_os_str().is_empty() {
-            pedal.parameters.get_mut("Model").unwrap().value = PedalParameterValue::String(model.to_string_lossy().to_string());
-        }
+        pedal.set_model(model);
         
         Ok(pedal)
     }
