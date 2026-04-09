@@ -56,11 +56,15 @@ impl Serialize for ImpulseResponse {
         // If the IR path is in the pedalboard IR directory, store it as a relative path
         if let Some(ir_path) = self.parameters.get("IR").and_then(|p| p.value.as_str()) {
             if let Some(save_dir) = Self::get_save_directory() {
-                if let Ok(relative_path) = PathBuf::from(ir_path).strip_prefix(&save_dir) {
-                    // Convert relative paths to use forward slashes for cross platform compatibility
-                    // Not used for absolute path as they are not intended to be portable
-                    let relative_path_converted = forward_slash_path(relative_path);
-                    parameters.get_mut("IR").unwrap().value = PedalParameterValue::String(relative_path_converted.to_string_lossy().to_string());
+                if let Ok(canon_ir_path) = dunce::canonicalize(Path::new(ir_path)) {
+                    if let Ok(relative_path) = canon_ir_path.strip_prefix(&save_dir) {
+                        // Convert relative paths to use forward slashes for cross platform compatibility
+                        // Not used for absolute path as they are not intended to be portable
+                        let relative_path_converted = forward_slash_path(relative_path);
+                        parameters.get_mut("IR").unwrap().value = PedalParameterValue::String(relative_path_converted.to_string_lossy().to_string());
+                    }
+                } else {
+                    tracing::warn!("Failed to canonicalize IR path {:?} for serialization", ir_path);
                 }
             }
         }

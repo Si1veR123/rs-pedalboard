@@ -75,11 +75,15 @@ impl Serialize for Nam {
         // If the model path is in the pedalboard NAM directory, store it as a relative path
         if let Some(model_path) = self.parameters.get("Model").and_then(|p| p.value.as_str()).map(PathBuf::from) {
             if let Some(save_dir) = Self::get_save_directory() {
-                if let Ok(relative_path) = model_path.strip_prefix(&save_dir) {
-                    // Convert relative paths to use forward slashes for cross platform compatibility
-                    // Not used for absolute path as they are not intended to be portable
-                    let relative_path_converted = forward_slash_path(relative_path);
-                    parameters.get_mut("Model").unwrap().value = PedalParameterValue::String(relative_path_converted.to_string_lossy().to_string());
+                if let Ok(canon_model_path) = dunce::canonicalize(&model_path) {
+                    if let Ok(relative_path) = canon_model_path.strip_prefix(&save_dir) {
+                        // Convert relative paths to use forward slashes for cross platform compatibility
+                        // Not used for absolute path as they are not intended to be portable
+                        let relative_path_converted = forward_slash_path(relative_path);
+                        parameters.get_mut("Model").unwrap().value = PedalParameterValue::String(relative_path_converted.to_string_lossy().to_string());
+                    }
+                } else {
+                    tracing::warn!("Failed to canonicalize model path {:?} for serialization", model_path);
                 }
             }
         }
