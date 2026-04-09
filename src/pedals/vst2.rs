@@ -347,10 +347,26 @@ impl Vst2 {
     }
 
     pub fn set_plugin<P: AsRef<Path>>(&mut self, plugin_path: P) {
-        let canon_path = match dunce::canonicalize(plugin_path.as_ref()) {
+        let absolute_path;
+        if plugin_path.as_ref().is_relative() {
+            let save_dir = match Self::get_save_directory() {
+                Some(dir) => dir,
+                None => {
+                    tracing::error!("Failed to get save directory for relative plugin path");
+                    self.instance = None;
+                    self.sync_instance_to_parameters();
+                    return;
+                }
+            };
+            absolute_path = save_dir.join(plugin_path);
+        } else {
+            absolute_path = plugin_path.as_ref().to_path_buf();
+        }
+
+        let canon_path = match dunce::canonicalize(&absolute_path) {
             Ok(p) => p,
             Err(e) => {
-                tracing::error!("Failed to canonicalize plugin path {:?}: {}", plugin_path.as_ref(), e);
+                tracing::error!("Failed to canonicalize plugin path {:?}: {}", absolute_path, e);
                 self.instance = None;
                 self.sync_instance_to_parameters();
                 return;
@@ -365,10 +381,10 @@ impl Vst2 {
                 }
                 self.instance = Some(instance);
                 self.sync_instance_to_parameters();
-                self.combobox_widget.set_selection(Some(plugin_path.as_ref()));
+                self.combobox_widget.set_selection(Some(absolute_path));
             },
             Err(_) => {
-                tracing::error!("Failed to load plugin: {}", plugin_path.as_ref().display());
+                tracing::error!("Failed to load plugin: {}", absolute_path.display());
                 self.instance = None;
                 self.sync_instance_to_parameters();
             }
