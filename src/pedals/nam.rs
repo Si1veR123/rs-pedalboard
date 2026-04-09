@@ -138,7 +138,17 @@ impl<'a> Deserialize<'a> for Nam {
             id: helper.id
         };
 
-        pedal.set_model(model);
+        if cfg!(feature = "processor") {
+            pedal.set_model(model);
+        } else {
+            let model_string = model.to_string_lossy().to_string();
+            pedal.parameters.get_mut("Model").unwrap().value = PedalParameterValue::String(model_string.clone());
+            if model_string.is_empty() {
+                pedal.combobox_widget.set_selection::<&str>(None);
+            } else {
+                pedal.combobox_widget.set_selection(Some(model_string));
+            }
+        }
         
         Ok(pedal)
     }
@@ -247,6 +257,17 @@ impl Nam {
                     false
                 }
             }))
+    }
+
+    fn has_loaded_model(&self) -> bool {
+        if cfg!(feature = "processor") {
+            self.modeler.get_model_path().is_some()
+        } else {
+            self.parameters
+                .get("Model")
+                .and_then(|p| p.value.as_str())
+                .is_some_and(|s| !s.is_empty())
+        }
     }
 
 
@@ -404,7 +425,7 @@ impl PedalTrait for Nam {
     }
 
     fn set_config(&mut self, buffer_size: usize, sample_rate: u32) {
-        if self.modeler.get_model_path().is_some() {
+        if self.has_loaded_model() {
             self.modeler.set_maximum_buffer_size(buffer_size);
             let expected_sample_rate = self.modeler.expected_sample_rate() as u32;
             if expected_sample_rate != 0 && expected_sample_rate != sample_rate {
@@ -415,7 +436,7 @@ impl PedalTrait for Nam {
     }
 
     fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
-        if self.modeler.get_model_path().is_none() {
+        if !self.has_loaded_model() {
             return;
         }
 
@@ -438,7 +459,7 @@ impl PedalTrait for Nam {
     }
 
     fn reset_buffer(&mut self) {
-        if self.modeler.get_model_path().is_some() {
+        if self.has_loaded_model() {
             self.modeler.reset_and_prewarm_model(self.modeler.expected_sample_rate(), self.modeler.get_maximum_buffer_size());
         }
     }

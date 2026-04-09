@@ -69,25 +69,16 @@ pub fn load_wav<P: AsRef<Path>>(wav_path: P, sample_rate: f32, normalise: bool) 
         }
 
         if normalise {
-            // Normalize WAV by RMS
-            let sample_count = resampled_channels
-                .iter()
-                .map(|ch| ch.len())
-                .sum::<usize>();
-
-            let rms = (resampled_channels
-                .iter()
+            // Normalize WAV to -1 to 1 range
+            let max_sample = resampled_channels.iter()
                 .flat_map(|ch| ch.iter())
-                .map(|&x| x * x)
-                .sum::<f32>()
-                / sample_count.max(1) as f32)
-                .sqrt();
-
-            if rms > 1e-12 {
-                let scale = 1.0 / rms;
-                for ch in &mut resampled_channels {
-                    for s in ch.iter_mut() {
-                        *s *= scale;
+                .map(|s| s.abs())
+                .fold(0.0_f32, f32::max);
+            if max_sample > 0.0 {
+                let normalisation_factor = 1.0 / max_sample;
+                for channel in &mut resampled_channels {
+                    for sample in channel {
+                        *sample *= normalisation_factor;
                     }
                 }
             }

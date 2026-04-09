@@ -251,7 +251,7 @@ impl ImpulseResponse {
             }
         };
 
-        match load_wav(ir_path.as_ref(), sample_rate, true) {
+        match load_wav(ir_path.as_ref(), sample_rate, false) {
             Ok(ir) => {
                 self.ir = Some(IRConvolver::new(ir.first().expect("IR has no channels").as_slice(), self.max_buffer_size));
 

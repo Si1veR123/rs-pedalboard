@@ -25,11 +25,23 @@ impl IRConvolver {
         let fft = planner.plan_fft_forward(fft_size);
         let ifft = planner.plan_fft_inverse(fft_size);
 
-        // Pre-transform IR
+        // Find maximum gain in frequency response of IR for normalisation
         let mut ir_padded = vec![0.0f32; fft_size];
         ir_padded[..ir.len()].copy_from_slice(ir);
         let mut ir_freq = fft.make_output_vec();
         fft.process(&mut ir_padded, &mut ir_freq).unwrap();
+
+        let max_freq_gain = ir_freq
+            .iter()
+            .map(|bin| bin.norm())
+            .fold(0.0_f32, f32::max);
+
+        if max_freq_gain > 1.0 + 1e-6 {
+            let scale = 1.0 / max_freq_gain;
+            for bin in &mut ir_freq {
+                *bin *= scale;
+            }
+        }
 
         IRConvolver {
             fft_size,

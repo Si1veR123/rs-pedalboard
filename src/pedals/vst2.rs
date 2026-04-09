@@ -541,6 +541,8 @@ impl PedalTrait for Vst2 {
                     }
                 }
             }
+        } else {
+            tracing::warn!("Parameter {} not found", name);
         }
     }
 
