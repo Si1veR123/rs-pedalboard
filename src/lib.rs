@@ -19,6 +19,10 @@ pub const DEFAULT_VOLUME_MONITOR_UPDATE_RATE: Duration = Duration::from_millis(1
 // For pedals such as EQ/Compressor, or when volume monitors are active, how often to update the UI
 pub const DEFAULT_REFRESH_DURATION: Duration = Duration::from_millis(33); // 30 FPS
 
+pub fn set_use_vst2_global_host(use_global_host: bool) {
+    plugin::vst2::set_use_vst2_global_host(use_global_host);
+}
+
 pub fn unique_time_id() -> u32 {
     let now = SystemTime::now();
     let duration = now.duration_since(UNIX_EPOCH).unwrap();

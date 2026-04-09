@@ -134,6 +134,8 @@ impl<'a> Deserialize<'a> for Vst2 {
                 }
             }
         }
+        let saved_parameters = parameters.clone();
+        let saved_param_index_map = param_index_map.clone();
 
         let id = helper.id;
 
@@ -161,7 +163,9 @@ impl<'a> Deserialize<'a> for Vst2 {
 
             vst_pedal.set_plugin(path);
 
-            // Set the saved parameters on the new instance
+            // Restore saved values then set them on the new instance.
+            vst_pedal.parameters = saved_parameters;
+            vst_pedal.param_index_map = saved_param_index_map;
             vst_pedal.sync_parameters_to_instance();
 
             Ok(vst_pedal)

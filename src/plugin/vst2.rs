@@ -1,4 +1,10 @@
-use std::{path::{Path, PathBuf}, sync::{Arc, Mutex, OnceLock}};
+use std::{
+    path::{Path, PathBuf},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex, OnceLock,
+    },
+};
 
 use crate::{pedals::PedalParameterValue, unique_time_id};
 
@@ -15,6 +21,28 @@ pub const VST2_PLUGIN_PATH: &str = "/Library/Audio/Plug-Ins/VST";
 fn get_global_host() -> Arc<Mutex<PedalboardVst2Host>> {
     static HOST: OnceLock<Arc<Mutex<PedalboardVst2Host>>> = OnceLock::new();
     HOST.get_or_init(|| Arc::new(Mutex::new(PedalboardVst2Host))).clone()
+}
+
+fn create_host() -> Arc<Mutex<PedalboardVst2Host>> {
+    Arc::new(Mutex::new(PedalboardVst2Host))
+}
+
+static USE_VST2_GLOBAL_HOST: AtomicBool = AtomicBool::new(true);
+
+pub fn set_use_vst2_global_host(use_global_host: bool) {
+    USE_VST2_GLOBAL_HOST.store(use_global_host, Ordering::SeqCst);
+}
+
+pub fn use_vst2_global_host() -> bool {
+    USE_VST2_GLOBAL_HOST.load(Ordering::SeqCst)
+}
+
+fn get_host_for_loader() -> Arc<Mutex<PedalboardVst2Host>> {
+    if use_vst2_global_host() {
+        get_global_host()
+    } else {
+        create_host()
+    }
 }
 
 pub fn path_from_name(name: &str) -> Option<PathBuf> {
@@ -80,7 +108,7 @@ impl Clone for Vst2Instance {
 
 impl Vst2Instance {
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, ()> {
-        let mut loader = PluginLoader::load(path.as_ref(), get_global_host()).map_err(|_| ())?;
+        let mut loader = PluginLoader::load(path.as_ref(), get_host_for_loader()).map_err(|_| ())?;
 
         let mut instance = loader.instance().map_err(|_| ())?;
 
