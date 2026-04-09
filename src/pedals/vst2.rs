@@ -52,10 +52,10 @@ impl Serialize for Vst2 {
             let idx = self.param_index_map.get(k).cloned();
             let mut value = v.clone();
 
-            // If the parameter is "Plugin", store only the relative path if it is in the VST2_PLUGIN_PATH directory
+            // If the parameter is "Plugin", store only the relative path if it is in the main save directory
             if k == "Plugin" {
                 if let PedalParameterValue::String(path) = &v.value {
-                    if let Some(save_dir) = dunce::canonicalize(Path::new(VST2_PLUGIN_PATH)).ok() {
+                    if let Some(save_dir) = Self::get_save_directory() {
                         if let Ok(relative_path) = Path::new(path).strip_prefix(&save_dir) {
                             // Convert relative paths to use forward slashes for cross platform compatibility
                             // Not used for absolute path as they are not intended to be portable
@@ -90,9 +90,9 @@ impl<'a> Deserialize<'a> for Vst2 {
 
         let parameters_with_idx = helper.parameters_with_idx;
         let mut path = parameters_with_idx.get("Plugin").unwrap().1.value.as_str().unwrap().to_string();
-        // If the path is relative, make it absolute using the VST2_PLUGIN_PATH directory
+        // If the path is relative, make it absolute using the main save directory
         if !path.is_empty() && Path::new(&path).is_relative() {
-            if let Some(save_dir) = dunce::canonicalize(Path::new(VST2_PLUGIN_PATH)).ok() {
+            if let Some(save_dir) = Self::get_save_directory() {
                 path = save_dir.join(path).to_string_lossy().to_string();
             }
         }
