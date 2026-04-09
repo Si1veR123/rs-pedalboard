@@ -71,7 +71,7 @@ impl Serialize for Vst2 {
                 }
             }
 
-            (k.clone(), (idx, v.clone()))
+            (k.clone(), (idx, value))
         }).collect();
 
         let mut ser_map = serializer.serialize_map(Some(2))?;
