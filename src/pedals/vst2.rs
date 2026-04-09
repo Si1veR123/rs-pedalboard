@@ -56,11 +56,15 @@ impl Serialize for Vst2 {
             if k == "Plugin" {
                 if let PedalParameterValue::String(path) = &v.value {
                     if let Some(save_dir) = Self::get_save_directory() {
-                        if let Ok(relative_path) = Path::new(path).strip_prefix(&save_dir) {
-                            // Convert relative paths to use forward slashes for cross platform compatibility
-                            // Not used for absolute path as they are not intended to be portable
-                            let relative_path_converted = forward_slash_path(relative_path);
-                            value.value = PedalParameterValue::String(relative_path_converted.to_string_lossy().to_string());
+                        if let Ok(canon_path) = dunce::canonicalize(Path::new(path)) {
+                            if let Ok(relative_path) = canon_path.strip_prefix(&save_dir) {
+                                // Convert relative paths to use forward slashes for cross platform compatibility
+                                // Not used for absolute path as they are not intended to be portable
+                                let relative_path_converted = forward_slash_path(relative_path);
+                                value.value = PedalParameterValue::String(relative_path_converted.to_string_lossy().to_string());
+                            }
+                        } else {
+                            tracing::warn!("Failed to canonicalize plugin path {:?} for serialization", path);
                         }
                     }
                 }
