@@ -478,7 +478,7 @@ fn draw_compressor_graph(
     // Draw compression curve
     ui.painter().add(egui::Shape::line(
         points,
-        egui::Stroke::new(1.0, egui::Color32::WHITE),
+        egui::Stroke::new(1.0_f32, egui::Color32::WHITE),
     ));
 
     // Draw envelope indicator

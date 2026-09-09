@@ -713,7 +713,7 @@ impl PedalTrait for GraphicEq7 {
             .show(ui, |plot_ui| {
                 plot_ui.line(
                     Line::new("freq_response", self.response_plot.as_slice())
-                        .width(1.0)
+                        .width(1.0_f32)
                         .color(Color32::from_rgb(150, 150, 245)),
                 );
 
@@ -728,17 +728,21 @@ impl PedalTrait for GraphicEq7 {
                     plot_ui.line(
                         Line::new("live_frequency", self.prev_live_frequency_plot.as_slice())
                             .color(Color32::from_rgb(200, 0, 0))
-                            .width(1.0),
+                            .width(1.0_f32),
                     );
                 }
 
                 let freqs: [f64; 7] = [100.0, 200.0, 400.0, 800.0, 1600.0, 3200.0, 6400.0];
                 for hz in freqs {
                     let log2_hz = hz.log2();
-                    plot_ui.vline(VLine::new("", log2_hz).color(Color32::DARK_GRAY).width(1.0));
+                    plot_ui.vline(
+                        VLine::new("", log2_hz)
+                            .color(Color32::DARK_GRAY)
+                            .width(1.0_f32),
+                    );
                 }
 
-                plot_ui.hline(HLine::new("", 0.0).color(Color32::GRAY).width(1.0));
+                plot_ui.hline(HLine::new("", 0.0).color(Color32::GRAY).width(1.0_f32));
             });
 
         let mut live_freq_response_button_rect =
