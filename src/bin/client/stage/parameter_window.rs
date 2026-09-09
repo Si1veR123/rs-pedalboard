@@ -124,10 +124,10 @@ pub fn draw_parameter_window(
                         if ui
                             .add_sized(
                                 egui::Vec2::splat(30.0),
-                                egui::ImageButton::new(include_image!(
+                                egui::Button::image(include_image!(
                                     "../files/settings_icon.png"
                                 ))
-                                .selected(is_selected),
+                                    .selected(is_selected),
                             )
                             .clicked()
                         {

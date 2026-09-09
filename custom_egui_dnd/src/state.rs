@@ -1,4 +1,4 @@
-use std::hash::Hash;
+use std::hash::{DefaultHasher, Hash, Hasher};
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::{Duration, SystemTime};
 
@@ -18,7 +18,9 @@ pub trait DragDropItem {
 
 impl<T: Hash> DragDropItem for T {
     fn id(&self) -> Id {
-        Id::new(self)
+        let mut hasher = DefaultHasher::new();
+        self.hash(&mut hasher);
+        Id::new(hasher.finish())
     }
 }
 

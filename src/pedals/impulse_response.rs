@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::hash::Hash;
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -220,6 +220,8 @@ impl ImpulseResponse {
     }
 
     fn get_empty_directory_combo_box(id: impl std::hash::Hash) -> DirectoryComboBox {
+        let mut id_hasher = DefaultHasher::new();
+        id.hash(&mut id_hasher);
         let roots = match Self::get_save_directory() {
             Some(main_save_dir) => vec![DirectoryNode::from_path(&main_save_dir)],
             None => {
@@ -229,7 +231,7 @@ impl ImpulseResponse {
         };
 
         DirectoryComboBox::new_from_nodes(roots)
-            .with_id(egui::Id::new("ir_combobox").with(id))
+            .with_id(egui::Id::new("ir_combobox").with(id_hasher.finish()))
             .with_wrap_mode(egui::TextWrapMode::Truncate)
             .show_extensions(false)
             .select_files_only(true)

@@ -19,9 +19,7 @@ mod midi;
 #[cfg(feature = "virtual_keyboard")]
 use egui_keyboard::{layouts::KeyboardLayout, Keyboard};
 
-use eframe::egui::{
-    self, include_image, Button, Color32, FontFamily, FontId, Id, ImageButton, RichText, Vec2,
-};
+use eframe::egui::{self, include_image, Button, Color32, FontFamily, FontId, Id, RichText, Vec2};
 use rs_pedalboard::{init_tracing, SAVE_DIR};
 use std::{sync::Arc, time::Instant};
 
@@ -49,7 +47,7 @@ pub const INACTIVE_BG_STROKE_COLOR: egui::Color32 = egui::Color32::from_gray(54)
 fn set_font_size(width: f32, ctx: &egui::Context) {
     let base_size = (width / 1920.0) * 18.0;
 
-    let mut style = (*ctx.style()).clone();
+    let mut style = (*ctx.style_of(egui::Theme::Dark)).clone();
     let text_styles = [
         (
             egui::TextStyle::Heading,
@@ -77,7 +75,7 @@ fn set_font_size(width: f32, ctx: &egui::Context) {
         style.text_styles.insert(text_style, font_id);
     }
 
-    ctx.set_style(style);
+    ctx.set_style_of(egui::Theme::Dark, style);
 }
 
 /// Get a FontId for the egui default proportional font
@@ -153,7 +151,7 @@ fn main() {
         native_options,
         Box::new(|cc| {
             tracing::debug!("Client init stage: style setup");
-            cc.egui_ctx.style_mut(|style| {
+            cc.egui_ctx.style_mut_of(egui::Theme::Dark, |style| {
                 style.visuals.extreme_bg_color = EXTREME_BACKGROUND_COLOR.into();
                 style.visuals.panel_fill = BACKGROUND_COLOR.into();
                 style.visuals.override_text_color = Some(TEXT_COLOR.into());
@@ -273,17 +271,18 @@ impl PedalboardClientApp {
 
 impl eframe::App for PedalboardClientApp {
     #[tracing::instrument(level = "trace", skip_all)]
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let ctx = ui.ctx().clone();
         #[cfg(feature = "virtual_keyboard")]
         {
-            self.keyboard.pump_events(ctx);
-            self.keyboard.show(ctx);
+            self.keyboard.pump_events(&ctx);
+            self.keyboard.show(&ctx);
         }
 
-        set_font_size(ctx.available_rect().width(), ctx);
+        set_font_size(ui.available_width(), &ctx);
 
         self.state.update_socket_responses();
-        self.state.handle_other_thread_commands(ctx);
+        self.state.handle_other_thread_commands(&ctx);
 
         let mut sr_buf = Vec::new();
         self.state.get_commands("sr", &mut sr_buf);
@@ -291,16 +290,16 @@ impl eframe::App for PedalboardClientApp {
             tracing::info!("Processor is using sample rate: {}hz", sr_buf[0]);
         }
 
-        let bottom_window_select_height = ctx.screen_rect().height() * 0.1;
+        let bottom_window_select_height = ctx.viewport_rect().height() * 0.1;
         let padding = 10.0;
 
         let selected_screen = self.state.selected_screen.get();
 
         let span = trace_span!("TopBottomPanel");
         let enter = span.enter();
-        egui::TopBottomPanel::bottom(Id::new("bottom_window_select"))
-            .min_height(bottom_window_select_height)
-            .show(&ctx, |ui| {
+        egui::Panel::bottom(Id::new("bottom_window_select"))
+            .min_size(bottom_window_select_height)
+            .show(ui, |ui| {
                 ui.horizontal_centered(|ui| {
                     let button_outline = |screen: Screen| {
                         if screen == selected_screen {
@@ -391,9 +390,11 @@ impl eframe::App for PedalboardClientApp {
                     if ui
                         .add_sized(
                             Vec2::splat(bottom_window_select_height - padding - 5.0), // why -5.0? idk
-                            ImageButton::new(include_image!("files/songs_icon.png"))
-                                .corner_radius(3.0)
-                                .tint(Color32::from_white_alpha(200)),
+                            Button::image(
+                                egui::Image::new(include_image!("files/songs_icon.png"))
+                                    .tint(Color32::from_white_alpha(200)),
+                            )
+                            .corner_radius(3.0)
                         )
                         .clicked()
                     {
@@ -418,9 +419,11 @@ impl eframe::App for PedalboardClientApp {
                                 bottom_window_select_height,
                                 bottom_window_select_height - padding - 5.0,
                             ),
-                            ImageButton::new(include_image!("files/settings_icon.png"))
-                                .corner_radius(3.0)
-                                .tint(Color32::from_white_alpha(200)),
+                            Button::image(
+                                egui::Image::new(include_image!("files/settings_icon.png"))
+                                    .tint(Color32::from_white_alpha(200)),
+                            )
+                            .corner_radius(3.0)
                         )
                         .clicked()
                     {
@@ -432,7 +435,7 @@ impl eframe::App for PedalboardClientApp {
 
         let span = trace_span!("CentralPanel");
         let enter = span.enter();
-        egui::CentralPanel::default().show(&ctx, |ui| {
+        egui::CentralPanel::default().show(ui, |ui| {
             match selected_screen {
                 Screen::Stage => {
                     ui.add(&mut self.pedalboard_stage_screen);
@@ -471,7 +474,7 @@ impl eframe::App for PedalboardClientApp {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+    fn on_exit(&mut self) {
         if self.state.client_settings.borrow().kill_processor_on_close {
             tracing::info!("Killing processor on exit");
             self.state.kill_processor();

@@ -186,9 +186,9 @@ impl SettingsScreen {
             audio_devices: AudioDevices::new(state.processor_settings.borrow().host.into()),
             state,
             processor_launch_state: ProcessorLaunchState::None,
-            nam_file_dialog: egui_file::FileDialog::select_folder(None),
-            ir_file_dialog: egui_file::FileDialog::select_folder(None),
-            vst2_file_dialog: egui_file::FileDialog::select_folder(None),
+            nam_file_dialog: egui_file::FileDialog::select_folder(),
+            ir_file_dialog: egui_file::FileDialog::select_folder(),
+            vst2_file_dialog: egui_file::FileDialog::select_folder(),
         }
     }
 
@@ -303,7 +303,7 @@ impl Widget for &mut SettingsScreen {
                     egui::Grid::new("processor_settings_grid")
                         .num_columns(2)
                         .min_col_width(ui.available_width()*0.5)
-                        .min_row_height(SETTING_ROW_HEIGHT_FRACT * ui.ctx().screen_rect().height())
+                        .min_row_height(SETTING_ROW_HEIGHT_FRACT * ui.ctx().viewport_rect().height())
                         .striped(true)
                         .show(ui, |ui| {
                             // Audio Host
@@ -459,7 +459,7 @@ impl Widget for &mut SettingsScreen {
                         });
 
                     ui.add_space(20.0);
-                    let button_size = Vec2::new(ui.available_width() * 0.25, ui.ctx().screen_rect().height()*0.06);
+                    let button_size = Vec2::new(ui.available_width() * 0.25, ui.ctx().viewport_rect().height()*0.06);
 
                     // Connecting requires a lock on client settings so must be done after rendering settings
                     // Store the connect button response to use later
@@ -530,7 +530,7 @@ impl Widget for &mut SettingsScreen {
                     egui::Grid::new("client_settings_grid")
                         .num_columns(2)
                         .min_col_width(ui.available_width()*0.5)
-                        .min_row_height(SETTING_ROW_HEIGHT_FRACT * ui.ctx().screen_rect().height())
+                        .min_row_height(SETTING_ROW_HEIGHT_FRACT * ui.ctx().viewport_rect().height())
                         .striped(true)
                         .show(ui, |ui| {
                             ui.label("Volume Normalization");
@@ -751,7 +751,7 @@ fn multiple_directories_select_ui(
 
     egui::Grid::new(id)
         .num_columns(2)
-        .min_row_height(SETTING_ROW_HEIGHT_FRACT * ui.ctx().screen_rect().height())
+        .min_row_height(SETTING_ROW_HEIGHT_FRACT * ui.ctx().viewport_rect().height())
         .min_col_width(available_width / 2.0)
         .striped(true)
         .show(ui, |ui| {

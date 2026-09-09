@@ -1,7 +1,7 @@
 use std::hash::Hash;
 use std::{collections::HashMap, time::Instant};
 
-use eframe::egui::{self, include_image, Color32, Image, ImageButton, UiBuilder, Vec2};
+use eframe::egui::{self, include_image, Button, Color32, Image, UiBuilder, Vec2};
 use egui_plot::{HLine, Line, Plot, PlotPoint, VLine};
 use serde::ser::SerializeMap;
 use serde::{Deserialize, Serialize};
@@ -558,7 +558,7 @@ impl PedalTrait for GraphicEq7 {
                 col1.centered_and_justified(|ui| {
                     if ui
                         .add(
-                            ImageButton::new(
+                            Button::image(
                                 Image::new(include_image!("images/eq/low_shelf.png"))
                                     .max_width(pedal_size.x * 0.15),
                             )
@@ -579,7 +579,7 @@ impl PedalTrait for GraphicEq7 {
                 col3.centered_and_justified(|ui| {
                     if ui
                         .add(
-                            ImageButton::new(
+                            Button::image(
                                 Image::new(include_image!("images/eq/high_shelf.png"))
                                     .max_width(pedal_size.x * 0.15),
                             )
@@ -755,11 +755,13 @@ impl PedalTrait for GraphicEq7 {
                     .sense(egui::Sense::click()),
             )
             .add(
-                ImageButton::new(include_image!("images/eq/live.png"))
-                    .corner_radius(3.0)
-                    .tint(Color32::from_rgba_unmultiplied(220, 100, 100, 200))
-                    .selected(live_frequency_enabled)
-                    .frame(false),
+                Button::image(
+                    Image::new(include_image!("images/eq/live.png"))
+                        .tint(Color32::from_rgba_unmultiplied(220, 100, 100, 200)),
+                )
+                .corner_radius(3.0)
+                .selected(live_frequency_enabled)
+                .frame(false),
             )
             .clicked()
         {

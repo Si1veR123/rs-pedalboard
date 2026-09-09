@@ -5,7 +5,7 @@ pub use state::{DragDropConfig, DragDropItem, DragDropResponse, DragUpdate, Hand
 
 pub use crate::item_iterator::ItemIterator;
 use crate::state::DragDropUi;
-use std::hash::Hash;
+use std::hash::{DefaultHasher, Hash, Hasher};
 
 mod item;
 mod item_iterator;
@@ -50,7 +50,9 @@ pub struct Dnd<'a> {
 /// }
 /// ```
 pub fn dnd(ui: &mut Ui, id_source: impl Hash) -> Dnd<'_> {
-    let id = Id::new(id_source).with("dnd");
+    let mut hasher = DefaultHasher::new();
+    id_source.hash(&mut hasher);
+    let id = Id::new(hasher.finish()).with("dnd");
     let mut dnd_ui: DragDropUi =
         ui.data_mut(|data| (*data.get_temp_mut_or_default::<DragDropUi>(id)).clone());
 
