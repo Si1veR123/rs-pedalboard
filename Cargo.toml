@@ -36,8 +36,8 @@ signalsmith-stretch = "0.1.1"
 egui_extras = { optional=true, version = "0.32.1", features=["image"] }
 image = { optional=true, version = "0.25.6", features = ["png"] }
 egui_dnd = { optional = true, path = "custom_egui_dnd" }
-strum = "0.27"
-strum_macros = "0.27"
+strum = "0.28.0"
+strum_macros = "0.28.0"
 neural-amp-modeler-core-bindgen = { git = "https://github.com/Si1veR123/rs-neural-amp-modeler-core.git" }
 homedir = "0.3.6"
 realfft = "3.5.0"
