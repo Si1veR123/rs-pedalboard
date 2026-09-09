@@ -3,7 +3,6 @@ use num_complex::Complex64;
 
 use super::biquad::BiquadFilter;
 
-
 pub struct DynamicEqualizerBuilder {
     pub sample_rate: f32,
     pub bands: Vec<(f32, f32, f32)>,
@@ -51,18 +50,16 @@ impl DynamicEqualizerBuilder {
             let bq;
 
             if self.lower_shelf && i == 0 {
-                bq = BiquadFilter::low_shelf(f, self.sample_rate, 1.0/bandwidth, gain);
+                bq = BiquadFilter::low_shelf(f, self.sample_rate, 1.0 / bandwidth, gain);
             } else if self.upper_shelf && i == last_index {
-                bq = BiquadFilter::high_shelf(f, self.sample_rate, 1.0/bandwidth, gain);
+                bq = BiquadFilter::high_shelf(f, self.sample_rate, 1.0 / bandwidth, gain);
             } else {
-                bq = BiquadFilter::peaking(f, self.sample_rate, 1.0/bandwidth, gain);
+                bq = BiquadFilter::peaking(f, self.sample_rate, 1.0 / bandwidth, gain);
             }
 
             biquads.push(bq);
         }
-        Equalizer {
-            biquads,
-        }
+        Equalizer { biquads }
     }
 }
 
@@ -134,7 +131,7 @@ impl<const N: usize> GraphicEqualizerBuilder<N> {
 
             if self.lower_shelf && i == 0 {
                 bq = BiquadFilter::low_shelf(f, self.sample_rate, q, gain);
-            } else if self.upper_shelf && i == N-1 {
+            } else if self.upper_shelf && i == N - 1 {
                 bq = BiquadFilter::high_shelf(f, self.sample_rate, q, gain);
             } else {
                 bq = BiquadFilter::peaking(f, self.sample_rate, q, gain);
@@ -148,7 +145,7 @@ impl<const N: usize> GraphicEqualizerBuilder<N> {
 
 #[derive(Clone)]
 pub struct Equalizer {
-    biquads: Vec<BiquadFilter>
+    biquads: Vec<BiquadFilter>,
 }
 
 impl Equalizer {
@@ -173,7 +170,13 @@ impl Equalizer {
     }
 
     /// log2 frequency response in dB from start_freq to end_freq with num_points points
-    pub fn amplitude_response_plot(&self, sample_rate: f64, mut start_freq: f64, end_freq: f64, num_points: usize) -> Vec<PlotPoint> {
+    pub fn amplitude_response_plot(
+        &self,
+        sample_rate: f64,
+        mut start_freq: f64,
+        end_freq: f64,
+        num_points: usize,
+    ) -> Vec<PlotPoint> {
         if start_freq == 0.0 {
             start_freq += 1.0; // Avoid log2(0)
         }
@@ -182,7 +185,7 @@ impl Equalizer {
         let log2_start = start_freq.log2();
         let log2_end = end_freq.log2();
         let step = (log2_end - log2_start) / num_points as f64;
-    
+
         for i in 0..num_points {
             let log2_f = log2_start + i as f64 * step;
             let f = 2f64.powf(log2_f);
@@ -191,7 +194,7 @@ impl Equalizer {
             let amplitude_db = 20.0 * amplitude.log10(); // Convert to dB
             response.push(PlotPoint::new(log2_f, amplitude_db));
         }
-    
+
         response
     }
 }

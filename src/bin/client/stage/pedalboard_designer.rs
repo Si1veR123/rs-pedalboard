@@ -1,10 +1,15 @@
 use core::f32;
 
-use crate::stage::{parameter_window::{draw_parameter_window, ParameterWindowChange}, ClippingState, XRunState};
+use crate::stage::{
+    parameter_window::{draw_parameter_window, ParameterWindowChange},
+    ClippingState, XRunState,
+};
 
 use super::PedalboardStageScreen;
 
-use eframe::egui::{self, Button, Color32, Layout, Pos2, Rect, RichText, Sense, Ui, UiBuilder, Vec2, Widget};
+use eframe::egui::{
+    self, Button, Color32, Layout, Pos2, Rect, RichText, Sense, Ui, UiBuilder, Vec2, Widget,
+};
 use rs_pedalboard::pedals::{PedalDiscriminants, PedalParameterValue, PedalTrait};
 use strum::IntoEnumIterator;
 
@@ -53,7 +58,13 @@ fn add_pedal_menu(screen: &mut PedalboardStageScreen, ui: &mut Ui, rect: Rect) {
         .show(&mut menu_ui, |ui| {
             ui.add_space(5.0);
             for pedal in PedalDiscriminants::iter() {
-                if ui.add_sized(Vec2::new(ui.available_width()*0.95, 35.0), egui::Button::new(pedal.display_name())).clicked() {
+                if ui
+                    .add_sized(
+                        Vec2::new(ui.available_width() * 0.95, 35.0),
+                        egui::Button::new(pedal.display_name()),
+                    )
+                    .clicked()
+                {
                     let new_pedal = pedal.new_pedal();
                     screen.state.add_pedal_to_active(&new_pedal, false);
                     screen.show_pedal_menu = false
@@ -72,10 +83,17 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
     // Status bar at the top. Allocate a top down ui for padding, then a left to right ui inside.
     let vertical_padding = 5.0;
     ui.allocate_ui_with_layout(
-        Vec2::new(ui.available_width(), ui.available_height()*0.075 + vertical_padding*2.0),
+        Vec2::new(
+            ui.available_width(),
+            ui.available_height() * 0.075 + vertical_padding * 2.0,
+        ),
         Layout::top_down(egui::Align::Center),
         |ui| {
-            ui.painter().rect_filled(ui.available_rect_before_wrap(), 5.0, crate::LIGHT_BACKGROUND_COLOR);
+            ui.painter().rect_filled(
+                ui.available_rect_before_wrap(),
+                5.0,
+                crate::LIGHT_BACKGROUND_COLOR,
+            );
 
             ui.add_space(vertical_padding);
 
@@ -84,7 +102,8 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
                 Layout::left_to_right(egui::Align::Center),
                 |ui| {
                     let can_show_add_button = {
-                        let mut pedalboard_set = screen.state.pedalboards.active_pedalboardstage.borrow_mut();
+                        let mut pedalboard_set =
+                            screen.state.pedalboards.active_pedalboardstage.borrow_mut();
                         let active_index = pedalboard_set.active_pedalboard;
                         let pedalboard = pedalboard_set.pedalboards.get_mut(active_index).unwrap();
                         pedalboard.pedals.len() < MAX_PEDAL_COUNT
@@ -92,15 +111,13 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
 
                     ui.add_space(20.0);
                     if ui
-                        .add_enabled_ui(
-                            can_show_add_button,
-                            |ui| {
-                                ui.add_sized(
-                                    [ui.available_width()*0.25, ui.available_height()],
-                                    egui::Button::new(RichText::new("Add Pedal")).stroke(egui::Stroke::new(1.0, crate::THEME_COLOR))
-                                )
-                            },
-                        )
+                        .add_enabled_ui(can_show_add_button, |ui| {
+                            ui.add_sized(
+                                [ui.available_width() * 0.25, ui.available_height()],
+                                egui::Button::new(RichText::new("Add Pedal"))
+                                    .stroke(egui::Stroke::new(1.0, crate::THEME_COLOR)),
+                            )
+                        })
                         .inner
                         .clicked()
                     {
@@ -136,7 +153,9 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
                                     ui.label("Clip");
                                     let clipping_color = match screen.clipping_state {
                                         ClippingState::None => Color32::from_rgb(50, 255, 50),
-                                        ClippingState::Clipping(_) => Color32::from_rgb(255, 50, 50),
+                                        ClippingState::Clipping(_) => {
+                                            Color32::from_rgb(255, 50, 50)
+                                        }
                                     };
                                     let (_id, rect) = ui.allocate_space(Vec2::splat(20.0));
                                     ui.painter().rect_filled(rect, 2.0, clipping_color);
@@ -176,7 +195,8 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
 
     // Available rect for the pedalboard itself
     let available_rect = ui.available_rect_before_wrap();
-    let drawing_volume_monitor = screen.state.client_settings.borrow().show_volume_monitor && screen.state.is_connected();
+    let drawing_volume_monitor =
+        screen.state.client_settings.borrow().show_volume_monitor && screen.state.is_connected();
     let volume_monitor_width = 5.0;
     let volume_monitor_inside_padding = 0.0;
     let volume_monitor_outside_padding = 5.0;
@@ -187,8 +207,9 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
     let pedal_y_spacing: f32;
     if drawing_volume_monitor {
         pedalboard_available_rect = pedalboard_available_rect.shrink2(Vec2::new(
-            volume_monitor_width * 2.0 + (volume_monitor_inside_padding + volume_monitor_outside_padding)*2.0,
-            0.0
+            volume_monitor_width * 2.0
+                + (volume_monitor_inside_padding + volume_monitor_outside_padding) * 2.0,
+            0.0,
         ));
         pedal_y_spacing = 25.0;
     } else {
@@ -198,7 +219,11 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
     let pedal_width = 0.9 * (pedalboard_available_rect.width() / PEDAL_ROW_COUNT as f32);
     let pedal_x_spacing = 0.1 * (pedalboard_available_rect.width() / PEDAL_ROW_COUNT as f32);
 
-    ui.painter().rect_filled(pedalboard_available_rect, 5.0, crate::LIGHT_BACKGROUND_COLOR);
+    ui.painter().rect_filled(
+        pedalboard_available_rect,
+        5.0,
+        crate::LIGHT_BACKGROUND_COLOR,
+    );
 
     // Initially set to ZERO, so fill in with available pedalboard rect
     if screen.pedalboard_rect == Rect::ZERO {
@@ -211,9 +236,14 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
         pedalboard_available_rect.max - Vec2::splat(size + 5.0),
         Vec2::splat(size),
     );
-    let mut button_ui = ui.new_child(UiBuilder::new()
-        .layer_id(egui::LayerId::new(egui::Order::Foreground, ui.id().with("delete_button")))
-        .max_rect(delete_button_rect));
+    let mut button_ui = ui.new_child(
+        UiBuilder::new()
+            .layer_id(egui::LayerId::new(
+                egui::Order::Foreground,
+                ui.id().with("delete_button"),
+            ))
+            .max_rect(delete_button_rect),
+    );
 
     let mut changed: Option<(u32, (String, PedalParameterValue))> = None;
     ui.horizontal(|ui| {
@@ -237,7 +267,7 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
                         ui.add_space(pedal_x_spacing/2.0);
                         ui.horizontal_wrapped(|ui| {
                             ui.spacing_mut().item_spacing = Vec2::new(pedal_x_spacing, pedal_y_spacing);
-        
+
                             let mut pedalboard_set = screen.state.pedalboards.active_pedalboardstage.borrow_mut();
                             let active_index = pedalboard_set.active_pedalboard;
                             let active_pedalboard = &mut pedalboard_set.pedalboards[active_index];
@@ -247,14 +277,14 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
                                 let whole_pedal_rect = ui.available_rect_before_wrap();
                                 ui.allocate_ui_with_layout(Vec2::new(pedal_width, pedal_width*PEDAL_HEIGHT_RATIO*0.95), Layout::top_down(egui::Align::Center), |ui| {
                                     ui.spacing_mut().item_spacing = Vec2::ZERO;
-                                    
+
                                     let mut command_buffer = Vec::new();
                                     screen.state.get_commands(&format!("pedalmsg{}", pedal.get_id()), &mut command_buffer);
                                     if let Some(v) = pedal.ui(ui, &command_buffer) {
                                         changed = Some((pedal.get_id(), v));
                                     }
                                 });
-        
+
                                 let button_rect = whole_pedal_rect.with_min_y(whole_pedal_rect.max.y - 0.05 * whole_pedal_rect.height());
                                 ui.scope_builder(UiBuilder::new().max_rect(button_rect), |ui| {
                                     handle.sense(egui::Sense::DRAG).ui_sized(
@@ -272,19 +302,19 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
                                     );
                                 });
                             });
-        
+
                             let mouse_over_delete = delete_button_rect.contains(ui.ctx().input(|i| i.pointer.hover_pos()).unwrap_or(Pos2::ZERO));
-        
+
                             if dnd_response.is_dragging() {
                                 let button = if mouse_over_delete {
                                     Button::new("Delete").fill(Color32::RED.gamma_multiply(0.3))
                                 } else {
                                     Button::new("Delete")
                                 };
-        
+
                                 button_ui.put(button_ui.available_rect_before_wrap(), button);
                             }
-        
+
                             if dnd_response.is_drag_finished() {
                                 if let Some(update) = &dnd_response.update {
                                     let pedal_id = active_pedalboard.pedals[update.from].get_id();
@@ -304,7 +334,7 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
                 )
             });
         });
-    
+
         bound_scene_rect(&mut screen.pedalboard_rect, &pedalboard_available_rect.size());
 
         if drawing_volume_monitor {
@@ -315,7 +345,7 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
                 screen.volume_monitors.1.ui(ui)
             });
         }
-        
+
     });
 
     // Draw any open parameter windows
@@ -325,25 +355,62 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
         let active_pedalboard_id = active_pedalboards.pedalboards[active_pedalboard].get_id();
 
         if PedalboardStageScreen::check_cached_midi_devices_invalid(ui.ctx()) {
-            screen.cached_midi_devices = screen.state.midi_state.borrow().get_all_parameter_devices();
+            screen.cached_midi_devices =
+                screen.state.midi_state.borrow().get_all_parameter_devices();
         }
 
-        for pedal in active_pedalboards.pedalboards[active_pedalboard].pedals.iter_mut() {
-            match draw_parameter_window(ui, active_pedalboard_id, pedal, &screen.cached_midi_devices) {
-                Some(ParameterWindowChange::ParameterChanged(name, value)) => changed = Some((pedal.get_id(), (name, value))),
-                Some(ParameterWindowChange::AddMidiFunction(parameter_path, midi_function_values, device_id)) => {
-                    screen.state.midi_state.borrow_mut().add_midi_parameter_function_to_device(parameter_path, midi_function_values, device_id);
-                },
+        for pedal in active_pedalboards.pedalboards[active_pedalboard]
+            .pedals
+            .iter_mut()
+        {
+            match draw_parameter_window(
+                ui,
+                active_pedalboard_id,
+                pedal,
+                &screen.cached_midi_devices,
+            ) {
+                Some(ParameterWindowChange::ParameterChanged(name, value)) => {
+                    changed = Some((pedal.get_id(), (name, value)))
+                }
+                Some(ParameterWindowChange::AddMidiFunction(
+                    parameter_path,
+                    midi_function_values,
+                    device_id,
+                )) => {
+                    screen
+                        .state
+                        .midi_state
+                        .borrow_mut()
+                        .add_midi_parameter_function_to_device(
+                            parameter_path,
+                            midi_function_values,
+                            device_id,
+                        );
+                }
                 Some(ParameterWindowChange::RemoveMidiFunction(parameter, device_id)) => {
-                    screen.state.midi_state.borrow_mut().remove_midi_parameter_function_from_device(&parameter, device_id);
-                },
-                Some(ParameterWindowChange::ChangeMidiFunctionDevice(parameter, old_id, new_id)) => {
+                    screen
+                        .state
+                        .midi_state
+                        .borrow_mut()
+                        .remove_midi_parameter_function_from_device(&parameter, device_id);
+                }
+                Some(ParameterWindowChange::ChangeMidiFunctionDevice(
+                    parameter,
+                    old_id,
+                    new_id,
+                )) => {
                     let midi_state = screen.state.midi_state.borrow_mut();
-                    if let Some(parameter_functions) = midi_state.remove_midi_parameter_function_from_device(&parameter, old_id) {
-                        midi_state.add_midi_parameter_function_to_device(parameter, parameter_functions, new_id);
+                    if let Some(parameter_functions) =
+                        midi_state.remove_midi_parameter_function_from_device(&parameter, old_id)
+                    {
+                        midi_state.add_midi_parameter_function_to_device(
+                            parameter,
+                            parameter_functions,
+                            new_id,
+                        );
                     }
-                },
-                None => {},
+                }
+                None => {}
             }
         }
     }
@@ -354,17 +421,16 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
             pedalboard_set.pedalboards[pedalboard_set.active_pedalboard].get_id()
         };
 
-        screen.state.set_parameter(
-            active_pedalboard_id,
-            pedal_id,
-            name,
-            value,
-            false,
-            ui.ctx()
-        );
+        screen
+            .state
+            .set_parameter(active_pedalboard_id, pedal_id, name, value, false, ui.ctx());
     }
 
     if screen.show_pedal_menu {
-        add_pedal_menu(screen, ui, pedalboard_available_rect.scale_from_center2(Vec2::new(0.6, 0.9)));
+        add_pedal_menu(
+            screen,
+            ui,
+            pedalboard_available_rect.scale_from_center2(Vec2::new(0.6, 0.9)),
+        );
     }
 }

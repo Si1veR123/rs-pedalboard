@@ -1,5 +1,12 @@
-use cpal::{traits::{DeviceTrait, HostTrait}, Host, Device, HostId};
-use std::{fs::File, io, process::{Child, Command, Stdio}};
+use cpal::{
+    traits::{DeviceTrait, HostTrait},
+    Device, Host, HostId,
+};
+use std::{
+    fs::File,
+    io,
+    process::{Child, Command, Stdio},
+};
 
 pub fn get_jack_host() -> (Host, Device, Device) {
     let jack_host = cpal::host_from_id(HostId::Jack).expect("Failed to get JACK host");
@@ -8,10 +15,14 @@ pub fn get_jack_host() -> (Host, Device, Device) {
         panic!("Failed to initialise JACK client");
     }
 
-    let input_device = jack_host.devices().unwrap()
+    let input_device = jack_host
+        .devices()
+        .unwrap()
         .find(|d| d.name().unwrap().contains("in"))
         .expect("No JACK input found on host");
-    let output_device = jack_host.devices().unwrap()
+    let output_device = jack_host
+        .devices()
+        .unwrap()
         .find(|d| d.name().unwrap().contains("out"))
         .expect("No JACK output found on host");
 
@@ -19,11 +30,22 @@ pub fn get_jack_host() -> (Host, Device, Device) {
 }
 
 pub fn kill_jack_servers() {
-    tracing::info!("Killing existing JACK servers");    
-    Command::new("pkill").arg("jackd").spawn().expect("Failed to kill any existing JACK servers.").wait().unwrap();
+    tracing::info!("Killing existing JACK servers");
+    Command::new("pkill")
+        .arg("jackd")
+        .spawn()
+        .expect("Failed to kill any existing JACK servers.")
+        .wait()
+        .unwrap();
 }
 
-pub fn start_jack_server(frames_per_period: usize, periods_per_buffer: usize, sample_rate: u32, input: String, output: String) -> io::Result<Child> {
+pub fn start_jack_server(
+    frames_per_period: usize,
+    periods_per_buffer: usize,
+    sample_rate: u32,
+    input: String,
+    output: String,
+) -> io::Result<Child> {
     kill_jack_servers();
     jack_server_wait(false);
     std::thread::sleep(std::time::Duration::from_millis(1000));
@@ -37,8 +59,14 @@ pub fn start_jack_server(frames_per_period: usize, periods_per_buffer: usize, sa
         .arg(format!("-n{periods_per_buffer}"))
         .arg(format!("-C{input}"))
         .arg(format!("-P{output}"))
-        .stdout(File::create("jack_server_out.log").expect("Failed to create file for jack server stdout"))
-        .stderr(File::create("jack_server_err.log").expect("Failed to create file for jack server stderr"))
+        .stdout(
+            File::create("jack_server_out.log")
+                .expect("Failed to create file for jack server stdout"),
+        )
+        .stderr(
+            File::create("jack_server_err.log")
+                .expect("Failed to create file for jack server stderr"),
+        )
         .spawn()
 }
 
@@ -72,7 +100,11 @@ pub fn stereo_output() {
     if let Err(e) = Command::new("jack_connect")
         .arg("cpal_client_out:out_0")
         .arg("system:playback_2")
-        .spawn() {
-            tracing::error!("Failed to connect output to second JACK playback port: {}", e);
-        }
+        .spawn()
+    {
+        tracing::error!(
+            "Failed to connect output to second JACK playback port: {}",
+            e
+        );
+    }
 }

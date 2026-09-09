@@ -1,16 +1,16 @@
 use std::collections::{HashMap, VecDeque};
-use std::iter;
 use std::hash::Hash;
+use std::iter;
 
+use super::ui::pedal_knob;
+use super::{PedalParameter, PedalParameterValue, PedalTrait};
 use crate::dsp_algorithms::{biquad, eq};
 use crate::pedals::ui::pedal_switch;
 use crate::unique_time_id;
-use super::ui::pedal_knob;
-use super::{PedalParameter, PedalParameterValue, PedalTrait};
 
 use eframe::egui::{self, include_image};
 use serde::ser::SerializeMap;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone)]
 pub struct Delay {
@@ -75,7 +75,7 @@ impl Delay {
                 value: PedalParameterValue::Float(init_delay),
                 min: Some(PedalParameterValue::Float(10.0)),
                 max: Some(PedalParameterValue::Float(1000.0)),
-                step: None
+                step: None,
             },
         );
         parameters.insert(
@@ -84,7 +84,7 @@ impl Delay {
                 value: PedalParameterValue::Float(0.5),
                 min: Some(PedalParameterValue::Float(0.0)),
                 max: Some(PedalParameterValue::Float(1.0)),
-                step: None
+                step: None,
             },
         );
         parameters.insert(
@@ -93,7 +93,7 @@ impl Delay {
                 value: PedalParameterValue::Float(0.5),
                 min: Some(PedalParameterValue::Float(0.0)),
                 max: Some(PedalParameterValue::Float(1.0)),
-                step: None
+                step: None,
             },
         );
         parameters.insert(
@@ -102,7 +102,7 @@ impl Delay {
                 value: PedalParameterValue::Float(init_warmth),
                 min: Some(PedalParameterValue::Float(0.0)),
                 max: Some(PedalParameterValue::Float(1.0)),
-                step: None
+                step: None,
             },
         );
         parameters.insert(
@@ -125,7 +125,7 @@ impl Delay {
     }
 
     pub fn eq_from_warmth(tone: f32, sample_rate: f32) -> eq::Equalizer {
-        let biquad = biquad::BiquadFilter::high_shelf(4000.0, sample_rate, 0.707, -tone*10.0);
+        let biquad = biquad::BiquadFilter::high_shelf(4000.0, sample_rate, 0.707, -tone * 10.0);
         let eq = eq::Equalizer::new(vec![biquad]);
         eq
     }
@@ -143,15 +143,25 @@ impl PedalTrait for Delay {
     }
 
     fn set_config(&mut self, _buffer_size: usize, sample_rate: u32) {
-        self.tone_eq = Some(
-            Self::eq_from_warmth(self.parameters.get("Warmth").unwrap().value.as_float().unwrap(), sample_rate as f32)
-        );
+        self.tone_eq = Some(Self::eq_from_warmth(
+            self.parameters
+                .get("Warmth")
+                .unwrap()
+                .value
+                .as_float()
+                .unwrap(),
+            sample_rate as f32,
+        ));
         self.sample_rate = Some(sample_rate as f32);
-        let delay_ms = self.parameters.get("Delay").unwrap().value.as_float().unwrap();
+        let delay_ms = self
+            .parameters
+            .get("Delay")
+            .unwrap()
+            .value
+            .as_float()
+            .unwrap();
         let delay_samples = ((delay_ms / 1000.0) * sample_rate as f32) as usize;
-        self.delay_buffer = Some(
-            VecDeque::from_iter(iter::repeat(0.0).take(delay_samples))
-        );
+        self.delay_buffer = Some(VecDeque::from_iter(iter::repeat(0.0).take(delay_samples)));
     }
 
     fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
@@ -160,8 +170,20 @@ impl PedalTrait for Delay {
             return;
         }
 
-        let decay = self.parameters.get("Decay").unwrap().value.as_float().unwrap();
-        let mix = self.parameters.get("Dry/Wet").unwrap().value.as_float().unwrap();
+        let decay = self
+            .parameters
+            .get("Decay")
+            .unwrap()
+            .value
+            .as_float()
+            .unwrap();
+        let mix = self
+            .parameters
+            .get("Dry/Wet")
+            .unwrap()
+            .value
+            .as_float()
+            .unwrap();
         for sample in buffer.iter_mut() {
             let delay_sample = self.delay_buffer.as_mut().unwrap().pop_front().unwrap();
 
@@ -199,7 +221,9 @@ impl PedalTrait for Delay {
                         if let Some(sample_rate) = self.sample_rate {
                             let delay_samples = ((delay_ms / 1000.0) * sample_rate) as usize;
                             if delay_samples > delay_buffer.len() {
-                                delay_buffer.extend(iter::repeat(0.0).take(delay_samples - delay_buffer.len()));
+                                delay_buffer.extend(
+                                    iter::repeat(0.0).take(delay_samples - delay_buffer.len()),
+                                );
                             } else {
                                 delay_buffer.truncate(delay_samples);
                             }
@@ -209,11 +233,8 @@ impl PedalTrait for Delay {
                     let warmth = value.as_float().unwrap();
                     parameter.value = value;
                     if let Some(sample_rate) = self.sample_rate {
-                        self.tone_eq = Some(
-                            Self::eq_from_warmth(warmth, sample_rate)
-                        );
+                        self.tone_eq = Some(Self::eq_from_warmth(warmth, sample_rate));
                     }
-                    
                 } else {
                     parameter.value = value;
                 }
@@ -221,31 +242,73 @@ impl PedalTrait for Delay {
         }
     }
 
-    fn ui(&mut self, ui: &mut egui::Ui, _message_buffer: &[String]) -> Option<(String, PedalParameterValue)> {
+    fn ui(
+        &mut self,
+        ui: &mut egui::Ui,
+        _message_buffer: &[String],
+    ) -> Option<(String, PedalParameterValue)> {
         ui.add(egui::Image::new(include_image!("images/delay.png")));
 
         let mut to_change = None;
         let delay_param = self.get_parameters().get("Delay").unwrap();
-        if let Some(value) = pedal_knob(ui, "", "Delay", delay_param, egui::Vec2::new(0.125, 0.038), 0.3, self.id) {
+        if let Some(value) = pedal_knob(
+            ui,
+            "",
+            "Delay",
+            delay_param,
+            egui::Vec2::new(0.125, 0.038),
+            0.3,
+            self.id,
+        ) {
             to_change = Some(("Delay".to_string(), value));
         }
 
         let decay_param = self.get_parameters().get("Decay").unwrap();
-        if let Some(value) = pedal_knob(ui, "", "Decay", decay_param, egui::Vec2::new(0.58, 0.145), 0.3, self.id) {
+        if let Some(value) = pedal_knob(
+            ui,
+            "",
+            "Decay",
+            decay_param,
+            egui::Vec2::new(0.58, 0.145),
+            0.3,
+            self.id,
+        ) {
             to_change = Some(("Decay".to_string(), value));
         }
 
         let warmth_param = self.get_parameters().get("Warmth").unwrap();
-        if let Some(value) = pedal_knob(ui, "", "Warmth", warmth_param, egui::Vec2::new(0.125, 0.27), 0.3, self.id) {
+        if let Some(value) = pedal_knob(
+            ui,
+            "",
+            "Warmth",
+            warmth_param,
+            egui::Vec2::new(0.125, 0.27),
+            0.3,
+            self.id,
+        ) {
             to_change = Some(("Warmth".to_string(), value));
         }
 
         let dry_wet_param = self.get_parameters().get("Dry/Wet").unwrap();
-        if let Some(value) = pedal_knob(ui, "", "Dry/Wet", dry_wet_param, egui::Vec2::new(0.58, 0.365), 0.3, self.id) {
+        if let Some(value) = pedal_knob(
+            ui,
+            "",
+            "Dry/Wet",
+            dry_wet_param,
+            egui::Vec2::new(0.58, 0.365),
+            0.3,
+            self.id,
+        ) {
             to_change = Some(("Dry/Wet".to_string(), value));
         }
 
-        let active_param = self.get_parameters().get("Active").unwrap().value.as_bool().unwrap();
+        let active_param = self
+            .get_parameters()
+            .get("Active")
+            .unwrap()
+            .value
+            .as_bool()
+            .unwrap();
         if let Some(value) = pedal_switch(ui, active_param, egui::Vec2::new(0.33, 0.72), 0.16) {
             to_change = Some(("Active".to_string(), PedalParameterValue::Bool(value)));
         }

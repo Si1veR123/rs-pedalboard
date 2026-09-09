@@ -1,12 +1,10 @@
 pub struct PeakVolumeMonitor {
-    peak: f32
+    peak: f32,
 }
 
 impl PeakVolumeMonitor {
     pub fn new() -> Self {
-        Self {
-            peak: 0.0
-        }
+        Self { peak: 0.0 }
     }
 
     pub fn add_samples(&mut self, samples: &[f32]) {

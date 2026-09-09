@@ -1,20 +1,22 @@
-use std::collections::HashMap;
-use std::hash::Hash;
+use super::{PedalParameter, PedalParameterValue, PedalTrait};
+use crate::{
+    dsp_algorithms::{
+        oscillator::{Oscillator, Sine},
+        variable_delay::VariableDelayLine,
+    },
+    pedals::ui::{pedal_knob, pedal_switch},
+    unique_time_id,
+};
 use eframe::egui::{self, include_image};
 use serde::{ser::SerializeMap, Deserialize, Serialize};
-use super::{PedalTrait, PedalParameter, PedalParameterValue};
-use crate::{
-    dsp_algorithms::{oscillator::{Oscillator, Sine},
-    variable_delay::VariableDelayLine},
-    pedals::ui::{pedal_knob, pedal_switch},
-    unique_time_id
-};
+use std::collections::HashMap;
+use std::hash::Hash;
 
 #[derive(Clone)]
 pub struct Vibrato {
     delay_line: Option<VariableDelayLine>,
     parameters: HashMap<String, PedalParameter>,
-    id: u32
+    id: u32,
 }
 
 impl Hash for Vibrato {
@@ -49,7 +51,7 @@ impl<'a> Deserialize<'a> for Vibrato {
         Ok(Vibrato {
             delay_line: None,
             parameters: helper.parameters,
-            id: helper.id
+            id: helper.id,
         })
     }
 }
@@ -100,7 +102,7 @@ impl Vibrato {
         Self {
             delay_line: None,
             parameters,
-            id: unique_time_id()
+            id: unique_time_id(),
         }
     }
 
@@ -118,24 +120,38 @@ impl PedalTrait for Vibrato {
 
     fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
         if self.delay_line.is_none() {
-            tracing::warn!("Vibrato pedal not initialized. Call set_config before processing audio.");
+            tracing::warn!(
+                "Vibrato pedal not initialized. Call set_config before processing audio."
+            );
             return;
         }
 
-        let dry_wet = self.parameters.get("Dry/Wet").unwrap().value.as_float().unwrap();
-        let oscillator = self.parameters.get_mut("Oscillator").unwrap().value.as_oscillator_mut().unwrap();
+        let dry_wet = self
+            .parameters
+            .get("Dry/Wet")
+            .unwrap()
+            .value
+            .as_float()
+            .unwrap();
+        let oscillator = self
+            .parameters
+            .get_mut("Oscillator")
+            .unwrap()
+            .value
+            .as_oscillator_mut()
+            .unwrap();
         let delay_line = self.delay_line.as_mut().unwrap();
 
         for sample in buffer.iter_mut() {
             delay_line.buffer.push_front(*sample);
             delay_line.buffer.pop_back();
-    
+
             let lfo_value = 0.5 * (1.0 + oscillator.next().unwrap());
-    
+
             let current_delay = lfo_value * delay_line.max_delay() as f32;
-    
+
             let delayed_sample = delay_line.get_sample(current_delay);
-    
+
             *sample = delayed_sample * dry_wet + *sample * (1.0 - dry_wet);
         }
     }
@@ -154,11 +170,15 @@ impl PedalTrait for Vibrato {
         &mut self.parameters
     }
 
-    fn set_parameter_value(&mut self,name: &str,value:PedalParameterValue) {
+    fn set_parameter_value(&mut self, name: &str, value: PedalParameterValue) {
         let parameters = self.get_parameters_mut();
         if let Some(parameter) = parameters.get_mut(name) {
             if !parameter.is_valid(&value) {
-                tracing::warn!("Attempted to set invalid value for parameter {}: {:?}", name, value);
+                tracing::warn!(
+                    "Attempted to set invalid value for parameter {}: {:?}",
+                    name,
+                    value
+                );
                 return;
             }
 
@@ -168,7 +188,8 @@ impl PedalTrait for Vibrato {
                 if let Some(osc) = parameters.get_mut("Oscillator") {
                     let sample_rate = osc.value.as_oscillator().unwrap().get_sample_rate();
                     if let Some(delay_line) = &mut self.delay_line {
-                        let max_delay_samples = (sample_rate as f32 * depth_ms / 1000.0).ceil() as usize;
+                        let max_delay_samples =
+                            (sample_rate as f32 * depth_ms / 1000.0).ceil() as usize;
                         delay_line.buffer.resize(max_delay_samples, 0.0);
                     }
                 }
@@ -176,17 +197,35 @@ impl PedalTrait for Vibrato {
         }
     }
 
-    fn ui(&mut self, ui: &mut egui::Ui, _message_buffer: &[String]) -> Option<(String, PedalParameterValue)> {
+    fn ui(
+        &mut self,
+        ui: &mut egui::Ui,
+        _message_buffer: &[String],
+    ) -> Option<(String, PedalParameterValue)> {
         ui.add(egui::Image::new(include_image!("images/vibrato.png")));
 
         let mut to_change = None;
 
         let depth_param = self.get_parameters().get("Depth").unwrap();
-        if let Some(value) = pedal_knob(ui, "", "Depth", depth_param, egui::Vec2::new(0.3, 0.11), 0.4, self.id) {
-            to_change =  Some(("Depth".to_string(), value));
+        if let Some(value) = pedal_knob(
+            ui,
+            "",
+            "Depth",
+            depth_param,
+            egui::Vec2::new(0.3, 0.11),
+            0.4,
+            self.id,
+        ) {
+            to_change = Some(("Depth".to_string(), value));
         }
 
-        let active_param = self.get_parameters().get("Active").unwrap().value.as_bool().unwrap();
+        let active_param = self
+            .get_parameters()
+            .get("Active")
+            .unwrap()
+            .value
+            .as_bool()
+            .unwrap();
         if let Some(value) = pedal_switch(ui, active_param, egui::Vec2::new(0.33, 0.72), 0.16) {
             to_change = Some(("Active".to_string(), PedalParameterValue::Bool(value)));
         }
@@ -194,12 +233,24 @@ impl PedalTrait for Vibrato {
         to_change
     }
 
-    fn set_config(&mut self, _buffer_size:usize,sample_rate:u32) {
-        let depth_ms = self.parameters.get("Depth").unwrap().value.as_float().unwrap();
+    fn set_config(&mut self, _buffer_size: usize, sample_rate: u32) {
+        let depth_ms = self
+            .parameters
+            .get("Depth")
+            .unwrap()
+            .value
+            .as_float()
+            .unwrap();
         let max_delay_samples = (sample_rate as f32 * depth_ms / 1000.0).ceil() as usize;
 
         self.delay_line = Some(VariableDelayLine::new(max_delay_samples));
 
-        self.parameters.get_mut("Oscillator").unwrap().value.as_oscillator_mut().unwrap().set_sample_rate(sample_rate as f32);
+        self.parameters
+            .get_mut("Oscillator")
+            .unwrap()
+            .value
+            .as_oscillator_mut()
+            .unwrap()
+            .set_sample_rate(sample_rate as f32);
     }
 }

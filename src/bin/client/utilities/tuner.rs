@@ -10,17 +10,24 @@ pub struct TunerWidget {
     recent_freq: f32,
     recent_freq_smooth: f32,
     last_update: Instant,
-    command_buffer: Vec<String>
+    command_buffer: Vec<String>,
 }
 
 impl TunerWidget {
     pub fn new(state: &'static State) -> Self {
-        Self { state, recent_freq: 0.0, recent_freq_smooth: 0.0, command_buffer: Vec::with_capacity(1), last_update: Instant::now() }
+        Self {
+            state,
+            recent_freq: 0.0,
+            recent_freq_smooth: 0.0,
+            command_buffer: Vec::with_capacity(1),
+            last_update: Instant::now(),
+        }
     }
 
     pub fn update_frequency(&mut self) {
         // Smooth the recent_freq_smooth towards recent_freq
-        let update_frac = self.last_update.elapsed().as_millis() as f32 / PROCESSOR_UPDATE_FREQ_MS as f32;
+        let update_frac =
+            self.last_update.elapsed().as_millis() as f32 / PROCESSOR_UPDATE_FREQ_MS as f32;
         self.last_update = Instant::now();
         if self.recent_freq_smooth != self.recent_freq {
             self.recent_freq_smooth += (self.recent_freq - self.recent_freq_smooth) * update_frac;
@@ -43,7 +50,6 @@ impl TunerWidget {
     }
 }
 
-
 impl Widget for &mut TunerWidget {
     fn ui(self, ui: &mut egui::Ui) -> egui::Response {
         let active = self.state.tuner_active.get();
@@ -58,12 +64,20 @@ impl Widget for &mut TunerWidget {
             (question.clone(), question.clone(), 0.0)
         } else {
             let recent_note = freq_to_note(self.recent_freq_smooth);
-            (recent_note.0.to_string(), recent_note.1.to_string(), recent_note.2)
+            (
+                recent_note.0.to_string(),
+                recent_note.1.to_string(),
+                recent_note.2,
+            )
         };
-        
+
         ui.vertical_centered(|ui| {
             ui.add_space(10.0);
-            ui.label(RichText::from("Tuner").size(30.0).color(Color32::from_gray(90)));
+            ui.label(
+                RichText::from("Tuner")
+                    .size(30.0)
+                    .color(Color32::from_gray(90)),
+            );
             ui.add_space(7.0);
 
             // Note name
@@ -73,12 +87,17 @@ impl Widget for &mut TunerWidget {
 
             // Cents offset
             let bar_height = 50.0;
-            let bg_im = egui::Image::new(egui::include_image!("../files/tuner_bar.png")).max_height(bar_height);
+            let bg_im = egui::Image::new(egui::include_image!("../files/tuner_bar.png"))
+                .max_height(bar_height);
             let bg_response = ui.add(bg_im);
             let needle_im = egui::Image::new(egui::include_image!("../files/tuner_needle.png"))
-                .max_height(bar_height-10.0)
+                .max_height(bar_height - 10.0)
                 .tint(crate::BACKGROUND_COLOR);
-            let needle_size = match needle_im.load_for_size(ui.ctx(), Vec2::splat(50.0)).expect("Failed to load needle image size").size() {
+            let needle_size = match needle_im
+                .load_for_size(ui.ctx(), Vec2::splat(50.0))
+                .expect("Failed to load needle image size")
+                .size()
+            {
                 Some(size) => size,
                 None => {
                     tracing::warn!("Failed to load needle image size");
@@ -87,15 +106,19 @@ impl Widget for &mut TunerWidget {
             };
 
             let bar_width = bg_response.rect.width();
-            let needle_x_frac = (cents_offset as f32+50.0) / 100.0;
+            let needle_x_frac = (cents_offset as f32 + 50.0) / 100.0;
             let needle_x = (bar_width * needle_x_frac).clamp(0.0, bar_width - needle_size.x);
 
-            let min = bg_response.rect.min + Vec2::new(needle_x - needle_size.x / 2.0, bar_height - needle_size.y);
+            let min = bg_response.rect.min
+                + Vec2::new(needle_x - needle_size.x / 2.0, bar_height - needle_size.y);
 
-            needle_im.paint_at(ui, egui::Rect{
-                min,
-                max: min + Vec2::new(needle_size.x, needle_size.y),
-            });
+            needle_im.paint_at(
+                ui,
+                egui::Rect {
+                    min,
+                    max: min + Vec2::new(needle_size.x, needle_size.y),
+                },
+            );
 
             // Cents offset label
             let cents_label = if cents_offset == 0.0 {
@@ -108,6 +131,7 @@ impl Widget for &mut TunerWidget {
             ui.label(RichText::new(cents_label).size(20.0));
 
             ui.add_space(10.0);
-        }).response
+        })
+        .response
     }
 }

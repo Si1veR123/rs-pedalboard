@@ -3,12 +3,12 @@ use std::time::Duration;
 use futures::{pin_mut, select, FutureExt};
 use ringbuf::traits::{Consumer, Split};
 use smol::channel::{Receiver, Sender, TryRecvError};
-use smol::io::{AsyncWriteExt, AsyncWrite};
-use smol::net::{TcpStream, Ipv4Addr};
+use smol::io::{AsyncWrite, AsyncWriteExt};
+use smol::net::{Ipv4Addr, TcpStream};
 
+use rs_pedalboard::pedalboard::ParameterPath;
 use rs_pedalboard::pedals::PedalParameterValue;
 use rs_pedalboard::socket_helper::CommandReceiver;
-use rs_pedalboard::pedalboard::ParameterPath;
 
 use crate::settings::VolumeNormalizationMode;
 
@@ -19,7 +19,7 @@ pub struct ClientSocket {
     port: u16,
     socket_thread_responses: Vec<String>,
     pub received_processor_commands: Vec<String>,
-    pub handle: Option<ClientSocketThreadHandle>
+    pub handle: Option<ClientSocketThreadHandle>,
 }
 
 impl ClientSocket {
@@ -28,7 +28,7 @@ impl ClientSocket {
             port,
             handle: None,
             received_processor_commands: Vec::new(),
-            socket_thread_responses: Vec::new()
+            socket_thread_responses: Vec::new(),
         }
     }
 
@@ -43,9 +43,7 @@ impl ClientSocket {
                 self.handle = Some(handle);
                 Ok(())
             }
-            Err(e) => {
-                Err(e)
-            }
+            Err(e) => Err(e),
         }
     }
 
@@ -163,21 +161,19 @@ pub enum Command {
 
 pub struct ClientSocketThreadHandle {
     message_sender: Sender<Command>,
-    response_receiver: Receiver<String>
+    response_receiver: Receiver<String>,
 }
 
 impl ClientSocketThreadHandle {
     pub fn new(message_sender: Sender<Command>, response_receiver: Receiver<String>) -> Self {
         ClientSocketThreadHandle {
             message_sender,
-            response_receiver
+            response_receiver,
         }
     }
 
     pub fn send_command(&self, command: Command) -> bool {
-        match smol::block_on(
-            self.message_sender.send(command)
-        ) {
+        match smol::block_on(self.message_sender.send(command)) {
             Ok(_) => false,
             Err(_) => {
                 tracing::error!("Failed to send command to socket thread");
@@ -198,7 +194,7 @@ impl ClientSocketThreadHandle {
             match self.response_receiver.try_recv() {
                 Ok(command) => {
                     into.push(command);
-                },
+                }
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Closed) => return true,
             }
@@ -209,16 +205,19 @@ impl ClientSocketThreadHandle {
     pub fn is_connected(&self) -> bool {
         match smol::block_on(self.message_sender.send(Command::ThreadAliveTest)) {
             Ok(_) => true,
-            Err(_) => false
+            Err(_) => false,
         }
     }
 
     pub fn clone_with_responses(&self) -> Self {
         let (new_sender, new_receiver) = smol::channel::unbounded();
-        let _ = smol::block_on(self.message_sender.send(Command::SubscribeToResponses(new_sender)));
+        let _ = smol::block_on(
+            self.message_sender
+                .send(Command::SubscribeToResponses(new_sender)),
+        );
         ClientSocketThreadHandle {
             message_sender: self.message_sender.clone(),
-            response_receiver: new_receiver
+            response_receiver: new_receiver,
         }
     }
 
@@ -226,7 +225,7 @@ impl ClientSocketThreadHandle {
         let (_new_sender, new_receiver) = smol::channel::bounded(1);
         ClientSocketThreadHandle {
             message_sender: self.message_sender.clone(),
-            response_receiver: new_receiver
+            response_receiver: new_receiver,
         }
     }
 }
@@ -238,14 +237,15 @@ impl Clone for ClientSocketThreadHandle {
 }
 
 #[tracing::instrument(level = "debug")]
-pub fn new_client_socket_thread(port: u16, subscribe_to_responses: bool) -> std::io::Result<ClientSocketThreadHandle> {
+pub fn new_client_socket_thread(
+    port: u16,
+    subscribe_to_responses: bool,
+) -> std::io::Result<ClientSocketThreadHandle> {
     let (message_sender, message_receiver) = smol::channel::unbounded();
     let (response_sender, response_receiver) = smol::channel::unbounded();
 
-    let (
-        connected_status_oneshot_sender,
-        connected_status_oneshot_receiver
-    ) = crossbeam::channel::bounded(0);
+    let (connected_status_oneshot_sender, connected_status_oneshot_receiver) =
+        crossbeam::channel::bounded(0);
 
     std::thread::spawn(move || {
         smol::block_on(async {
@@ -276,25 +276,19 @@ pub fn new_client_socket_thread(port: u16, subscribe_to_responses: bool) -> std:
     });
 
     match connected_status_oneshot_receiver.recv_timeout(RESPONSE_TIMEOUT) {
-        Ok(Ok(_)) => {
-            Ok(ClientSocketThreadHandle::new(message_sender, response_receiver))
-        },
-        Ok(Err(e)) => {
-            Err(e)
-        }
-        Err(e) => {
-            Err(std::io::Error::new(
-                std::io::ErrorKind::TimedOut,
-                format!("Failed to connect to processor within timeout: {}", e)
-            ))
-        }
+        Ok(Ok(_)) => Ok(ClientSocketThreadHandle::new(
+            message_sender,
+            response_receiver,
+        )),
+        Ok(Err(e)) => Err(e),
+        Err(e) => Err(std::io::Error::new(
+            std::io::ErrorKind::TimedOut,
+            format!("Failed to connect to processor within timeout: {}", e),
+        )),
     }
 }
 
-async fn send_to_all<T: Clone>(
-    senders: &[Sender<T>],
-    message: T,
-) -> bool {
+async fn send_to_all<T: Clone>(senders: &[Sender<T>], message: T) -> bool {
     for sender in senders {
         if sender.send(message.clone()).await.is_err() {
             tracing::error!("Failed to send message to one of the response channels");
@@ -308,16 +302,19 @@ async fn send_to_all<T: Clone>(
 async fn client_socket_event_loop(
     stream: TcpStream,
     message_receiver: Receiver<Command>,
-    mut response_senders: Vec<Sender<String>>
+    mut response_senders: Vec<Sender<String>>,
 ) {
     let mut command_receiver = CommandReceiver::new();
     // 128 is large but it is only storing String, which is small
-    let (mut received_commands_writer, mut received_commands_reader) = ringbuf::HeapRb::new(128).split();
-    
+    let (mut received_commands_writer, mut received_commands_reader) =
+        ringbuf::HeapRb::new(128).split();
+
     let (mut stream_reader, mut stream_writer) = smol::io::split(stream);
 
     loop {
-        let socket_fut = command_receiver.receive_commands_async(&mut stream_reader, &mut received_commands_writer).fuse();
+        let socket_fut = command_receiver
+            .receive_commands_async(&mut stream_reader, &mut received_commands_writer)
+            .fuse();
         let command_fut = message_receiver.recv().fuse();
 
         pin_mut!(socket_fut, command_fut);
@@ -466,7 +463,7 @@ async fn client_socket_event_loop(
                     },
                     Command::VolumeNormalization(mode, auto_decay) => {
                         let message: String;
-                        
+
                         if let Some(decay) = auto_decay {
                             message = format!("volumenormalization|{}|{}\n", match mode {
                                 VolumeNormalizationMode::None => "none",
@@ -596,7 +593,7 @@ async fn client_socket_event_loop(
 async fn socket_send(mut stream: impl AsyncWrite + Unpin, message: &str) -> bool {
     match stream.write_all(message.as_bytes()).await {
         Ok(()) => {
-            if message.len() < 40 || cfg!(feature="log_full_commands") {
+            if message.len() < 40 || cfg!(feature = "log_full_commands") {
                 tracing::info!("Sent: {:?}", message);
             } else {
                 tracing::info!("Sent: {:?}...", &message[..40]);
@@ -605,12 +602,12 @@ async fn socket_send(mut stream: impl AsyncWrite + Unpin, message: &str) -> bool
         }
         Err(e) => {
             match e.kind() {
-                std::io::ErrorKind::BrokenPipe |
-                std::io::ErrorKind::NotConnected |
-                std::io::ErrorKind::ConnectionReset |
-                std::io::ErrorKind::ConnectionAborted => {
+                std::io::ErrorKind::BrokenPipe
+                | std::io::ErrorKind::NotConnected
+                | std::io::ErrorKind::ConnectionReset
+                | std::io::ErrorKind::ConnectionAborted => {
                     tracing::info!("Connection closed");
-                },
+                }
                 _ => {
                     tracing::error!("Failed to send message. Closing connection. Error: {}", e);
                 }

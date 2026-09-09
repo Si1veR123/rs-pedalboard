@@ -1,5 +1,5 @@
 use crate::SAVE_DIR;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::{fmt::Display, path::PathBuf, str::FromStr};
 use strum_macros::EnumIter;
 
@@ -9,7 +9,7 @@ const SAVE_NAME: &str = "processor_settings.json";
 #[derive(Serialize, Deserialize, Clone, Copy, Default, Debug, EnumIter, PartialEq)]
 pub enum SupportedHost {
     #[default]
-    JACK
+    JACK,
 }
 
 #[cfg(target_os = "windows")]
@@ -17,14 +17,13 @@ pub enum SupportedHost {
 pub enum SupportedHost {
     #[default]
     WASAPI,
-    ASIO
+    ASIO,
 }
 
 impl Display for SupportedHost {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // Just use debug implementation
         write!(f, "{:?}", self)
-
     }
 }
 
@@ -81,7 +80,7 @@ pub struct ProcessorSettingsSave {
     pub preferred_sample_rate: Option<u32>,
     pub upsample_passes: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub recording_dir: Option<PathBuf>
+    pub recording_dir: Option<PathBuf>,
 }
 
 impl Default for ProcessorSettingsSave {
@@ -96,7 +95,7 @@ impl Default for ProcessorSettingsSave {
             output_device: None,
             preferred_sample_rate: None,
             upsample_passes: 0,
-            recording_dir: None
+            recording_dir: None,
         }
     }
 }
@@ -123,7 +122,10 @@ impl ProcessorSettingsSave {
         let data = match std::fs::read_to_string(&save_path) {
             Ok(d) => d,
             Err(e) => {
-                tracing::error!("Failed to read processor settings from {:?}: {e}, using default", save_path);
+                tracing::error!(
+                    "Failed to read processor settings from {:?}: {e}, using default",
+                    save_path
+                );
                 return Default::default();
             }
         };
@@ -131,7 +133,10 @@ impl ProcessorSettingsSave {
         match serde_json::from_str(&data) {
             Ok(settings) => settings,
             Err(e) => {
-                tracing::error!("Failed to deserialize processor settings from {:?}: {e}, using default", save_path);
+                tracing::error!(
+                    "Failed to deserialize processor settings from {:?}: {e}, using default",
+                    save_path
+                );
                 Default::default()
             }
         }
@@ -139,7 +144,10 @@ impl ProcessorSettingsSave {
 
     pub fn save(&self) -> Result<(), std::io::Error> {
         let data = serde_json::to_string(self).expect("Failed to serialize processor settings");
-        std::fs::write(Self::get_save_path().expect("Failed to get processor settings save path"), data)?;
+        std::fs::write(
+            Self::get_save_path().expect("Failed to get processor settings save path"),
+            data,
+        )?;
         Ok(())
     }
 

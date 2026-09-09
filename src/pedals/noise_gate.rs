@@ -1,13 +1,10 @@
-use std::{collections::HashMap, hash::Hash};
 use eframe::egui::{self, include_image};
 use serde::{ser::SerializeMap, Deserialize, Serialize};
+use std::{collections::HashMap, hash::Hash};
 
 use crate::{pedals::ui::pedal_switch, unique_time_id};
 
-use super::{
-    ui::pedal_knob,
-    PedalParameter, PedalParameterValue, PedalTrait,
-};
+use super::{ui::pedal_knob, PedalParameter, PedalParameterValue, PedalTrait};
 
 #[derive(Clone)]
 pub struct NoiseGate {
@@ -41,13 +38,13 @@ impl<'de> Deserialize<'de> for NoiseGate {
             parameters: HashMap<String, PedalParameter>,
         }
         let helper = NoiseGateData::deserialize(deserializer)?;
-        
+
         Ok(NoiseGate {
             parameters: helper.parameters,
             gain: 1.0,
             level: 0.0,
             sample_rate: None,
-            id: helper.id
+            id: helper.id,
         })
     }
 }
@@ -121,7 +118,7 @@ impl NoiseGate {
             gain: 1.0,
             level: 0.0,
             sample_rate: None,
-            id: unique_time_id()
+            id: unique_time_id(),
         }
     }
 
@@ -143,7 +140,7 @@ impl PedalTrait for NoiseGate {
         self.id
     }
 
-    fn set_config(&mut self,_buffer_size:usize, sample_rate:u32) {
+    fn set_config(&mut self, _buffer_size: usize, sample_rate: u32) {
         self.sample_rate = Some(sample_rate as f32);
     }
 
@@ -207,32 +204,74 @@ impl PedalTrait for NoiseGate {
         &mut self.parameters
     }
 
-    fn ui(&mut self, ui: &mut egui::Ui, _message_buffer: &[String]) -> Option<(String,PedalParameterValue)> {
+    fn ui(
+        &mut self,
+        ui: &mut egui::Ui,
+        _message_buffer: &[String],
+    ) -> Option<(String, PedalParameterValue)> {
         ui.add(egui::Image::new(include_image!("images/noise_gate.png")));
 
         let mut to_change = None;
 
         let threshold_db_param = self.get_parameters().get("Threshold Db").unwrap();
-        if let Some(value) = pedal_knob(ui, "", "Threshold Db", threshold_db_param, egui::Vec2::new(0.08, 0.03), 0.35, self.id) {
+        if let Some(value) = pedal_knob(
+            ui,
+            "",
+            "Threshold Db",
+            threshold_db_param,
+            egui::Vec2::new(0.08, 0.03),
+            0.35,
+            self.id,
+        ) {
             to_change = Some(("Threshold Db".to_string(), value));
         }
 
         let reduction_param = self.get_parameters().get("Reduction").unwrap();
-        if let Some(value) = pedal_knob(ui, "", "Reduction", reduction_param, egui::Vec2::new(0.57, 0.03), 0.35, self.id) {
+        if let Some(value) = pedal_knob(
+            ui,
+            "",
+            "Reduction",
+            reduction_param,
+            egui::Vec2::new(0.57, 0.03),
+            0.35,
+            self.id,
+        ) {
             to_change = Some(("Reduction".to_string(), value));
         }
 
         let attack_param = self.get_parameters().get("Attack").unwrap();
-        if let Some(value) = pedal_knob(ui, "", "Attack", attack_param, egui::Vec2::new(0.08, 0.34), 0.35, self.id) {
+        if let Some(value) = pedal_knob(
+            ui,
+            "",
+            "Attack",
+            attack_param,
+            egui::Vec2::new(0.08, 0.34),
+            0.35,
+            self.id,
+        ) {
             to_change = Some(("Attack".to_string(), value));
         }
 
         let release_param = self.get_parameters().get("Release").unwrap();
-        if let Some(value) = pedal_knob(ui, "", "Release", release_param, egui::Vec2::new(0.57, 0.34), 0.35, self.id) {
+        if let Some(value) = pedal_knob(
+            ui,
+            "",
+            "Release",
+            release_param,
+            egui::Vec2::new(0.57, 0.34),
+            0.35,
+            self.id,
+        ) {
             to_change = Some(("Release".to_string(), value));
         }
 
-        let active_param = self.get_parameters().get("Active").unwrap().value.as_bool().unwrap();
+        let active_param = self
+            .get_parameters()
+            .get("Active")
+            .unwrap()
+            .value
+            .as_bool()
+            .unwrap();
         if let Some(value) = pedal_switch(ui, active_param, egui::Vec2::new(0.33, 0.72), 0.16) {
             to_change = Some(("Active".to_string(), PedalParameterValue::Bool(value)));
         }

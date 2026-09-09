@@ -1,10 +1,10 @@
+use crate::state::State;
 use eframe::egui::{self, Layout, RichText, TextEdit, Vec2, Widget};
 use rs_pedalboard::pedalboard::Pedalboard;
-use crate::state::State;
 
 pub enum RowAction {
     Load,
-    Delete
+    Delete,
 }
 
 pub struct PedalboardLibraryScreen {
@@ -21,43 +21,55 @@ impl PedalboardLibraryScreen {
         }
     }
 
-    pub fn pedalboard_row(ui: &mut egui::Ui, pedalboard: &Pedalboard, row_size: Vec2) -> (Option<RowAction>, egui::Response) {
+    pub fn pedalboard_row(
+        ui: &mut egui::Ui,
+        pedalboard: &Pedalboard,
+        row_size: Vec2,
+    ) -> (Option<RowAction>, egui::Response) {
         let mut action = None;
 
         let row_height = row_size.y;
-        let response = ui.allocate_ui_with_layout(
-            row_size,
-            Layout::left_to_right(egui::Align::Center),
-            |ui| {
+        let response = ui
+            .allocate_ui_with_layout(row_size, Layout::left_to_right(egui::Align::Center), |ui| {
                 ui.set_min_size(row_size);
                 ui.columns(2, |columns| {
                     columns[0].horizontal_centered(|ui| {
                         ui.add_space(20.0);
-                        ui.label(RichText::new(&pedalboard.name));   
+                        ui.label(RichText::new(&pedalboard.name));
                     });
 
                     columns[1].allocate_ui_with_layout(
                         Vec2::new(0.0, row_height),
                         Layout::right_to_left(egui::Align::Center),
                         |ui| {
-                            let button_size = Vec2::new(ui.available_width() * 0.2, row_height * 0.6);
+                            let button_size =
+                                Vec2::new(ui.available_width() * 0.2, row_height * 0.6);
                             ui.add_space(20.0);
-                            if ui.add_sized(
-                                button_size,
-                                egui::Button::new("Delete").stroke((1.5, egui::Color32::from_rgb(150, 30, 30)))
-                            ).clicked() {
+                            if ui
+                                .add_sized(
+                                    button_size,
+                                    egui::Button::new("Delete")
+                                        .stroke((1.5, egui::Color32::from_rgb(150, 30, 30))),
+                                )
+                                .clicked()
+                            {
                                 action = Some(RowAction::Delete);
                             }
-                            if ui.add_sized(
-                                button_size,
-                                egui::Button::new("Load").stroke((1.3, egui::Color32::from_gray(60)))
-                            ).clicked() {
+                            if ui
+                                .add_sized(
+                                    button_size,
+                                    egui::Button::new("Load")
+                                        .stroke((1.3, egui::Color32::from_gray(60))),
+                                )
+                                .clicked()
+                            {
                                 action = Some(RowAction::Load);
                             }
-                        }
+                        },
                     )
                 });
-        }).response;
+            })
+            .response;
 
         (action, response)
     }
@@ -74,22 +86,32 @@ impl Widget for &mut PedalboardLibraryScreen {
                 Vec2::new(0.0, col_height),
                 Layout::top_down(egui::Align::Center),
                 |ui| {
-                    if ui.add_sized(
-                        [ui.available_width()*0.5, col_height*0.9],
-                        egui::Button::new(
-                            RichText::new("New Pedalboard")
-                        ).stroke((0.7, crate::THEME_COLOR))).clicked()
+                    if ui
+                        .add_sized(
+                            [ui.available_width() * 0.5, col_height * 0.9],
+                            egui::Button::new(RichText::new("New Pedalboard"))
+                                .stroke((0.7, crate::THEME_COLOR)),
+                        )
+                        .clicked()
                     {
-                        let unique_name = self.state.pedalboards.unique_name(String::from("New Pedalboard"));
-                        self.state.pedalboards.pedalboard_library.borrow_mut().push(Pedalboard::new(unique_name));
-                }
-            });
+                        let unique_name = self
+                            .state
+                            .pedalboards
+                            .unique_name(String::from("New Pedalboard"));
+                        self.state
+                            .pedalboards
+                            .pedalboard_library
+                            .borrow_mut()
+                            .push(Pedalboard::new(unique_name));
+                    }
+                },
+            );
 
             columns[1].add_sized(
                 [0.0, col_height],
                 TextEdit::singleline(&mut self.search_term)
                     .hint_text(RichText::new("Search pedalboards..."))
-                    .vertical_align(egui::Align::Center)
+                    .vertical_align(egui::Align::Center),
             );
         });
 
@@ -102,51 +124,66 @@ impl Widget for &mut PedalboardLibraryScreen {
 
         let pedalboard_library = self.state.pedalboards.pedalboard_library.borrow();
         if pedalboard_library.is_empty() {
-            ui.add_sized(row_size, egui::Label::new(
-                RichText::new("No Pedalboards Found")
-                    .text_style(egui::TextStyle::Heading)
-                    .color(crate::FAINT_TEXT_COLOR)
-            ))
+            ui.add_sized(
+                row_size,
+                egui::Label::new(
+                    RichText::new("No Pedalboards Found")
+                        .text_style(egui::TextStyle::Heading)
+                        .color(crate::FAINT_TEXT_COLOR),
+                ),
+            )
         } else {
             let mut action = None;
 
-            egui::ScrollArea::vertical().show(ui, |ui| {
-                let response = egui::Grid::new("pedalboard_library_grid")
-                    .with_row_color(|index, _style| {
-                        if index % 2 == 0 {
-                            Some(crate::ROW_COLOR_LIGHT)
-                        } else {
-                            Some(crate::ROW_COLOR_DARK)
-                        }
-                    })
-                    .spacing(Vec2::new(10.0, 20.0))
-                    .show(ui, |ui| {
-                        for pedalboard in pedalboard_library.iter() {
-                            if self.search_term.is_empty() || pedalboard.name.contains(&self.search_term) {
-                                PedalboardLibraryScreen::pedalboard_row(ui, pedalboard, row_size).0.map(|row_action| {
-                                    action = Some((pedalboard.get_id(), row_action));
-                                });
-                                ui.end_row();
+            egui::ScrollArea::vertical()
+                .show(ui, |ui| {
+                    let response = egui::Grid::new("pedalboard_library_grid")
+                        .with_row_color(|index, _style| {
+                            if index % 2 == 0 {
+                                Some(crate::ROW_COLOR_LIGHT)
+                            } else {
+                                Some(crate::ROW_COLOR_DARK)
+                            }
+                        })
+                        .spacing(Vec2::new(10.0, 20.0))
+                        .show(ui, |ui| {
+                            for pedalboard in pedalboard_library.iter() {
+                                if self.search_term.is_empty()
+                                    || pedalboard.name.contains(&self.search_term)
+                                {
+                                    PedalboardLibraryScreen::pedalboard_row(
+                                        ui, pedalboard, row_size,
+                                    )
+                                    .0
+                                    .map(|row_action| {
+                                        action = Some((pedalboard.get_id(), row_action));
+                                    });
+                                    ui.end_row();
+                                }
+                            }
+                        })
+                        .response;
+
+                    // Perform any actions performed in this frame
+                    if let Some((pedalboard_id, action)) = action {
+                        match action {
+                            RowAction::Load => {
+                                let pedalboard = pedalboard_library
+                                    .iter()
+                                    .find(|p| p.get_id() == pedalboard_id)
+                                    .unwrap();
+                                self.state.add_pedalboard(pedalboard.clone(), false);
+                            }
+                            RowAction::Delete => {
+                                drop(pedalboard_library);
+                                self.state.pedalboards.delete_pedalboard(pedalboard_id);
                             }
                         }
-                }).response;
+                    };
 
-                // Perform any actions performed in this frame
-                if let Some((pedalboard_id, action)) = action {
-                    match action {
-                        RowAction::Load => {
-                            let pedalboard = pedalboard_library.iter().find(|p| p.get_id() == pedalboard_id).unwrap();
-                            self.state.add_pedalboard(pedalboard.clone(), false);
-                        },
-                        RowAction::Delete => {
-                            drop(pedalboard_library);
-                            self.state.pedalboards.delete_pedalboard(pedalboard_id);
-                        }
-                    }
-                };
-
-                response
-            }).inner
+                    response
+                })
+                .inner
         }
     }
 }

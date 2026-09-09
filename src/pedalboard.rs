@@ -1,5 +1,8 @@
+use crate::{
+    pedals::{Pedal, PedalTrait},
+    unique_time_id,
+};
 use serde::{Deserialize, Serialize};
-use crate::{pedals::{Pedal, PedalTrait}, unique_time_id};
 use std::{fmt::Write, hash::Hash};
 
 /// Can uniquely identify a parameter.
@@ -30,7 +33,13 @@ pub struct Pedalboard {
 
 impl std::fmt::Debug for Pedalboard {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Pedalboard {{ id: {}, name: {}, pedals count: {:?} }}", self.id, self.name, self.pedals.len())
+        write!(
+            f,
+            "Pedalboard {{ id: {}, name: {}, pedals count: {:?} }}",
+            self.id,
+            self.name,
+            self.pedals.len()
+        )
     }
 }
 

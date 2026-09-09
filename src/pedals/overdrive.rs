@@ -7,15 +7,15 @@ use crate::dsp_algorithms::biquad::BiquadFilter;
 use crate::dsp_algorithms::eq;
 use crate::unique_time_id;
 
-use super::PedalTrait;
+use super::ui::{pedal_knob, pedal_switch};
 use super::PedalParameter;
 use super::PedalParameterValue;
-use super::ui::{pedal_knob, pedal_switch};
+use super::PedalTrait;
 
 use eframe::egui::Image;
-use eframe::egui::{include_image, self, Vec2};
+use eframe::egui::{self, include_image, Vec2};
 use serde::ser::SerializeMap;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone)]
 pub struct Overdrive {
@@ -55,7 +55,7 @@ impl<'a> Deserialize<'a> for Overdrive {
             pre_eq: None,
             post_eq: None,
             sample_rate: None,
-            id: helper.id
+            id: helper.id,
         })
     }
 }
@@ -75,7 +75,7 @@ impl Overdrive {
                 value: PedalParameterValue::Float(5.0),
                 min: Some(PedalParameterValue::Float(1.0)),
                 max: Some(PedalParameterValue::Float(20.0)),
-                step: None
+                step: None,
             },
         );
         parameters.insert(
@@ -84,7 +84,7 @@ impl Overdrive {
                 value: PedalParameterValue::Float(0.5),
                 min: Some(PedalParameterValue::Float(0.0)),
                 max: Some(PedalParameterValue::Float(1.0)),
-                step: None
+                step: None,
             },
         );
         parameters.insert(
@@ -93,7 +93,7 @@ impl Overdrive {
                 value: PedalParameterValue::Float(1.0),
                 min: Some(PedalParameterValue::Float(0.0)),
                 max: Some(PedalParameterValue::Float(3.0)),
-                step: None
+                step: None,
             },
         );
 
@@ -103,10 +103,16 @@ impl Overdrive {
                 value: PedalParameterValue::Bool(true),
                 min: None,
                 max: None,
-                step: None
+                step: None,
             },
         );
-        Overdrive { parameters, pre_eq: None, post_eq: None, sample_rate: None, id: unique_time_id() }
+        Overdrive {
+            parameters,
+            pre_eq: None,
+            post_eq: None,
+            sample_rate: None,
+            id: unique_time_id(),
+        }
     }
 
     pub fn diode_soft_clip(x: f32, knee: f32) -> f32 {
@@ -138,7 +144,7 @@ impl PedalTrait for Overdrive {
         self.id
     }
 
-    fn set_config(&mut self,_buffer_size:usize, sample_rate: u32) {
+    fn set_config(&mut self, _buffer_size: usize, sample_rate: u32) {
         self.pre_eq = Some(Self::pre_clip_eq(sample_rate as f32));
         self.post_eq = Some(Self::post_eq(sample_rate as f32));
         self.sample_rate = Some(sample_rate as f32);
@@ -150,12 +156,30 @@ impl PedalTrait for Overdrive {
             return;
         }
 
-        let drive = self.get_parameters().get("Drive").unwrap().value.as_float().unwrap();
-        let volume = self.get_parameters().get("Level").unwrap().value.as_float().unwrap();
-        let tone = self.get_parameters().get("Tone").unwrap().value.as_float().unwrap();
+        let drive = self
+            .get_parameters()
+            .get("Drive")
+            .unwrap()
+            .value
+            .as_float()
+            .unwrap();
+        let volume = self
+            .get_parameters()
+            .get("Level")
+            .unwrap()
+            .value
+            .as_float()
+            .unwrap();
+        let tone = self
+            .get_parameters()
+            .get("Tone")
+            .unwrap()
+            .value
+            .as_float()
+            .unwrap();
         let pre_eq = self.pre_eq.as_mut().unwrap();
         let (post_lowpass, post_highpass) = self.post_eq.as_mut().unwrap();
-        
+
         for sample in buffer.iter_mut() {
             let mut x = *sample;
             x = pre_eq.process(x);
@@ -173,13 +197,17 @@ impl PedalTrait for Overdrive {
         }
     }
 
-    fn set_parameter_value(&mut self,name: &str,value:PedalParameterValue) {
+    fn set_parameter_value(&mut self, name: &str, value: PedalParameterValue) {
         let parameters = self.get_parameters_mut();
         if let Some(parameter) = parameters.get_mut(name) {
             if parameter.is_valid(&value) {
                 parameter.value = value;
             } else {
-                tracing::warn!("Attempted to set invalid value for parameter {}: {:?}", name, value);
+                tracing::warn!(
+                    "Attempted to set invalid value for parameter {}: {:?}",
+                    name,
+                    value
+                );
             }
         }
     }
@@ -192,30 +220,64 @@ impl PedalTrait for Overdrive {
         &mut self.parameters
     }
 
-    fn ui(&mut self, ui: &mut egui::Ui, _message_buffer: &[String]) -> Option<(String, PedalParameterValue)> {
+    fn ui(
+        &mut self,
+        ui: &mut egui::Ui,
+        _message_buffer: &[String],
+    ) -> Option<(String, PedalParameterValue)> {
         ui.add(Image::new(include_image!("images/overdrive.png")));
 
         let mut to_change = None;
         let drive_param = self.get_parameters().get("Drive").unwrap();
-        if let Some(value) = pedal_knob(ui, "", "Drive", drive_param, egui::Vec2::new(0.127, 0.085), 0.35, self.id) {
+        if let Some(value) = pedal_knob(
+            ui,
+            "",
+            "Drive",
+            drive_param,
+            egui::Vec2::new(0.127, 0.085),
+            0.35,
+            self.id,
+        ) {
             to_change = Some(("Drive".to_string(), value));
         }
 
         let tone_param = self.get_parameters().get("Tone").unwrap();
-        if let Some(value) = pedal_knob(ui, "", "Tone", tone_param, egui::Vec2::new(0.535, 0.085), 0.35, self.id) {
+        if let Some(value) = pedal_knob(
+            ui,
+            "",
+            "Tone",
+            tone_param,
+            egui::Vec2::new(0.535, 0.085),
+            0.35,
+            self.id,
+        ) {
             to_change = Some(("Tone".to_string(), value));
         }
 
         let level_param = self.get_parameters().get("Level").unwrap();
-        if let Some(value) = pedal_knob(ui, "", "Level", level_param, egui::Vec2::new(0.325, 0.335), 0.35, self.id) {
+        if let Some(value) = pedal_knob(
+            ui,
+            "",
+            "Level",
+            level_param,
+            egui::Vec2::new(0.325, 0.335),
+            0.35,
+            self.id,
+        ) {
             to_change = Some(("Level".to_string(), value));
         }
 
-        let active_param = self.get_parameters().get("Active").unwrap().value.as_bool().unwrap();
+        let active_param = self
+            .get_parameters()
+            .get("Active")
+            .unwrap()
+            .value
+            .as_bool()
+            .unwrap();
         if let Some(value) = pedal_switch(ui, active_param, Vec2::new(0.33, 0.72), 0.16) {
             to_change = Some(("Active".to_string(), PedalParameterValue::Bool(value)));
         }
-        
+
         to_change
     }
 }

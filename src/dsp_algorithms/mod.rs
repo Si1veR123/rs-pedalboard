@@ -1,13 +1,13 @@
-pub mod variable_delay;
-pub mod oscillator;
-pub mod variable_delay_phaser;
 pub mod biquad;
 pub mod eq;
-pub mod yin;
-pub mod impluse_response;
 pub mod frequency_analysis;
-pub mod resampler;
+pub mod impluse_response;
 pub mod moving_bandpass;
+pub mod oscillator;
+pub mod resampler;
+pub mod variable_delay;
+pub mod variable_delay_phaser;
+pub mod yin;
 
 pub fn hann_window(size: usize) -> Vec<f32> {
     let mut window = vec![0.0; size];

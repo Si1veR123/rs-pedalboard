@@ -1,5 +1,5 @@
+use hound::{SampleFormat, WavReader};
 use std::io::Cursor;
-use hound::{WavReader, SampleFormat};
 
 pub struct MetronomePlayer {
     pub bpm: u32,
@@ -16,14 +16,12 @@ impl MetronomePlayer {
         let cursor = Cursor::new(data);
         let reader = WavReader::new(cursor).expect("Failed to create WAV reader");
         let spec = reader.spec();
-    
+
         let samples: Vec<f32> = match spec.sample_format {
-            SampleFormat::Float => {
-                reader
-                    .into_samples::<f32>()
-                    .map(|s| s.expect("Failed to read sample"))
-                    .collect()
-            }
+            SampleFormat::Float => reader
+                .into_samples::<f32>()
+                .map(|s| s.expect("Failed to read sample"))
+                .collect(),
             SampleFormat::Int => {
                 match spec.bits_per_sample {
                     8 => reader
@@ -50,7 +48,7 @@ impl MetronomePlayer {
                 }
             }
         };
-    
+
         samples
     }
 
@@ -72,7 +70,7 @@ impl MetronomePlayer {
 
     pub fn add_to_buffer(&mut self, buffer: &mut [f32]) {
         // Clamp current_position in case parameters have changed
-        self.current_position = self.current_position.min(self.samples_per_beat()-1);
+        self.current_position = self.current_position.min(self.samples_per_beat() - 1);
 
         for sample in buffer.iter_mut() {
             if self.current_position < self.click_audio.len() {

@@ -1,6 +1,6 @@
 use egui_plot::PlotPoint;
-use realfft::{RealFftPlanner, RealToComplex};
 use num_complex::Complex32;
+use realfft::{RealFftPlanner, RealToComplex};
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -17,7 +17,13 @@ pub struct FrequencyAnalyser {
 }
 
 impl FrequencyAnalyser {
-    pub fn new(sample_rate: f32, min_freq: f32, mut max_freq: f32, num_bins: usize, oversample: f32) -> Self {
+    pub fn new(
+        sample_rate: f32,
+        min_freq: f32,
+        mut max_freq: f32,
+        num_bins: usize,
+        oversample: f32,
+    ) -> Self {
         if max_freq > sample_rate * 0.5 {
             tracing::warn!("FrequencyAnalyser: max_freq is greater than Nyquist frequency, clamping to Nyquist");
             max_freq = sample_rate * 0.5;
@@ -64,16 +70,16 @@ impl FrequencyAnalyser {
             .expect("Buffers and input should be correct");
 
         let bin_width = self.sample_rate / self.fft.len() as f32;
-    
+
         let log2_min = self.min_freq.log2();
         let log2_max = self.max_freq.log2();
         let log2_step = (log2_max - log2_min) / self.num_bins as f32;
-    
+
         for bin in 0..self.num_bins {
             let log2_f = log2_min + bin as f32 * log2_step;
             let freq_center = 2f32.powf(log2_f);
             let fft_bin_index = (freq_center / bin_width).round() as usize;
-    
+
             if fft_bin_index < self.output.len() {
                 amplitude_output.push(PlotPoint::new(log2_f, self.output[fft_bin_index].norm()))
             } else {
@@ -82,6 +88,6 @@ impl FrequencyAnalyser {
             }
         }
 
-        return true
+        return true;
     }
 }

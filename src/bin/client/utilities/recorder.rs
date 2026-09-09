@@ -2,18 +2,16 @@ use std::time::Instant;
 
 use eframe::egui::{self, Color32, RichText, Vec2, Widget};
 
-use crate::state::State;
 use super::start_stop_icon;
+use crate::state::State;
 
 pub struct RecorderUtility {
-    state: &'static State
+    state: &'static State,
 }
 
 impl RecorderUtility {
     pub fn new(state: &'static State) -> Self {
-        Self {
-            state
-        }
+        Self { state }
     }
 }
 
@@ -23,13 +21,14 @@ impl Widget for &mut RecorderUtility {
 
         ui.vertical_centered(|ui| {
             ui.add_space(10.0);
-            ui.label(RichText::from("Record").size(28.0).color(Color32::from_gray(90)));
+            ui.label(
+                RichText::from("Record")
+                    .size(28.0)
+                    .color(Color32::from_gray(90)),
+            );
             ui.add_space(7.0);
             if let Some(start_time) = recording_time {
-                let button_response = ui.add_sized(
-                    Vec2::splat(50.0),
-                    egui::Button::new("")
-                );
+                let button_response = ui.add_sized(Vec2::splat(50.0), egui::Button::new(""));
                 if button_response.clicked() {
                     self.state.set_recording(false);
                 }
@@ -39,14 +38,18 @@ impl Widget for &mut RecorderUtility {
                 ui.add_space(10.0);
 
                 let elapsed = Instant::now().duration_since(start_time);
-                ui.label(RichText::new(format!("Recording... {:02}:{:02}", elapsed.as_secs() / 60, elapsed.as_secs() % 60)).size(30.0));
+                ui.label(
+                    RichText::new(format!(
+                        "Recording... {:02}:{:02}",
+                        elapsed.as_secs() / 60,
+                        elapsed.as_secs() % 60
+                    ))
+                    .size(30.0),
+                );
 
                 ui.add_space(10.0);
             } else {
-                let button_response = ui.add_sized(
-                    Vec2::splat(50.0),
-                    egui::Button::new("")
-                );
+                let button_response = ui.add_sized(Vec2::splat(50.0), egui::Button::new(""));
                 if button_response.clicked() {
                     self.state.set_recording(true);
                 }
@@ -56,13 +59,15 @@ impl Widget for &mut RecorderUtility {
                 ui.add_space(10.0);
 
                 let mut save_clean = self.state.recording_save_clean.get();
-                if ui.checkbox(&mut save_clean, RichText::new("Save clean").size(30.0)).on_hover_text("Save the recording with and without pedal effects").changed() {
+                if ui
+                    .checkbox(&mut save_clean, RichText::new("Save clean").size(30.0))
+                    .on_hover_text("Save the recording with and without pedal effects")
+                    .changed()
+                {
                     self.state.set_recorder_clean(save_clean);
                 }
             }
-        }).response
-        
+        })
+        .response
     }
-
-    
 }

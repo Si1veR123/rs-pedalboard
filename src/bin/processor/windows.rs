@@ -1,15 +1,23 @@
-use cpal::{traits::{DeviceTrait, HostTrait}, Device, Host};
-use crate::ProcessorSettings;
 use super::device_select::device_select_menu;
+use crate::ProcessorSettings;
+use cpal::{
+    traits::{DeviceTrait, HostTrait},
+    Device, Host,
+};
 use rs_pedalboard::audio_devices::{get_input_devices, get_output_devices};
 
 fn find_device_by_name(host: &Host, name: &str) -> Option<Device> {
-    host.devices().expect("Failed to get devices")
+    host.devices()
+        .expect("Failed to get devices")
         .find(|d| d.name().unwrap() == name)
 }
 
 #[tracing::instrument(level = "trace")]
-pub fn setup(input: Option<&str>, output: Option<&str>, args: &ProcessorSettings) -> (Host, Device, Device) {
+pub fn setup(
+    input: Option<&str>,
+    output: Option<&str>,
+    args: &ProcessorSettings,
+) -> (Host, Device, Device) {
     let host_id = args.host.into();
 
     if !cpal::available_hosts().contains(&host_id) {
@@ -23,7 +31,8 @@ pub fn setup(input: Option<&str>, output: Option<&str>, args: &ProcessorSettings
         let asio_driver = match output {
             Some(name) => find_device_by_name(&windows_host, name).expect("ASIO driver not found"),
             None => {
-                let asio_drivers = get_input_devices(Some(&windows_host)).expect("Failed to get ASIO drivers");
+                let asio_drivers =
+                    get_input_devices(Some(&windows_host)).expect("Failed to get ASIO drivers");
                 println!("Asio Drivers:");
                 let asio_driver_string = device_select_menu(&asio_drivers);
                 find_device_by_name(&windows_host, &asio_driver_string).unwrap()
@@ -34,28 +43,30 @@ pub fn setup(input: Option<&str>, output: Option<&str>, args: &ProcessorSettings
         let input_device = match input {
             Some(name) => find_device_by_name(&windows_host, name).expect("Input device not found"),
             None => {
-                let input_devices = get_input_devices(Some(&windows_host)).expect("Failed to get input devices");
+                let input_devices =
+                    get_input_devices(Some(&windows_host)).expect("Failed to get input devices");
                 println!("Input Devices:");
                 let input_device_string = device_select_menu(&input_devices);
                 find_device_by_name(&windows_host, &input_device_string).unwrap()
             }
         };
-    
+
         let output_device = match output {
-            Some(name) => find_device_by_name(&windows_host, name).expect("Output device not found"),
+            Some(name) => {
+                find_device_by_name(&windows_host, name).expect("Output device not found")
+            }
             None => {
-                let output_devices: Vec<String> = get_output_devices(Some(&windows_host)).expect("Failed to get output devices");
-    
+                let output_devices: Vec<String> =
+                    get_output_devices(Some(&windows_host)).expect("Failed to get output devices");
+
                 println!("Output Devices:");
                 let output_device_string = device_select_menu(&output_devices);
                 find_device_by_name(&windows_host, &output_device_string).unwrap()
             }
         };
-    
+
         (windows_host, input_device, output_device)
     }
 }
 
-pub fn after_setup(_out_channels: cpal::ChannelCount) {
-
-}
+pub fn after_setup(_out_channels: cpal::ChannelCount) {}

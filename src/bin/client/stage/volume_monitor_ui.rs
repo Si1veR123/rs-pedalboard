@@ -1,4 +1,4 @@
-use eframe::egui::{Response, Ui, Widget, Color32, Rect, Vec2, Sense};
+use eframe::egui::{Color32, Rect, Response, Sense, Ui, Vec2, Widget};
 use rs_pedalboard::DEFAULT_VOLUME_MONITOR_UPDATE_RATE;
 use std::time::{Duration, Instant};
 
@@ -8,7 +8,7 @@ pub struct VolumeMonitorWidget {
     target_volume: f32,
     smoothing_factor: f32,
     bar_color: Color32,
-    clipping: (bool, Instant)
+    clipping: (bool, Instant),
 }
 
 impl VolumeMonitorWidget {
@@ -30,7 +30,9 @@ impl VolumeMonitorWidget {
         if volume >= 1.0 {
             self.clipping.0 = true;
             self.clipping.1 = Instant::now();
-        } else if self.clipping.0 && Instant::now().duration_since(self.clipping.1) > super::CLIPPING_STATE_DURATION {
+        } else if self.clipping.0
+            && Instant::now().duration_since(self.clipping.1) > super::CLIPPING_STATE_DURATION
+        {
             self.clipping.0 = false; // Reset clipping state after 2 seconds of no clipping
         }
     }
@@ -66,7 +68,12 @@ impl Widget for &mut VolumeMonitorWidget {
 
         let color = if self.clipping.0 {
             // Change color to red and add border if clipping
-            ui.painter().rect_stroke(bar_rect, 1.0, (3.0, Color32::RED), eframe::egui::StrokeKind::Outside);
+            ui.painter().rect_stroke(
+                bar_rect,
+                1.0,
+                (3.0, Color32::RED),
+                eframe::egui::StrokeKind::Outside,
+            );
             Color32::DARK_RED
         } else {
             self.bar_color

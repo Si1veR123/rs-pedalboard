@@ -1,12 +1,12 @@
-use std::{path::PathBuf, vec};
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::sync::Arc;
+use std::{path::PathBuf, vec};
 
-use neural_amp_modeler::NeuralAmpModeler;
-use serde::{ser::SerializeMap, Deserialize, Serialize};
 use eframe::egui::{self, include_image, Vec2};
 use egui_directory_combobox::{DirectoryComboBox, DirectoryNode};
+use neural_amp_modeler::NeuralAmpModeler;
+use serde::{ser::SerializeMap, Deserialize, Serialize};
 
 use super::{ui::pedal_knob, PedalParameter, PedalParameterValue, PedalTrait};
 use crate::pedals::ui::{pedal_switch, sideways_arrow};
@@ -30,13 +30,14 @@ pub struct Nam {
     midi_min_combobox_widget: DirectoryComboBox,
     midi_max_combobox_widget: DirectoryComboBox,
     folders_state: u32, // Used to track changes in the root directories settings
-    id: u32
+    id: u32,
 }
 
 impl Clone for Nam {
     fn clone(&self) -> Self {
         let buf_size = self.modeler.get_maximum_buffer_size();
-        let new_modeler = NeuralAmpModeler::new_with_maximum_buffer_size(buf_size).expect("Failed to create neural amp modeler");
+        let new_modeler = NeuralAmpModeler::new_with_maximum_buffer_size(buf_size)
+            .expect("Failed to create neural amp modeler");
 
         let mut new_nam = Nam {
             modeler: new_modeler,
@@ -46,7 +47,7 @@ impl Clone for Nam {
             midi_min_combobox_widget: self.midi_min_combobox_widget.clone(),
             midi_max_combobox_widget: self.midi_max_combobox_widget.clone(),
             folders_state: self.folders_state,
-            id: self.id
+            id: self.id,
         };
 
         if cfg!(feature = "processor") {
@@ -73,17 +74,27 @@ impl Serialize for Nam {
         ser_map.serialize_entry("id", &self.id)?;
         let mut parameters = self.parameters.clone();
         // If the model path is in the pedalboard NAM directory, store it as a relative path
-        if let Some(model_path) = self.parameters.get("Model").and_then(|p| p.value.as_str()).map(PathBuf::from) {
+        if let Some(model_path) = self
+            .parameters
+            .get("Model")
+            .and_then(|p| p.value.as_str())
+            .map(PathBuf::from)
+        {
             if let Some(save_dir) = Self::get_save_directory() {
                 if let Ok(canon_model_path) = dunce::canonicalize(&model_path) {
                     if let Ok(relative_path) = canon_model_path.strip_prefix(&save_dir) {
                         // Convert relative paths to use forward slashes for cross platform compatibility
                         // Not used for absolute path as they are not intended to be portable
                         let relative_path_converted = forward_slash_path(relative_path);
-                        parameters.get_mut("Model").unwrap().value = PedalParameterValue::String(relative_path_converted.to_string_lossy().to_string());
+                        parameters.get_mut("Model").unwrap().value = PedalParameterValue::String(
+                            relative_path_converted.to_string_lossy().to_string(),
+                        );
                     }
                 } else {
-                    tracing::warn!("Failed to canonicalize model path {:?} for serialization", model_path);
+                    tracing::warn!(
+                        "Failed to canonicalize model path {:?} for serialization",
+                        model_path
+                    );
                 }
             }
         }
@@ -125,7 +136,8 @@ impl<'a> Deserialize<'a> for Nam {
         };
 
         // Default buffer size, can be changed later with `set_config`
-        let modeler = NeuralAmpModeler::new_with_maximum_buffer_size(512).expect("Failed to create neural amp modeler");
+        let modeler = NeuralAmpModeler::new_with_maximum_buffer_size(512)
+            .expect("Failed to create neural amp modeler");
 
         let mut pedal = Nam {
             modeler,
@@ -133,23 +145,28 @@ impl<'a> Deserialize<'a> for Nam {
             dry_buffer: vec![0.0; 512],
             folders_state: 0,
             combobox_widget: Self::get_empty_directory_combo_box(helper.id),
-            midi_min_combobox_widget: Self::get_empty_directory_combo_box(egui::Id::new(helper.id).with("midi_min")),
-            midi_max_combobox_widget: Self::get_empty_directory_combo_box(egui::Id::new(helper.id).with("midi_max")),
-            id: helper.id
+            midi_min_combobox_widget: Self::get_empty_directory_combo_box(
+                egui::Id::new(helper.id).with("midi_min"),
+            ),
+            midi_max_combobox_widget: Self::get_empty_directory_combo_box(
+                egui::Id::new(helper.id).with("midi_max"),
+            ),
+            id: helper.id,
         };
 
         if cfg!(feature = "processor") {
             pedal.set_model(model);
         } else {
             let model_string = model.to_string_lossy().to_string();
-            pedal.parameters.get_mut("Model").unwrap().value = PedalParameterValue::String(model_string.clone());
+            pedal.parameters.get_mut("Model").unwrap().value =
+                PedalParameterValue::String(model_string.clone());
             if model_string.is_empty() {
                 pedal.combobox_widget.set_selection::<&str>(None);
             } else {
                 pedal.combobox_widget.set_selection(Some(model_string));
             }
         }
-        
+
         Ok(pedal)
     }
 }
@@ -213,7 +230,8 @@ impl Nam {
             },
         );
 
-        let modeler = NeuralAmpModeler::new_with_maximum_buffer_size(buffer_size).expect("Failed to create neural amp modeler");
+        let modeler = NeuralAmpModeler::new_with_maximum_buffer_size(buffer_size)
+            .expect("Failed to create neural amp modeler");
 
         let id = unique_time_id();
         Nam {
@@ -222,9 +240,13 @@ impl Nam {
             dry_buffer: vec![0.0; buffer_size],
             folders_state: 0,
             combobox_widget: Self::get_empty_directory_combo_box(id),
-            midi_min_combobox_widget: Self::get_empty_directory_combo_box(egui::Id::new(id).with("midi_min")),
-            midi_max_combobox_widget: Self::get_empty_directory_combo_box(egui::Id::new(id).with("midi_max")),
-            id
+            midi_min_combobox_widget: Self::get_empty_directory_combo_box(
+                egui::Id::new(id).with("midi_min"),
+            ),
+            midi_max_combobox_widget: Self::get_empty_directory_combo_box(
+                egui::Id::new(id).with("midi_max"),
+            ),
+            id,
         }
     }
 
@@ -270,13 +292,12 @@ impl Nam {
         }
     }
 
-
     pub fn set_model(&mut self, model_path: PathBuf) {
         if model_path.as_os_str().is_empty() {
             self.remove_model();
             return;
         }
-        
+
         let canon_path = match dunce::canonicalize(&model_path) {
             Ok(p) => p,
             Err(e) => {
@@ -296,7 +317,8 @@ impl Nam {
         if let Err(e) = self.modeler.set_model(model_path) {
             tracing::error!("Failed to set model: {}", e);
         } else {
-            self.parameters.get_mut("Model").unwrap().value = PedalParameterValue::String(string_path);
+            self.parameters.get_mut("Model").unwrap().value =
+                PedalParameterValue::String(string_path);
 
             // Update combobox to match new selection (in case it was not set from the combobox itself)
             let model_path = self.modeler.get_model_path();
@@ -305,59 +327,80 @@ impl Nam {
     }
 
     pub fn remove_model(&mut self) {
-        self.parameters.get_mut("Model").unwrap().value = PedalParameterValue::String("".to_string());
+        self.parameters.get_mut("Model").unwrap().value =
+            PedalParameterValue::String("".to_string());
         let buffer_size = self.modeler.get_maximum_buffer_size();
-        self.modeler = NeuralAmpModeler::new_with_maximum_buffer_size(buffer_size).expect("Failed to create neural amp modeler");
+        self.modeler = NeuralAmpModeler::new_with_maximum_buffer_size(buffer_size)
+            .expect("Failed to create neural amp modeler");
         self.combobox_widget.set_selection::<&str>(None);
     }
 
     pub fn get_save_directory() -> Option<PathBuf> {
         if let Some(override_path) = std::env::var_os(OVERRIDE_DEFAULT_FOLDERS_ENV_VAR) {
-            tracing::debug!("Using overridden NAM save directory from env var {}: {:?}", OVERRIDE_DEFAULT_FOLDERS_ENV_VAR, override_path);
+            tracing::debug!(
+                "Using overridden NAM save directory from env var {}: {:?}",
+                OVERRIDE_DEFAULT_FOLDERS_ENV_VAR,
+                override_path
+            );
             let path_buf = PathBuf::from(override_path);
             return Some(dunce::canonicalize(path_buf).ok()?);
         }
-        Some(dunce::canonicalize(homedir::my_home().ok()??.join(SAVE_DIR).join(NAM_SAVE_PATH)).ok()?)
+        Some(
+            dunce::canonicalize(homedir::my_home().ok()??.join(SAVE_DIR).join(NAM_SAVE_PATH))
+                .ok()?,
+        )
     }
 
     /// Update the main pedal value, and midi min and max combobox widgets if the root directories have changed
     fn update_combobox_nodes(&mut self, ui: &mut egui::Ui) {
         // Refresh the list of root directories if it has changed
-        let new_root_directories: Option<Vec<egui_directory_combobox::DirectoryNode>> = ui.ctx().memory_mut(|m| {
-            let state = m.data.get_temp_mut_or("nam_folders_state".into(), 1u32);
-            if *state != self.folders_state {
-                self.folders_state = *state;
-                m.data.get_temp("nam_folders".into()).as_ref().cloned()
-            } else {
-                None
-            }
-        });
+        let new_root_directories: Option<Vec<egui_directory_combobox::DirectoryNode>> =
+            ui.ctx().memory_mut(|m| {
+                let state = m.data.get_temp_mut_or("nam_folders_state".into(), 1u32);
+                if *state != self.folders_state {
+                    self.folders_state = *state;
+                    m.data.get_temp("nam_folders".into()).as_ref().cloned()
+                } else {
+                    None
+                }
+            });
 
         if let Some(mut roots) = new_root_directories {
             if let Some(main_save_dir) = Self::get_save_directory() {
-                roots.push(egui_directory_combobox::DirectoryNode::from_path(&main_save_dir));
+                roots.push(egui_directory_combobox::DirectoryNode::from_path(
+                    &main_save_dir,
+                ));
             } else {
                 tracing::warn!("Failed to get main save directory");
             }
-            let model_path = self.combobox_widget.selected().and_then(|p| p.to_str().map(|s| s.to_string()));
+            let model_path = self
+                .combobox_widget
+                .selected()
+                .and_then(|p| p.to_str().map(|s| s.to_string()));
             self.combobox_widget = Self::get_empty_directory_combo_box(self.id);
             self.combobox_widget.set_selection(model_path);
 
-            let midi_min_path = self.midi_min_combobox_widget.selected().and_then(|p| p.to_str().map(|s| s.to_string()));
-            self.midi_min_combobox_widget = Self::get_empty_directory_combo_box(egui::Id::new(self.id).with("midi_min"));
+            let midi_min_path = self
+                .midi_min_combobox_widget
+                .selected()
+                .and_then(|p| p.to_str().map(|s| s.to_string()));
+            self.midi_min_combobox_widget =
+                Self::get_empty_directory_combo_box(egui::Id::new(self.id).with("midi_min"));
             self.midi_min_combobox_widget.set_selection(midi_min_path);
 
-            let midi_max_path = self.midi_max_combobox_widget.selected().and_then(|p| p.to_str().map(|s| s.to_string()));
-            self.midi_max_combobox_widget = Self::get_empty_directory_combo_box(egui::Id::new(self.id).with("midi_max"));
+            let midi_max_path = self
+                .midi_max_combobox_widget
+                .selected()
+                .and_then(|p| p.to_str().map(|s| s.to_string()));
+            self.midi_max_combobox_widget =
+                Self::get_empty_directory_combo_box(egui::Id::new(self.id).with("midi_max"));
             self.midi_max_combobox_widget.set_selection(midi_max_path);
 
             // If there is only one root directory, use its children as the roots
             let nodes = if roots.len() == 1 {
                 match roots.pop().unwrap() {
-                    egui_directory_combobox::DirectoryNode::Directory(_, children) => {
-                        children
-                    },
-                    _ => roots
+                    egui_directory_combobox::DirectoryNode::Directory(_, children) => children,
+                    _ => roots,
                 }
             } else {
                 roots
@@ -369,14 +412,19 @@ impl Nam {
         }
     }
 
-    fn show_model_combobox(&mut self, ui: &mut egui::Ui, parameter: Option<&PedalParameter>, location: ParameterUILocation) -> egui::InnerResponse<Option<PedalParameterValue>> {
+    fn show_model_combobox(
+        &mut self,
+        ui: &mut egui::Ui,
+        parameter: Option<&PedalParameter>,
+        location: ParameterUILocation,
+    ) -> egui::InnerResponse<Option<PedalParameterValue>> {
         self.update_combobox_nodes(ui);
 
         let combobox_to_show = match location {
             ParameterUILocation::Pedal => &mut self.combobox_widget,
             ParameterUILocation::ParameterWindow => &mut self.combobox_widget,
             ParameterUILocation::MidiMin => &mut self.midi_min_combobox_widget,
-            ParameterUILocation::MidiMax => &mut self.midi_max_combobox_widget
+            ParameterUILocation::MidiMax => &mut self.midi_max_combobox_widget,
         };
 
         if let Some(param) = parameter {
@@ -390,20 +438,21 @@ impl Nam {
         }
 
         let old = combobox_to_show.selected().map(|p| p.to_path_buf());
-        let response = ui.add_sized(Vec2::new(ui.available_width(), 15.0), &mut *combobox_to_show);
+        let response = ui.add_sized(
+            Vec2::new(ui.available_width(), 15.0),
+            &mut *combobox_to_show,
+        );
 
         let mut to_change = None;
         if old.as_ref().map(|p| p.as_path()) != combobox_to_show.selected() {
             match combobox_to_show.selected() {
-                Some(path) => {
-                    match path.to_str() {
-                        Some(s) => {
-                            let selected_str = s.to_string();
-                            to_change = Some(PedalParameterValue::String(selected_str));
-                        },
-                        None => {
-                            tracing::warn!("Selected model path is not valid unicode");
-                        }
+                Some(path) => match path.to_str() {
+                    Some(s) => {
+                        let selected_str = s.to_string();
+                        to_change = Some(PedalParameterValue::String(selected_str));
+                    }
+                    None => {
+                        tracing::warn!("Selected model path is not valid unicode");
                     }
                 },
                 None => {
@@ -414,7 +463,7 @@ impl Nam {
 
         egui::InnerResponse {
             inner: to_change,
-            response
+            response,
         }
     }
 }
@@ -440,9 +489,27 @@ impl PedalTrait for Nam {
             return;
         }
 
-        let gain = self.parameters.get("Gain").unwrap().value.as_float().unwrap();
-        let dry_wet = self.parameters.get("Dry/Wet").unwrap().value.as_float().unwrap();
-        let level = self.parameters.get("Level").unwrap().value.as_float().unwrap();
+        let gain = self
+            .parameters
+            .get("Gain")
+            .unwrap()
+            .value
+            .as_float()
+            .unwrap();
+        let dry_wet = self
+            .parameters
+            .get("Dry/Wet")
+            .unwrap()
+            .value
+            .as_float()
+            .unwrap();
+        let level = self
+            .parameters
+            .get("Level")
+            .unwrap()
+            .value
+            .as_float()
+            .unwrap();
 
         buffer.iter_mut().for_each(|sample| {
             *sample *= gain;
@@ -460,7 +527,10 @@ impl PedalTrait for Nam {
 
     fn reset_buffer(&mut self) {
         if self.has_loaded_model() {
-            self.modeler.reset_and_prewarm_model(self.modeler.expected_sample_rate(), self.modeler.get_maximum_buffer_size());
+            self.modeler.reset_and_prewarm_model(
+                self.modeler.expected_sample_rate(),
+                self.modeler.get_maximum_buffer_size(),
+            );
         }
     }
 
@@ -472,14 +542,18 @@ impl PedalTrait for Nam {
         &mut self.parameters
     }
 
-    fn set_parameter_value(&mut self,name: &str, value: PedalParameterValue) {
+    fn set_parameter_value(&mut self, name: &str, value: PedalParameterValue) {
         let Some(existing_param) = self.parameters.get(name) else {
             tracing::error!("Parameter {} not found", name);
             return;
         };
 
         if !existing_param.is_valid(&value) {
-            tracing::warn!("Attempted to set invalid value for parameter {}: {:?}", name, value);
+            tracing::warn!(
+                "Attempted to set invalid value for parameter {}: {:?}",
+                name,
+                value
+            );
             return;
         }
 
@@ -510,99 +584,144 @@ impl PedalTrait for Nam {
         }
     }
 
-    fn get_string_values(&self,_parameter_name: &str) -> Option<Vec<String>> {
-        Some(self.combobox_widget.get_all_paths().iter().map(|p| p.to_string_lossy().to_string()).collect())
+    fn get_string_values(&self, _parameter_name: &str) -> Option<Vec<String>> {
+        Some(
+            self.combobox_widget
+                .get_all_paths()
+                .iter()
+                .map(|p| p.to_string_lossy().to_string())
+                .collect(),
+        )
     }
 
-    fn parameter_editor_ui(&mut self, ui: &mut egui::Ui, name: &str, parameter: &PedalParameter, location: ParameterUILocation) -> egui::InnerResponse<Option<PedalParameterValue>> {
+    fn parameter_editor_ui(
+        &mut self,
+        ui: &mut egui::Ui,
+        name: &str,
+        parameter: &PedalParameter,
+        location: ParameterUILocation,
+    ) -> egui::InnerResponse<Option<PedalParameterValue>> {
         if name == "Model" {
             ui.spacing_mut().combo_width = ui.available_width();
-            
+
             self.show_model_combobox(ui, Some(parameter), location)
         } else {
             parameter.parameter_editor_ui(ui)
         }
     }
 
-    fn ui(&mut self, ui: &mut egui::Ui, _message_buffer: &[String]) -> Option<(String,PedalParameterValue)> {
+    fn ui(
+        &mut self,
+        ui: &mut egui::Ui,
+        _message_buffer: &[String],
+    ) -> Option<(String, PedalParameterValue)> {
         let pedal_rect = ui.available_rect_before_wrap();
         ui.add(egui::Image::new(include_image!("images/nam.png")));
 
         let combo_box_rect = pedal_rect
-            .scale_from_center2(
-                Vec2::new(0.9, 0.1)
-            ).translate(
-                Vec2::new(0.0, -0.15*pedal_rect.height())
-            );
+            .scale_from_center2(Vec2::new(0.9, 0.1))
+            .translate(Vec2::new(0.0, -0.15 * pedal_rect.height()));
 
-        let mut combo_ui = ui.new_child(
-            egui::UiBuilder::new()
-                .max_rect(combo_box_rect)
-        );
+        let mut combo_ui = ui.new_child(egui::UiBuilder::new().max_rect(combo_box_rect));
 
         let mut to_change = None;
 
         combo_ui.spacing_mut().combo_width = combo_ui.available_width();
 
-        if let Some(new_model_value) = self.show_model_combobox(&mut combo_ui, None, ParameterUILocation::Pedal).inner {
+        if let Some(new_model_value) = self
+            .show_model_combobox(&mut combo_ui, None, ParameterUILocation::Pedal)
+            .inner
+        {
             to_change = Some(("Model".to_string(), new_model_value));
         }
 
-        let button_rect = combo_box_rect.translate(Vec2::new(0.0, combo_box_rect.height() + 0.02*pedal_rect.height()));
+        let button_rect = combo_box_rect.translate(Vec2::new(
+            0.0,
+            combo_box_rect.height() + 0.02 * pedal_rect.height(),
+        ));
         let mut button_ui = ui.new_child(
             egui::UiBuilder::new()
                 .max_rect(button_rect)
-                .layout(egui::Layout::left_to_right(egui::Align::Min))
+                .layout(egui::Layout::left_to_right(egui::Align::Min)),
         );
-        let button_size = Vec2::new(button_rect.width()*0.47, button_rect.height());
-        let left_button_response = button_ui.add_sized(
-            button_size,
-            egui::Button::new("")
-        );
-        
+        let button_size = Vec2::new(button_rect.width() * 0.47, button_rect.height());
+        let left_button_response = button_ui.add_sized(button_size, egui::Button::new(""));
+
         sideways_arrow(ui, left_button_response.rect, true);
 
         if left_button_response.clicked() {
             self.combobox_widget.select_previous_file();
             if let Some(path) = self.combobox_widget.selected() {
                 if let Some(s) = path.to_str() {
-                    to_change = Some((String::from("Model"), PedalParameterValue::String(s.to_string())));
+                    to_change = Some((
+                        String::from("Model"),
+                        PedalParameterValue::String(s.to_string()),
+                    ));
                 } else {
                     tracing::warn!("Selected model path is not valid unicode");
                 }
             }
         };
-        button_ui.add_space(button_rect.width()*0.06);
-        let right_button_response = button_ui.add_sized(
-            button_size,
-            egui::Button::new("")
-        );
-        
+        button_ui.add_space(button_rect.width() * 0.06);
+        let right_button_response = button_ui.add_sized(button_size, egui::Button::new(""));
+
         sideways_arrow(ui, right_button_response.rect, false);
 
         if right_button_response.clicked() {
             self.combobox_widget.select_next_file();
             if let Some(path) = self.combobox_widget.selected() {
                 if let Some(s) = path.to_str() {
-                    to_change = Some((String::from("Model"), PedalParameterValue::String(s.to_string())));
+                    to_change = Some((
+                        String::from("Model"),
+                        PedalParameterValue::String(s.to_string()),
+                    ));
                 } else {
                     tracing::warn!("Selected model path is not valid unicode");
                 }
             }
         };
 
-        if let Some(value) = pedal_knob(ui, "", "Gain", self.parameters.get("Gain").unwrap(), Vec2::new(0.05, 0.06), 0.25, self.id) {
+        if let Some(value) = pedal_knob(
+            ui,
+            "",
+            "Gain",
+            self.parameters.get("Gain").unwrap(),
+            Vec2::new(0.05, 0.06),
+            0.25,
+            self.id,
+        ) {
             to_change = Some(("Gain".to_string(), value));
         }
-        if let Some(value) = pedal_knob(ui, "", "Dry/Wet", self.parameters.get("Dry/Wet").unwrap(), Vec2::new(0.375, 0.06), 0.25, self.id) {
+        if let Some(value) = pedal_knob(
+            ui,
+            "",
+            "Dry/Wet",
+            self.parameters.get("Dry/Wet").unwrap(),
+            Vec2::new(0.375, 0.06),
+            0.25,
+            self.id,
+        ) {
             to_change = Some(("Dry/Wet".to_string(), value));
         }
-        if let Some(value) = pedal_knob(ui, "", "Level", self.parameters.get("Level").unwrap(), Vec2::new(0.7, 0.06), 0.25, self.id) {
+        if let Some(value) = pedal_knob(
+            ui,
+            "",
+            "Level",
+            self.parameters.get("Level").unwrap(),
+            Vec2::new(0.7, 0.06),
+            0.25,
+            self.id,
+        ) {
             to_change = Some(("Level".to_string(), value));
         }
 
-
-        let active_param = self.get_parameters().get("Active").unwrap().value.as_bool().unwrap();
+        let active_param = self
+            .get_parameters()
+            .get("Active")
+            .unwrap()
+            .value
+            .as_bool()
+            .unwrap();
         if let Some(value) = pedal_switch(ui, active_param, egui::Vec2::new(0.33, 0.72), 0.16) {
             to_change = Some(("Active".to_string(), PedalParameterValue::Bool(value)));
         }

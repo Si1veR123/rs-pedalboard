@@ -322,13 +322,15 @@ impl<'a> Handle<'a> {
         }
 
         // If on a layer, transform the item position to global coordinates and use this to calculate the offset
-        let item_pos_for_offset = if let Some(transform) = ui.ctx().layer_transform_to_global(ui.layer_id()) {
-            transform.mul_pos(self.item_pos)
-        } else {
-            self.item_pos
-        };
+        let item_pos_for_offset =
+            if let Some(transform) = ui.ctx().layer_transform_to_global(ui.layer_id()) {
+                transform.mul_pos(self.item_pos)
+            } else {
+                self.item_pos
+            };
 
-        let mouse_pos = ui.input(|i| i.pointer.hover_pos())
+        let mouse_pos = ui
+            .input(|i| i.pointer.hover_pos())
             .unwrap_or_default()
             .to_vec2();
 

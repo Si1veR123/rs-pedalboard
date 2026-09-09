@@ -5,7 +5,7 @@ pub struct BiquadFilter {
     pub y: [f32; 2],
     pub x: [f32; 2],
     b: [f32; 3],
-    a: [f32; 2]
+    a: [f32; 2],
 }
 
 impl BiquadFilter {
@@ -14,7 +14,7 @@ impl BiquadFilter {
             y: [0.0, 0.0],
             x: [0.0, 0.0],
             b,
-            a
+            a,
         }
     }
 
@@ -117,7 +117,8 @@ impl BiquadFilter {
 
     pub fn process(&mut self, x: f32) -> f32 {
         let y = self.b[0] * x + self.b[1] * self.x[0] + self.b[2] * self.x[1]
-            - self.a[0] * self.y[0] - self.a[1] * self.y[1];
+            - self.a[0] * self.y[0]
+            - self.a[1] * self.y[1];
         self.x[1] = self.x[0];
         self.x[0] = x;
         self.y[1] = self.y[0];

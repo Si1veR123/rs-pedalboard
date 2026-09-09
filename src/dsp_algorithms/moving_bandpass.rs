@@ -13,7 +13,13 @@ pub struct MovingBandPass {
 }
 
 impl MovingBandPass {
-    pub fn new(freq: f32, sample_rate: f32, width: f32, update_rate: usize, smoothing_ms: f32) -> Self {
+    pub fn new(
+        freq: f32,
+        sample_rate: f32,
+        width: f32,
+        update_rate: usize,
+        smoothing_ms: f32,
+    ) -> Self {
         let q = 1.0 / width;
         // Make smoothing independent of sample rate
         let smoothing_samples = (smoothing_ms * sample_rate) / 1000.0;
@@ -60,7 +66,7 @@ impl MovingBandPass {
         if self.counter % self.update_rate == 0 {
             self.current_freq = self.smoothing_per_update * self.current_freq
                 + (1.0 - self.smoothing_per_update) * self.target_freq;
-            
+
             self.set_band_filter();
         }
         self.counter = self.counter.wrapping_add(1);

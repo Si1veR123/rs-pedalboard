@@ -1,5 +1,8 @@
 mod pedalboard_panel_ui;
-use std::{collections::HashMap, time::{Duration, Instant}};
+use std::{
+    collections::HashMap,
+    time::{Duration, Instant},
+};
 
 use pedalboard_panel_ui::pedalboard_stage_panel;
 
@@ -10,9 +13,9 @@ mod volume_monitor_ui;
 
 mod parameter_window;
 
+use crate::{stage::volume_monitor_ui::VolumeMonitorWidget, state::State};
 use eframe::egui::{self, Layout, Rect, Vec2, Widget};
 use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
-use crate::{stage::volume_monitor_ui::VolumeMonitorWidget, state::State};
 
 /// Repaint duration for pedalboard stage for stats, time etc.
 const STATS_STAGE_REPAINT_DURATION: std::time::Duration = Duration::from_secs(1);
@@ -27,13 +30,13 @@ pub enum CurrentAction {
     Rename((usize, String)),
     SaveToLibrary(usize),
     ChangeActive(usize),
-    AddPedalboard
+    AddPedalboard,
 }
 
 pub enum ClippingState {
     None,
     // Time that the last clip occurred
-    Clipping(Instant)
+    Clipping(Instant),
 }
 
 pub enum XRunState {
@@ -41,7 +44,7 @@ pub enum XRunState {
     // How many occurred since the first one, time that the last xrun occurred
     Few((usize, Instant)),
     // Time that the last xrun occurred
-    Many(Instant)
+    Many(Instant),
 }
 
 pub struct PedalboardStageScreen {
@@ -58,7 +61,7 @@ pub struct PedalboardStageScreen {
     xrun_state: XRunState,
     clipping_state: ClippingState,
     volume_monitors: (VolumeMonitorWidget, VolumeMonitorWidget),
-    cached_midi_devices: HashMap<u32, String> // id to name
+    cached_midi_devices: HashMap<u32, String>, // id to name
 }
 
 impl PedalboardStageScreen {
@@ -85,7 +88,7 @@ impl PedalboardStageScreen {
             xrun_state: XRunState::None,
             clipping_state: ClippingState::None,
             volume_monitors: (volume_monitor.clone(), volume_monitor),
-            cached_midi_devices: cached_midi_device_names
+            cached_midi_devices: cached_midi_device_names,
         }
     }
 
@@ -111,7 +114,7 @@ impl PedalboardStageScreen {
                 if xrun_count > 0 {
                     self.xrun_state = XRunState::Few((xrun_count, Instant::now()));
                 }
-            },
+            }
             XRunState::Few((count, last_xrun)) => {
                 // If no xrun occurred for more than 2 seconds, reset the state
                 if xrun_count == 0 && last_xrun.elapsed().as_secs() > 2 {
@@ -126,7 +129,7 @@ impl PedalboardStageScreen {
                 } else if xrun_count > 0 {
                     self.xrun_state = XRunState::Few((total, Instant::now()));
                 }
-            },
+            }
             XRunState::Many(last_xrun) => {
                 // If no xrun occurred for more than 2 seconds, reset the state
                 if xrun_count == 0 && last_xrun.elapsed().as_secs() > 2 {
@@ -154,7 +157,8 @@ impl PedalboardStageScreen {
 
     pub fn update_volume_monitors_from_commands(&mut self) {
         self.command_buffer.clear();
-        self.state.get_commands("volumemonitor", &mut self.command_buffer);
+        self.state
+            .get_commands("volumemonitor", &mut self.command_buffer);
 
         if self.command_buffer.is_empty() {
             return;
@@ -177,17 +181,21 @@ impl PedalboardStageScreen {
         tracing::error!("Invalid volume monitor command format: {}", latest_command);
     }
 
-    fn save_song_input_window(&mut self, ui: &mut egui::Ui, title: &str, input: &mut String, open: &mut bool) -> bool {
+    fn save_song_input_window(
+        &mut self,
+        ui: &mut egui::Ui,
+        title: &str,
+        input: &mut String,
+        open: &mut bool,
+    ) -> bool {
         let mut saved = false;
-        egui::Window::new(title)
-            .open(open)
-            .show(ui.ctx(), |ui| {
-                ui.add(egui::TextEdit::singleline(input));
-                
-                if ui.button("Save Song").clicked() {
-                    saved = true;
-                }
-            });
+        egui::Window::new(title).open(open).show(ui.ctx(), |ui| {
+            ui.add(egui::TextEdit::singleline(input));
+
+            if ui.button("Save Song").clicked() {
+                saved = true;
+            }
+        });
 
         if saved {
             *open = false;
@@ -196,17 +204,21 @@ impl PedalboardStageScreen {
         saved
     }
 
-    fn input_string_window(&mut self, ui: &mut egui::Ui, title: &str, input: &mut String, open: &mut bool) -> bool {
+    fn input_string_window(
+        &mut self,
+        ui: &mut egui::Ui,
+        title: &str,
+        input: &mut String,
+        open: &mut bool,
+    ) -> bool {
         let mut saved = false;
-        egui::Window::new(title)
-            .open(open)
-            .show(ui.ctx(), |ui| {
-                ui.add(egui::TextEdit::singleline(input));
-                
-                if ui.button("Save").clicked() {
-                    saved = true;
-                }
-            });
+        egui::Window::new(title).open(open).show(ui.ctx(), |ui| {
+            ui.add(egui::TextEdit::singleline(input));
+
+            if ui.button("Save").clicked() {
+                saved = true;
+            }
+        });
 
         if saved {
             *open = false;
@@ -219,17 +231,21 @@ impl PedalboardStageScreen {
 impl Widget for &mut PedalboardStageScreen {
     fn ui(self, ui: &mut egui::Ui) -> egui::Response {
         ui.ctx().request_repaint_after(STATS_STAGE_REPAINT_DURATION);
-        
+
         // We don't want to refresh every minimum, as that makes the update time inconsistent (updates quicker when moving mouse etc.)
-        if self.last_system_refresh.elapsed() > sysinfo::MINIMUM_CPU_UPDATE_INTERVAL.max(STATS_STAGE_REPAINT_DURATION) {
+        if self.last_system_refresh.elapsed()
+            > sysinfo::MINIMUM_CPU_UPDATE_INTERVAL.max(STATS_STAGE_REPAINT_DURATION)
+        {
             self.system.refresh_cpu_usage();
-            self.system.refresh_memory_specifics(sysinfo::MemoryRefreshKind::nothing().with_ram());
+            self.system
+                .refresh_memory_specifics(sysinfo::MemoryRefreshKind::nothing().with_ram());
             self.last_system_refresh = Instant::now();
         }
 
         if self.state.client_settings.borrow().show_volume_monitor {
             self.update_volume_monitors_from_commands();
-            ui.ctx().request_repaint_after(rs_pedalboard::DEFAULT_REFRESH_DURATION);
+            ui.ctx()
+                .request_repaint_after(rs_pedalboard::DEFAULT_REFRESH_DURATION);
         }
 
         self.update_xrun_from_commands();
@@ -241,14 +257,15 @@ impl Widget for &mut PedalboardStageScreen {
         ui.horizontal(|ui| {
             ui.allocate_ui_with_layout(
                 Vec2::new(width * 0.33, height),
-                    Layout::top_down(egui::Align::Center),
-                    |ui| pedalboard_stage_panel(self, ui)
+                Layout::top_down(egui::Align::Center),
+                |ui| pedalboard_stage_panel(self, ui),
             );
             ui.allocate_ui_with_layout(
                 Vec2::new(width * 0.67, height),
                 Layout::top_down(egui::Align::Center),
-                |ui| pedalboard_designer(self, ui)
+                |ui| pedalboard_designer(self, ui),
             );
-        }).response
+        })
+        .response
     }
 }

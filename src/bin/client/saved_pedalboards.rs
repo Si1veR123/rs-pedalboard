@@ -12,9 +12,15 @@ pub struct SavedPedalboards {
 }
 
 impl Serialize for SavedPedalboards {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
         let mut state = serializer.serialize_struct("SavedPedalboards", 3)?;
-        state.serialize_field("active_pedalboardstage", &*self.active_pedalboardstage.borrow())?;
+        state.serialize_field(
+            "active_pedalboardstage",
+            &*self.active_pedalboardstage.borrow(),
+        )?;
         state.serialize_field("pedalboard_library", &*self.pedalboard_library.borrow())?;
         state.serialize_field("songs_library", &*self.songs_library.borrow())?;
         state.end()
@@ -22,7 +28,10 @@ impl Serialize for SavedPedalboards {
 }
 
 impl<'de> Deserialize<'de> for SavedPedalboards {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: serde::Deserializer<'de> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
         #[derive(Deserialize)]
         struct SavedPedalboardsData {
             active_pedalboardstage: PedalboardSet,
@@ -35,7 +44,7 @@ impl<'de> Deserialize<'de> for SavedPedalboards {
         Ok(SavedPedalboards {
             active_pedalboardstage: RefCell::new(data.active_pedalboardstage),
             pedalboard_library: RefCell::new(data.pedalboard_library),
-            songs_library: RefCell::new(data.songs_library)
+            songs_library: RefCell::new(data.songs_library),
         })
     }
 }
@@ -58,7 +67,11 @@ impl SavedPedalboards {
         let library_pedalboards = &self.pedalboard_library.borrow();
 
         let mut i = 1;
-        while active_stage_pedalboards.iter().chain(library_pedalboards.iter()).any(|pedalboard| pedalboard.name == name) {
+        while active_stage_pedalboards
+            .iter()
+            .chain(library_pedalboards.iter())
+            .any(|pedalboard| pedalboard.name == name)
+        {
             if i == 1 {
                 let last_char = name.chars().last().unwrap_or(' ');
                 if last_char.is_numeric() {
@@ -72,55 +85,71 @@ impl SavedPedalboards {
                 name.pop();
                 name.push_str(&i.to_string());
             }
-            
+
             i += 1;
         }
         name
     }
 
     /// Delete a pedalboard from the pedalboard library
-    /// 
+    ///
     /// Requires a lock on pedalboard_library and songs_library
     pub fn delete_pedalboard(&self, id: u32) {
         let mut pedalboard_library = self.pedalboard_library.borrow_mut();
-        if let Some(index) = pedalboard_library.iter().position(|pedalboard| pedalboard.get_id() == id) {
+        if let Some(index) = pedalboard_library
+            .iter()
+            .position(|pedalboard| pedalboard.get_id() == id)
+        {
             pedalboard_library.remove(index);
         }
 
         // Remove the pedalboard from any songs
         let mut songs = self.songs_library.borrow_mut();
         for (_, pedalboards) in songs.iter_mut() {
-            if let Some(index) = pedalboards.iter().position(|pedalboard_id| *pedalboard_id == id) {
+            if let Some(index) = pedalboards
+                .iter()
+                .position(|pedalboard_id| *pedalboard_id == id)
+            {
                 pedalboards.remove(index);
             }
         }
     }
 
     /// Save the current pedalboard stage to a song
-    /// 
+    ///
     /// Requires a lock on active_pedalboardstage, pedalboard_library, and songs_library
     pub fn save_to_song(&self, song_name: String) {
         let active_pedalboards = &self.active_pedalboardstage.borrow().pedalboards;
         let mut pedalboard_library = self.pedalboard_library.borrow_mut();
 
         for pedalboard in active_pedalboards.iter() {
-            let pedalboard_in_library = pedalboard_library.iter_mut().find(|library_pedalboard| library_pedalboard.name == pedalboard.name);
+            let pedalboard_in_library = pedalboard_library
+                .iter_mut()
+                .find(|library_pedalboard| library_pedalboard.name == pedalboard.name);
             if pedalboard_in_library.is_none() {
                 pedalboard_library.push(pedalboard.clone());
             }
         }
 
-        self.songs_library.borrow_mut().insert(song_name, active_pedalboards.iter().map(|pedalboard| pedalboard.get_id()).collect());
+        self.songs_library.borrow_mut().insert(
+            song_name,
+            active_pedalboards
+                .iter()
+                .map(|pedalboard| pedalboard.get_id())
+                .collect(),
+        );
     }
 
     /// Save the pedalboard library into the save file
-    /// 
+    ///
     /// Requires a lock on active_pedalboardstage, pedalboard_library, and songs_library
     pub fn save(&self) -> Result<(), std::io::Error> {
-        let stringified = serde_json::to_string(self).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
-        let dir_path = homedir::my_home().map_err(
-            |e| std::io::Error::new(std::io::ErrorKind::Other, e)
-        )?.unwrap().join(SAVE_DIR);
+        let stringified = serde_json::to_string(self)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        let dir_path = homedir::my_home()
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?
+            .unwrap()
+            .join(SAVE_DIR);
 
         if !dir_path.exists() {
             std::fs::create_dir_all(&dir_path)?;
@@ -153,12 +182,18 @@ impl SavedPedalboards {
             Ok(stringified) => match serde_json::from_str::<Self>(&stringified) {
                 Ok(state) => state,
                 Err(e) => {
-                    tracing::error!("Failed to parse save file {:?}: {e}, using default", file_path);
+                    tracing::error!(
+                        "Failed to parse save file {:?}: {e}, using default",
+                        file_path
+                    );
                     Self::default()
                 }
             },
             Err(e) => {
-                tracing::error!("Failed to read save file {:?}: {e}, using default", file_path);
+                tracing::error!(
+                    "Failed to read save file {:?}: {e}, using default",
+                    file_path
+                );
                 Self::default()
             }
         }

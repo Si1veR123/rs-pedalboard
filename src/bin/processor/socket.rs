@@ -1,23 +1,31 @@
+use futures::{pin_mut, select, FutureExt};
 use ringbuf::traits::{Consumer, Split};
-use smol::{io::AsyncWriteExt, net::{TcpListener, TcpStream, Ipv4Addr}, stream::StreamExt};
-use futures::{FutureExt, select, pin_mut};
-use smol::channel::{Sender, Receiver};
 use rs_pedalboard::socket_helper::CommandReceiver;
+use smol::channel::{Receiver, Sender};
+use smol::{
+    io::AsyncWriteExt,
+    net::{Ipv4Addr, TcpListener, TcpStream},
+    stream::StreamExt,
+};
 
 pub struct ProcessorSocket {
     port: u16,
     command_sender: Sender<Box<str>>,
     command_receiver: Receiver<Box<str>>,
-    command_receive_helper: CommandReceiver
+    command_receive_helper: CommandReceiver,
 }
 
 impl ProcessorSocket {
-    pub fn new(port: u16, command_sender: Sender<Box<str>>, command_receiver: Receiver<Box<str>>) -> Self {
+    pub fn new(
+        port: u16,
+        command_sender: Sender<Box<str>>,
+        command_receiver: Receiver<Box<str>>,
+    ) -> Self {
         ProcessorSocket {
             port,
             command_sender,
             command_receiver,
-            command_receive_helper: CommandReceiver::new()
+            command_receive_helper: CommandReceiver::new(),
         }
     }
 
@@ -44,11 +52,15 @@ impl ProcessorSocket {
     }
 
     async fn handle_client(&mut self, stream: TcpStream) {
-        let (mut received_commands_writer, mut received_commands_reader) = ringbuf::HeapRb::new(128).split();
+        let (mut received_commands_writer, mut received_commands_reader) =
+            ringbuf::HeapRb::new(128).split();
         let (mut stream_reader, mut stream_writer) = smol::io::split(stream);
 
         loop {
-            let socket_fut = self.command_receive_helper.receive_commands_async(&mut stream_reader, &mut received_commands_writer).fuse();
+            let socket_fut = self
+                .command_receive_helper
+                .receive_commands_async(&mut stream_reader, &mut received_commands_writer)
+                .fuse();
             let channel_fut = self.command_receiver.recv().fuse();
 
             pin_mut!(socket_fut, channel_fut);
@@ -109,6 +121,9 @@ impl ProcessorSocket {
                 }
             }
         }
-        self.command_sender.send("disconnect".into()).await.expect("Failed to send disconnect command");
+        self.command_sender
+            .send("disconnect".into())
+            .await
+            .expect("Failed to send disconnect command");
     }
 }

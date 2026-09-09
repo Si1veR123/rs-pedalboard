@@ -1,17 +1,17 @@
 use crate::{pedalboard::Pedalboard, pedals::PedalTrait};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PedalboardSet {
     pub pedalboards: Vec<Pedalboard>,
-    pub active_pedalboard: usize
+    pub active_pedalboard: usize,
 }
 
 impl Default for PedalboardSet {
     fn default() -> PedalboardSet {
         PedalboardSet {
             pedalboards: vec![Pedalboard::default()],
-            active_pedalboard: 0
+            active_pedalboard: 0,
         }
     }
 }
@@ -25,14 +25,16 @@ impl std::fmt::Display for EmptyPedalboardSetError {
 }
 
 impl PedalboardSet {
-    pub fn from_pedalboards(pedalboards: Vec<Pedalboard>) -> Result<PedalboardSet, EmptyPedalboardSetError> {
+    pub fn from_pedalboards(
+        pedalboards: Vec<Pedalboard>,
+    ) -> Result<PedalboardSet, EmptyPedalboardSetError> {
         if pedalboards.is_empty() {
             return Err(EmptyPedalboardSetError);
         }
 
         Ok(PedalboardSet {
             pedalboards,
-            active_pedalboard: 0
+            active_pedalboard: 0,
         })
     }
 

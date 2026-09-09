@@ -155,7 +155,12 @@ impl<'a> ItemIterator<'a> {
                 }
             } else {
                 let (distance, mark_next) = self.get_distance(dragged_item_rect, global_space_rect);
-                self.check_closest_item(distance, global_space_rect.min, Some((idx, id)), mark_next);
+                self.check_closest_item(
+                    distance,
+                    global_space_rect.min,
+                    Some((idx, id)),
+                    mark_next,
+                );
             }
         }
 

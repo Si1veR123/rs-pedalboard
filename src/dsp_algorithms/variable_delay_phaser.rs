@@ -1,5 +1,5 @@
-use crate::dsp_algorithms::variable_delay::VariableDelayLine;
 use crate::dsp_algorithms::oscillator::Oscillator;
+use crate::dsp_algorithms::variable_delay::VariableDelayLine;
 use std::iter::Iterator;
 
 #[derive(Clone)]
@@ -9,12 +9,18 @@ pub struct VariableDelayPhaser {
     min_delay_samples: usize,
     pub feedback: f32,
     pub oscillator: Oscillator,
-    sample_rate: f32
+    sample_rate: f32,
 }
 
-
 impl VariableDelayPhaser {
-    pub fn new(depth_min_ms: f32, depth_max_ms: f32, mix: f32, oscillator: Oscillator, feedback: f32, sample_rate: f32) -> Self {
+    pub fn new(
+        depth_min_ms: f32,
+        depth_max_ms: f32,
+        mix: f32,
+        oscillator: Oscillator,
+        feedback: f32,
+        sample_rate: f32,
+    ) -> Self {
         let depth_samples = ((depth_max_ms / 1000.0) * sample_rate) as usize;
 
         VariableDelayPhaser {
@@ -23,7 +29,7 @@ impl VariableDelayPhaser {
             delay: VariableDelayLine::new(depth_samples),
             feedback,
             oscillator,
-            sample_rate
+            sample_rate,
         }
     }
 
@@ -32,7 +38,8 @@ impl VariableDelayPhaser {
             let max_depth_samples = self.delay.max_delay().ceil() as usize;
 
             let oscillator_val = (self.oscillator.next().unwrap() + 1.0) / 2.0;
-            let delay_val = (oscillator_val * (max_depth_samples-self.min_delay_samples) as f32) + self.min_delay_samples as f32;
+            let delay_val = (oscillator_val * (max_depth_samples - self.min_delay_samples) as f32)
+                + self.min_delay_samples as f32;
 
             let delayed_sample = self.delay.get_sample(delay_val);
 

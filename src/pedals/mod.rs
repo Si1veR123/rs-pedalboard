@@ -1,9 +1,9 @@
+use crate::dsp_algorithms::oscillator::Oscillator;
+use eframe::egui;
+use enum_dispatch::enum_dispatch;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::hash::Hash;
-use crate::dsp_algorithms::oscillator::Oscillator;
-use enum_dispatch::enum_dispatch;
-use serde::{ Deserialize, Serialize};
-use eframe::egui;
 use strum_macros::{EnumDiscriminants, EnumIter};
 
 mod volume;
@@ -19,16 +19,16 @@ pub use delay::Delay;
 mod eq;
 pub use eq::GraphicEq7;
 mod nam;
-pub use nam::Nam;
 pub use nam::set_nam_save_path;
+pub use nam::Nam;
 mod impulse_response;
-pub use impulse_response::ImpulseResponse;
 pub use impulse_response::set_ir_save_path;
+pub use impulse_response::ImpulseResponse;
 mod noise_gate;
 pub use noise_gate::NoiseGate;
 mod vst2;
-pub use vst2::Vst2;
 pub use vst2::set_vst2_save_path;
+pub use vst2::Vst2;
 mod reverb;
 pub use reverb::Reverb;
 mod vibrato;
@@ -46,8 +46,8 @@ pub use overdrive::Overdrive;
 mod distortion;
 pub use distortion::Distortion;
 
-mod ui;
 pub mod info;
+mod ui;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PedalParameter {
@@ -59,7 +59,7 @@ pub struct PedalParameter {
     pub max: Option<PedalParameterValue>,
     // For floats only
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub step: Option<PedalParameterValue>
+    pub step: Option<PedalParameterValue>,
 }
 
 impl PedalParameter {
@@ -76,7 +76,7 @@ impl PedalParameter {
                         return false;
                     }
                 }
-                
+
                 // Don't validate float step, but it can be used for hinting to UI
 
                 true
@@ -93,8 +93,8 @@ impl PedalParameter {
                     }
                 }
                 true
-            },
-            _ => true
+            }
+            _ => true,
         }
     }
 
@@ -102,9 +102,13 @@ impl PedalParameter {
         if let PedalParameterValue::Int(value) = self.value {
             let new_parameter = PedalParameter {
                 value: PedalParameterValue::Float(value as f32),
-                min: Some(PedalParameterValue::Float(self.min.clone().unwrap().as_int().unwrap() as f32)),
-                max: Some(PedalParameterValue::Float(self.max.clone().unwrap().as_int().unwrap() as f32)),
-                step: None
+                min: Some(PedalParameterValue::Float(
+                    self.min.clone().unwrap().as_int().unwrap() as f32,
+                )),
+                max: Some(PedalParameterValue::Float(
+                    self.max.clone().unwrap().as_int().unwrap() as f32,
+                )),
+                step: None,
             };
             new_parameter
         } else {
@@ -116,9 +120,13 @@ impl PedalParameter {
         if let PedalParameterValue::Float(value) = self.value {
             let new_parameter = PedalParameter {
                 value: PedalParameterValue::Int(value as i16),
-                min: Some(PedalParameterValue::Int(self.min.clone().unwrap().as_float().unwrap() as i16)),
-                max: Some(PedalParameterValue::Int(self.max.clone().unwrap().as_float().unwrap() as i16)),
-                step: None
+                min: Some(PedalParameterValue::Int(
+                    self.min.clone().unwrap().as_float().unwrap() as i16,
+                )),
+                max: Some(PedalParameterValue::Int(
+                    self.max.clone().unwrap().as_float().unwrap() as i16,
+                )),
+                step: None,
             };
             new_parameter
         } else {
@@ -126,7 +134,10 @@ impl PedalParameter {
         }
     }
 
-    pub fn parameter_editor_ui(&self, ui: &mut egui::Ui) -> egui::InnerResponse<Option<PedalParameterValue>> {
+    pub fn parameter_editor_ui(
+        &self,
+        ui: &mut egui::Ui,
+    ) -> egui::InnerResponse<Option<PedalParameterValue>> {
         let width = ui.available_width() * 0.8;
         let mut to_change = None;
 
@@ -184,14 +195,13 @@ impl PedalParameter {
     }
 }
 
-
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum PedalParameterValue {
     Float(f32),
     String(String),
     Bool(bool),
     Int(i16),
-    Oscillator(Oscillator)
+    Oscillator(Oscillator),
 }
 
 impl Hash for PedalParameterValue {
@@ -210,42 +220,42 @@ impl PedalParameterValue {
     pub fn as_float(&self) -> Option<f32> {
         match self {
             PedalParameterValue::Float(value) => Some(*value),
-            _ => None
+            _ => None,
         }
     }
 
     pub fn as_str(&self) -> Option<&str> {
         match self {
             PedalParameterValue::String(value) => Some(value),
-            _ => None
+            _ => None,
         }
     }
 
     pub fn as_bool(&self) -> Option<bool> {
         match self {
             PedalParameterValue::Bool(value) => Some(*value),
-            _ => None
+            _ => None,
         }
     }
 
     pub fn as_int(&self) -> Option<i16> {
         match self {
             PedalParameterValue::Int(value) => Some(*value),
-            _ => None
+            _ => None,
         }
     }
 
     pub fn as_oscillator(&self) -> Option<&Oscillator> {
         match self {
             PedalParameterValue::Oscillator(osc) => Some(osc),
-            _ => None
+            _ => None,
         }
     }
 
     pub fn as_oscillator_mut(&mut self) -> Option<&mut Oscillator> {
         match self {
             PedalParameterValue::Oscillator(osc) => Some(osc),
-            _ => None
+            _ => None,
         }
     }
 }
@@ -271,15 +281,25 @@ pub trait PedalTrait {
             if parameter.is_valid(&value) {
                 parameter.value = value;
             } else {
-                tracing::warn!("Attempted to set invalid value for parameter {}: {:?}", name, value);
+                tracing::warn!(
+                    "Attempted to set invalid value for parameter {}: {:?}",
+                    name,
+                    value
+                );
             }
         }
     }
 
     /// Returns the name of the parameter that needs to be changed, and its value
-    /// 
+    ///
     /// `message_buffer` contains messages from the pedal on the processor to the client
-    fn ui(&mut self, _ui: &mut egui::Ui, _message_buffer: &[String]) -> Option<(String, PedalParameterValue)> { None }
+    fn ui(
+        &mut self,
+        _ui: &mut egui::Ui,
+        _message_buffer: &[String],
+    ) -> Option<(String, PedalParameterValue)> {
+        None
+    }
 
     /// Call after creating a pedal so that it can set up its internal state
     fn set_config(&mut self, _buffer_size: usize, _sample_rate: u32) {}
@@ -295,7 +315,13 @@ pub trait PedalTrait {
 
     fn get_id(&self) -> u32;
 
-    fn parameter_editor_ui(&mut self, ui: &mut egui::Ui, _name: &str, parameter: &PedalParameter, _location: ParameterUILocation) -> egui::InnerResponse<Option<PedalParameterValue>> {
+    fn parameter_editor_ui(
+        &mut self,
+        ui: &mut egui::Ui,
+        _name: &str,
+        parameter: &PedalParameter,
+        _location: ParameterUILocation,
+    ) -> egui::InnerResponse<Option<PedalParameterValue>> {
         parameter.parameter_editor_ui(ui)
     }
 

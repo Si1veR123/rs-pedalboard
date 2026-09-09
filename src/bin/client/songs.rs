@@ -4,7 +4,7 @@ use crate::State;
 
 pub enum RowAction {
     Load,
-    Delete
+    Delete,
 }
 
 pub struct SongsScreen {
@@ -16,65 +16,86 @@ impl SongsScreen {
     pub fn new(state: &'static State) -> Self {
         Self {
             state,
-            search_term: String::new()
+            search_term: String::new(),
         }
     }
 
-    pub fn songs_row(&self, ui: &mut egui::Ui, song_name: &str, pedalboard_ids: &[u32], row_size: Vec2) -> (Option<RowAction>, egui::Response) {
+    pub fn songs_row(
+        &self,
+        ui: &mut egui::Ui,
+        song_name: &str,
+        pedalboard_ids: &[u32],
+        row_size: Vec2,
+    ) -> (Option<RowAction>, egui::Response) {
         let mut action = None;
 
         let row_height = row_size.y;
-        let response = ui.allocate_ui_with_layout(
-            row_size,
-            Layout::top_down_justified(egui::Align::Center),
-            |ui| {
-                ui.columns(2, |columns| {
-                    columns[0].allocate_ui_with_layout(
-                        Vec2::new(0.0, row_height-20.0),
-                        Layout::left_to_right(egui::Align::Center),
-                        |ui| {
-                            ui.add_space(20.0);
-                            ui.label(song_name);
+        let response = ui
+            .allocate_ui_with_layout(
+                row_size,
+                Layout::top_down_justified(egui::Align::Center),
+                |ui| {
+                    ui.columns(2, |columns| {
+                        columns[0].allocate_ui_with_layout(
+                            Vec2::new(0.0, row_height - 20.0),
+                            Layout::left_to_right(egui::Align::Center),
+                            |ui| {
+                                ui.add_space(20.0);
+                                ui.label(song_name);
+                            },
+                        );
+
+                        columns[1].allocate_ui_with_layout(
+                            Vec2::new(0.0, row_height - 20.0),
+                            Layout::right_to_left(egui::Align::Center),
+                            |ui| {
+                                let button_size =
+                                    Vec2::new(ui.available_width() * 0.2, row_height * 0.6);
+                                ui.add_space(20.0);
+                                if ui
+                                    .add_sized(
+                                        button_size,
+                                        egui::Button::new("Delete")
+                                            .stroke((1.5, egui::Color32::from_rgb(150, 30, 30))),
+                                    )
+                                    .clicked()
+                                {
+                                    action = Some(RowAction::Delete);
+                                }
+                                if ui
+                                    .add_sized(
+                                        button_size,
+                                        egui::Button::new("Load")
+                                            .stroke((1.3, egui::Color32::from_gray(60))),
+                                    )
+                                    .clicked()
+                                {
+                                    action = Some(RowAction::Load);
+                                }
+                            },
+                        )
+                    });
+
+                    let mut pedalboards_text = String::new();
+
+                    let pedalboard_library = self.state.pedalboards.pedalboard_library.borrow();
+                    for (i, pedalboard_id) in pedalboard_ids.iter().enumerate() {
+                        if i > 0 {
+                            pedalboards_text.push_str(", ");
                         }
-                    );
-
-                    columns[1].allocate_ui_with_layout(
-                        Vec2::new(0.0, row_height-20.0),
-                        Layout::right_to_left(egui::Align::Center),
-                        |ui| {
-                            let button_size = Vec2::new(ui.available_width() * 0.2, row_height * 0.6);
-                            ui.add_space(20.0);
-                            if ui.add_sized(
-                                button_size,
-                                egui::Button::new("Delete").stroke((1.5, egui::Color32::from_rgb(150, 30, 30)))
-                            ).clicked() {
-                                action = Some(RowAction::Delete);
-                            }
-                            if ui.add_sized(
-                                button_size,
-                                egui::Button::new("Load").stroke((1.3, egui::Color32::from_gray(60)))
-                            ).clicked() {
-                                action = Some(RowAction::Load);
-                            }
-                        }
-                    )
-                });
-
-                let mut pedalboards_text = String::new();
-
-                let pedalboard_library = self.state.pedalboards.pedalboard_library.borrow();
-                for (i, pedalboard_id) in pedalboard_ids.iter().enumerate() {
-                    if i > 0 {
-                        pedalboards_text.push_str(", ");
+                        pedalboards_text.push_str(
+                            &pedalboard_library
+                                .iter()
+                                .find(|pedalboard| pedalboard.get_id() == *pedalboard_id)
+                                .map_or("Unknown", |pedalboard| &pedalboard.name),
+                        );
                     }
-                    pedalboards_text.push_str(
-                        &pedalboard_library.iter().find(|pedalboard| pedalboard.get_id() == *pedalboard_id).map_or("Unknown", |pedalboard| &pedalboard.name)
-                    );
-                }
 
-                ui.label(RichText::new(pedalboards_text).size(15.0));
-                ui.add_space(5.0);
-        }).response;
+                    ui.label(RichText::new(pedalboards_text).size(15.0));
+                    ui.add_space(5.0);
+                },
+            )
+            .response;
 
         (action, response)
     }
@@ -84,13 +105,13 @@ impl Widget for &mut SongsScreen {
     fn ui(self, ui: &mut egui::Ui) -> egui::Response {
         ui.vertical_centered(|ui| {
             ui.add_space(5.0);
-            
+
             // === Search bar ===
             ui.add_sized(
-                [ui.available_width()/3.0, ui.available_height() * 0.08],
+                [ui.available_width() / 3.0, ui.available_height() * 0.08],
                 TextEdit::singleline(&mut self.search_term)
                     .hint_text(RichText::new("Search songs..."))
-                    .vertical_align(egui::Align::Center)
+                    .vertical_align(egui::Align::Center),
             );
 
             ui.add_space(5.0);
@@ -102,11 +123,14 @@ impl Widget for &mut SongsScreen {
 
             let mut songs_library = self.state.pedalboards.songs_library.borrow_mut();
             if songs_library.is_empty() {
-                ui.add_sized(row_size, egui::Label::new(
-                    RichText::new("No Songs Found")
-                        .text_style(egui::TextStyle::Heading)
-                        .color(crate::FAINT_TEXT_COLOR)
-                ));
+                ui.add_sized(
+                    row_size,
+                    egui::Label::new(
+                        RichText::new("No Songs Found")
+                            .text_style(egui::TextStyle::Heading)
+                            .color(crate::FAINT_TEXT_COLOR),
+                    ),
+                );
             } else {
                 let mut action = None;
 
@@ -122,27 +146,38 @@ impl Widget for &mut SongsScreen {
                     .show(ui, |ui| {
                         for (song, pedalboards) in songs_library.iter() {
                             if self.search_term.is_empty() || song.contains(&self.search_term) {
-                                SongsScreen::songs_row(self, ui, song, pedalboards, row_size).0.map(|row_action| {
-                                    action = Some((song, row_action));
-                                });
+                                SongsScreen::songs_row(self, ui, song, pedalboards, row_size)
+                                    .0
+                                    .map(|row_action| {
+                                        action = Some((song, row_action));
+                                    });
                                 ui.end_row();
                             }
                         }
-                });
+                    });
 
                 // Perform any actions performed in this frame
                 if let Some((song, action)) = action {
                     match action {
                         RowAction::Load => {
                             let song = songs_library.get(song).unwrap();
-                            let pedalboard_library = self.state.pedalboards.pedalboard_library.borrow();
+                            let pedalboard_library =
+                                self.state.pedalboards.pedalboard_library.borrow();
                             for pedalboard_id in song {
-                                if let Some(pedalboard) = pedalboard_library.iter().find(|pedalboard| &pedalboard.get_id() == pedalboard_id) {
-                                    self.state.pedalboards.active_pedalboardstage.borrow_mut().pedalboards.push(pedalboard.clone());
+                                if let Some(pedalboard) = pedalboard_library
+                                    .iter()
+                                    .find(|pedalboard| &pedalboard.get_id() == pedalboard_id)
+                                {
+                                    self.state
+                                        .pedalboards
+                                        .active_pedalboardstage
+                                        .borrow_mut()
+                                        .pedalboards
+                                        .push(pedalboard.clone());
                                     self.state.load_active_set();
                                 }
                             }
-                        },
+                        }
                         RowAction::Delete => {
                             // Can't get from the hashmap with a reference to the String key
                             let cloned = song.clone();
@@ -151,6 +186,7 @@ impl Widget for &mut SongsScreen {
                     }
                 };
             }
-        }).response
+        })
+        .response
     }
 }

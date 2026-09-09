@@ -12,14 +12,16 @@ mod utilities;
 use tracing::trace_span;
 use utilities::UtilitiesScreen;
 mod settings;
-use settings::{SettingsScreen, ProcessorLaunchState};
+use settings::{ProcessorLaunchState, SettingsScreen};
 mod audio_processor_handler;
 mod midi;
 
 #[cfg(feature = "virtual_keyboard")]
-use egui_keyboard::{Keyboard, layouts::KeyboardLayout};
+use egui_keyboard::{layouts::KeyboardLayout, Keyboard};
 
-use eframe::egui::{self, include_image, Button, Color32, FontId, Id, ImageButton, RichText, Vec2, FontFamily};
+use eframe::egui::{
+    self, include_image, Button, Color32, FontFamily, FontId, Id, ImageButton, RichText, Vec2,
+};
 use rs_pedalboard::{init_tracing, SAVE_DIR};
 use std::{sync::Arc, time::Instant};
 
@@ -49,11 +51,26 @@ fn set_font_size(width: f32, ctx: &egui::Context) {
 
     let mut style = (*ctx.style()).clone();
     let text_styles = [
-        (egui::TextStyle::Heading, FontId::new(base_size * 2.0, FontFamily::Proportional)),
-        (egui::TextStyle::Body, FontId::new(base_size*1.38, FontFamily::Proportional)),
-        (egui::TextStyle::Monospace, FontId::new(base_size*1.33, FontFamily::Monospace)),
-        (egui::TextStyle::Button, FontId::new(base_size*1.38, FontFamily::Proportional)),
-        (egui::TextStyle::Small, FontId::new(base_size, FontFamily::Proportional)),
+        (
+            egui::TextStyle::Heading,
+            FontId::new(base_size * 2.0, FontFamily::Proportional),
+        ),
+        (
+            egui::TextStyle::Body,
+            FontId::new(base_size * 1.38, FontFamily::Proportional),
+        ),
+        (
+            egui::TextStyle::Monospace,
+            FontId::new(base_size * 1.33, FontFamily::Monospace),
+        ),
+        (
+            egui::TextStyle::Button,
+            FontId::new(base_size * 1.38, FontFamily::Proportional),
+        ),
+        (
+            egui::TextStyle::Small,
+            FontId::new(base_size, FontFamily::Proportional),
+        ),
     ];
 
     for (text_style, font_id) in text_styles {
@@ -74,11 +91,17 @@ fn setup_custom_fonts(ctx: &egui::Context) {
 
     fonts.font_data.insert(
         "pedalboard_font".to_owned(),
-        Arc::new(egui::FontData::from_static(include_bytes!("files/TangoSans.ttf"))),
+        Arc::new(egui::FontData::from_static(include_bytes!(
+            "files/TangoSans.ttf"
+        ))),
     );
 
     // Put the default proporional font in another font family so it can be used
-    if let Some(font) = fonts.families.get(&egui::FontFamily::Proportional).and_then(|f| f.get(0)) {
+    if let Some(font) = fonts
+        .families
+        .get(&egui::FontFamily::Proportional)
+        .and_then(|f| f.get(0))
+    {
         fonts.families.insert(
             egui::FontFamily::Name("default-proportional".into()),
             vec![font.clone()],
@@ -119,17 +142,24 @@ fn main() {
     let mut native_options = eframe::NativeOptions::default();
     native_options.persist_window = false;
     native_options.persistence_path = None;
-    native_options.viewport = native_options.viewport.with_inner_size((WINDOW_WIDTH, WINDOW_HEIGHT)).with_maximized(true).with_maximize_button(true);
+    native_options.viewport = native_options
+        .viewport
+        .with_inner_size((WINDOW_WIDTH, WINDOW_HEIGHT))
+        .with_maximized(true)
+        .with_maximize_button(true);
 
-    eframe::run_native("Pedalboard", native_options, Box::new(
-        |cc| {
+    eframe::run_native(
+        "Pedalboard",
+        native_options,
+        Box::new(|cc| {
             tracing::debug!("Client init stage: style setup");
             cc.egui_ctx.style_mut(|style| {
                 style.visuals.extreme_bg_color = EXTREME_BACKGROUND_COLOR.into();
                 style.visuals.panel_fill = BACKGROUND_COLOR.into();
                 style.visuals.override_text_color = Some(TEXT_COLOR.into());
                 style.visuals.extreme_bg_color = EXTREME_BACKGROUND_COLOR.into();
-                let widget_click_background_color = THEME_COLOR.gamma_multiply(WIDGET_CLICK_BACKGROUND_COLOR_THEME_ALPHA);
+                let widget_click_background_color =
+                    THEME_COLOR.gamma_multiply(WIDGET_CLICK_BACKGROUND_COLOR_THEME_ALPHA);
                 style.visuals.widgets.active.bg_fill = widget_click_background_color.into();
                 style.visuals.widgets.active.weak_bg_fill = widget_click_background_color.into();
                 let faint_theme_color = THEME_COLOR.gamma_multiply(FAINT_THEME_COLOR_ALPHA);
@@ -147,8 +177,9 @@ fn main() {
             setup_custom_fonts(&cc.egui_ctx);
             tracing::debug!("Client init stage: construct app state");
             Ok(Box::new(PedalboardClientApp::new(cc)))
-        }
-    )).expect("Failed to run app");
+        }),
+    )
+    .expect("Failed to run app");
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -157,7 +188,7 @@ pub enum Screen {
     Library,
     Utilities,
     Songs,
-    Settings
+    Settings,
 }
 
 pub struct PedalboardClientApp {
@@ -170,7 +201,7 @@ pub struct PedalboardClientApp {
     pedalboard_library_screen: PedalboardLibraryScreen,
     utilities_screen: UtilitiesScreen,
     songs_screen: SongsScreen,
-    settings_screen: SettingsScreen
+    settings_screen: SettingsScreen,
 }
 
 impl PedalboardClientApp {
@@ -188,12 +219,21 @@ impl PedalboardClientApp {
 
         let no_processor_start_arg = std::env::args().any(|arg| arg == "--no-processor");
         // Start up the audio processor process if configured to do so, not already connected and not running with the `--no-processor` argument
-        if leaked_state.client_settings.borrow().startup_processor && !leaked_state.is_connected() && !no_processor_start_arg {
+        if leaked_state.client_settings.borrow().startup_processor
+            && !leaked_state.is_connected()
+            && !no_processor_start_arg
+        {
             tracing::info!("Starting processor on startup");
             if settings_screen.ready_to_start_processor(&leaked_state.processor_settings.borrow()) {
-                match audio_processor_handler::start_processor_process(&leaked_state.processor_settings.borrow()) {
+                match audio_processor_handler::start_processor_process(
+                    &leaked_state.processor_settings.borrow(),
+                ) {
                     Some(child) => {
-                        settings_screen.processor_launch_state = ProcessorLaunchState::AwaitingStart { start_time: Instant::now(), process: child };
+                        settings_screen.processor_launch_state =
+                            ProcessorLaunchState::AwaitingStart {
+                                start_time: Instant::now(),
+                                process: child,
+                            };
                         loop {
                             settings_screen.handle_processor_launch();
                             if !settings_screen.processor_launch_state.is_awaiting() {
@@ -201,8 +241,8 @@ impl PedalboardClientApp {
                             }
                             std::thread::sleep(std::time::Duration::from_millis(100));
                         }
-                    },
-                    None => tracing::error!("Failed to start processor process")
+                    }
+                    None => tracing::error!("Failed to start processor process"),
                 }
             } else {
                 tracing::error!("Set input and output device to launch processor on start");
@@ -212,7 +252,10 @@ impl PedalboardClientApp {
         // Linux (JACK) requires jack processor to be running before connecting MIDI ports
         // This is started by the processor app
         tracing::debug!("PedalboardClientApp::new: auto-connect MIDI ports");
-        leaked_state.midi_state.borrow_mut().connect_to_auto_connect_ports();
+        leaked_state
+            .midi_state
+            .borrow_mut()
+            .connect_to_auto_connect_ports();
         tracing::debug!("PedalboardClientApp::new: completed");
 
         PedalboardClientApp {
@@ -274,57 +317,91 @@ impl eframe::App for PedalboardClientApp {
                         }
                     };
 
-                    ui.allocate_ui(Vec2::new(ui.available_width()-(bottom_window_select_height*2.0), ui.available_height()), |ui| {
-                        ui.columns_const(|[column0, column1, column2]| {
-                            let button_size = [column0.available_width(), column0.available_height() - padding];
+                    ui.allocate_ui(
+                        Vec2::new(
+                            ui.available_width() - (bottom_window_select_height * 2.0),
+                            ui.available_height(),
+                        ),
+                        |ui| {
+                            ui.columns_const(|[column0, column1, column2]| {
+                                let button_size = [
+                                    column0.available_width(),
+                                    column0.available_height() - padding,
+                                ];
 
-                            column0.horizontal_centered(|ui| {
-                                if ui.add_sized(button_size, Button::new(
-                                    RichText::new("Stage View")
-                                ).stroke(button_outline(Screen::Stage)).fill(button_bg(Screen::Stage))).clicked() {
-                                    self.state.set_screen(Screen::Stage);
-                                }
-                            });
-                            column1.horizontal_centered(|ui| {
-                                if ui.add_sized(button_size, Button::new(
-                                    RichText::new("Library")
-                                ).stroke(button_outline(Screen::Library)).fill(button_bg(Screen::Library))).clicked() {
-                                    self.state.set_screen(Screen::Library);
-                                }
-                            });
-                            column2.horizontal_centered(|ui| {
-                                let recording = self.state.recording_time.get().is_some();
-                                let text_color = if recording {
-                                    ui.visuals().text_color().lerp_to_gamma(Color32::RED, 0.5)
-                                } else {
-                                    ui.visuals().text_color()
-                                };
+                                column0.horizontal_centered(|ui| {
+                                    if ui
+                                        .add_sized(
+                                            button_size,
+                                            Button::new(RichText::new("Stage View"))
+                                                .stroke(button_outline(Screen::Stage))
+                                                .fill(button_bg(Screen::Stage)),
+                                        )
+                                        .clicked()
+                                    {
+                                        self.state.set_screen(Screen::Stage);
+                                    }
+                                });
+                                column1.horizontal_centered(|ui| {
+                                    if ui
+                                        .add_sized(
+                                            button_size,
+                                            Button::new(RichText::new("Library"))
+                                                .stroke(button_outline(Screen::Library))
+                                                .fill(button_bg(Screen::Library)),
+                                        )
+                                        .clicked()
+                                    {
+                                        self.state.set_screen(Screen::Library);
+                                    }
+                                });
+                                column2.horizontal_centered(|ui| {
+                                    let recording = self.state.recording_time.get().is_some();
+                                    let text_color = if recording {
+                                        ui.visuals().text_color().lerp_to_gamma(Color32::RED, 0.5)
+                                    } else {
+                                        ui.visuals().text_color()
+                                    };
 
-                                if ui.add_sized(button_size, Button::new(
-                                    RichText::new("Utilities").color(text_color)
-                                ).stroke(button_outline(Screen::Utilities)).fill(button_bg(Screen::Utilities))).clicked() {
-                                    self.state.set_screen(Screen::Utilities);
-                                }
+                                    if ui
+                                        .add_sized(
+                                            button_size,
+                                            Button::new(
+                                                RichText::new("Utilities").color(text_color),
+                                            )
+                                            .stroke(button_outline(Screen::Utilities))
+                                            .fill(button_bg(Screen::Utilities)),
+                                        )
+                                        .clicked()
+                                    {
+                                        self.state.set_screen(Screen::Utilities);
+                                    }
+                                });
                             });
-                        });
-                    });
+                        },
+                    );
 
-                    ui.add_space(padding/2.0);
+                    ui.add_space(padding / 2.0);
 
                     // Smaller songs and settings buttons
                     // ImageButton doesnt have methods for stroke and fill, so we use style_mut() to set the style
                     ui.style_mut().visuals.widgets.inactive.weak_bg_fill = button_bg(Screen::Songs);
-                    ui.style_mut().visuals.widgets.inactive.bg_stroke = button_outline(Screen::Songs);
-                    if ui.add_sized(
-                        Vec2::splat(bottom_window_select_height-padding-5.0), // why -5.0? idk
-                        ImageButton::new(include_image!("files/songs_icon.png"))
-                            .corner_radius(3.0)
-                            .tint(Color32::from_white_alpha(200))
-                    ).clicked() {
+                    ui.style_mut().visuals.widgets.inactive.bg_stroke =
+                        button_outline(Screen::Songs);
+                    if ui
+                        .add_sized(
+                            Vec2::splat(bottom_window_select_height - padding - 5.0), // why -5.0? idk
+                            ImageButton::new(include_image!("files/songs_icon.png"))
+                                .corner_radius(3.0)
+                                .tint(Color32::from_white_alpha(200)),
+                        )
+                        .clicked()
+                    {
                         self.state.set_screen(Screen::Songs);
                     }
 
-                    ui.style_mut().visuals.widgets.inactive.weak_bg_fill = button_bg(Screen::Settings);
+                    ui.style_mut().visuals.widgets.inactive.weak_bg_fill =
+                        button_bg(Screen::Settings);
                     let settings_button_outline = if selected_screen == Screen::Settings {
                         button_outline(Screen::Settings)
                     } else {
@@ -335,16 +412,22 @@ impl eframe::App for PedalboardClientApp {
                         }
                     };
                     ui.style_mut().visuals.widgets.inactive.bg_stroke = settings_button_outline;
-                    if ui.add_sized(
-                        Vec2::new(bottom_window_select_height, bottom_window_select_height-padding-5.0),
-                        ImageButton::new(include_image!("files/settings_icon.png"))
-                            .corner_radius(3.0)
-                            .tint(Color32::from_white_alpha(200))
-                    ).clicked() {
+                    if ui
+                        .add_sized(
+                            Vec2::new(
+                                bottom_window_select_height,
+                                bottom_window_select_height - padding - 5.0,
+                            ),
+                            ImageButton::new(include_image!("files/settings_icon.png"))
+                                .corner_radius(3.0)
+                                .tint(Color32::from_white_alpha(200)),
+                        )
+                        .clicked()
+                    {
                         self.state.set_screen(Screen::Settings);
                     };
                 });
-        });
+            });
         drop(enter);
 
         let span = trace_span!("CentralPanel");
@@ -353,16 +436,16 @@ impl eframe::App for PedalboardClientApp {
             match selected_screen {
                 Screen::Stage => {
                     ui.add(&mut self.pedalboard_stage_screen);
-                },
+                }
                 Screen::Library => {
                     ui.add(&mut self.pedalboard_library_screen);
-                },
+                }
                 Screen::Utilities => {
                     ui.add(&mut self.utilities_screen);
-                },
+                }
                 Screen::Songs => {
                     ui.add(&mut self.songs_screen);
-                },
+                }
                 Screen::Settings => {
                     ui.add(&mut self.settings_screen);
                 }
@@ -374,7 +457,10 @@ impl eframe::App for PedalboardClientApp {
     #[tracing::instrument(level = "debug", skip_all)]
     fn save(&mut self, _storage: &mut dyn eframe::Storage) {
         // Remove any MIDI parameter functions that refer to pedalboards that no longer exist
-        self.state.midi_state.borrow_mut().remove_old_parameter_functions(&self.state.all_pedalboard_ids());
+        self.state
+            .midi_state
+            .borrow_mut()
+            .remove_old_parameter_functions(&self.state.all_pedalboard_ids());
 
         tracing::info!("Saving state");
         if let Err(e) = self.state.save_state() {

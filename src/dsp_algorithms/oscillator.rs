@@ -1,6 +1,6 @@
-use std::iter::Iterator;
 use ordered_float::OrderedFloat;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
+use std::iter::Iterator;
 use strum_macros::EnumDiscriminants;
 
 #[derive(Clone, Hash, Debug, Serialize, Deserialize, EnumDiscriminants, PartialEq)]
@@ -9,7 +9,7 @@ pub enum Oscillator {
     Sine(Sine),
     Square(Square),
     Sawtooth(Sawtooth),
-    Triangle(Triangle)
+    Triangle(Triangle),
 }
 
 impl Oscillator {
@@ -18,7 +18,7 @@ impl Oscillator {
             Oscillator::Sine(sine) => sine.frequency.0,
             Oscillator::Square(square) => square.frequency.0,
             Oscillator::Sawtooth(sawtooth) => sawtooth.frequency.0,
-            Oscillator::Triangle(triangle) => triangle.frequency.0
+            Oscillator::Triangle(triangle) => triangle.frequency.0,
         }
     }
 
@@ -27,7 +27,7 @@ impl Oscillator {
             Oscillator::Sine(sine) => sine.frequency = OrderedFloat(frequency),
             Oscillator::Square(square) => square.frequency = OrderedFloat(frequency),
             Oscillator::Sawtooth(sawtooth) => sawtooth.frequency = OrderedFloat(frequency),
-            Oscillator::Triangle(triangle) => triangle.frequency = OrderedFloat(frequency)
+            Oscillator::Triangle(triangle) => triangle.frequency = OrderedFloat(frequency),
         }
     }
 
@@ -36,7 +36,7 @@ impl Oscillator {
             Oscillator::Sine(sine) => sine.phase_offset = OrderedFloat(phase_offset),
             Oscillator::Square(square) => square.phase_offset = OrderedFloat(phase_offset),
             Oscillator::Sawtooth(sawtooth) => sawtooth.phase_offset = OrderedFloat(phase_offset),
-            Oscillator::Triangle(triangle) => triangle.phase_offset = OrderedFloat(phase_offset)
+            Oscillator::Triangle(triangle) => triangle.phase_offset = OrderedFloat(phase_offset),
         }
     }
 
@@ -45,7 +45,7 @@ impl Oscillator {
             Oscillator::Sine(sine) => sine.phase_offset.0,
             Oscillator::Square(square) => square.phase_offset.0,
             Oscillator::Sawtooth(sawtooth) => sawtooth.phase_offset.0,
-            Oscillator::Triangle(triangle) => triangle.phase_offset.0
+            Oscillator::Triangle(triangle) => triangle.phase_offset.0,
         }
     }
 
@@ -54,7 +54,7 @@ impl Oscillator {
             Oscillator::Sine(sine) => sine.sample_rate = OrderedFloat(sample_rate),
             Oscillator::Square(square) => square.sample_rate = OrderedFloat(sample_rate),
             Oscillator::Sawtooth(sawtooth) => sawtooth.sample_rate = OrderedFloat(sample_rate),
-            Oscillator::Triangle(triangle) => triangle.sample_rate = OrderedFloat(sample_rate)
+            Oscillator::Triangle(triangle) => triangle.sample_rate = OrderedFloat(sample_rate),
         }
     }
 
@@ -63,7 +63,7 @@ impl Oscillator {
             Oscillator::Sine(sine) => sine.sample_rate.0,
             Oscillator::Square(square) => square.sample_rate.0,
             Oscillator::Sawtooth(sawtooth) => sawtooth.sample_rate.0,
-            Oscillator::Triangle(triangle) => triangle.sample_rate.0
+            Oscillator::Triangle(triangle) => triangle.sample_rate.0,
         }
     }
 
@@ -80,7 +80,7 @@ impl Iterator for Oscillator {
             Oscillator::Sine(sine) => sine.next(),
             Oscillator::Square(square) => square.next(),
             Oscillator::Sawtooth(sawtooth) => sawtooth.next(),
-            Oscillator::Triangle(triangle) => triangle.next()
+            Oscillator::Triangle(triangle) => triangle.next(),
         }
     }
 }
@@ -93,7 +93,7 @@ pub struct Sine {
     pub frequency: OrderedFloat<f32>,
 
     squareness: OrderedFloat<f32>,
-    tanh_drive: OrderedFloat<f32>
+    tanh_drive: OrderedFloat<f32>,
 }
 
 impl Sine {
@@ -104,7 +104,7 @@ impl Sine {
             phase_offset: OrderedFloat(phase_offset),
             frequency: OrderedFloat(frequency),
             squareness: OrderedFloat(squareness),
-            tanh_drive: OrderedFloat(Self::squareness_to_tanh_drive(squareness))
+            tanh_drive: OrderedFloat(Self::squareness_to_tanh_drive(squareness)),
         }
     }
 
@@ -141,7 +141,7 @@ impl Iterator for Sine {
     fn next(&mut self) -> Option<f32> {
         if self.phase.0 > 1.0 {
             self.phase -= 1.0;
-        } 
+        }
 
         let value = ((self.phase.0 + self.phase_offset.0) * 2.0 * std::f32::consts::PI).sin();
         self.phase += self.frequency / self.sample_rate;
@@ -159,7 +159,7 @@ pub struct Square {
     pub sample_rate: OrderedFloat<f32>,
     phase: OrderedFloat<f32>,
     pub phase_offset: OrderedFloat<f32>,
-    pub frequency: OrderedFloat<f32>
+    pub frequency: OrderedFloat<f32>,
 }
 
 impl Square {
@@ -168,7 +168,7 @@ impl Square {
             sample_rate: OrderedFloat(sample_rate),
             phase: OrderedFloat(0.0),
             phase_offset: OrderedFloat(phase_offset),
-            frequency: OrderedFloat(frequency)
+            frequency: OrderedFloat(frequency),
         }
     }
 }
@@ -188,7 +188,7 @@ impl Iterator for Square {
             -1.0
         };
         self.phase += self.frequency / self.sample_rate;
-        
+
         Some(value)
     }
 }
@@ -198,7 +198,7 @@ pub struct Sawtooth {
     pub sample_rate: OrderedFloat<f32>,
     phase: OrderedFloat<f32>,
     pub phase_offset: OrderedFloat<f32>,
-    pub frequency: OrderedFloat<f32>
+    pub frequency: OrderedFloat<f32>,
 }
 
 impl Sawtooth {
@@ -207,7 +207,7 @@ impl Sawtooth {
             sample_rate: OrderedFloat(sample_rate),
             phase: OrderedFloat(0.0),
             phase_offset: OrderedFloat(phase_offset),
-            frequency: OrderedFloat(frequency)
+            frequency: OrderedFloat(frequency),
         }
     }
 }
@@ -223,7 +223,7 @@ impl Iterator for Sawtooth {
 
         let value = 2.0 * ((self.phase.0 + self.phase_offset.0) % 1.0) - 1.0;
         self.phase += self.frequency / self.sample_rate;
-        
+
         Some(value)
     }
 }
@@ -233,7 +233,7 @@ pub struct Triangle {
     sample_rate: OrderedFloat<f32>,
     phase: OrderedFloat<f32>,
     pub phase_offset: OrderedFloat<f32>,
-    pub frequency: OrderedFloat<f32>
+    pub frequency: OrderedFloat<f32>,
 }
 
 impl Triangle {
@@ -242,7 +242,7 @@ impl Triangle {
             sample_rate: OrderedFloat(sample_rate),
             phase: OrderedFloat(0.0),
             phase_offset: OrderedFloat(phase_offset),
-            frequency: OrderedFloat(frequency)
+            frequency: OrderedFloat(frequency),
         }
     }
 }
@@ -264,7 +264,7 @@ impl Iterator for Triangle {
         };
 
         self.phase += self.frequency / self.sample_rate;
-        
+
         Some(value)
     }
 }

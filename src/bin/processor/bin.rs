@@ -1,32 +1,32 @@
 #[cfg(target_os = "linux")]
 mod linux;
 #[cfg(target_os = "linux")]
-use linux::{setup, after_setup};
+use linux::{after_setup, setup};
 
 #[cfg(target_os = "windows")]
 mod windows;
 use rs_pedalboard::processor_settings::ProcessorSettingsSave;
 #[cfg(target_os = "windows")]
-use windows::{setup, after_setup};
+use windows::{after_setup, setup};
 
-mod audio_processor;
-mod sample_conversion;
-mod stream_config;
 mod audio_callback;
-mod socket;
+mod audio_processor;
 mod device_select;
-mod tuner;
 mod metronome_player;
+mod recording;
+mod sample_conversion;
+mod settings;
+mod socket;
+mod stream_config;
+mod tuner;
 mod volume_monitor;
 mod volume_normalization;
-mod settings;
-mod recording;
-use settings::{ProcessorSettings, ProcessorArguments};
+use settings::{ProcessorArguments, ProcessorSettings};
 
-use cpal::traits::StreamTrait;
-use smol::channel::bounded;
 use clap::Parser;
+use cpal::traits::StreamTrait;
 use rs_pedalboard::init_tracing;
+use smol::channel::bounded;
 
 const LOG_FILE: &str = "pedalboard-processor.log";
 
@@ -43,13 +43,16 @@ fn main() {
     tracing::info!("Started logging...");
     init_panic_logging();
 
-    let settings = ProcessorSettings::new(ProcessorArguments::parse(), Some(ProcessorSettingsSave::load_or_default()));
+    let settings = ProcessorSettings::new(
+        ProcessorArguments::parse(),
+        Some(ProcessorSettingsSave::load_or_default()),
+    );
     tracing::info!("Processor settings: {:?}", settings);
 
     let (_host, input, output) = setup(
         settings.input_device.as_ref().map(|s| s.as_str()),
         settings.output_device.as_ref().map(|s| s.as_str()),
-        &settings
+        &settings,
     );
 
     let (socket_command_sender, audio_command_receiver) = bounded(12);
@@ -60,7 +63,7 @@ fn main() {
         output,
         audio_command_receiver,
         audio_command_sender,
-        settings
+        settings,
     );
 
     in_stream.play().expect("Failed to play input stream");
@@ -69,5 +72,7 @@ fn main() {
     after_setup(out_channels);
 
     // Will loop infinitely (unless panic)
-    socket::ProcessorSocket::new(29475, socket_command_sender, socket_command_receiver).start().expect("Failed to start processor");
+    socket::ProcessorSocket::new(29475, socket_command_sender, socket_command_receiver)
+        .start()
+        .expect("Failed to start processor");
 }

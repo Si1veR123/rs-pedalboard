@@ -1,16 +1,16 @@
-use std::time::{Duration, UNIX_EPOCH, SystemTime};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use std::path::{Path, PathBuf};
 
+pub mod audio_devices;
+pub mod dsp_algorithms;
 pub mod pedalboard;
 pub mod pedalboard_set;
 pub mod pedals;
-pub mod dsp_algorithms;
 pub mod plugin;
-pub mod socket_helper;
-pub mod audio_devices;
-pub mod processor_settings;
 pub mod processor_api;
+pub mod processor_settings;
+pub mod socket_helper;
 
 pub const SAVE_DIR: &str = "rs_pedalboard";
 // Required by both processor and client so define it here
@@ -31,16 +31,17 @@ pub fn unique_time_id() -> u32 {
 }
 
 pub fn forward_slash_path<P: AsRef<Path>>(path: P) -> PathBuf {
-    let s = path
-        .as_ref()
-        .to_str()
-        .expect("Path contains invalid UTF-8");
+    let s = path.as_ref().to_str().expect("Path contains invalid UTF-8");
     PathBuf::from(s.replace('\\', "/"))
 }
 
-use tracing_subscriber::{fmt::{format::Writer, time::FormatTime, self}, filter::EnvFilter, prelude::*};
-use std::io;
 use std::fs::File;
+use std::io;
+use tracing_subscriber::{
+    filter::EnvFilter,
+    fmt::{self, format::Writer, time::FormatTime},
+    prelude::*,
+};
 
 pub struct TimeOnlyFormat;
 impl FormatTime for TimeOnlyFormat {
@@ -52,8 +53,8 @@ impl FormatTime for TimeOnlyFormat {
 
 pub fn init_tracing(file_path: &str) {
     // Console layer
-    let console_filter_layer = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info"));
+    let console_filter_layer =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
 
     let stdout_layer = fmt::layer()
         .with_writer(io::stdout)
@@ -62,11 +63,10 @@ pub fn init_tracing(file_path: &str) {
         .with_filter(console_filter_layer);
 
     // File layer
-    let file_filter_layer = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("debug"));
+    let file_filter_layer =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("debug"));
 
-    let file = File::create(file_path)
-        .expect("Failed to create log file");
+    let file = File::create(file_path).expect("Failed to create log file");
     let file_layer = fmt::layer()
         .with_writer(file)
         .with_thread_names(true)

@@ -1,15 +1,19 @@
-use std::{process::Child, time::Instant, path::PathBuf};
+use std::{path::PathBuf, process::Child, time::Instant};
 
 use cpal::{Host, HostId};
 use eframe::egui::{self, Color32, Layout, Response, RichText, Vec2, Widget};
 use rs_pedalboard::processor_settings::ProcessorSettingsSave;
 use serde::{Deserialize, Serialize};
-use strum::{IntoEnumIterator};
+use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
-use crate::state::State;
 use crate::audio_processor_handler::start_processor_process;
-use rs_pedalboard::{audio_devices::{get_input_devices, get_output_devices}, processor_settings::{SupportedHost}, SAVE_DIR};
+use crate::state::State;
+use rs_pedalboard::{
+    audio_devices::{get_input_devices, get_output_devices},
+    processor_settings::SupportedHost,
+    SAVE_DIR,
+};
 
 pub const CLIENT_SAVE_NAME: &'static str = "client_settings.json";
 
@@ -18,7 +22,7 @@ pub enum VolumeNormalizationMode {
     #[default]
     None,
     Manual,
-    Automatic
+    Automatic,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -39,7 +43,12 @@ pub struct ClientSettings {
 
 impl ClientSettings {
     fn get_save_path() -> Option<PathBuf> {
-        Some(homedir::my_home().ok()??.join(SAVE_DIR).join(CLIENT_SAVE_NAME))
+        Some(
+            homedir::my_home()
+                .ok()??
+                .join(SAVE_DIR)
+                .join(CLIENT_SAVE_NAME),
+        )
     }
 
     pub fn load_or_default() -> Self {
@@ -60,12 +69,18 @@ impl ClientSettings {
             Ok(data) => match serde_json::from_str::<Self>(&data) {
                 Ok(state) => state,
                 Err(e) => {
-                    tracing::error!("Failed to deserialize client settings from {:?}: {e}, using default", save_path);
+                    tracing::error!(
+                        "Failed to deserialize client settings from {:?}: {e}, using default",
+                        save_path
+                    );
                     Self::default()
                 }
             },
             Err(e) => {
-                tracing::error!("Failed to read client settings from {:?}: {e}, using default", save_path);
+                tracing::error!(
+                    "Failed to read client settings from {:?}: {e}, using default",
+                    save_path
+                );
                 Self::default()
             }
         }
@@ -73,7 +88,10 @@ impl ClientSettings {
 
     pub fn save(&self) -> Result<(), std::io::Error> {
         let data = serde_json::to_string(self).expect("Failed to serialize client settings");
-        std::fs::write(Self::get_save_path().expect("Failed to get client settings save path"), data)?;
+        std::fs::write(
+            Self::get_save_path().expect("Failed to get client settings save path"),
+            data,
+        )?;
         Ok(())
     }
 }
@@ -98,17 +116,17 @@ impl Default for ClientSettings {
 pub enum ProcessorLaunchState {
     AwaitingKill(Instant),
     KillError,
-    AwaitingStart {
-        start_time: Instant,
-        process: Child
-    },
+    AwaitingStart { start_time: Instant, process: Child },
     StartError,
-    None
+    None,
 }
 
 impl ProcessorLaunchState {
     pub fn is_awaiting(&self) -> bool {
-        matches!(self, ProcessorLaunchState::AwaitingKill(_) | ProcessorLaunchState::AwaitingStart { .. })
+        matches!(
+            self,
+            ProcessorLaunchState::AwaitingKill(_) | ProcessorLaunchState::AwaitingStart { .. }
+        )
     }
 }
 
@@ -176,11 +194,14 @@ impl SettingsScreen {
 
     #[cfg(target_os = "linux")]
     pub fn ready_to_start_processor(&self, processor_settings: &ProcessorSettingsSave) -> bool {
-        processor_settings.input_device.is_some() && processor_settings.output_device.is_some() &&
-        matches!(
-            self.processor_launch_state,
-            ProcessorLaunchState::None | ProcessorLaunchState::StartError | ProcessorLaunchState::KillError
-        )
+        processor_settings.input_device.is_some()
+            && processor_settings.output_device.is_some()
+            && matches!(
+                self.processor_launch_state,
+                ProcessorLaunchState::None
+                    | ProcessorLaunchState::StartError
+                    | ProcessorLaunchState::KillError
+            )
     }
 
     #[cfg(target_os = "windows")]
@@ -188,13 +209,17 @@ impl SettingsScreen {
     pub fn ready_to_start_processor(&self, processor_settings: &ProcessorSettingsSave) -> bool {
         let correct_state = matches!(
             self.processor_launch_state,
-            ProcessorLaunchState::None | ProcessorLaunchState::StartError | ProcessorLaunchState::KillError
+            ProcessorLaunchState::None
+                | ProcessorLaunchState::StartError
+                | ProcessorLaunchState::KillError
         );
-        
+
         if processor_settings.host == SupportedHost::ASIO {
             processor_settings.output_device.is_some() && correct_state
         } else {
-            processor_settings.input_device.is_some() && processor_settings.output_device.is_some() && correct_state
+            processor_settings.input_device.is_some()
+                && processor_settings.output_device.is_some()
+                && correct_state
         }
     }
 
@@ -202,7 +227,10 @@ impl SettingsScreen {
     pub fn handle_processor_launch(&mut self) {
         // Remove error state if now connected
         if self.state.is_connected() {
-            if matches!(self.processor_launch_state, ProcessorLaunchState::KillError | ProcessorLaunchState::StartError) {
+            if matches!(
+                self.processor_launch_state,
+                ProcessorLaunchState::KillError | ProcessorLaunchState::StartError
+            ) {
                 self.processor_launch_state = ProcessorLaunchState::None;
             }
         }
@@ -213,10 +241,12 @@ impl SettingsScreen {
                 self.processor_launch_state = ProcessorLaunchState::KillError;
             } else if start_time.elapsed().as_secs() > 1 {
                 if !self.state.is_processor_available() {
-                    if let Some(process) = start_processor_process(&self.state.processor_settings.borrow()) {
+                    if let Some(process) =
+                        start_processor_process(&self.state.processor_settings.borrow())
+                    {
                         self.processor_launch_state = ProcessorLaunchState::AwaitingStart {
                             start_time: Instant::now(),
-                            process
+                            process,
                         };
                     } else {
                         tracing::error!("Failed to start processor process");
@@ -224,7 +254,11 @@ impl SettingsScreen {
                     }
                 }
             }
-        } else if let ProcessorLaunchState::AwaitingStart { start_time, process  } = &mut self.processor_launch_state {
+        } else if let ProcessorLaunchState::AwaitingStart {
+            start_time,
+            process,
+        } = &mut self.processor_launch_state
+        {
             // `try_wait` returns Ok(Some(status)) if the process has exited
             if start_time.elapsed().as_secs() > 5 || matches!(process.try_wait(), Ok(Some(_))) {
                 tracing::error!("Processor process started but did not connect, or closed. Check processor logs");
@@ -401,7 +435,7 @@ impl Widget for &mut SettingsScreen {
                                     response
                                 });
                             ui.end_row();
-                            
+
                             // Upsample Passes
                             ui.label("\tUpsample");
                             egui::ComboBox::from_id_salt("upsample_dropdown")
@@ -423,7 +457,7 @@ impl Widget for &mut SettingsScreen {
 
                             ui.end_row()
                         });
-                    
+
                     ui.add_space(20.0);
                     let button_size = Vec2::new(ui.available_width() * 0.25, ui.ctx().screen_rect().height()*0.06);
 
@@ -448,7 +482,7 @@ impl Widget for &mut SettingsScreen {
                             "Start Processor"
                         };
                         if ui.add_enabled(
-                            self.ready_to_start_processor(&processor_settings), 
+                            self.ready_to_start_processor(&processor_settings),
                             egui::Button::new(button_text)
                                 .stroke(egui::Stroke::new(1.0, crate::THEME_COLOR))
                                 .min_size(button_size)
@@ -673,14 +707,23 @@ impl Widget for &mut SettingsScreen {
     }
 }
 
-fn multiple_directories_select_ui(ui: &mut egui::Ui, paths: &mut Vec<PathBuf>, default_path: Option<PathBuf>, id: &str, file_dialog: &mut egui_file::FileDialog) -> bool {
+fn multiple_directories_select_ui(
+    ui: &mut egui::Ui,
+    paths: &mut Vec<PathBuf>,
+    default_path: Option<PathBuf>,
+    id: &str,
+    file_dialog: &mut egui_file::FileDialog,
+) -> bool {
     let mut changed = false;
     let available_width = ui.available_width();
 
-    if ui.add_sized(
-        Vec2::new(available_width*0.3, 45.0),
-        egui::Button::new("Add Directory")
-    ).clicked() {
+    if ui
+        .add_sized(
+            Vec2::new(available_width * 0.3, 45.0),
+            egui::Button::new("Add Directory"),
+        )
+        .clicked()
+    {
         file_dialog.open();
     }
 
@@ -697,7 +740,7 @@ fn multiple_directories_select_ui(ui: &mut egui::Ui, paths: &mut Vec<PathBuf>, d
                         paths.push(path);
                         changed = true;
                     }
-                },
+                }
                 Err(e) => {
                     tracing::error!("Failed to canonicalize path: {e}");
                     return false;
@@ -709,18 +752,23 @@ fn multiple_directories_select_ui(ui: &mut egui::Ui, paths: &mut Vec<PathBuf>, d
     egui::Grid::new(id)
         .num_columns(2)
         .min_row_height(SETTING_ROW_HEIGHT_FRACT * ui.ctx().screen_rect().height())
-        .min_col_width(available_width/2.0)
+        .min_col_width(available_width / 2.0)
         .striped(true)
         .show(ui, |ui| {
             if let Some(default_path) = default_path {
-                ui.label(RichText::new(default_path.to_string_lossy()).color(crate::FAINT_TEXT_COLOR));
+                ui.label(
+                    RichText::new(default_path.to_string_lossy()).color(crate::FAINT_TEXT_COLOR),
+                );
                 ui.end_row();
             }
 
             let mut to_remove = None;
 
             for path in paths.iter() {
-                let file_name = path.file_name().map(|s| s.to_string_lossy()).unwrap_or_else(|| "Invalid Path".into());
+                let file_name = path
+                    .file_name()
+                    .map(|s| s.to_string_lossy())
+                    .unwrap_or_else(|| "Invalid Path".into());
                 ui.label(file_name);
                 if ui.button("Remove").clicked() {
                     to_remove = Some(path.clone());
@@ -733,12 +781,13 @@ fn multiple_directories_select_ui(ui: &mut egui::Ui, paths: &mut Vec<PathBuf>, d
                 paths.retain(|p| p != &to_remove);
             }
         });
-    
+
     changed
 }
 
 pub fn set_large_checkbox_style(ui: &mut egui::Ui) {
     ui.style_mut().spacing.icon_width = 35.0;
     ui.style_mut().spacing.icon_width_inner = 12.0;
-    ui.style_mut().visuals.widgets.inactive.fg_stroke = egui::Stroke::new(2.0, Color32::from_rgb(200, 200, 200));
+    ui.style_mut().visuals.widgets.inactive.fg_stroke =
+        egui::Stroke::new(2.0, Color32::from_rgb(200, 200, 200));
 }

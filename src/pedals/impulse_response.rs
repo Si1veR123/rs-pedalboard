@@ -1,6 +1,6 @@
-use std::path::{Path, PathBuf};
 use std::collections::HashMap;
 use std::hash::Hash;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::dsp_algorithms::impluse_response::IRConvolver;
@@ -8,9 +8,9 @@ use crate::pedals::ui::{pedal_switch, sideways_arrow};
 use crate::pedals::ParameterUILocation;
 use crate::processor_api::load_wav;
 use crate::{forward_slash_path, unique_time_id, SAVE_DIR};
+use eframe::egui::{self, include_image, Vec2};
 use egui_directory_combobox::{DirectoryComboBox, DirectoryNode};
 use serde::{ser::SerializeMap, Deserialize, Serialize};
-use eframe::egui::{self, include_image, Vec2};
 
 use super::{ui::pedal_knob, PedalParameter, PedalParameterValue, PedalTrait};
 
@@ -61,10 +61,15 @@ impl Serialize for ImpulseResponse {
                         // Convert relative paths to use forward slashes for cross platform compatibility
                         // Not used for absolute path as they are not intended to be portable
                         let relative_path_converted = forward_slash_path(relative_path);
-                        parameters.get_mut("IR").unwrap().value = PedalParameterValue::String(relative_path_converted.to_string_lossy().to_string());
+                        parameters.get_mut("IR").unwrap().value = PedalParameterValue::String(
+                            relative_path_converted.to_string_lossy().to_string(),
+                        );
                     }
                 } else {
-                    tracing::warn!("Failed to canonicalize IR path {:?} for serialization", ir_path);
+                    tracing::warn!(
+                        "Failed to canonicalize IR path {:?} for serialization",
+                        ir_path
+                    );
                 }
             }
         }
@@ -87,13 +92,20 @@ impl<'a> Deserialize<'a> for ImpulseResponse {
         let mut helper = ImpulseResponseData::deserialize(deserializer)?;
         let id = helper.id;
         let mut combobox_widget = Self::get_empty_directory_combo_box(id);
-        let midi_min_combobox_widget = Self::get_empty_directory_combo_box(egui::Id::new(id).with("midi_min"));
-        let midi_max_combobox_widget = Self::get_empty_directory_combo_box(egui::Id::new(id).with("midi_max"));
+        let midi_min_combobox_widget =
+            Self::get_empty_directory_combo_box(egui::Id::new(id).with("midi_min"));
+        let midi_max_combobox_widget =
+            Self::get_empty_directory_combo_box(egui::Id::new(id).with("midi_max"));
 
-        let mut model_path = helper.parameters.get("IR")
-            .and_then(
-                |p| p.value.as_str().and_then(|s| if s == "" { None } else { Some(PathBuf::from(s)) } )
-            );
+        let mut model_path = helper.parameters.get("IR").and_then(|p| {
+            p.value.as_str().and_then(|s| {
+                if s == "" {
+                    None
+                } else {
+                    Some(PathBuf::from(s))
+                }
+            })
+        });
 
         // If the model path is relative, make it absolute based on save directory
         if let Some(model_path) = model_path.as_mut() {
@@ -188,8 +200,12 @@ impl ImpulseResponse {
             parameters,
             dry_buffer: Vec::new(),
             combobox_widget: Self::get_empty_directory_combo_box(id),
-            midi_min_combobox_widget: Self::get_empty_directory_combo_box(egui::Id::new(id).with("midi_min")),
-            midi_max_combobox_widget: Self::get_empty_directory_combo_box(egui::Id::new(id).with("midi_max")),
+            midi_min_combobox_widget: Self::get_empty_directory_combo_box(
+                egui::Id::new(id).with("midi_min"),
+            ),
+            midi_max_combobox_widget: Self::get_empty_directory_combo_box(
+                egui::Id::new(id).with("midi_max"),
+            ),
             folders_state: 0,
             max_buffer_size: 0,
             id,
@@ -238,7 +254,11 @@ impl ImpulseResponse {
         let canon_path = match dunce::canonicalize(ir_path.as_ref()) {
             Ok(p) => p,
             Err(e) => {
-                tracing::error!("Failed to canonicalize IR path {:?}: {}", ir_path.as_ref(), e);
+                tracing::error!(
+                    "Failed to canonicalize IR path {:?}: {}",
+                    ir_path.as_ref(),
+                    e
+                );
                 return;
             }
         };
@@ -253,13 +273,17 @@ impl ImpulseResponse {
 
         match load_wav(ir_path.as_ref(), sample_rate, false) {
             Ok(ir) => {
-                self.ir = Some(IRConvolver::new(ir.first().expect("IR has no channels").as_slice(), self.max_buffer_size));
+                self.ir = Some(IRConvolver::new(
+                    ir.first().expect("IR has no channels").as_slice(),
+                    self.max_buffer_size,
+                ));
 
                 // Update combobox to match new selection (in case it was not set from the combobox itself)
                 self.combobox_widget.set_selection(Some(&string_path));
 
-                self.parameters.get_mut("IR").unwrap().value = PedalParameterValue::String(string_path);
-            },
+                self.parameters.get_mut("IR").unwrap().value =
+                    PedalParameterValue::String(string_path);
+            }
             Err(e) => {
                 tracing::error!("Failed to load IR: {}", e);
                 return;
@@ -275,51 +299,70 @@ impl ImpulseResponse {
 
     pub fn get_save_directory() -> Option<PathBuf> {
         if let Some(override_path) = std::env::var_os(OVERRIDE_DEFAULT_FOLDERS_ENV_VAR) {
-            tracing::debug!("Using overridden IR save directory from env var {}: {:?}", OVERRIDE_DEFAULT_FOLDERS_ENV_VAR, override_path);
+            tracing::debug!(
+                "Using overridden IR save directory from env var {}: {:?}",
+                OVERRIDE_DEFAULT_FOLDERS_ENV_VAR,
+                override_path
+            );
             let path_buf = PathBuf::from(override_path);
             return Some(dunce::canonicalize(path_buf).ok()?);
         }
-        Some(dunce::canonicalize(homedir::my_home().ok()??.join(SAVE_DIR).join(IR_SAVE_PATH)).ok()?)
+        Some(
+            dunce::canonicalize(homedir::my_home().ok()??.join(SAVE_DIR).join(IR_SAVE_PATH))
+                .ok()?,
+        )
     }
 
     /// Update the main pedal value, and midi min and max combobox widgets if the root directories have changed
     fn update_combobox_nodes(&mut self, ui: &mut egui::Ui) {
         // Refresh the list of root directories if it has changed
-        let new_root_directories: Option<Vec<egui_directory_combobox::DirectoryNode>> = ui.ctx().memory_mut(|m| {
-            let state = m.data.get_temp_mut_or("ir_folders_state".into(), 1u32);
-            if *state != self.folders_state {
-                self.folders_state = *state;
-                m.data.get_temp("ir_folders".into()).as_ref().cloned()
-            } else {
-                None
-            }
-        });
+        let new_root_directories: Option<Vec<egui_directory_combobox::DirectoryNode>> =
+            ui.ctx().memory_mut(|m| {
+                let state = m.data.get_temp_mut_or("ir_folders_state".into(), 1u32);
+                if *state != self.folders_state {
+                    self.folders_state = *state;
+                    m.data.get_temp("ir_folders".into()).as_ref().cloned()
+                } else {
+                    None
+                }
+            });
 
         if let Some(mut roots) = new_root_directories {
             if let Some(main_save_dir) = Self::get_save_directory() {
-                roots.push(egui_directory_combobox::DirectoryNode::from_path(&main_save_dir));
+                roots.push(egui_directory_combobox::DirectoryNode::from_path(
+                    &main_save_dir,
+                ));
             } else {
                 tracing::warn!("Failed to get main save directory");
             }
-            let model_path = self.combobox_widget.selected().and_then(|p| p.to_str().map(|s| s.to_string()));
+            let model_path = self
+                .combobox_widget
+                .selected()
+                .and_then(|p| p.to_str().map(|s| s.to_string()));
             self.combobox_widget = Self::get_empty_directory_combo_box(self.id);
             self.combobox_widget.set_selection(model_path);
 
-            let midi_min_path = self.midi_min_combobox_widget.selected().and_then(|p| p.to_str().map(|s| s.to_string()));
-            self.midi_min_combobox_widget = Self::get_empty_directory_combo_box(egui::Id::new(self.id).with("midi_min"));
+            let midi_min_path = self
+                .midi_min_combobox_widget
+                .selected()
+                .and_then(|p| p.to_str().map(|s| s.to_string()));
+            self.midi_min_combobox_widget =
+                Self::get_empty_directory_combo_box(egui::Id::new(self.id).with("midi_min"));
             self.midi_min_combobox_widget.set_selection(midi_min_path);
 
-            let midi_max_path = self.midi_max_combobox_widget.selected().and_then(|p| p.to_str().map(|s| s.to_string()));
-            self.midi_max_combobox_widget = Self::get_empty_directory_combo_box(egui::Id::new(self.id).with("midi_max"));
+            let midi_max_path = self
+                .midi_max_combobox_widget
+                .selected()
+                .and_then(|p| p.to_str().map(|s| s.to_string()));
+            self.midi_max_combobox_widget =
+                Self::get_empty_directory_combo_box(egui::Id::new(self.id).with("midi_max"));
             self.midi_max_combobox_widget.set_selection(midi_max_path);
 
             // If there is only one root directory, use its children as the roots
             let nodes = if roots.len() == 1 {
                 match roots.pop().unwrap() {
-                    egui_directory_combobox::DirectoryNode::Directory(_, children) => {
-                        children
-                    },
-                    _ => roots
+                    egui_directory_combobox::DirectoryNode::Directory(_, children) => children,
+                    _ => roots,
                 }
             } else {
                 roots
@@ -332,14 +375,19 @@ impl ImpulseResponse {
     }
 
     // If parameter is set, we force the combobox to show the value in parameter
-    fn show_ir_combobox(&mut self, ui: &mut egui::Ui, parameter: Option<&PedalParameter>, location: ParameterUILocation) -> egui::InnerResponse<Option<PedalParameterValue>> {
+    fn show_ir_combobox(
+        &mut self,
+        ui: &mut egui::Ui,
+        parameter: Option<&PedalParameter>,
+        location: ParameterUILocation,
+    ) -> egui::InnerResponse<Option<PedalParameterValue>> {
         self.update_combobox_nodes(ui);
 
         let combobox_to_show = match location {
             ParameterUILocation::Pedal => &mut self.combobox_widget,
             ParameterUILocation::ParameterWindow => &mut self.combobox_widget,
             ParameterUILocation::MidiMin => &mut self.midi_min_combobox_widget,
-            ParameterUILocation::MidiMax => &mut self.midi_max_combobox_widget
+            ParameterUILocation::MidiMax => &mut self.midi_max_combobox_widget,
         };
 
         if let Some(param) = parameter {
@@ -353,20 +401,21 @@ impl ImpulseResponse {
         }
 
         let old = combobox_to_show.selected().map(|p| p.to_path_buf());
-        let response = ui.add_sized(Vec2::new(ui.available_width(), 15.0), &mut *combobox_to_show);
+        let response = ui.add_sized(
+            Vec2::new(ui.available_width(), 15.0),
+            &mut *combobox_to_show,
+        );
 
         let mut to_change = None;
         if old.as_ref().map(|p| p.as_path()) != combobox_to_show.selected() {
             match combobox_to_show.selected() {
-                Some(path) => {
-                    match path.to_str() {
-                        Some(s) => {
-                            let selected_str = s.to_string();
-                            to_change = Some(PedalParameterValue::String(selected_str));
-                        },
-                        None => {
-                            tracing::warn!("Selected IR is not valid unicode");
-                        }
+                Some(path) => match path.to_str() {
+                    Some(s) => {
+                        let selected_str = s.to_string();
+                        to_change = Some(PedalParameterValue::String(selected_str));
+                    }
+                    None => {
+                        tracing::warn!("Selected IR is not valid unicode");
                     }
                 },
                 None => {
@@ -377,7 +426,7 @@ impl ImpulseResponse {
 
         egui::InnerResponse {
             inner: to_change,
-            response
+            response,
         }
     }
 }
@@ -393,7 +442,14 @@ impl PedalTrait for ImpulseResponse {
         self.dry_buffer.resize(buffer_size, 0.0);
         self.sample_rate = Some(sample_rate as f32);
 
-        let ir_path = self.parameters.get("IR").unwrap().value.as_str().unwrap().to_string();
+        let ir_path = self
+            .parameters
+            .get("IR")
+            .unwrap()
+            .value
+            .as_str()
+            .unwrap()
+            .to_string();
         self.set_ir_convolver(&ir_path, sample_rate as f32);
     }
 
@@ -407,8 +463,20 @@ impl PedalTrait for ImpulseResponse {
             return;
         }
 
-        let dry_wet = self.parameters.get("Dry/Wet").unwrap().value.as_float().unwrap();
-        let level = self.parameters.get("Level").unwrap().value.as_float().unwrap();
+        let dry_wet = self
+            .parameters
+            .get("Dry/Wet")
+            .unwrap()
+            .value
+            .as_float()
+            .unwrap();
+        let level = self
+            .parameters
+            .get("Level")
+            .unwrap()
+            .value
+            .as_float()
+            .unwrap();
 
         self.dry_buffer.clear();
         self.dry_buffer.extend_from_slice(buffer);
@@ -450,7 +518,11 @@ impl PedalTrait for ImpulseResponse {
         }
 
         if !self.parameters.get(name).unwrap().is_valid(&value) {
-            tracing::warn!("Attempted to set invalid value for parameter {}: {:?}", name, value);
+            tracing::warn!(
+                "Attempted to set invalid value for parameter {}: {:?}",
+                name,
+                value
+            );
             return;
         }
 
@@ -461,91 +533,121 @@ impl PedalTrait for ImpulseResponse {
         }
     }
 
-    fn get_string_values(&self,_parameter_name: &str) -> Option<Vec<String>> {
-        Some(self.combobox_widget.get_all_paths().iter().map(|p| p.to_string_lossy().to_string()).collect())
+    fn get_string_values(&self, _parameter_name: &str) -> Option<Vec<String>> {
+        Some(
+            self.combobox_widget
+                .get_all_paths()
+                .iter()
+                .map(|p| p.to_string_lossy().to_string())
+                .collect(),
+        )
     }
 
-    fn parameter_editor_ui(&mut self, ui: &mut egui::Ui, name: &str, parameter: &PedalParameter, location: ParameterUILocation) -> egui::InnerResponse<Option<PedalParameterValue>> {
+    fn parameter_editor_ui(
+        &mut self,
+        ui: &mut egui::Ui,
+        name: &str,
+        parameter: &PedalParameter,
+        location: ParameterUILocation,
+    ) -> egui::InnerResponse<Option<PedalParameterValue>> {
         if name == "IR" {
             ui.spacing_mut().combo_width = ui.available_width();
-            
+
             self.show_ir_combobox(ui, Some(parameter), location)
         } else {
             parameter.parameter_editor_ui(ui)
         }
     }
 
-    fn ui(&mut self, ui: &mut egui::Ui, _message_buffer: &[String]) -> Option<(String,PedalParameterValue)> {
+    fn ui(
+        &mut self,
+        ui: &mut egui::Ui,
+        _message_buffer: &[String],
+    ) -> Option<(String, PedalParameterValue)> {
         let pedal_rect = ui.available_rect_before_wrap();
 
         ui.add(egui::Image::new(include_image!("images/ir.png")));
-        
+
         let mut to_change = None;
 
         let combo_box_rect = pedal_rect
-            .scale_from_center2(
-                Vec2::new(0.9, 0.1)
-            ).translate(
-                Vec2::new(0.0, -0.15*pedal_rect.height())
-            );
-        let mut combo_ui = ui.new_child(
-            egui::UiBuilder::new()
-                .max_rect(combo_box_rect)
-        );
-        
+            .scale_from_center2(Vec2::new(0.9, 0.1))
+            .translate(Vec2::new(0.0, -0.15 * pedal_rect.height()));
+        let mut combo_ui = ui.new_child(egui::UiBuilder::new().max_rect(combo_box_rect));
+
         combo_ui.spacing_mut().combo_width = combo_ui.available_width();
-        if let Some(new_model_value) = self.show_ir_combobox(&mut combo_ui, None, ParameterUILocation::Pedal).inner {
+        if let Some(new_model_value) = self
+            .show_ir_combobox(&mut combo_ui, None, ParameterUILocation::Pedal)
+            .inner
+        {
             to_change = Some(("IR".to_string(), new_model_value));
         }
 
-        let button_rect = combo_box_rect.translate(Vec2::new(0.0, combo_box_rect.height() + 0.02*pedal_rect.height()));
+        let button_rect = combo_box_rect.translate(Vec2::new(
+            0.0,
+            combo_box_rect.height() + 0.02 * pedal_rect.height(),
+        ));
         let mut button_ui = ui.new_child(
             egui::UiBuilder::new()
                 .max_rect(button_rect)
-                .layout(egui::Layout::left_to_right(egui::Align::Min))
+                .layout(egui::Layout::left_to_right(egui::Align::Min)),
         );
-        let button_size = Vec2::new(button_rect.width()*0.47, button_rect.height());
-        let left_button_response = button_ui.add_sized(
-            button_size,
-            egui::Button::new("")
-        );
-        
+        let button_size = Vec2::new(button_rect.width() * 0.47, button_rect.height());
+        let left_button_response = button_ui.add_sized(button_size, egui::Button::new(""));
+
         sideways_arrow(ui, left_button_response.rect, true);
 
         if left_button_response.clicked() {
             self.combobox_widget.select_previous_file();
             if let Some(path) = self.combobox_widget.selected() {
                 if let Some(s) = path.to_str() {
-                    to_change = Some((String::from("IR"), PedalParameterValue::String(s.to_string())));
+                    to_change = Some((
+                        String::from("IR"),
+                        PedalParameterValue::String(s.to_string()),
+                    ));
                 } else {
                     tracing::warn!("Selected IR path is not valid unicode");
                 }
             }
         };
-        button_ui.add_space(button_rect.width()*0.06);
-        let right_button_response = button_ui.add_sized(
-            button_size,
-            egui::Button::new("")
-        );
-        
+        button_ui.add_space(button_rect.width() * 0.06);
+        let right_button_response = button_ui.add_sized(button_size, egui::Button::new(""));
+
         sideways_arrow(ui, right_button_response.rect, false);
 
         if right_button_response.clicked() {
             self.combobox_widget.select_next_file();
             if let Some(path) = self.combobox_widget.selected() {
                 if let Some(s) = path.to_str() {
-                    to_change = Some((String::from("IR"), PedalParameterValue::String(s.to_string())));
+                    to_change = Some((
+                        String::from("IR"),
+                        PedalParameterValue::String(s.to_string()),
+                    ));
                 } else {
                     tracing::warn!("Selected IR path is not valid unicode");
                 }
             }
         };
 
-        if let Some(value) = pedal_knob(ui, "", "Dry/Wet", self.parameters.get("Dry/Wet").unwrap(), Vec2::new(0.325, 0.037), 0.35, self.id) {
+        if let Some(value) = pedal_knob(
+            ui,
+            "",
+            "Dry/Wet",
+            self.parameters.get("Dry/Wet").unwrap(),
+            Vec2::new(0.325, 0.037),
+            0.35,
+            self.id,
+        ) {
             to_change = Some(("Dry/Wet".to_string(), value));
         }
 
-        let active_param = self.get_parameters().get("Active").unwrap().value.as_bool().unwrap();
+        let active_param = self
+            .get_parameters()
+            .get("Active")
+            .unwrap()
+            .value
+            .as_bool()
+            .unwrap();
         if let Some(value) = pedal_switch(ui, active_param, egui::Vec2::new(0.33, 0.72), 0.16) {
             to_change = Some(("Active".to_string(), PedalParameterValue::Bool(value)));
         }

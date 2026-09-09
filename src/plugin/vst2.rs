@@ -9,7 +9,11 @@ use std::{
 use crate::{pedals::PedalParameterValue, unique_time_id};
 
 use eframe::egui::{self, Id};
-use vst::{buffer::AudioBuffer, host::{Host, PluginInstance, PluginLoader}, plugin::{Info, Plugin}};
+use vst::{
+    buffer::AudioBuffer,
+    host::{Host, PluginInstance, PluginLoader},
+    plugin::{Info, Plugin},
+};
 
 #[cfg(target_os = "windows")]
 pub const VST2_PLUGIN_PATH: &str = r"C:\Program Files\Steinberg\VSTPlugins";
@@ -20,7 +24,8 @@ pub const VST2_PLUGIN_PATH: &str = "/Library/Audio/Plug-Ins/VST";
 
 fn get_global_host() -> Arc<Mutex<PedalboardVst2Host>> {
     static HOST: OnceLock<Arc<Mutex<PedalboardVst2Host>>> = OnceLock::new();
-    HOST.get_or_init(|| Arc::new(Mutex::new(PedalboardVst2Host))).clone()
+    HOST.get_or_init(|| Arc::new(Mutex::new(PedalboardVst2Host)))
+        .clone()
 }
 
 fn create_host() -> Arc<Mutex<PedalboardVst2Host>> {
@@ -62,7 +67,11 @@ impl Host for PedalboardVst2Host {
     }
 
     fn get_info(&self) -> (isize, String, String) {
-        (1, "Pedalboard VST Host".to_string(), "Pedalboard VST Host".to_string())
+        (
+            1,
+            "Pedalboard VST Host".to_string(),
+            "Pedalboard VST Host".to_string(),
+        )
     }
 }
 
@@ -77,12 +86,15 @@ pub struct Vst2Instance {
     pub ui_open: bool,
     dll_path: PathBuf,
     sample_rate: f32,
-    buffer_size: usize
+    buffer_size: usize,
 }
 
 impl Vst2Instance {
     pub fn is_configured(&self) -> bool {
-        self.sample_rate > 0.0 && self.buffer_size > 0 && !self.in_buffers.is_empty() && !self.out_buffers.is_empty()
+        self.sample_rate > 0.0
+            && self.buffer_size > 0
+            && !self.in_buffers.is_empty()
+            && !self.out_buffers.is_empty()
     }
 
     pub fn dll_path(&self) -> &Path {
@@ -100,7 +112,8 @@ impl Vst2Instance {
 
 impl Clone for Vst2Instance {
     fn clone(&self) -> Self {
-        let mut instance = Self::load(self.dll_path.as_path()).expect("Plugin has previously been loaded - Clone should succeed");
+        let mut instance = Self::load(self.dll_path.as_path())
+            .expect("Plugin has previously been loaded - Clone should succeed");
         instance.set_config(self.buffer_size, self.sample_rate as u32);
         instance
     }
@@ -108,7 +121,8 @@ impl Clone for Vst2Instance {
 
 impl Vst2Instance {
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, ()> {
-        let mut loader = PluginLoader::load(path.as_ref(), get_host_for_loader()).map_err(|_| ())?;
+        let mut loader =
+            PluginLoader::load(path.as_ref(), get_host_for_loader()).map_err(|_| ())?;
 
         let mut instance = loader.instance().map_err(|_| ())?;
 
@@ -149,14 +163,18 @@ impl Vst2Instance {
         self.in_buffers = (0..self.info.inputs)
             .map(|_| vec![0.0; buffer_size].into_boxed_slice())
             .collect();
-        self.in_buffer_ptrs = self.in_buffers.iter_mut()
+        self.in_buffer_ptrs = self
+            .in_buffers
+            .iter_mut()
             .map(|buf| buf.as_mut_ptr())
             .collect();
 
         self.out_buffers = (0..self.info.outputs)
             .map(|_| vec![0.0; buffer_size].into_boxed_slice())
             .collect();
-        self.out_buffer_ptrs = self.out_buffers.iter_mut()
+        self.out_buffer_ptrs = self
+            .out_buffers
+            .iter_mut()
             .map(|buf| buf.as_mut_ptr())
             .collect();
     }
@@ -167,9 +185,19 @@ impl Vst2Instance {
 
     /// Ensure that `set_config` has been called before processing audio.
     pub fn process(&mut self, input: &mut [f32], output: &mut [f32]) {
-        assert_eq!(input.len(), output.len(), "Input and output buffers must have the same length");
-        assert!(self.is_configured(), "VST instance must be configured with sample rate and buffer size before processing");
-        assert!(input.len() <= self.buffer_size, "Input buffer length must not exceed configured buffer size");
+        assert_eq!(
+            input.len(),
+            output.len(),
+            "Input and output buffers must have the same length"
+        );
+        assert!(
+            self.is_configured(),
+            "VST instance must be configured with sample rate and buffer size before processing"
+        );
+        assert!(
+            input.len() <= self.buffer_size,
+            "Input buffer length must not exceed configured buffer size"
+        );
 
         output.fill(0.0);
         for out_buf in &mut self.out_buffers {
@@ -185,13 +213,15 @@ impl Vst2Instance {
         }
 
         // SAFETY: in_buffer_ptrs and out_buffer_ptrs were set up in set_config to point to valid buffers of the correct size.
-        let mut buffer = unsafe { AudioBuffer::from_raw(
-            self.in_buffer_ptrs.len(),
-            self.out_buffer_ptrs.len(),
-            self.in_buffer_ptrs.as_ptr() as *const *const f32,
-            self.out_buffer_ptrs.as_mut_ptr(),
-            input.len(),
-        ) };
+        let mut buffer = unsafe {
+            AudioBuffer::from_raw(
+                self.in_buffer_ptrs.len(),
+                self.out_buffer_ptrs.len(),
+                self.in_buffer_ptrs.as_ptr() as *const *const f32,
+                self.out_buffer_ptrs.as_mut_ptr(),
+                input.len(),
+            )
+        };
 
         self.instance.process(&mut buffer);
 
@@ -209,13 +239,13 @@ impl Vst2Instance {
     pub fn open_ui(&mut self) {
         self.ui_open = true;
     }
-    
+
     pub fn close_ui(&mut self) {
         self.ui_open = false;
     }
 
     /// Render the window with the VST parameters, if it is open.
-    /// 
+    ///
     /// This does not directly update the parameter values. If a change is made, the name and value is returned.
     /// The caller is responsible for updating the parameter in the instance.
     pub fn ui_frame(&mut self, ui: &mut egui::Ui) -> Option<(String, PedalParameterValue)> {
@@ -232,11 +262,14 @@ impl Vst2Instance {
                 let mut value = self.parameter_value(parameter_idx);
                 let label = self.parameter_label(parameter_idx);
 
-                if ui.add(
-                    egui::Slider::new(&mut value, 0.0..=1.0)
-                        .text(&name)
-                        .suffix(label)
-                ).changed() {
+                if ui
+                    .add(
+                        egui::Slider::new(&mut value, 0.0..=1.0)
+                            .text(&name)
+                            .suffix(label),
+                    )
+                    .changed()
+                {
                     changed_param = Some((name, PedalParameterValue::Float(value)));
                 }
             }
@@ -250,39 +283,51 @@ impl Vst2Instance {
     pub fn parameter_count(&self) -> usize {
         self.info.parameters as usize
     }
-    
+
     pub fn parameter_name(&self, index: usize) -> String {
         if index < self.info.parameters as usize {
             self.instance.get_parameter_name(index as i32)
         } else {
-            tracing::warn!("Attempted to get name for invalid parameter index: {}", index);
+            tracing::warn!(
+                "Attempted to get name for invalid parameter index: {}",
+                index
+            );
             "Invalid Parameter".to_string()
         }
     }
-    
+
     pub fn parameter_value(&self, index: usize) -> f32 {
         if index < self.info.parameters as usize {
             self.instance.get_parameter(index as i32)
         } else {
-            tracing::warn!("Attempted to get value for invalid parameter index: {}", index);
+            tracing::warn!(
+                "Attempted to get value for invalid parameter index: {}",
+                index
+            );
             -1.0
         }
     }
-    
+
     pub fn parameter_label(&self, index: usize) -> String {
         if index < self.info.parameters as usize {
             self.instance.get_parameter_label(index as i32)
         } else {
-            tracing::warn!("Attempted to get label for invalid parameter index: {}", index);
+            tracing::warn!(
+                "Attempted to get label for invalid parameter index: {}",
+                index
+            );
             "Invalid Parameter".to_string()
         }
     }
-    
+
     pub fn set_parameter_value(&mut self, index: usize, value: f32) {
         if index < self.info.parameters as usize {
             self.instance.set_parameter(index as i32, value);
         } else {
-            tracing::warn!("Attempted to set value for invalid parameter index: {}", index);
+            tracing::warn!(
+                "Attempted to set value for invalid parameter index: {}",
+                index
+            );
         }
     }
 }

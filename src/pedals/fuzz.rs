@@ -1,22 +1,22 @@
-use std::collections::HashMap;
-use std::hash::Hash;
 use crate::pedals::ui::pedal_switch;
 use crate::unique_time_id;
+use std::collections::HashMap;
+use std::hash::Hash;
 
-use super::PedalTrait;
+use super::ui::pedal_knob;
 use super::PedalParameter;
 use super::PedalParameterValue;
-use super::ui::pedal_knob;
+use super::PedalTrait;
 
 use eframe::egui;
 use eframe::egui::include_image;
 use eframe::egui::Vec2;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Fuzz {
     parameters: HashMap<String, PedalParameter>,
-    id: u32
+    id: u32,
 }
 
 impl Hash for Fuzz {
@@ -34,7 +34,7 @@ impl Fuzz {
                 value: PedalParameterValue::Float(20.0),
                 min: Some(PedalParameterValue::Float(0.0)),
                 max: Some(PedalParameterValue::Float(100.0)),
-                step: None
+                step: None,
             },
         );
         parameters.insert(
@@ -43,7 +43,7 @@ impl Fuzz {
                 value: PedalParameterValue::Float(1.0),
                 min: Some(PedalParameterValue::Float(0.0)),
                 max: Some(PedalParameterValue::Float(3.0)),
-                step: None
+                step: None,
             },
         );
         parameters.insert(
@@ -52,7 +52,7 @@ impl Fuzz {
                 value: PedalParameterValue::Int(0),
                 min: Some(PedalParameterValue::Int(0)),
                 max: Some(PedalParameterValue::Int(3)),
-                step: None
+                step: None,
             },
         );
         parameters.insert(
@@ -61,7 +61,7 @@ impl Fuzz {
                 value: PedalParameterValue::Float(1.0),
                 min: Some(PedalParameterValue::Float(0.0)),
                 max: Some(PedalParameterValue::Float(1.0)),
-                step: None
+                step: None,
             },
         );
         parameters.insert(
@@ -73,7 +73,10 @@ impl Fuzz {
                 step: None,
             },
         );
-        Fuzz { parameters, id: unique_time_id()}
+        Fuzz {
+            parameters,
+            id: unique_time_id(),
+        }
     }
 
     pub fn clone_with_new_id(&self) -> Self {
@@ -89,12 +92,29 @@ impl PedalTrait for Fuzz {
     }
 
     fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
-
-        let gain = self.parameters.get("Gain").unwrap().value.as_float().unwrap();
-        let level = self.parameters.get("Level").unwrap().value.as_float().unwrap();
+        let gain = self
+            .parameters
+            .get("Gain")
+            .unwrap()
+            .value
+            .as_float()
+            .unwrap();
+        let level = self
+            .parameters
+            .get("Level")
+            .unwrap()
+            .value
+            .as_float()
+            .unwrap();
         let fuzz_type = self.parameters.get("Type").unwrap().value.as_int().unwrap();
-        let dry_wet = self.parameters.get("Dry/Wet").unwrap().value.as_float().unwrap();
-        
+        let dry_wet = self
+            .parameters
+            .get("Dry/Wet")
+            .unwrap()
+            .value
+            .as_float()
+            .unwrap();
+
         for sample in buffer.iter_mut() {
             let x = *sample * gain;
 
@@ -128,31 +148,73 @@ impl PedalTrait for Fuzz {
         &mut self.parameters
     }
 
-    fn ui(&mut self, ui: &mut egui::Ui, _message_buffer: &[String]) -> Option<(String, PedalParameterValue)> {
+    fn ui(
+        &mut self,
+        ui: &mut egui::Ui,
+        _message_buffer: &[String],
+    ) -> Option<(String, PedalParameterValue)> {
         ui.add(egui::Image::new(include_image!("images/fuzz.png")));
 
         let mut to_change = None;
         let gain_param = self.get_parameters().get("Gain").unwrap();
-        if let Some(value) = pedal_knob(ui, "", "Gain", gain_param, Vec2::new(0.1, 0.07), 0.35, self.id) {
+        if let Some(value) = pedal_knob(
+            ui,
+            "",
+            "Gain",
+            gain_param,
+            Vec2::new(0.1, 0.07),
+            0.35,
+            self.id,
+        ) {
             to_change = Some(("Gain".to_string(), value));
         }
 
         let level_param = self.get_parameters().get("Level").unwrap();
-        if let Some(value) = pedal_knob(ui, "", "Level", level_param, Vec2::new(0.52, 0.07), 0.35, self.id) {
+        if let Some(value) = pedal_knob(
+            ui,
+            "",
+            "Level",
+            level_param,
+            Vec2::new(0.52, 0.07),
+            0.35,
+            self.id,
+        ) {
             to_change = Some(("Level".to_string(), value));
         }
 
         let type_param = self.get_parameters().get("Type").unwrap();
-        if let Some(value) = pedal_knob(ui, "", "Type", type_param, Vec2::new(0.1, 0.3), 0.35, self.id) {
+        if let Some(value) = pedal_knob(
+            ui,
+            "",
+            "Type",
+            type_param,
+            Vec2::new(0.1, 0.3),
+            0.35,
+            self.id,
+        ) {
             to_change = Some(("Type".to_string(), value));
         }
 
         let dry_wet_param = self.get_parameters().get("Dry/Wet").unwrap();
-        if let Some(value) = pedal_knob(ui, "", "Dry/Wet", dry_wet_param, Vec2::new(0.52, 0.3), 0.35, self.id) {
+        if let Some(value) = pedal_knob(
+            ui,
+            "",
+            "Dry/Wet",
+            dry_wet_param,
+            Vec2::new(0.52, 0.3),
+            0.35,
+            self.id,
+        ) {
             to_change = Some(("Dry/Wet".to_string(), value));
         }
 
-        let active_param = self.get_parameters().get("Active").unwrap().value.as_bool().unwrap();
+        let active_param = self
+            .get_parameters()
+            .get("Active")
+            .unwrap()
+            .value
+            .as_bool()
+            .unwrap();
         if let Some(value) = pedal_switch(ui, active_param, egui::Vec2::new(0.33, 0.72), 0.16) {
             to_change = Some(("Active".to_string(), PedalParameterValue::Bool(value)));
         }

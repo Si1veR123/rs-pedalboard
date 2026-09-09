@@ -1,33 +1,39 @@
-use std::{io, path::{Path, PathBuf}};
+use std::{
+    io,
+    path::{Path, PathBuf},
+};
 
 use crossbeam::channel::{Receiver, Sender, TryRecvError};
 use hound::WavWriter;
-use ringbuf::{traits::{Consumer, Observer, Split}, HeapCons, HeapProd};
+use ringbuf::{
+    traits::{Consumer, Observer, Split},
+    HeapCons, HeapProd,
+};
 
 pub enum RecordingHandleState {
     Active {
         processed_prod: HeapProd<f32>,
         clean_prod: Option<HeapProd<f32>>,
         kill_channel: Sender<()>,
-        cons_receiver: Receiver<(HeapCons<f32>, Option<HeapCons<f32>>)>
+        cons_receiver: Receiver<(HeapCons<f32>, Option<HeapCons<f32>>)>,
     },
     Inactive {
         processed: (HeapProd<f32>, HeapCons<f32>),
-        clean: Option<(HeapProd<f32>, HeapCons<f32>)>
+        clean: Option<(HeapProd<f32>, HeapCons<f32>)>,
     },
     Starting,
     Stopping {
         processed_prod: HeapProd<f32>,
         clean_prod: Option<HeapProd<f32>>,
-        cons_receiver: Receiver<(HeapCons<f32>, Option<HeapCons<f32>>)>
+        cons_receiver: Receiver<(HeapCons<f32>, Option<HeapCons<f32>>)>,
     },
-    Transitioning
+    Transitioning,
 }
 
 pub struct RecordingHandle {
     state: RecordingHandleState,
     sample_rate: f32,
-    pub output_dir: PathBuf
+    pub output_dir: PathBuf,
 }
 
 impl RecordingHandle {
@@ -37,25 +43,27 @@ impl RecordingHandle {
         Self {
             state: RecordingHandleState::Inactive {
                 processed: (prod, cons),
-                clean: None
+                clean: None,
             },
             output_dir,
-            sample_rate
+            sample_rate,
         }
     }
 
     pub fn set_clean(&mut self, clean: bool) {
         match &mut self.state {
-            RecordingHandleState::Inactive { clean: clean_ringbuf, processed: (prod, _) } => {
+            RecordingHandleState::Inactive {
+                clean: clean_ringbuf,
+                processed: (prod, _),
+            } => {
                 if clean && clean_ringbuf.is_none() {
-                    let (clean_prod, clean_cons) = ringbuf::HeapRb::<f32>::new(
-                        prod.capacity().get()
-                    ).split();
+                    let (clean_prod, clean_cons) =
+                        ringbuf::HeapRb::<f32>::new(prod.capacity().get()).split();
                     *clean_ringbuf = Some((clean_prod, clean_cons));
                 } else if !clean && clean_ringbuf.is_some() {
                     *clean_ringbuf = None;
                 }
-            },
+            }
             _ => {
                 tracing::warn!("Attempted to change clean recording state in invalid state.");
             }
@@ -66,7 +74,7 @@ impl RecordingHandle {
         match &self.state {
             RecordingHandleState::Inactive { clean, .. } => clean.is_some(),
             RecordingHandleState::Active { clean_prod, .. } => clean_prod.is_some(),
-            _ => false
+            _ => false,
         }
     }
 
@@ -81,7 +89,7 @@ impl RecordingHandle {
 
         RecordingHandleState::Inactive {
             processed: (prod, cons),
-            clean: clean_ringbuf
+            clean: clean_ringbuf,
         }
     }
 
@@ -90,28 +98,36 @@ impl RecordingHandle {
             if let RecordingHandleState::Stopping {
                 processed_prod,
                 clean_prod,
-                cons_receiver
-            } = std::mem::replace(&mut self.state, RecordingHandleState::Transitioning) {
+                cons_receiver,
+            } = std::mem::replace(&mut self.state, RecordingHandleState::Transitioning)
+            {
                 match cons_receiver.try_recv() {
                     Ok((cons, clean_cons)) => {
                         self.state = RecordingHandleState::Inactive {
                             processed: (processed_prod, cons),
-                            clean:  match clean_cons {
-                                Some(c) => Some((clean_prod.expect("Clean producer missing when consumer received."), c)),
-                                None => None
-                            }
+                            clean: match clean_cons {
+                                Some(c) => Some((
+                                    clean_prod
+                                        .expect("Clean producer missing when consumer received."),
+                                    c,
+                                )),
+                                None => None,
+                            },
                         };
-                    },
+                    }
                     Err(TryRecvError::Empty) => {
                         self.state = RecordingHandleState::Stopping {
                             processed_prod,
                             clean_prod,
-                            cons_receiver
+                            cons_receiver,
                         };
-                    },
+                    }
                     Err(crossbeam::channel::TryRecvError::Disconnected) => {
                         tracing::error!("Recording thread disconnected unexpectedly.");
-                        self.state = Self::new_inactive_state(processed_prod.capacity().get(), clean_prod.is_some());
+                        self.state = Self::new_inactive_state(
+                            processed_prod.capacity().get(),
+                            clean_prod.is_some(),
+                        );
                     }
                 }
             } else {
@@ -126,13 +142,15 @@ impl RecordingHandle {
             return;
         }
 
-        if let RecordingHandleState::Inactive { processed, clean } = std::mem::replace(&mut self.state, RecordingHandleState::Starting) {
+        if let RecordingHandleState::Inactive { processed, clean } =
+            std::mem::replace(&mut self.state, RecordingHandleState::Starting)
+        {
             let (alive_sender, alive_receiver) = crossbeam::channel::bounded(1);
             let (cons_sender, cons_receiver) = crossbeam::channel::bounded(1);
 
             let (clean_prod, clean_cons) = match clean {
                 Some((p, c)) => (Some(p), Some(c)),
-                None => (None, None)
+                None => (None, None),
             };
 
             if let Err(e) = start_file_writer_thread(
@@ -141,17 +159,18 @@ impl RecordingHandle {
                 clean_cons,
                 self.sample_rate,
                 alive_receiver,
-                cons_sender
+                cons_sender,
             ) {
                 tracing::error!("Failed to start recording thread: {}", e);
-                self.state = Self::new_inactive_state(processed.0.capacity().get(), clean_prod.is_some());
+                self.state =
+                    Self::new_inactive_state(processed.0.capacity().get(), clean_prod.is_some());
             } else {
                 // Ok
                 self.state = RecordingHandleState::Active {
                     processed_prod: processed.0,
                     clean_prod,
                     kill_channel: alive_sender,
-                    cons_receiver
+                    cons_receiver,
                 };
             }
         } else {
@@ -169,17 +188,21 @@ impl RecordingHandle {
             processed_prod,
             clean_prod,
             kill_channel,
-            cons_receiver
-        } = std::mem::replace(&mut self.state, RecordingHandleState::Transitioning) {
+            cons_receiver,
+        } = std::mem::replace(&mut self.state, RecordingHandleState::Transitioning)
+        {
             // Sending a message will cause the recording thread to finish
             if let Err(e) = kill_channel.send(()) {
-                tracing::error!("RecordingHandle: Failed to send stop signal to recording thread: {}", e);
+                tracing::error!(
+                    "RecordingHandle: Failed to send stop signal to recording thread: {}",
+                    e
+                );
             }
 
             self.state = RecordingHandleState::Stopping {
                 processed_prod,
                 clean_prod,
-                cons_receiver
+                cons_receiver,
             };
         } else {
             unreachable!();
@@ -194,7 +217,7 @@ impl RecordingHandle {
         match &mut self.state {
             RecordingHandleState::Active { processed_prod, .. } => Some(processed_prod),
             RecordingHandleState::Inactive { processed, .. } => Some(&mut processed.0),
-            _ => None
+            _ => None,
         }
     }
 
@@ -202,12 +225,15 @@ impl RecordingHandle {
         match &mut self.state {
             RecordingHandleState::Active { clean_prod, .. } => clean_prod.as_mut(),
             RecordingHandleState::Inactive { clean, .. } => clean.as_mut().map(|(p, _)| p),
-            _ => None
+            _ => None,
         }
     }
 }
 
-#[tracing::instrument(level = "trace", skip(reader, clean_reader, alive_channel, cons_sender))]
+#[tracing::instrument(
+    level = "trace",
+    skip(reader, clean_reader, alive_channel, cons_sender)
+)]
 pub fn start_file_writer_thread<P: AsRef<Path> + std::fmt::Debug>(
     output_dir: P,
     mut reader: HeapCons<f32>,
@@ -219,86 +245,108 @@ pub fn start_file_writer_thread<P: AsRef<Path> + std::fmt::Debug>(
     let dir = output_dir.as_ref().to_path_buf();
     std::fs::create_dir_all(&dir).expect("Failed to create recording directory");
 
-    std::thread::Builder::new().name("RecordingThread".to_string()).spawn(move || {
-        tracing::info!("Starting recording thread, to directory: {:?}", dir);
-        let ringbuffer_len = reader.capacity().get();
-        // Theoretical time for the ringbuffer to fill up
-        let fill_time = ringbuffer_len as f32 / sample_rate;
-        // Check the buffer 4 times during that period
-        let sleep_time = std::time::Duration::from_secs_f32(fill_time / 4.0);
+    std::thread::Builder::new()
+        .name("RecordingThread".to_string())
+        .spawn(move || {
+            tracing::info!("Starting recording thread, to directory: {:?}", dir);
+            let ringbuffer_len = reader.capacity().get();
+            // Theoretical time for the ringbuffer to fill up
+            let fill_time = ringbuffer_len as f32 / sample_rate;
+            // Check the buffer 4 times during that period
+            let sleep_time = std::time::Duration::from_secs_f32(fill_time / 4.0);
 
-        let mut file_writer = WavWriter::create(
-            dir.join(format!("{}.wav", chrono::Local::now().format("%H%M%S-%d%m%Y"))),
-            hound::WavSpec {
-                channels: 2,
-                sample_rate: sample_rate as u32,
-                bits_per_sample: 32,
-                sample_format: hound::SampleFormat::Float
-            }
-        ).expect("Failed to create WAV file");
-
-        tracing::info!("Recording to file: {:?}", file_writer.spec());
-
-        let mut clean_file_writer = None;
-        if let Some(clean_reader) = clean_reader {
-            clean_file_writer = Some((
-                WavWriter::create(
-                dir.join(format!("{}-clean.wav", chrono::Local::now().format("%H%M%S-%d%m%Y"))),
+            let mut file_writer = WavWriter::create(
+                dir.join(format!(
+                    "{}.wav",
+                    chrono::Local::now().format("%H%M%S-%d%m%Y")
+                )),
                 hound::WavSpec {
-                        channels: 2,
-                        sample_rate: sample_rate as u32,
-                        bits_per_sample: 32,
-                        sample_format: hound::SampleFormat::Float
-                    }
-                ).expect("Failed to create clean WAV file"),
-                clean_reader
-            ));
-        }
+                    channels: 2,
+                    sample_rate: sample_rate as u32,
+                    bits_per_sample: 32,
+                    sample_format: hound::SampleFormat::Float,
+                },
+            )
+            .expect("Failed to create WAV file");
 
-        let mut sample_count = 0;
+            tracing::info!("Recording to file: {:?}", file_writer.spec());
 
-        // If message received, or sender disconnected, stop recording
-        while let Err(crossbeam::channel::TryRecvError::Empty) = alive_channel.try_recv() {
-            for s in reader.pop_iter() {
-                // Output 2 channels
-                file_writer.write_sample(s).expect("Failed to write sample to WAV file");
-                file_writer.write_sample(s).expect("Failed to write sample to WAV file");
-                sample_count += 1;
+            let mut clean_file_writer = None;
+            if let Some(clean_reader) = clean_reader {
+                clean_file_writer = Some((
+                    WavWriter::create(
+                        dir.join(format!(
+                            "{}-clean.wav",
+                            chrono::Local::now().format("%H%M%S-%d%m%Y")
+                        )),
+                        hound::WavSpec {
+                            channels: 2,
+                            sample_rate: sample_rate as u32,
+                            bits_per_sample: 32,
+                            sample_format: hound::SampleFormat::Float,
+                        },
+                    )
+                    .expect("Failed to create clean WAV file"),
+                    clean_reader,
+                ));
             }
 
-            if let Some((clean_writer, clean_reader)) = &mut clean_file_writer {
-                for s in clean_reader.pop_iter() {
+            let mut sample_count = 0;
+
+            // If message received, or sender disconnected, stop recording
+            while let Err(crossbeam::channel::TryRecvError::Empty) = alive_channel.try_recv() {
+                for s in reader.pop_iter() {
                     // Output 2 channels
-                    clean_writer.write_sample(s).expect("Failed to write sample to clean WAV file");
-                    clean_writer.write_sample(s).expect("Failed to write sample to clean WAV file");
+                    file_writer
+                        .write_sample(s)
+                        .expect("Failed to write sample to WAV file");
+                    file_writer
+                        .write_sample(s)
+                        .expect("Failed to write sample to WAV file");
+                    sample_count += 1;
                 }
 
+                if let Some((clean_writer, clean_reader)) = &mut clean_file_writer {
+                    for s in clean_reader.pop_iter() {
+                        // Output 2 channels
+                        clean_writer
+                            .write_sample(s)
+                            .expect("Failed to write sample to clean WAV file");
+                        clean_writer
+                            .write_sample(s)
+                            .expect("Failed to write sample to clean WAV file");
+                    }
+
+                    if sample_count >= sample_rate as usize {
+                        clean_writer
+                            .flush()
+                            .expect("Failed to flush clean WAV file");
+                    }
+                }
+
+                // Flush every second
                 if sample_count >= sample_rate as usize {
-                    clean_writer.flush().expect("Failed to flush clean WAV file");
+                    file_writer.flush().expect("Failed to flush WAV file");
+                    sample_count = 0;
                 }
+
+                std::thread::sleep(sleep_time);
             }
 
-            // Flush every second
-            if sample_count >= sample_rate as usize {
-                file_writer.flush().expect("Failed to flush WAV file");
-                sample_count = 0;
+            tracing::info!("Stopped recording");
+
+            let (clean_file_writer, clean_reader) = match clean_file_writer {
+                Some((w, r)) => (Some(w), Some(r)),
+                None => (None, None),
+            };
+
+            cons_sender
+                .send((reader, clean_reader))
+                .expect("Failed to send consumer back to main thread");
+
+            file_writer.finalize().expect("Failed to finalize WAV file");
+            if let Some(w) = clean_file_writer {
+                w.finalize().expect("Failed to finalize clean WAV file");
             }
-
-            std::thread::sleep(sleep_time);
-        }
-
-        tracing::info!("Stopped recording");
-
-        let (clean_file_writer, clean_reader) = match clean_file_writer {
-            Some((w, r)) => (Some(w), Some(r)),
-            None => (None, None)
-        };
-
-        cons_sender.send((reader, clean_reader)).expect("Failed to send consumer back to main thread");
-
-        file_writer.finalize().expect("Failed to finalize WAV file");
-        if let Some(w) = clean_file_writer {
-            w.finalize().expect("Failed to finalize clean WAV file");
-        }
-    })
+        })
 }

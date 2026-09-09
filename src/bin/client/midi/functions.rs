@@ -1,5 +1,5 @@
 use rs_pedalboard::pedals::PedalParameterValue;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 
 use crate::socket::Command;
@@ -20,7 +20,7 @@ pub enum GlobalMidiFunction {
     SongsView,
     SettingsView,
     ChangeActiveParameter,
-    ResetVolumeNormalization
+    ResetVolumeNormalization,
 }
 
 impl std::fmt::Display for GlobalMidiFunction {
@@ -40,7 +40,7 @@ impl std::fmt::Display for GlobalMidiFunction {
             GlobalMidiFunction::SongsView => "Songs View",
             GlobalMidiFunction::SettingsView => "Settings View",
             GlobalMidiFunction::ChangeActiveParameter => "Change Active Parameter",
-            GlobalMidiFunction::ResetVolumeNormalization => "Reset Volume Normalization"
+            GlobalMidiFunction::ResetVolumeNormalization => "Reset Volume Normalization",
         };
         write!(f, "{name}")
     }
@@ -63,7 +63,7 @@ impl GlobalMidiFunction {
             GlobalMidiFunction::SongsView => Command::SongsView,
             GlobalMidiFunction::SettingsView => Command::SettingsView,
             GlobalMidiFunction::ChangeActiveParameter => Command::ChangeActiveParameter(value),
-            GlobalMidiFunction::ResetVolumeNormalization => Command::VolumeNormalizationReset
+            GlobalMidiFunction::ResetVolumeNormalization => Command::VolumeNormalizationReset,
         }
     }
 }
@@ -71,7 +71,7 @@ impl GlobalMidiFunction {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ParameterMidiFunctionValues {
     pub min_value: PedalParameterValue,
-    pub max_value: PedalParameterValue
+    pub max_value: PedalParameterValue,
 }
 
 impl ParameterMidiFunctionValues {
@@ -80,15 +80,19 @@ impl ParameterMidiFunctionValues {
             PedalParameterValue::Float(min) => {
                 let max = self.max_value.as_float().unwrap_or(min);
                 PedalParameterValue::Float(min + (max - min) * value)
-            },
+            }
             PedalParameterValue::Int(min) => {
                 let max = self.max_value.as_int().unwrap_or(min);
                 PedalParameterValue::Int(min + ((max - min) as f32 * value).round() as i16)
-            },
-            PedalParameterValue::Bool(_) |
-            PedalParameterValue::Oscillator(_) |
-            PedalParameterValue::String(_) => {
-                if value >= 0.5 { self.max_value.clone() } else { self.min_value.clone() }
+            }
+            PedalParameterValue::Bool(_)
+            | PedalParameterValue::Oscillator(_)
+            | PedalParameterValue::String(_) => {
+                if value >= 0.5 {
+                    self.max_value.clone()
+                } else {
+                    self.min_value.clone()
+                }
             }
         }
     }

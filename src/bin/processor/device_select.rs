@@ -8,9 +8,17 @@ pub fn device_select_menu(devices: &[String]) -> String {
     }
     print!("Select a device: ");
     stdout().flush().expect("Failed to flush stdout");
-    stdin().read_line(&mut input_buf).expect("Failed to read stdin");
+    stdin()
+        .read_line(&mut input_buf)
+        .expect("Failed to read stdin");
 
-    devices.get(
-        input_buf.trim().parse::<usize>().expect("Failed to parse device index")
-    ).expect("Invalid index").clone()
+    devices
+        .get(
+            input_buf
+                .trim()
+                .parse::<usize>()
+                .expect("Failed to parse device index"),
+        )
+        .expect("Invalid index")
+        .clone()
 }

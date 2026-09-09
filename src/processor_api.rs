@@ -7,11 +7,19 @@ use crate::pedals::PedalTrait;
 
 pub const PROCESSING_BUFFER_SIZE: usize = 1024;
 
-pub fn load_wav<P: AsRef<Path>>(wav_path: P, sample_rate: f32, normalise: bool) -> Result<Vec<Vec<f32>>, String> {
-    let mut reader = hound::WavReader::open(wav_path.as_ref()).map_err(
-        |e| format!("Failed to open WAV file '{}': {}", wav_path.as_ref().display(), e)
-    )?;
-    
+pub fn load_wav<P: AsRef<Path>>(
+    wav_path: P,
+    sample_rate: f32,
+    normalise: bool,
+) -> Result<Vec<Vec<f32>>, String> {
+    let mut reader = hound::WavReader::open(wav_path.as_ref()).map_err(|e| {
+        format!(
+            "Failed to open WAV file '{}': {}",
+            wav_path.as_ref().display(),
+            e
+        )
+    })?;
+
     let spec = reader.spec();
     if spec.bits_per_sample > 32 {
         return Err("WAV file has more than 32 bits per sample. This is not supported.".into());
@@ -23,10 +31,11 @@ pub fn load_wav<P: AsRef<Path>>(wav_path: P, sample_rate: f32, normalise: bool) 
         hound::SampleFormat::Float => {
             let ir_samples: Result<Vec<f32>, _> = reader.into_samples().collect();
             ir_samples.map_err(|e| e.to_string())
-        },
+        }
         hound::SampleFormat::Int => {
             let max_amplitude = (1i64 << (spec.bits_per_sample - 1)) as f32;
-            let ir_samples: Result<Vec<f32>, _> = reader.samples::<i32>()
+            let ir_samples: Result<Vec<f32>, _> = reader
+                .samples::<i32>()
                 .map(|s| s.and_then(|s| Ok(s as f32 / max_amplitude)))
                 .collect();
             ir_samples.map_err(|e| e.to_string())
@@ -37,7 +46,8 @@ pub fn load_wav<P: AsRef<Path>>(wav_path: P, sample_rate: f32, normalise: bool) 
         let num_channels = spec.channels as usize;
 
         // Deinterleave samples into a Vec of channels
-        let mut channels: Vec<Vec<f32>> = vec![Vec::with_capacity(float_samples.len() / num_channels); num_channels];
+        let mut channels: Vec<Vec<f32>> =
+            vec![Vec::with_capacity(float_samples.len() / num_channels); num_channels];
         for frame in float_samples.chunks_exact(num_channels) {
             for (i, &sample) in frame.iter().enumerate() {
                 channels[i].push(sample);
@@ -60,17 +70,20 @@ pub fn load_wav<P: AsRef<Path>>(wav_path: P, sample_rate: f32, normalise: bool) 
                 },
                 float_samples.len() / num_channels,
                 num_channels,
-            ).map_err(|e| e.to_string())?;
+            )
+            .map_err(|e| e.to_string())?;
 
             let channel_refs: Vec<&[f32]> = channels.iter().map(|ch| ch.as_slice()).collect();
 
-            resampled_channels = resampler.process(&channel_refs, None)
+            resampled_channels = resampler
+                .process(&channel_refs, None)
                 .map_err(|e| e.to_string())?;
         }
 
         if normalise {
             // Normalize WAV to -1 to 1 range
-            let max_sample = resampled_channels.iter()
+            let max_sample = resampled_channels
+                .iter()
                 .flat_map(|ch| ch.iter())
                 .map(|s| s.abs())
                 .fold(0.0_f32, f32::max);
@@ -87,7 +100,11 @@ pub fn load_wav<P: AsRef<Path>>(wav_path: P, sample_rate: f32, normalise: bool) 
     })
 }
 
-fn save_wav<P: AsRef<std::path::Path>>(wav_path: P, buffer: &[f32], sample_rate: f32) -> Result<(), String> {
+fn save_wav<P: AsRef<std::path::Path>>(
+    wav_path: P,
+    buffer: &[f32],
+    sample_rate: f32,
+) -> Result<(), String> {
     let spec = hound::WavSpec {
         channels: 1,
         sample_rate: sample_rate as u32,
@@ -95,21 +112,23 @@ fn save_wav<P: AsRef<std::path::Path>>(wav_path: P, buffer: &[f32], sample_rate:
         sample_format: hound::SampleFormat::Float,
     };
 
-    let mut writer = hound::WavWriter::create(wav_path, spec)
-        .map_err(|e| e.to_string())?;
+    let mut writer = hound::WavWriter::create(wav_path, spec).map_err(|e| e.to_string())?;
 
     for &sample in buffer {
-        writer.write_sample(sample)
-            .map_err(|e| e.to_string())?;
+        writer.write_sample(sample).map_err(|e| e.to_string())?;
     }
 
-    writer.finalize()
-        .map_err(|e| e.to_string())?;
+    writer.finalize().map_err(|e| e.to_string())?;
 
     Ok(())
 }
 
-pub fn process_audio(audio: &mut [f32], pedalboard: &mut Pedalboard, sample_rate: f32, normalise: bool) {
+pub fn process_audio(
+    audio: &mut [f32],
+    pedalboard: &mut Pedalboard,
+    sample_rate: f32,
+    normalise: bool,
+) {
     let mut pedal_command_to_client_buffer: Vec<String> = Vec::new();
 
     for pedal in &mut pedalboard.pedals {
@@ -134,7 +153,12 @@ pub fn process_audio(audio: &mut [f32], pedalboard: &mut Pedalboard, sample_rate
     }
 }
 
-pub fn process_audio_file(src_path: &std::path::Path, pedalboard: &mut Pedalboard, sample_rate: f32, normalise: bool) -> Result<Vec<f32>, String> {
+pub fn process_audio_file(
+    src_path: &std::path::Path,
+    pedalboard: &mut Pedalboard,
+    sample_rate: f32,
+    normalise: bool,
+) -> Result<Vec<f32>, String> {
     for pedal in &mut pedalboard.pedals {
         pedal.set_config(PROCESSING_BUFFER_SIZE, sample_rate as u32);
     }
@@ -154,7 +178,7 @@ pub fn process_audio_file(src_path: &std::path::Path, pedalboard: &mut Pedalboar
                 *sample /= num_channels as f32;
             }
             mono_buffer
-        },
+        }
         Err(e) => {
             return Err(e);
         }
@@ -165,7 +189,13 @@ pub fn process_audio_file(src_path: &std::path::Path, pedalboard: &mut Pedalboar
     Ok(processing_buffer)
 }
 
-pub fn process_audio_file_and_save(src_path: &std::path::Path, to_path: &std::path::Path, pedalboard: &mut Pedalboard, sample_rate: f32, normalise: bool) -> Result<(), String> {
+pub fn process_audio_file_and_save(
+    src_path: &std::path::Path,
+    to_path: &std::path::Path,
+    pedalboard: &mut Pedalboard,
+    sample_rate: f32,
+    normalise: bool,
+) -> Result<(), String> {
     let buffer = process_audio_file(src_path, pedalboard, sample_rate, normalise)?;
 
     // Save processed buffer to output file

@@ -78,7 +78,7 @@ impl CommandReceiver {
     ) -> io::Result<bool>
     where
         R: AsyncRead + Unpin,
-        P: ringbuf::producer::Producer<Item = String>
+        P: ringbuf::producer::Producer<Item = String>,
     {
         let mut buf = [0u8; 1024];
         let n = match reader.read(&mut buf).await {
@@ -86,12 +86,15 @@ impl CommandReceiver {
             Ok(n) => n,
             Err(e) => return Err(e),
         };
-    
+
         self.process_buffer_chunk(&buf[..n]);
-        
+
         for command in self.temp_command_buffer.drain(..) {
             if let Err(command) = into.try_push(command) {
-                tracing::warn!("Failed to push command into ringbuf producer, it is full. Command: {:?}", command);
+                tracing::warn!(
+                    "Failed to push command into ringbuf producer, it is full. Command: {:?}",
+                    command
+                );
                 break;
             }
         }

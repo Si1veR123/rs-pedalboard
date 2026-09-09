@@ -4,10 +4,10 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use super::PedalTrait;
+use super::ui::pedal_knob;
 use super::PedalParameter;
 use super::PedalParameterValue;
-use super::ui::pedal_knob;
+use super::PedalTrait;
 
 use crate::forward_slash_path;
 use crate::pedals::ui::pedal_switch;
@@ -16,10 +16,10 @@ use crate::plugin::vst2::{Vst2Instance, VST2_PLUGIN_PATH};
 use crate::unique_time_id;
 
 use eframe::egui::RichText;
-use eframe::egui::{self, Button, Color32, Layout, UiBuilder, Vec2, include_image};
-use serde::ser::SerializeMap;
-use serde::{Serialize, Deserialize};
+use eframe::egui::{self, include_image, Button, Color32, Layout, UiBuilder, Vec2};
 use egui_directory_combobox::{DirectoryComboBox, DirectoryNode};
+use serde::ser::SerializeMap;
+use serde::{Deserialize, Serialize};
 
 pub const OVERRIDE_DEFAULT_FOLDERS_ENV_VAR: &str = "RSPEDALBOARD_VST2_FOLDER";
 
@@ -40,7 +40,7 @@ pub struct Vst2 {
     midi_min_combobox_widget: DirectoryComboBox,
     midi_max_combobox_widget: DirectoryComboBox,
     folders_state: u32,
-    id: u32
+    id: u32,
 }
 
 impl Serialize for Vst2 {
@@ -48,30 +48,39 @@ impl Serialize for Vst2 {
     where
         S: serde::Serializer,
     {
-        let parameters_with_idx: HashMap<String, (Option<usize>, PedalParameter)> = self.parameters.iter().map(|(k, v)| {
-            let idx = self.param_index_map.get(k).cloned();
-            let mut value = v.clone();
+        let parameters_with_idx: HashMap<String, (Option<usize>, PedalParameter)> = self
+            .parameters
+            .iter()
+            .map(|(k, v)| {
+                let idx = self.param_index_map.get(k).cloned();
+                let mut value = v.clone();
 
-            // If the parameter is "Plugin", store only the relative path if it is in the main save directory
-            if k == "Plugin" {
-                if let PedalParameterValue::String(path) = &v.value {
-                    if let Some(save_dir) = Self::get_save_directory() {
-                        if let Ok(canon_path) = dunce::canonicalize(Path::new(path)) {
-                            if let Ok(relative_path) = canon_path.strip_prefix(&save_dir) {
-                                // Convert relative paths to use forward slashes for cross platform compatibility
-                                // Not used for absolute path as they are not intended to be portable
-                                let relative_path_converted = forward_slash_path(relative_path);
-                                value.value = PedalParameterValue::String(relative_path_converted.to_string_lossy().to_string());
+                // If the parameter is "Plugin", store only the relative path if it is in the main save directory
+                if k == "Plugin" {
+                    if let PedalParameterValue::String(path) = &v.value {
+                        if let Some(save_dir) = Self::get_save_directory() {
+                            if let Ok(canon_path) = dunce::canonicalize(Path::new(path)) {
+                                if let Ok(relative_path) = canon_path.strip_prefix(&save_dir) {
+                                    // Convert relative paths to use forward slashes for cross platform compatibility
+                                    // Not used for absolute path as they are not intended to be portable
+                                    let relative_path_converted = forward_slash_path(relative_path);
+                                    value.value = PedalParameterValue::String(
+                                        relative_path_converted.to_string_lossy().to_string(),
+                                    );
+                                }
+                            } else {
+                                tracing::warn!(
+                                    "Failed to canonicalize plugin path {:?} for serialization",
+                                    path
+                                );
                             }
-                        } else {
-                            tracing::warn!("Failed to canonicalize plugin path {:?} for serialization", path);
                         }
                     }
                 }
-            }
 
-            (k.clone(), (idx, value))
-        }).collect();
+                (k.clone(), (idx, value))
+            })
+            .collect();
 
         let mut ser_map = serializer.serialize_map(Some(2))?;
         ser_map.serialize_entry("id", &self.id)?;
@@ -93,7 +102,14 @@ impl<'a> Deserialize<'a> for Vst2 {
         let helper = Vst2Data::deserialize(deserializer)?;
 
         let parameters_with_idx = helper.parameters_with_idx;
-        let mut path = parameters_with_idx.get("Plugin").unwrap().1.value.as_str().unwrap().to_string();
+        let mut path = parameters_with_idx
+            .get("Plugin")
+            .unwrap()
+            .1
+            .value
+            .as_str()
+            .unwrap()
+            .to_string();
         // If the path is relative, make it absolute using the main save directory
         if !path.is_empty() && Path::new(&path).is_relative() {
             if let Some(save_dir) = Self::get_save_directory() {
@@ -101,28 +117,49 @@ impl<'a> Deserialize<'a> for Vst2 {
             }
         }
 
-        let dry_wet = parameters_with_idx.get("Dry/Wet").unwrap().1.value.as_float().unwrap_or(1.0);
-        let active = parameters_with_idx.get("Active").unwrap().1.value.as_bool().unwrap_or(true);
+        let dry_wet = parameters_with_idx
+            .get("Dry/Wet")
+            .unwrap()
+            .1
+            .value
+            .as_float()
+            .unwrap_or(1.0);
+        let active = parameters_with_idx
+            .get("Active")
+            .unwrap()
+            .1
+            .value
+            .as_bool()
+            .unwrap_or(true);
 
         let mut parameters = HashMap::new();
-        parameters.insert(String::from("Plugin"), PedalParameter {
-            value: PedalParameterValue::String(path.clone()),
-            min: None,
-            max: None,
-            step: None
-        });
-        parameters.insert(String::from("Dry/Wet"), PedalParameter {
-            value: PedalParameterValue::Float(dry_wet),
-            min: Some(PedalParameterValue::Float(0.0)),
-            max: Some(PedalParameterValue::Float(1.0)),
-            step: None
-        });
-        parameters.insert(String::from("Active"), PedalParameter {
-            value: PedalParameterValue::Bool(active),
-            min: None,
-            max: None,
-            step: None
-        });
+        parameters.insert(
+            String::from("Plugin"),
+            PedalParameter {
+                value: PedalParameterValue::String(path.clone()),
+                min: None,
+                max: None,
+                step: None,
+            },
+        );
+        parameters.insert(
+            String::from("Dry/Wet"),
+            PedalParameter {
+                value: PedalParameterValue::Float(dry_wet),
+                min: Some(PedalParameterValue::Float(0.0)),
+                max: Some(PedalParameterValue::Float(1.0)),
+                step: None,
+            },
+        );
+        parameters.insert(
+            String::from("Active"),
+            PedalParameter {
+                value: PedalParameterValue::Bool(active),
+                min: None,
+                max: None,
+                step: None,
+            },
+        );
 
         let mut param_index_map = HashMap::new();
         if !path.is_empty() {
@@ -146,10 +183,14 @@ impl<'a> Deserialize<'a> for Vst2 {
             param_index_map,
             output_buffer: Vec::new(),
             combobox_widget: Self::get_empty_directory_combo_box(id),
-            midi_min_combobox_widget: Self::get_empty_directory_combo_box(egui::Id::new(id).with("midi_min")),
-            midi_max_combobox_widget: Self::get_empty_directory_combo_box(egui::Id::new(id).with("midi_max")),
+            midi_min_combobox_widget: Self::get_empty_directory_combo_box(
+                egui::Id::new(id).with("midi_min"),
+            ),
+            midi_max_combobox_widget: Self::get_empty_directory_combo_box(
+                egui::Id::new(id).with("midi_max"),
+            ),
             folders_state: 0,
-            id
+            id,
         };
         if path.is_empty() {
             Ok(vst_pedal)
@@ -169,10 +210,9 @@ impl<'a> Deserialize<'a> for Vst2 {
             vst_pedal.sync_parameters_to_instance();
 
             Ok(vst_pedal)
-        }        
+        }
     }
 }
-
 
 impl Hash for Vst2 {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
@@ -189,7 +229,7 @@ impl Vst2 {
                 value: PedalParameterValue::String("".to_string()),
                 min: None,
                 max: None,
-                step: None
+                step: None,
             },
         );
         parameters.insert(
@@ -198,7 +238,7 @@ impl Vst2 {
                 value: PedalParameterValue::Float(1.0),
                 min: Some(PedalParameterValue::Float(0.0)),
                 max: Some(PedalParameterValue::Float(1.0)),
-                step: None
+                step: None,
             },
         );
         parameters.insert(
@@ -219,10 +259,14 @@ impl Vst2 {
             param_index_map: HashMap::new(),
             output_buffer: Vec::new(),
             combobox_widget: Self::get_empty_directory_combo_box(id),
-            midi_min_combobox_widget: Self::get_empty_directory_combo_box(egui::Id::new(id).with("midi_min")),
-            midi_max_combobox_widget: Self::get_empty_directory_combo_box(egui::Id::new(id).with("midi_max")),
+            midi_min_combobox_widget: Self::get_empty_directory_combo_box(
+                egui::Id::new(id).with("midi_min"),
+            ),
+            midi_max_combobox_widget: Self::get_empty_directory_combo_box(
+                egui::Id::new(id).with("midi_max"),
+            ),
             folders_state: 0,
-            id
+            id,
         }
     }
 
@@ -234,7 +278,11 @@ impl Vst2 {
 
     pub fn get_save_directory() -> Option<PathBuf> {
         if let Some(override_path) = std::env::var_os(OVERRIDE_DEFAULT_FOLDERS_ENV_VAR) {
-            tracing::debug!("Using overridden VST2 save directory from env var {}: {:?}", OVERRIDE_DEFAULT_FOLDERS_ENV_VAR, override_path);
+            tracing::debug!(
+                "Using overridden VST2 save directory from env var {}: {:?}",
+                OVERRIDE_DEFAULT_FOLDERS_ENV_VAR,
+                override_path
+            );
             let path_buf = PathBuf::from(override_path);
             return Some(dunce::canonicalize(path_buf).ok()?);
         }
@@ -271,8 +319,9 @@ impl Vst2 {
 
     /// Update the pedal's parameters to the parameters of the current plugin instance
     pub fn sync_instance_to_parameters(&mut self) {
-        self.parameters.retain(|k, _| k == "Dry/Wet" || k == "Active");
-        
+        self.parameters
+            .retain(|k, _| k == "Dry/Wet" || k == "Active");
+
         if let Some(instance) = self.instance.as_mut() {
             match instance.dll_path().to_str() {
                 Some(path) => {
@@ -282,10 +331,10 @@ impl Vst2 {
                             value: PedalParameterValue::String(path.to_string()),
                             min: None,
                             max: None,
-                            step: None
+                            step: None,
                         },
                     );
-                },
+                }
                 None => {
                     tracing::warn!("Plugin path is not valid unicode, removing plugin instance.");
                     self.parameters.insert(
@@ -294,7 +343,7 @@ impl Vst2 {
                             value: PedalParameterValue::String("".to_string()),
                             min: None,
                             max: None,
-                            step: None
+                            step: None,
                         },
                     );
                     self.instance = None;
@@ -312,8 +361,8 @@ impl Vst2 {
                         value: PedalParameterValue::Float(value),
                         min: Some(PedalParameterValue::Float(0.0)),
                         max: Some(PedalParameterValue::Float(1.0)),
-                        step: None
-                    }
+                        step: None,
+                    },
                 );
 
                 self.param_index_map.insert(name, i);
@@ -325,7 +374,7 @@ impl Vst2 {
                     value: PedalParameterValue::String("".to_string()),
                     min: None,
                     max: None,
-                    step: None
+                    step: None,
                 },
             );
             self.param_index_map.clear();
@@ -370,7 +419,11 @@ impl Vst2 {
         let canon_path = match dunce::canonicalize(&absolute_path) {
             Ok(p) => p,
             Err(e) => {
-                tracing::error!("Failed to canonicalize plugin path {:?}: {}", absolute_path, e);
+                tracing::error!(
+                    "Failed to canonicalize plugin path {:?}: {}",
+                    absolute_path,
+                    e
+                );
                 self.instance = None;
                 self.sync_instance_to_parameters();
                 return;
@@ -386,7 +439,7 @@ impl Vst2 {
                 self.instance = Some(instance);
                 self.sync_instance_to_parameters();
                 self.combobox_widget.set_selection(Some(absolute_path));
-            },
+            }
             Err(_) => {
                 tracing::error!("Failed to load plugin: {}", absolute_path.display());
                 self.instance = None;
@@ -398,41 +451,54 @@ impl Vst2 {
     /// Update the main pedal value, and midi min and max combobox widgets if the root directories have changed
     fn update_combobox_nodes(&mut self, ui: &mut egui::Ui) {
         // Refresh the list of root directories if it has changed
-        let new_root_directories: Option<Vec<egui_directory_combobox::DirectoryNode>> = ui.ctx().memory_mut(|m| {
-            let state = m.data.get_temp_mut_or("vst2_folders_state".into(), 1u32);
-            if *state != self.folders_state {
-                self.folders_state = *state;
-                m.data.get_temp("vst2_folders".into()).as_ref().cloned()
-            } else {
-                None
-            }
-        });
+        let new_root_directories: Option<Vec<egui_directory_combobox::DirectoryNode>> =
+            ui.ctx().memory_mut(|m| {
+                let state = m.data.get_temp_mut_or("vst2_folders_state".into(), 1u32);
+                if *state != self.folders_state {
+                    self.folders_state = *state;
+                    m.data.get_temp("vst2_folders".into()).as_ref().cloned()
+                } else {
+                    None
+                }
+            });
 
         if let Some(mut roots) = new_root_directories {
             if let Some(node) = DirectoryNode::try_from_path(VST2_PLUGIN_PATH) {
                 roots.push(node);
             } else {
-                tracing::warn!("Failed to get default VST2 save directory: {}", VST2_PLUGIN_PATH);
+                tracing::warn!(
+                    "Failed to get default VST2 save directory: {}",
+                    VST2_PLUGIN_PATH
+                );
             }
-            let model_path = self.combobox_widget.selected().and_then(|p| p.to_str().map(|s| s.to_string()));
+            let model_path = self
+                .combobox_widget
+                .selected()
+                .and_then(|p| p.to_str().map(|s| s.to_string()));
             self.combobox_widget = Self::get_empty_directory_combo_box(self.id);
             self.combobox_widget.set_selection(model_path);
 
-            let midi_min_path = self.midi_min_combobox_widget.selected().and_then(|p| p.to_str().map(|s| s.to_string()));
-            self.midi_min_combobox_widget = Self::get_empty_directory_combo_box(egui::Id::new(self.id).with("midi_min"));
+            let midi_min_path = self
+                .midi_min_combobox_widget
+                .selected()
+                .and_then(|p| p.to_str().map(|s| s.to_string()));
+            self.midi_min_combobox_widget =
+                Self::get_empty_directory_combo_box(egui::Id::new(self.id).with("midi_min"));
             self.midi_min_combobox_widget.set_selection(midi_min_path);
 
-            let midi_max_path = self.midi_max_combobox_widget.selected().and_then(|p| p.to_str().map(|s| s.to_string()));
-            self.midi_max_combobox_widget = Self::get_empty_directory_combo_box(egui::Id::new(self.id).with("midi_max"));
+            let midi_max_path = self
+                .midi_max_combobox_widget
+                .selected()
+                .and_then(|p| p.to_str().map(|s| s.to_string()));
+            self.midi_max_combobox_widget =
+                Self::get_empty_directory_combo_box(egui::Id::new(self.id).with("midi_max"));
             self.midi_max_combobox_widget.set_selection(midi_max_path);
 
             // If there is only one root directory, use its children as the roots
             let nodes = if roots.len() == 1 {
                 match roots.pop().unwrap() {
-                    egui_directory_combobox::DirectoryNode::Directory(_, children) => {
-                        children
-                    },
-                    _ => roots
+                    egui_directory_combobox::DirectoryNode::Directory(_, children) => children,
+                    _ => roots,
                 }
             } else {
                 roots
@@ -444,14 +510,19 @@ impl Vst2 {
         }
     }
 
-    fn show_vst_combobox(&mut self, ui: &mut egui::Ui, parameter: Option<&PedalParameter>, location: ParameterUILocation) -> egui::InnerResponse<Option<PedalParameterValue>> {
+    fn show_vst_combobox(
+        &mut self,
+        ui: &mut egui::Ui,
+        parameter: Option<&PedalParameter>,
+        location: ParameterUILocation,
+    ) -> egui::InnerResponse<Option<PedalParameterValue>> {
         self.update_combobox_nodes(ui);
 
         let combobox_to_show = match location {
             ParameterUILocation::Pedal => &mut self.combobox_widget,
             ParameterUILocation::ParameterWindow => &mut self.combobox_widget,
             ParameterUILocation::MidiMin => &mut self.midi_min_combobox_widget,
-            ParameterUILocation::MidiMax => &mut self.midi_max_combobox_widget
+            ParameterUILocation::MidiMax => &mut self.midi_max_combobox_widget,
         };
 
         if let Some(param) = parameter {
@@ -465,20 +536,21 @@ impl Vst2 {
         }
 
         let old = combobox_to_show.selected().map(|p| p.to_path_buf());
-        let response = ui.add_sized(Vec2::new(ui.available_width(), 15.0), &mut *combobox_to_show);
+        let response = ui.add_sized(
+            Vec2::new(ui.available_width(), 15.0),
+            &mut *combobox_to_show,
+        );
 
         let mut to_change = None;
         if old.as_ref().map(|p| p.as_path()) != combobox_to_show.selected() {
             match combobox_to_show.selected() {
-                Some(path) => {
-                    match path.to_str() {
-                        Some(s) => {
-                            let selected_str = s.to_string();
-                            to_change = Some(PedalParameterValue::String(selected_str));
-                        },
-                        None => {
-                            tracing::warn!("Selected VST2 path is not valid unicode");
-                        }
+                Some(path) => match path.to_str() {
+                    Some(s) => {
+                        let selected_str = s.to_string();
+                        to_change = Some(PedalParameterValue::String(selected_str));
+                    }
+                    None => {
+                        tracing::warn!("Selected VST2 path is not valid unicode");
                     }
                 },
                 None => {
@@ -489,7 +561,7 @@ impl Vst2 {
 
         egui::InnerResponse {
             inner: to_change,
-            response
+            response,
         }
     }
 }
@@ -511,17 +583,28 @@ impl PedalTrait for Vst2 {
     fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
         // Config will be set on the processor. If it is not set, we cannot process audio.
         match self.config {
-            Some((b, _)) => assert!(buffer.len() <= b, "Buffer size exceeds configured max buffer size"),
-            None => return
+            Some((b, _)) => assert!(
+                buffer.len() <= b,
+                "Buffer size exceeds configured max buffer size"
+            ),
+            None => return,
         }
 
-        let dry_wet = self.parameters.get("Dry/Wet").unwrap().value.as_float().unwrap();
+        let dry_wet = self
+            .parameters
+            .get("Dry/Wet")
+            .unwrap()
+            .value
+            .as_float()
+            .unwrap();
 
         if let Some(instance) = self.instance.as_mut() {
             instance.process(buffer, &mut self.output_buffer[..buffer.len()]);
 
             // Mix using dry/wet
-            for (output_sample, processed_sample) in buffer.iter_mut().zip(self.output_buffer.iter()) {
+            for (output_sample, processed_sample) in
+                buffer.iter_mut().zip(self.output_buffer.iter())
+            {
                 *output_sample = *output_sample * (1.0 - dry_wet) + processed_sample * dry_wet;
             }
         }
@@ -566,21 +649,37 @@ impl PedalTrait for Vst2 {
         }
     }
 
-    fn get_string_values(&self,_parameter_name: &str) -> Option<Vec<String>> {
-        Some(self.combobox_widget.get_all_paths().iter().map(|p| p.to_string_lossy().to_string()).collect())
+    fn get_string_values(&self, _parameter_name: &str) -> Option<Vec<String>> {
+        Some(
+            self.combobox_widget
+                .get_all_paths()
+                .iter()
+                .map(|p| p.to_string_lossy().to_string())
+                .collect(),
+        )
     }
 
-    fn parameter_editor_ui(&mut self, ui: &mut egui::Ui, name: &str, parameter: &PedalParameter, location: ParameterUILocation) -> egui::InnerResponse<Option<PedalParameterValue>> {
+    fn parameter_editor_ui(
+        &mut self,
+        ui: &mut egui::Ui,
+        name: &str,
+        parameter: &PedalParameter,
+        location: ParameterUILocation,
+    ) -> egui::InnerResponse<Option<PedalParameterValue>> {
         if name == "Plugin" {
             ui.spacing_mut().combo_width = ui.available_width();
-            
+
             self.show_vst_combobox(ui, Some(parameter), location)
         } else {
             parameter.parameter_editor_ui(ui)
         }
     }
 
-    fn ui(&mut self, ui: &mut egui::Ui, _message_buffer: &[String]) -> Option<(String, PedalParameterValue)> {
+    fn ui(
+        &mut self,
+        ui: &mut egui::Ui,
+        _message_buffer: &[String],
+    ) -> Option<(String, PedalParameterValue)> {
         let mut plugin_param_change = None;
         if let Some(i) = self.instance.as_mut() {
             plugin_param_change = i.ui_frame(ui);
@@ -588,35 +687,40 @@ impl PedalTrait for Vst2 {
 
         let mut to_change = None;
 
-        let mut img_ui = ui.new_child(
-            UiBuilder::new()
-                .max_rect(ui.available_rect_before_wrap())
-        );
+        let mut img_ui = ui.new_child(UiBuilder::new().max_rect(ui.available_rect_before_wrap()));
 
-        img_ui.add(egui::Image::new(include_image!("images/pedal_gradient.png")).tint(Color32::from_rgb(18, 105, 50)));
+        img_ui.add(
+            egui::Image::new(include_image!("images/pedal_gradient.png"))
+                .tint(Color32::from_rgb(18, 105, 50)),
+        );
 
         ui.allocate_ui_with_layout(
             ui.available_size() * Vec2::new(0.9, 1.0),
             Layout::top_down(egui::Align::Center),
-
             |ui| {
                 ui.add_space(31.0);
-                
+
                 ui.label(egui::RichText::new("VST2").size(23.0));
 
                 ui.add_space(5.0);
 
                 ui.spacing_mut().combo_width = ui.available_width();
-                if let Some(value) = self.show_vst_combobox(ui, None, ParameterUILocation::Pedal).inner {
+                if let Some(value) = self
+                    .show_vst_combobox(ui, None, ParameterUILocation::Pedal)
+                    .inner
+                {
                     to_change = Some(("Plugin".to_string(), value));
                 }
 
                 ui.add_space(5.0);
 
-                if ui.add_enabled(
-                    self.instance.as_ref().map(|i| !i.ui_open).unwrap_or(false),
-                    Button::new(RichText::new("Parameters").size(14.0))
-                ).clicked() {
+                if ui
+                    .add_enabled(
+                        self.instance.as_ref().map(|i| !i.ui_open).unwrap_or(false),
+                        Button::new(RichText::new("Parameters").size(14.0)),
+                    )
+                    .clicked()
+                {
                     if let Some(instance) = self.instance.as_mut() {
                         if instance.ui_open {
                             instance.close_ui();
@@ -627,14 +731,28 @@ impl PedalTrait for Vst2 {
                 }
 
                 ui.add_space(5.0);
-                    
-                if let Some(value) = pedal_knob(ui, RichText::new("Dry/Wet").color(Color32::WHITE).size(8.0), "Dry/Wet", self.parameters.get("Dry/Wet").unwrap(), Vec2::new(0.325, 0.55), 0.35, self.id) {
+
+                if let Some(value) = pedal_knob(
+                    ui,
+                    RichText::new("Dry/Wet").color(Color32::WHITE).size(8.0),
+                    "Dry/Wet",
+                    self.parameters.get("Dry/Wet").unwrap(),
+                    Vec2::new(0.325, 0.55),
+                    0.35,
+                    self.id,
+                ) {
                     to_change = Some(("Dry/Wet".to_string(), value));
                 }
-            }
+            },
         );
 
-        let active_param = self.get_parameters().get("Active").unwrap().value.as_bool().unwrap();
+        let active_param = self
+            .get_parameters()
+            .get("Active")
+            .unwrap()
+            .value
+            .as_bool()
+            .unwrap();
         if let Some(value) = pedal_switch(ui, active_param, egui::Vec2::new(0.33, 0.72), 0.16) {
             to_change = Some(("Active".to_string(), PedalParameterValue::Bool(value)));
         }

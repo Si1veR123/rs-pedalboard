@@ -1,7 +1,10 @@
 use std::fmt::Display;
 
 /// Credit to https://github.com/saresend/yin/ for some functions
-use ringbuf::{traits::{Consumer, Observer}, HeapCons};
+use ringbuf::{
+    traits::{Consumer, Observer},
+    HeapCons,
+};
 
 // How often in milliseconds the processor should calculate and send the tuner frequency when active
 pub const PROCESSOR_UPDATE_FREQ_MS: u64 = 100;
@@ -87,7 +90,7 @@ pub struct Yin {
     tau_max: usize,
     num_periods: usize,
     threshold: f32,
-    sample_rate: u32
+    sample_rate: u32,
 }
 
 impl Yin {
@@ -96,10 +99,22 @@ impl Yin {
         tau_max as usize * num_periods
     }
 
-    pub fn new(threshold: f32, freq_min: u32, freq_max: u32, sample_rate: u32, num_periods: usize, read_from: HeapCons<f32>) -> Self {
+    pub fn new(
+        threshold: f32,
+        freq_min: u32,
+        freq_max: u32,
+        sample_rate: u32,
+        num_periods: usize,
+        read_from: HeapCons<f32>,
+    ) -> Self {
         let min_buffer = Self::minimum_buffer_length(sample_rate, freq_min, num_periods);
-        assert!(read_from.capacity().get() >= min_buffer, "Yin buffer too small: {} < {}", read_from.capacity(), min_buffer);
-        
+        assert!(
+            read_from.capacity().get() >= min_buffer,
+            "Yin buffer too small: {} < {}",
+            read_from.capacity(),
+            min_buffer
+        );
+
         let tau_max = sample_rate / freq_min;
         let tau_min = sample_rate / freq_max;
 
@@ -124,10 +139,16 @@ impl Yin {
         let samples_to_take = self.tau_max * self.num_periods;
         if occupied_samples >= samples_to_take {
             self.sample_frame_buffer.clear();
-            self.sample_frame_buffer.extend(self.read_from.pop_iter().take(samples_to_take));
+            self.sample_frame_buffer
+                .extend(self.read_from.pop_iter().take(samples_to_take));
 
             // Normalise the buffer between -1 and 1
-            if let Some(max_amplitude) = self.sample_frame_buffer.iter().map(|v| v.abs()).max_by(|a, b| a.partial_cmp(b).unwrap()) {
+            if let Some(max_amplitude) = self
+                .sample_frame_buffer
+                .iter()
+                .map(|v| v.abs())
+                .max_by(|a, b| a.partial_cmp(b).unwrap())
+            {
                 if max_amplitude > 0.0 {
                     for sample in self.sample_frame_buffer.iter_mut() {
                         *sample /= max_amplitude;
@@ -155,7 +176,7 @@ impl Yin {
         self.diff_buffer.resize(self.tau_max, 0.0);
 
         debug_assert!(self.sample_frame_buffer.len() >= self.tau_max);
-    
+
         for tau in 1..self.tau_max {
             for j in 0..(self.sample_frame_buffer.len() - self.tau_max) {
                 let tmp = self.sample_frame_buffer[j] - self.sample_frame_buffer[j + tau];
@@ -173,7 +194,8 @@ impl Yin {
             if running_sum == 0.0 {
                 self.cmndf_buffer.push(self.diff_buffer[index]);
             } else {
-                self.cmndf_buffer.push(self.diff_buffer[index] * index as f32 / running_sum);
+                self.cmndf_buffer
+                    .push(self.diff_buffer[index] * index as f32 / running_sum);
             }
         }
     }
@@ -182,7 +204,7 @@ impl Yin {
         if self.cmndf_buffer.len() < self.tau_min {
             return 0.0;
         }
-    
+
         let relevant_cmndf_buffer = &self.cmndf_buffer[self.tau_min..self.tau_max];
         let (min_tau, value) = relevant_cmndf_buffer
             .iter()
@@ -190,7 +212,7 @@ impl Yin {
             .enumerate()
             .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
             .expect("Shouldn't be any NaN in Yin");
-    
+
         if value >= self.threshold {
             0.0
         } else {
@@ -199,14 +221,13 @@ impl Yin {
             self.sample_rate as f32 / refined
         }
     }
-    
 
     fn parabolic_interpolation(cmndf: &[f32], tau_m: usize) -> f32 {
         if tau_m <= 0 || tau_m >= cmndf.len() - 1 {
             return tau_m as f32;
         }
 
-        let (y_0, y_1, y_2) = (cmndf[tau_m-1], cmndf[tau_m], cmndf[tau_m + 1]);
+        let (y_0, y_1, y_2) = (cmndf[tau_m - 1], cmndf[tau_m], cmndf[tau_m + 1]);
         let denominator = 2.0 * (y_0 - 2.0 * y_1 + y_2);
         if denominator == 0.0 {
             return tau_m as f32;
@@ -217,10 +238,12 @@ impl Yin {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
-    use ringbuf::{traits::{Producer, Split}, HeapRb};
+    use ringbuf::{
+        traits::{Producer, Split},
+        HeapRb,
+    };
 
     use super::*;
 
@@ -241,6 +264,10 @@ mod tests {
         }
         prod.push_slice(&example);
         let freq = estimator.process_buffer();
-        assert!(freq - 20.0 < 0.5, "Yin frequency estimation failed: {} != 20.0", freq);
+        assert!(
+            freq - 20.0 < 0.5,
+            "Yin frequency estimation failed: {} != 20.0",
+            freq
+        );
     }
 }

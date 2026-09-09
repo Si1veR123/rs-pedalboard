@@ -1,5 +1,5 @@
-use realfft::{ComplexToReal, RealFftPlanner, RealToComplex};
 use num_complex::Complex;
+use realfft::{ComplexToReal, RealFftPlanner, RealToComplex};
 
 use std::sync::Arc;
 
@@ -31,10 +31,7 @@ impl IRConvolver {
         let mut ir_freq = fft.make_output_vec();
         fft.process(&mut ir_padded, &mut ir_freq).unwrap();
 
-        let max_freq_gain = ir_freq
-            .iter()
-            .map(|bin| bin.norm())
-            .fold(0.0_f32, f32::max);
+        let max_freq_gain = ir_freq.iter().map(|bin| bin.norm()).fold(0.0_f32, f32::max);
 
         if max_freq_gain > 1.0 + 1e-6 {
             let scale = 1.0 / max_freq_gain;
@@ -67,7 +64,13 @@ impl IRConvolver {
         self.input_buffer.fill(0.0);
         self.input_buffer[..buffer.len()].copy_from_slice(buffer);
 
-        self.fft.process_with_scratch(&mut self.input_buffer, &mut self.input_freq, &mut self.scratch).unwrap();
+        self.fft
+            .process_with_scratch(
+                &mut self.input_buffer,
+                &mut self.input_freq,
+                &mut self.scratch,
+            )
+            .unwrap();
 
         // Multiply in frequency domain
         for (x, h) in self.input_freq.iter_mut().zip(&self.ir_freq) {
@@ -75,7 +78,9 @@ impl IRConvolver {
         }
 
         // IFFT
-        self.ifft.process(&mut self.input_freq, &mut self.ifft_out).unwrap();
+        self.ifft
+            .process(&mut self.input_freq, &mut self.ifft_out)
+            .unwrap();
 
         // Normalize
         let scale = self.fft_size as f32;
@@ -94,7 +99,7 @@ impl IRConvolver {
         // Copy any remaining samples to overlap buffer
         self.overlap.fill(0.0);
         for i in buffer.len()..self.fft_size {
-            self.overlap[i-buffer.len()] = self.ifft_out[i];
+            self.overlap[i - buffer.len()] = self.ifft_out[i];
         }
     }
 
@@ -113,7 +118,13 @@ mod tests {
     macro_rules! assert_nearly_eq_array {
         ($a:expr, $b:expr, $epsilon:expr) => {
             for (i, (x, y)) in $a.iter().zip($b.iter()).enumerate() {
-                assert!((x - y).abs() < $epsilon, "Arrays differ at index {}: {} vs {}", i, x, y);
+                assert!(
+                    (x - y).abs() < $epsilon,
+                    "Arrays differ at index {}: {} vs {}",
+                    i,
+                    x,
+                    y
+                );
             }
         };
     }
@@ -170,26 +181,14 @@ mod tests {
 
         convolver.process(&mut input_block1);
 
-        assert_nearly_eq_array!(
-            input_block1,
-            vec![0.5, 0.7, 1.0, 0.5],
-            1e-6
-        );
+        assert_nearly_eq_array!(input_block1, vec![0.5, 0.7, 1.0, 0.5], 1e-6);
 
         convolver.process(&mut input_block2);
 
-        assert_nearly_eq_array!(
-            input_block2,
-            vec![0.3, 0.0, 1.5, 1.1],
-            1e-6
-        );
+        assert_nearly_eq_array!(input_block2, vec![0.3, 0.0, 1.5, 1.1], 1e-6);
 
         convolver.process(&mut input_block3);
 
-        assert_nearly_eq_array!(
-            input_block3,
-            vec![1.1, 0.3, 0.0, 0.5],
-            1e-6
-        );
+        assert_nearly_eq_array!(input_block3, vec![1.1, 0.3, 0.0, 0.5], 1e-6);
     }
 }
