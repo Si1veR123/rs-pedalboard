@@ -2021,9 +2021,9 @@ dependencies = [
 
 [[package]]
 name = "freeverb"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68732b37b380a5009de482bc6ad5707dbd98fad8b132ba452d84519bf4b8343e"
+checksum = "fc1a77d60920b1ecd5c168ad25c58a67c6bc432caa9b3292e8ee9b1aaeb7ba30"
 
 [[package]]
 name = "futures"

@@ -52,7 +52,7 @@ clap = { version = "4.5.46", optional=true, features=["derive"] }
 which = { version = "8.0.0", optional=true }
 sysinfo = { version = "0.35.2", optional = true }
 chrono = "0.4.41"
-freeverb = "0.1.0"
+freeverb = "0.2.0"
 ordered-float = { version = "5.0.0", features = ["serde"] }
 rubato = "0.16.2"
 smol = { version = "2.0.2" }
