@@ -214,16 +214,9 @@ impl SettingsScreen {
                 | ProcessorLaunchState::KillError
         );
 
-        #[cfg(feature = "asio")]
         if processor_settings.host == SupportedHost::ASIO {
             processor_settings.output_device.is_some() && correct_state
         } else {
-            processor_settings.input_device.is_some()
-                && processor_settings.output_device.is_some()
-                && correct_state
-        }
-        #[cfg(not(feature = "asio"))]
-        {
             processor_settings.input_device.is_some()
                 && processor_settings.output_device.is_some()
                 && correct_state
@@ -335,9 +328,9 @@ impl Widget for &mut SettingsScreen {
                             }
 
                             // If on windows, and using ASIO host, we cannot control audio devices. Instead, we select the ASIO driver
-                            #[cfg(all(target_os = "windows", feature = "asio"))]
+                            #[cfg(target_os = "windows")]
                             let show_asio_driver = processor_settings.host == SupportedHost::ASIO;
-                            #[cfg(not(all(target_os = "windows", feature = "asio")))]
+                            #[cfg(not(target_os = "windows"))]
                             let show_asio_driver = false;
 
                             if show_asio_driver {
@@ -491,7 +484,7 @@ impl Widget for &mut SettingsScreen {
                         if ui.add_enabled(
                             self.ready_to_start_processor(&processor_settings),
                             egui::Button::new(button_text)
-                                .stroke(egui::Stroke::new(1.0, crate::THEME_COLOR))
+                                .stroke(egui::Stroke::new(1.0_f32, crate::THEME_COLOR))
                                 .min_size(button_size)
                         ).clicked() {
                             ui.ctx().request_repaint();
@@ -514,7 +507,7 @@ impl Widget for &mut SettingsScreen {
                             ui.add_space(button_horizontal_space*2.0);
                             connect_button = Some(ui.add(
                                 egui::Button::new("Connect")
-                                    .stroke(egui::Stroke::new(1.0, crate::ROW_COLOR_LIGHT))
+                                    .stroke(egui::Stroke::new(1.0_f32, crate::ROW_COLOR_LIGHT))
                                     .min_size(button_size)
                             ));
                         }
@@ -796,5 +789,5 @@ pub fn set_large_checkbox_style(ui: &mut egui::Ui) {
     ui.style_mut().spacing.icon_width = 35.0;
     ui.style_mut().spacing.icon_width_inner = 12.0;
     ui.style_mut().visuals.widgets.inactive.fg_stroke =
-        egui::Stroke::new(2.0, Color32::from_rgb(200, 200, 200));
+        egui::Stroke::new(2.0_f32, Color32::from_rgb(200, 200, 200));
 }

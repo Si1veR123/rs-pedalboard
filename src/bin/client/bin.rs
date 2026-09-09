@@ -304,9 +304,9 @@ impl eframe::App for PedalboardClientApp {
                 ui.horizontal_centered(|ui| {
                     let button_outline = |screen: Screen| {
                         if screen == selected_screen {
-                            egui::Stroke::new(1.0, THEME_COLOR)
+                            egui::Stroke::new(1.0_f32, THEME_COLOR)
                         } else {
-                            egui::Stroke::new(0.3, INACTIVE_BG_STROKE_COLOR)
+                            egui::Stroke::new(0.3_f32, INACTIVE_BG_STROKE_COLOR)
                         }
                     };
                     let button_bg = |screen: Screen| {
@@ -408,7 +408,7 @@ impl eframe::App for PedalboardClientApp {
                         if self.state.is_connected() {
                             button_outline(Screen::Settings)
                         } else {
-                            egui::Stroke::new(2.5, Color32::RED)
+                            egui::Stroke::new(2.5_f32, Color32::RED)
                         }
                     };
                     ui.style_mut().visuals.widgets.inactive.bg_stroke = settings_button_outline;
