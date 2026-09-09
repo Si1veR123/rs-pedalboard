@@ -17,12 +17,9 @@ impl VariableDelayLine {
     }
 
     pub fn get_sample(&mut self, delay: f32) -> f32 {
-        let prev_int_index = (self.buffer.len() - delay.floor() as usize)
-            .max(0)
-            .min(self.buffer.len() - 1);
-        let next_int_index = (self.buffer.len() - delay.ceil() as usize)
-            .max(0)
-            .min(self.buffer.len() - 1);
+        let delay = delay.clamp(0.0, self.max_delay());
+        let prev_int_index = delay.floor() as usize;
+        let next_int_index = delay.ceil() as usize;
         let prev_value = self.buffer[prev_int_index];
         let next_value = self.buffer[next_int_index];
         let interpolation = prev_value + delay.fract() * (next_value - prev_value);
@@ -31,5 +28,24 @@ impl VariableDelayLine {
 
     pub fn reset(&mut self) {
         self.buffer.iter_mut().for_each(|s| *s = 0.0);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::VariableDelayLine;
+
+    #[test]
+    fn reads_from_newest_sample() {
+        let mut delay = VariableDelayLine::new(2);
+        for value in [3.0, 2.0, 1.0] {
+            delay.buffer.push_front(value);
+            delay.buffer.pop_back();
+        }
+
+        assert_eq!(delay.get_sample(0.0), 1.0);
+        assert_eq!(delay.get_sample(1.0), 2.0);
+        assert_eq!(delay.get_sample(2.0), 3.0);
+        assert_eq!(delay.get_sample(1.5), 2.5);
     }
 }

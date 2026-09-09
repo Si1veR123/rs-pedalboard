@@ -178,7 +178,7 @@ impl Yin {
         debug_assert!(self.sample_frame_buffer.len() >= self.tau_max);
 
         for tau in 1..self.tau_max {
-            for j in 0..(self.sample_frame_buffer.len() - self.tau_max) {
+            for j in 0..(self.sample_frame_buffer.len() - tau) {
                 let tmp = self.sample_frame_buffer[j] - self.sample_frame_buffer[j + tau];
                 self.diff_buffer[tau] += tmp * tmp;
             }

@@ -13,6 +13,16 @@ pub struct VariableDelayPhaser {
 }
 
 impl VariableDelayPhaser {
+    const MAX_FEEDBACK: f32 = 0.99;
+
+    fn validated_feedback(feedback: f32) -> f32 {
+        if feedback.is_finite() {
+            feedback.clamp(0.0, Self::MAX_FEEDBACK)
+        } else {
+            0.0
+        }
+    }
+
     pub fn new(
         depth_min_ms: f32,
         depth_max_ms: f32,
@@ -27,7 +37,7 @@ impl VariableDelayPhaser {
             mix,
             min_delay_samples: ((depth_min_ms / 1000.0) * sample_rate) as usize,
             delay: VariableDelayLine::new(depth_samples),
-            feedback,
+            feedback: Self::validated_feedback(feedback),
             oscillator,
             sample_rate,
         }
@@ -45,7 +55,8 @@ impl VariableDelayPhaser {
 
             // Apply feedback
             self.delay.buffer.pop_front();
-            let feedback_sample = delayed_sample * self.feedback + *sample;
+            let feedback = Self::validated_feedback(self.feedback);
+            let feedback_sample = delayed_sample * feedback + *sample;
             self.delay.buffer.push_back(feedback_sample);
 
             *sample = self.mix * delayed_sample + (1.0 - self.mix) * *sample;

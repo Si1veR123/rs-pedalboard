@@ -21,6 +21,12 @@ impl Hash for Tremolo {
 }
 
 impl Tremolo {
+    fn modulation_gain(oscillator_value: f32, depth: f32) -> f32 {
+        let lfo = oscillator_value.clamp(-1.0, 1.0);
+        let depth = depth.clamp(0.0, 1.0);
+        1.0 - depth * (1.0 - 0.5 * (lfo + 1.0))
+    }
+
     pub fn new() -> Self {
         let mut parameters = HashMap::new();
         parameters.insert(
@@ -67,6 +73,19 @@ impl Tremolo {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::Tremolo;
+
+    #[test]
+    fn depth_controls_unipolar_gain() {
+        assert_eq!(Tremolo::modulation_gain(-1.0, 0.0), 1.0);
+        assert_eq!(Tremolo::modulation_gain(1.0, 0.0), 1.0);
+        assert_eq!(Tremolo::modulation_gain(-1.0, 1.0), 0.0);
+        assert_eq!(Tremolo::modulation_gain(1.0, 1.0), 1.0);
+    }
+}
+
 impl PedalTrait for Tremolo {
     fn get_id(&self) -> u32 {
         self.id
@@ -90,8 +109,7 @@ impl PedalTrait for Tremolo {
 
         for sample in buffer.iter_mut() {
             let oscillator_value = oscillator.next().unwrap();
-            let modulated_value = oscillator_value * depth;
-            *sample *= modulated_value;
+            *sample *= Self::modulation_gain(oscillator_value, depth);
         }
     }
 

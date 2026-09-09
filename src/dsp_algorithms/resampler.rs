@@ -183,23 +183,16 @@ impl HalfBandFilter {
 
         for (i, &x) in input.iter().enumerate() {
             self.delay[self.pos] = x;
-            let base = if self.pos == 0 {
-                self.len - 1
-            } else {
-                self.pos - 1
-            };
+            let base = self.pos;
 
-            // y[2n] = convolution with even taps
+            // y[2n] uses the even filter taps at the original sample rate.
             let mut even_out = 0.0;
             for (k, &c) in self.h_even.iter().enumerate() {
-                let d1 = self.idx(base, 2 * k);
-                let d2 = self.idx(base, self.len - 1 - 2 * k);
-                even_out += c * (self.delay[d1] + self.delay[d2]);
+                even_out += c * self.delay[self.idx(base, k)];
             }
-            even_out += self.center_tap * self.delay[self.idx(base, self.mid)];
 
-            // y[2n+1] = center_tap * newest sample
-            let odd_out = self.center_tap * self.delay[self.pos];
+            // y[2n+1] = the odd polyphase of the zero-stuffed signal.
+            let odd_out = self.center_tap * self.delay[self.idx(self.pos, self.mid / 2)];
 
             output[2 * i] = even_out;
             output[2 * i + 1] = odd_out;
@@ -217,19 +210,16 @@ impl HalfBandFilter {
             self.delay[self.pos] = chunk[1];
             self.pos = (self.pos + 1) % self.len;
 
-            let base = if self.pos == 0 {
-                self.len - 1
+            let base = if self.pos < 2 {
+                self.pos + self.len - 2
             } else {
-                self.pos - 1
+                self.pos - 2
             };
 
             let mut acc = 0.0;
             for (k, &c) in self.h_even.iter().enumerate() {
-                let d1 = self.idx(base, 2 * k);
-                let d2 = self.idx(base, self.len - 1 - 2 * k);
-                acc += c * (self.delay[d1] + self.delay[d2]);
+                acc += c * self.delay[self.idx(base, k)];
             }
-            acc += self.center_tap * self.delay[self.idx(base, self.mid)];
 
             output[i] = acc;
         }
@@ -318,6 +308,24 @@ mod tests {
             down_writer.write_sample(s).unwrap();
         }
         down_writer.finalize().unwrap();
+    }
+
+    #[test]
+    fn preserves_dc_after_filter_warmup() {
+        let mut resampler = Resampler::new(1, 256);
+        let input = vec![1.0; 256];
+        let mut upsampled = vec![0.0; 512];
+        resampler.upsample(&input, &mut upsampled);
+
+        assert!(upsampled[128..]
+            .iter()
+            .all(|sample| (*sample - 1.0).abs() < 0.01));
+
+        let mut downsampled = vec![0.0; 256];
+        resampler.downsample(&upsampled, &mut downsampled);
+        assert!(downsampled[64..]
+            .iter()
+            .all(|sample| (*sample - 1.0).abs() < 0.01));
     }
 
     fn create_resampled_files_block(path: &std::path::Path, resampler: &mut Resampler) {
