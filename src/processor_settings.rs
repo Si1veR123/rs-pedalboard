@@ -17,6 +17,7 @@ pub enum SupportedHost {
 pub enum SupportedHost {
     #[default]
     WASAPI,
+    #[cfg(feature = "asio")]
     ASIO,
 }
 
@@ -40,6 +41,7 @@ impl FromStr for SupportedHost {
         #[cfg(target_os = "windows")]
         match s.to_lowercase().as_str() {
             "wasapi" => Ok(SupportedHost::WASAPI),
+            #[cfg(feature = "asio")]
             "asio" => Ok(SupportedHost::ASIO),
             _ => Err(format!("Unsupported host: {}", s)),
         }
@@ -56,6 +58,7 @@ impl From<SupportedHost> for cpal::HostId {
         #[cfg(target_os = "windows")]
         match value {
             SupportedHost::WASAPI => cpal::HostId::Wasapi,
+            #[cfg(feature = "asio")]
             SupportedHost::ASIO => cpal::HostId::Asio,
         }
     }

@@ -26,7 +26,7 @@ pub fn setup(
 
     let windows_host = cpal::host_from_id(host_id).expect("Failed to get host from ID");
 
-    // Asio requires the input and output device to be the same device
+    #[cfg(feature = "asio")]
     if matches!(host_id, cpal::HostId::Asio) {
         let asio_driver = match output {
             Some(name) => find_device_by_name(&windows_host, name).expect("ASIO driver not found"),
@@ -40,6 +40,19 @@ pub fn setup(
         };
         (windows_host, asio_driver.clone(), asio_driver)
     } else {
+        setup_standard_devices(input, output, windows_host)
+    }
+    #[cfg(not(feature = "asio"))]
+    {
+        setup_standard_devices(input, output, windows_host)
+    }
+}
+
+fn setup_standard_devices(
+    input: Option<&str>,
+    output: Option<&str>,
+    windows_host: Host,
+) -> (Host, Device, Device) {
         let input_device = match input {
             Some(name) => find_device_by_name(&windows_host, name).expect("Input device not found"),
             None => {
@@ -66,7 +79,6 @@ pub fn setup(
         };
 
         (windows_host, input_device, output_device)
-    }
 }
 
 pub fn after_setup(_out_channels: cpal::ChannelCount) {}

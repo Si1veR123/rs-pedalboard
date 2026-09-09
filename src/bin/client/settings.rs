@@ -214,9 +214,16 @@ impl SettingsScreen {
                 | ProcessorLaunchState::KillError
         );
 
+        #[cfg(feature = "asio")]
         if processor_settings.host == SupportedHost::ASIO {
             processor_settings.output_device.is_some() && correct_state
         } else {
+            processor_settings.input_device.is_some()
+                && processor_settings.output_device.is_some()
+                && correct_state
+        }
+        #[cfg(not(feature = "asio"))]
+        {
             processor_settings.input_device.is_some()
                 && processor_settings.output_device.is_some()
                 && correct_state
@@ -328,9 +335,9 @@ impl Widget for &mut SettingsScreen {
                             }
 
                             // If on windows, and using ASIO host, we cannot control audio devices. Instead, we select the ASIO driver
-                            #[cfg(target_os = "windows")]
+                            #[cfg(all(target_os = "windows", feature = "asio"))]
                             let show_asio_driver = processor_settings.host == SupportedHost::ASIO;
-                            #[cfg(not(target_os = "windows"))]
+                            #[cfg(not(all(target_os = "windows", feature = "asio")))]
                             let show_asio_driver = false;
 
                             if show_asio_driver {
