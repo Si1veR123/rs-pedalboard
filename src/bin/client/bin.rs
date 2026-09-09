@@ -20,6 +20,7 @@ mod midi;
 use egui_keyboard::{layouts::KeyboardLayout, Keyboard};
 
 use eframe::egui::{self, include_image, Button, Color32, FontFamily, FontId, Id, RichText, Vec2};
+use eframe::egui_wgpu::{WgpuSetup, WgpuSetupCreateNew};
 use rs_pedalboard::{init_tracing, SAVE_DIR};
 use std::{sync::Arc, time::Instant};
 
@@ -145,6 +146,15 @@ fn main() {
         .with_inner_size((WINDOW_WIDTH, WINDOW_HEIGHT))
         .with_maximized(true)
         .with_maximize_button(true);
+
+    let mut wgpu_setup = WgpuSetupCreateNew::without_display_handle();
+    wgpu_setup.device_descriptor = Arc::new(|adapter| eframe::wgpu::DeviceDescriptor {
+        label: Some("Pedalboard WGPU Device"),
+        required_features: eframe::wgpu::Features::default(),
+        required_limits: adapter.limits(),
+        ..Default::default()
+    });
+    native_options.wgpu_options.wgpu_setup = WgpuSetup::CreateNew(wgpu_setup);
 
     eframe::run_native(
         "Pedalboard",
