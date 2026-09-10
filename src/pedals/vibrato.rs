@@ -190,7 +190,8 @@ impl PedalTrait for Vibrato {
                     if let Some(delay_line) = &mut self.delay_line {
                         let max_delay_samples =
                             (sample_rate as f32 * depth_ms / 1000.0).ceil() as usize;
-                        delay_line.buffer.resize(max_delay_samples, 0.0);
+                        // +1 keeps the interpolation neighbour used by VariableDelayLine
+                        delay_line.buffer.resize(max_delay_samples + 1, 0.0);
                     }
                 }
             }
