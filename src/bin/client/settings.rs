@@ -284,7 +284,7 @@ impl Widget for &mut SettingsScreen {
         let mut processor_settings = self.state.processor_settings.borrow_mut();
         let mut client_settings = self.state.client_settings.borrow_mut();
 
-        ui.allocate_ui_with_layout(ui.available_size(), Layout::left_to_right(egui::Align::Center), |ui| {
+        ui.allocate_ui_with_layout(ui.available_size(), Layout::left_to_right(egui::Align::Min), |ui| {
             ui.add_space(ui.available_width()*0.05);
             ui.allocate_ui_with_layout(ui.available_size()*Vec2::new(0.95, 1.0), Layout::top_down(egui::Align::Min), |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| {
@@ -296,6 +296,14 @@ impl Widget for &mut SettingsScreen {
                     ui.style_mut().spacing.slider_width = ui.available_width()*0.45 - 80.0;
 
                     ui.add_space(SECTION_SPACE);
+                    ui.with_layout(Layout::right_to_left(egui::Align::Min), |ui| {
+                        if ui
+                            .add_sized(Vec2::new(180.0, 55.0), egui::Button::new("Exit"))
+                            .clicked()
+                        {
+                            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                        }
+                    });
 
                     ui.label(RichText::new("Processor Settings").font(egui::TextStyle::Heading.resolve(ui.style())));
                     ui.separator();
