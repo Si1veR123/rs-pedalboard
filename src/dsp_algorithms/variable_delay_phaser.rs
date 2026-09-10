@@ -44,9 +44,10 @@ impl VariableDelayPhaser {
     }
 
     pub fn process_audio(&mut self, buffer: &mut [f32]) {
-        for sample in buffer.iter_mut() {
-            let max_depth_samples = self.delay.max_delay().ceil() as usize;
+        let max_depth_samples = self.delay.max_delay().ceil() as usize;
+        let feedback = Self::validated_feedback(self.feedback);
 
+        for sample in buffer.iter_mut() {
             let oscillator_val = (self.oscillator.next().unwrap() + 1.0) / 2.0;
             let delay_val = (oscillator_val * (max_depth_samples - self.min_delay_samples) as f32)
                 + self.min_delay_samples as f32;
@@ -55,7 +56,6 @@ impl VariableDelayPhaser {
 
             // Apply feedback
             self.delay.buffer.pop_front();
-            let feedback = Self::validated_feedback(self.feedback);
             let feedback_sample = delayed_sample * feedback + *sample;
             self.delay.buffer.push_back(feedback_sample);
 
