@@ -263,11 +263,37 @@ impl PedalTrait for SimpleEq {
         });
 
         ui.add_space(4.0);
+
+        // The pedal is allocated slightly taller than the `eq.png` artwork, which is drawn
+        // top-aligned and leaves a blank strip at the bottom. Bound the knob row to the
+        // visible artwork so the knobs are centered within the pedal itself.
+        let background_size = Image::new(include_image!("../images/eq.png"))
+            .load_and_calc_size(ui, pedal_size)
+            .unwrap_or(pedal_size);
+        let artwork_bottom = pedal_rect.top() + background_size.y;
+        let knob_area = egui::Vec2::new(
+            ui.available_width(),
+            (artwork_bottom - ui.cursor().top()).max(0.0),
+        );
+
+        // The knob slot image (`slot.png`) is 39x298 px, so its width is ~13% of its
+        // height. Use that to size the knobs so the slots use the full vertical space.
+        const SLOT_WIDTH_TO_HEIGHT_RATIO: f32 = 39.0 / 298.0;
+
         ui.allocate_ui_with_layout(
-            egui::Vec2::new(ui.available_width(), ui.available_height()),
+            knob_area,
             egui::Layout::top_down(egui::Align::Center),
             |ui| {
-                let knob_width = (pedal_size.x / 8.0).min(140.0);
+                // Make the slots as wide as the available height allows so they fill it,
+                // but never wider than a single one of the five columns (a reasonable width).
+                let knob_width = (knob_area.y * SLOT_WIDTH_TO_HEIGHT_RATIO)
+                    .min(knob_area.x / 5.0)
+                    .max(1.0);
+                let knob_height = knob_width / SLOT_WIDTH_TO_HEIGHT_RATIO;
+
+                // Center the row of knobs vertically within the available space
+                ui.add_space(((knob_area.y - knob_height) / 2.0).max(0.0));
+
                 ui.columns(5, |columns| {
                     for (column, (name, enabled)) in columns.iter_mut().zip([
                         ("High Pass", high_pass_enabled),
