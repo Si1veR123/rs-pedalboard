@@ -55,11 +55,11 @@ impl MovingBandPass {
     }
 
     pub fn set_band_filter(&mut self) {
-        let old_x = self.filter.x;
-        let old_y = self.filter.y;
+        let old_s1 = self.filter.s1;
+        let old_s2 = self.filter.s2;
         self.filter = BiquadFilter::band_pass(self.current_freq, self.sample_rate, self.q);
-        self.filter.x = old_x;
-        self.filter.y = old_y;
+        self.filter.s1 = old_s1;
+        self.filter.s2 = old_s2;
     }
 
     pub fn process(&mut self, sample: f32) -> f32 {
@@ -74,8 +74,8 @@ impl MovingBandPass {
     }
 
     pub fn reset(&mut self) {
-        self.filter.x.iter_mut().for_each(|s| *s = 0.0);
-        self.filter.y.iter_mut().for_each(|s| *s = 0.0);
+        self.filter.s1 = 0.0;
+        self.filter.s2 = 0.0;
         self.current_freq = self.target_freq;
         self.counter = 0;
     }

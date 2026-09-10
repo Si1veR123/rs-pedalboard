@@ -2,8 +2,8 @@ use num_complex::Complex64;
 
 #[derive(Debug, Clone, Copy)]
 pub struct BiquadFilter {
-    pub y: [f32; 2],
-    pub x: [f32; 2],
+    pub s1: f32,
+    pub s2: f32,
     b: [f32; 3],
     a: [f32; 2],
 }
@@ -11,8 +11,8 @@ pub struct BiquadFilter {
 impl BiquadFilter {
     pub fn new(a: [f32; 2], b: [f32; 3]) -> Self {
         BiquadFilter {
-            y: [0.0, 0.0],
-            x: [0.0, 0.0],
+            s1: 0.0,
+            s2: 0.0,
             b,
             a,
         }
@@ -116,13 +116,9 @@ impl BiquadFilter {
     }
 
     pub fn process(&mut self, x: f32) -> f32 {
-        let y = self.b[0] * x + self.b[1] * self.x[0] + self.b[2] * self.x[1]
-            - self.a[0] * self.y[0]
-            - self.a[1] * self.y[1];
-        self.x[1] = self.x[0];
-        self.x[0] = x;
-        self.y[1] = self.y[0];
-        self.y[0] = y;
+        let y = self.b[0] * x + self.s1;
+        self.s1 = self.b[1] * x - self.a[0] * y + self.s2;
+        self.s2 = self.b[2] * x - self.a[1] * y;
         y
     }
 
