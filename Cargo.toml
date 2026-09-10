@@ -8,6 +8,7 @@ default = ["asio"]
 asio = ["cpal/asio"]
 processor = ["dep:clap"]
 client = ["dep:egui_extras", "dep:image", "dep:egui_dnd", "dep:which", "dep:sysinfo", "dep:egui_file", "dep:serde_with"]
+glow = ["eframe/glow"]
 virtual_keyboard = ["dep:egui_keyboard"]
 log_full_commands = []
 
@@ -44,8 +45,6 @@ neural-amp-modeler-core-bindgen = { git = "https://github.com/Si1veR123/rs-neura
 homedir = "0.3.6"
 realfft = "3.5.0"
 hound = "^3.5.1"
-libloading = "0.9.0"
-winit = "0.30.12"
 vst = "0.0.1"
 egui_plot = "0.37.0"
 num-complex = "0.4.6"

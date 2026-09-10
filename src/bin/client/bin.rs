@@ -20,6 +20,7 @@ mod midi;
 use egui_keyboard::{layouts::KeyboardLayout, Keyboard};
 
 use eframe::egui::{self, include_image, Button, Color32, FontFamily, FontId, Id, RichText, Vec2};
+#[cfg(not(feature = "glow"))]
 use eframe::egui_wgpu::{WgpuSetup, WgpuSetupCreateNew};
 use rs_pedalboard::{init_tracing, SAVE_DIR};
 use std::{sync::Arc, time::Instant};
@@ -147,14 +148,24 @@ fn main() {
         .with_maximized(true)
         .with_maximize_button(true);
 
-    let mut wgpu_setup = WgpuSetupCreateNew::without_display_handle();
-    wgpu_setup.device_descriptor = Arc::new(|adapter| eframe::wgpu::DeviceDescriptor {
-        label: Some("Pedalboard WGPU Device"),
-        required_features: eframe::wgpu::Features::default(),
-        required_limits: adapter.limits(),
-        ..Default::default()
-    });
-    native_options.wgpu_options.wgpu_setup = WgpuSetup::CreateNew(wgpu_setup);
+    #[cfg(feature = "glow")]
+    {
+        native_options.renderer = eframe::Renderer::Glow;
+    }
+
+    #[cfg(not(feature = "glow"))]
+    {
+        // Fixes a raspberry pi bug, solution inspired by
+        // https://github.com/alufers/thermal-cat/commit/870c380df4ce56249f3e23a7f2b75573cb0f01eb#diff-42cb6807ad74b3e201c5a7ca98b911c5fa08380e942be6e4ac5807f8377f87fcR82
+        let mut wgpu_setup = WgpuSetupCreateNew::without_display_handle();
+        wgpu_setup.device_descriptor = Arc::new(|adapter| eframe::wgpu::DeviceDescriptor {
+            label: Some("Pedalboard WGPU Device"),
+            required_features: eframe::wgpu::Features::default(),
+            required_limits: adapter.limits(),
+            ..Default::default()
+        });
+        native_options.wgpu_options.wgpu_setup = WgpuSetup::CreateNew(wgpu_setup);
+    }
 
     eframe::run_native(
         "Pedalboard",
@@ -484,6 +495,16 @@ impl eframe::App for PedalboardClientApp {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
+    #[cfg(feature = "glow")]
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        if self.state.client_settings.borrow().kill_processor_on_close {
+            tracing::info!("Killing processor on exit");
+            self.state.kill_processor();
+        }
+    }
+
+    #[tracing::instrument(level = "debug", skip_all)]
+    #[cfg(not(feature = "glow"))]
     fn on_exit(&mut self) {
         if self.state.client_settings.borrow().kill_processor_on_close {
             tracing::info!("Killing processor on exit");
