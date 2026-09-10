@@ -23,6 +23,7 @@ pub struct Overdrive {
     // Processor only
     pre_eq: Option<eq::Equalizer>,
     post_eq: Option<(BiquadFilter, BiquadFilter)>,
+    post_filter: Option<BiquadFilter>,
     sample_rate: Option<f32>,
     id: u32,
 }
@@ -54,6 +55,7 @@ impl<'a> Deserialize<'a> for Overdrive {
             parameters: helper.parameters,
             pre_eq: None,
             post_eq: None,
+            post_filter: None,
             sample_rate: None,
             id: helper.id,
         })
@@ -110,6 +112,7 @@ impl Overdrive {
             parameters,
             pre_eq: None,
             post_eq: None,
+            post_filter: None,
             sample_rate: None,
             id: unique_time_id(),
         }
@@ -126,10 +129,14 @@ impl Overdrive {
     }
 
     pub fn post_eq(sample_rate: f32) -> (BiquadFilter, BiquadFilter) {
-        let pivot = 1200.0;
+        let pivot = 1800.0;
         let low = BiquadFilter::low_pass(pivot, sample_rate, 0.55);
         let high = BiquadFilter::high_pass(pivot, sample_rate, 0.55);
         (low, high)
+    }
+
+    fn tone_mix(tone: f32) -> f32 {
+        0.25 + tone.clamp(0.0, 1.0) * 0.5
     }
 
     pub fn clone_with_new_id(&self) -> Self {
@@ -147,11 +154,12 @@ impl PedalTrait for Overdrive {
     fn set_config(&mut self, _buffer_size: usize, sample_rate: u32) {
         self.pre_eq = Some(Self::pre_clip_eq(sample_rate as f32));
         self.post_eq = Some(Self::post_eq(sample_rate as f32));
+        self.post_filter = Some(BiquadFilter::low_pass(7500.0, sample_rate as f32, 0.707));
         self.sample_rate = Some(sample_rate as f32);
     }
 
     fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
-        if self.pre_eq.is_none() || self.post_eq.is_none() {
+        if self.pre_eq.is_none() || self.post_eq.is_none() || self.post_filter.is_none() {
             tracing::warn!("Overdrive: Filters not initialized. Call set_config first.");
             return;
         }
@@ -177,8 +185,10 @@ impl PedalTrait for Overdrive {
             .value
             .as_float()
             .unwrap();
+        let tone_mix = Self::tone_mix(tone);
         let pre_eq = self.pre_eq.as_mut().unwrap();
         let (post_lowpass, post_highpass) = self.post_eq.as_mut().unwrap();
+        let post_filter = self.post_filter.as_mut().unwrap();
 
         for sample in buffer.iter_mut() {
             let mut x = *sample;
@@ -187,10 +197,12 @@ impl PedalTrait for Overdrive {
             x *= drive;
 
             x = Self::diode_soft_clip(x, 0.5);
+            x /= drive.sqrt().max(1.0);
 
             let low = post_lowpass.process(x);
             let high = post_highpass.process(x);
-            x = low * (1.0 - tone) + high * tone;
+            x = low * (1.0 - tone_mix) + high * tone_mix;
+            x = post_filter.process(x);
 
             x *= volume;
             *sample = x;

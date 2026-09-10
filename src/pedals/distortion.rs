@@ -22,6 +22,7 @@ pub struct Distortion {
     // Processor only
     low_tilt: Option<BiquadFilter>,
     high_tilt: Option<BiquadFilter>,
+    post_filter: Option<BiquadFilter>,
     sample_rate: Option<f32>,
     id: u32,
 }
@@ -55,6 +56,7 @@ impl<'de> Deserialize<'de> for Distortion {
             parameters: helper.parameters,
             low_tilt: None,
             high_tilt: None,
+            post_filter: None,
             sample_rate: None,
         })
     }
@@ -118,6 +120,7 @@ impl Distortion {
             parameters,
             low_tilt: None,
             high_tilt: None,
+            post_filter: None,
             sample_rate: None,
             id: unique_time_id(),
         }
@@ -130,10 +133,14 @@ impl Distortion {
     }
 
     pub fn post_eq(sample_rate: f32) -> (BiquadFilter, BiquadFilter) {
-        let pivot = 1000.0;
+        let pivot = 2500.0;
         let low = BiquadFilter::low_pass(pivot, sample_rate, 0.707);
         let high = BiquadFilter::high_pass(pivot, sample_rate, 0.707);
         (low, high)
+    }
+
+    fn tone_mix(tone: f32) -> f32 {
+        0.2 + tone.clamp(0.0, 1.0) * 0.6
     }
 
     pub fn hard_diode(x: f32, threshold: f32, knee: f32) -> f32 {
@@ -141,6 +148,23 @@ impl Distortion {
             threshold + (x - threshold) / (1.0 + knee * (x - threshold).abs())
         } else if x < -threshold {
             -threshold + (x + threshold) / (1.0 + knee * (x + threshold).abs())
+        } else {
+            x
+        }
+    }
+
+    fn asymmetric_diode(
+        x: f32,
+        positive_threshold: f32,
+        negative_threshold: f32,
+        knee: f32,
+    ) -> f32 {
+        if x >= positive_threshold {
+            positive_threshold
+                + (x - positive_threshold) / (1.0 + knee * (x - positive_threshold).abs())
+        } else if x <= -negative_threshold {
+            -negative_threshold
+                + (x + negative_threshold) / (1.0 + knee * (x + negative_threshold).abs())
         } else {
             x
         }
@@ -157,10 +181,11 @@ impl PedalTrait for Distortion {
         let (low_tilt, high_tilt) = Self::post_eq(sample_rate as f32);
         self.low_tilt = Some(low_tilt);
         self.high_tilt = Some(high_tilt);
+        self.post_filter = Some(BiquadFilter::low_pass(9000.0, sample_rate as f32, 0.707));
     }
 
     fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
-        if self.high_tilt.is_none() || self.low_tilt.is_none() {
+        if self.high_tilt.is_none() || self.low_tilt.is_none() || self.post_filter.is_none() {
             tracing::warn!("Distortion: Filters not initialized. Call set_config first.");
             return;
         }
@@ -193,26 +218,22 @@ impl PedalTrait for Distortion {
             .value
             .as_float()
             .unwrap();
+        let tone_mix = Self::tone_mix(tone);
 
         for sample in buffer.iter_mut() {
             let mut x = *sample;
 
             x *= 1.0 + drive * 0.5;
-            x *= 1.0 + asymmetry * 3.0; // Asymmetry makes it quiter, so boost here
-
-            let asymmetry_scale = 1.5;
-            if x > 0.0 {
-                x = x * (1.0 + asymmetry_amount * asymmetry_scale);
-            } else {
-                x = x * (1.0 - asymmetry_amount * asymmetry_scale);
-            }
-
-            x = Self::hard_diode(x, 1.0, 5.0);
+            let positive_threshold = 1.0 * (1.0 - 0.2 * asymmetry_amount);
+            let negative_threshold = 1.0 * (1.0 + 0.2 * asymmetry_amount);
+            x = Self::asymmetric_diode(x, positive_threshold, negative_threshold, 5.0);
+            x /= (1.0 + drive * 0.5).sqrt();
 
             let low = self.low_tilt.as_mut().unwrap().process(x);
             let high = self.high_tilt.as_mut().unwrap().process(x);
 
-            x = low * (1.0 - tone) + high * tone;
+            x = low * (1.0 - tone_mix) + high * tone_mix;
+            x = self.post_filter.as_mut().unwrap().process(x);
 
             x *= volume;
             *sample = x;
