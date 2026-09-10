@@ -93,16 +93,19 @@ impl Pedalboard {
 
             // Clear the message buffer for each pedal
             self.pedal_message_buffer.clear();
-            self.prepend_message.clear();
-            // Each message from a pedal will be preprended with "pedalmsg<id> "
-            if let Err(e) = write!(&mut self.prepend_message, "pedalmsg{} ", pedal.get_id()) {
-                tracing::warn!("Failed to write prepend message: {}", e);
-            }
 
             pedal.process_audio(buffer, &mut self.pedal_message_buffer);
 
-            for message in &mut self.pedal_message_buffer {
-                message.insert_str(0, &self.prepend_message);
+            // only build the prefix if the pedal sent a message
+            if !self.pedal_message_buffer.is_empty() {
+                self.prepend_message.clear();
+                if let Err(e) = write!(&mut self.prepend_message, "pedalmsg{} ", pedal.get_id()) {
+                    tracing::warn!("Failed to write prepend message: {}", e);
+                }
+
+                for message in &mut self.pedal_message_buffer {
+                    message.insert_str(0, &self.prepend_message);
+                }
             }
 
             message_buffer.append(&mut self.pedal_message_buffer);
