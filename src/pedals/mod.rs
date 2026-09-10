@@ -29,6 +29,9 @@ pub use noise_gate::NoiseGate;
 mod vst2;
 pub use vst2::set_vst2_save_path;
 pub use vst2::Vst2;
+mod vst3;
+pub use vst3::set_vst3_save_path;
+pub use vst3::Vst3;
 mod reverb;
 pub use reverb::Reverb;
 mod vibrato;
@@ -360,6 +363,7 @@ pub enum Pedal {
     Vibrato(Vibrato),
     Volume(Volume),
     Vst2(Vst2),
+    Vst3(Vst3),
     Wah(Wah),
 }
 
@@ -378,6 +382,7 @@ impl PedalDiscriminants {
             PedalDiscriminants::ImpulseResponse => Pedal::ImpulseResponse(ImpulseResponse::new()),
             PedalDiscriminants::NoiseGate => Pedal::NoiseGate(NoiseGate::new()),
             PedalDiscriminants::Vst2 => Pedal::Vst2(Vst2::new()),
+            PedalDiscriminants::Vst3 => Pedal::Vst3(Vst3::new()),
             PedalDiscriminants::Reverb => Pedal::Reverb(Reverb::new()),
             PedalDiscriminants::Vibrato => Pedal::Vibrato(Vibrato::new()),
             PedalDiscriminants::Tremolo => Pedal::Tremolo(Tremolo::new()),
@@ -404,6 +409,7 @@ impl PedalDiscriminants {
             PedalDiscriminants::ImpulseResponse => "Impulse Response",
             PedalDiscriminants::NoiseGate => "Noise Gate",
             PedalDiscriminants::Vst2 => "VST2 Plugin",
+            PedalDiscriminants::Vst3 => "VST3 Plugin",
             PedalDiscriminants::Reverb => "Reverb",
             PedalDiscriminants::Vibrato => "Vibrato",
             PedalDiscriminants::Tremolo => "Tremolo",
