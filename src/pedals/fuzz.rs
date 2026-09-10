@@ -133,10 +133,7 @@ impl PedalTrait for Fuzz {
                 }
             };
 
-            *sample = (unmixed_sample * dry_wet) + (*sample * (1.0 - dry_wet));
-        }
-        for sample in buffer.iter_mut() {
-            *sample *= level;
+            *sample = ((unmixed_sample * dry_wet) + (*sample * (1.0 - dry_wet))) * level;
         }
     }
 
