@@ -142,11 +142,23 @@ fn main() {
     let mut native_options = eframe::NativeOptions::default();
     native_options.persist_window = false;
     native_options.persistence_path = None;
-    native_options.viewport = native_options
-        .viewport
-        .with_inner_size((WINDOW_WIDTH, WINDOW_HEIGHT))
-        .with_maximized(true)
-        .with_maximize_button(true);
+
+    #[cfg(not(feature = "windowed"))]
+    {
+        native_options.viewport = native_options
+            .viewport
+            .with_decorations(false)
+            .with_fullscreen(true);
+    }
+
+    #[cfg(feature = "windowed")]
+    {
+        native_options.viewport = native_options
+            .viewport
+            .with_inner_size((WINDOW_WIDTH, WINDOW_HEIGHT))
+            .with_maximized(true)
+            .with_maximize_button(true);
+    }
 
     #[cfg(feature = "glow")]
     {
