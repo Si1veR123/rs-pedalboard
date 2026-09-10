@@ -33,7 +33,8 @@ impl IRConvolver {
 
         let max_freq_gain = ir_freq.iter().map(|bin| bin.norm()).fold(0.0_f32, f32::max);
 
-        if max_freq_gain > 1.0 + 1e-6 {
+        // always normalise by the peak frequency gain
+        if max_freq_gain > 1e-6 {
             let scale = 1.0 / max_freq_gain;
             for bin in &mut ir_freq {
                 *bin *= scale;
