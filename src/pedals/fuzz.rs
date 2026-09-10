@@ -122,7 +122,11 @@ impl PedalTrait for Fuzz {
                 // 0: Smooth (tanh)
                 0 => x.tanh(),
                 // 1: Cubic
-                1 => x - (x.powf(3.0)) / 3.0,
+                // clamp so the cubic doesn't explode on loud inputs
+                1 => {
+                    let x = x.clamp(-1.0, 1.0);
+                    x - (x.powf(3.0)) / 3.0
+                }
                 // 2: x / (1 + |x|)
                 2 => x / (1.0 + x.abs()),
                 // 3: atan - smooth, tube-like but a bit brighter than tanh
