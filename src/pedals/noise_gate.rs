@@ -160,7 +160,8 @@ impl PedalTrait for NoiseGate {
         let attack_coeff = (-1.0 / ((attack_ms / 1000.0) * self.sample_rate.unwrap())).exp();
         let release_coeff = (-1.0 / ((release_ms / 1000.0) * self.sample_rate.unwrap())).exp();
 
-        let alpha = 0.99; // Smoothing for level estimation (RMS approximation)
+        // 2ms smoothing, sample-rate derived for consistency
+        let alpha = (-1.0 / (0.002 * self.sample_rate.unwrap())).exp();
         let mut level = self.level;
 
         for sample in buffer.iter_mut() {
