@@ -225,6 +225,11 @@ impl PedalTrait for Delay {
                                     iter::repeat(0.0).take(delay_samples - delay_buffer.len()),
                                 );
                             } else {
+                                // shift samples back so the most recent audio is kept when shortening
+                                let shift = delay_buffer.len() - delay_samples;
+                                for i in 0..delay_samples {
+                                    delay_buffer[i] = delay_buffer[i + shift];
+                                }
                                 delay_buffer.truncate(delay_samples);
                             }
                         }
