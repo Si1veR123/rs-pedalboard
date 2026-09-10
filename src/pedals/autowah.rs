@@ -135,7 +135,7 @@ impl PedalTrait for AutoWah {
     }
 
     fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
-        let (filter, _sample_rate) = match &mut self.filter {
+        let (filter, sample_rate) = match &mut self.filter {
             Some((f, sr)) => (f, sr),
             None => return,
         };
@@ -148,9 +148,17 @@ impl PedalTrait for AutoWah {
             .unwrap();
         let dry_wet = self.parameters["Dry Wet"].value.as_float().unwrap();
 
+        // fast attack avoids the filter chattering, smoothing controls release
+        let attack = (-1.0 / (0.005 * *sample_rate as f32)).exp();
+
         for sample in buffer.iter_mut() {
-            self.envelope = envelope_smoothing * self.envelope.max(sample.abs())
-                + (1.0 - envelope_smoothing) * sample.abs();
+            let rectified = sample.abs();
+            let coeff = if rectified > self.envelope {
+                attack
+            } else {
+                envelope_smoothing
+            };
+            self.envelope = coeff * self.envelope + (1.0 - coeff) * rectified;
 
             let freq = base_freq + self.envelope * sensitivity;
             filter.set_freq(freq);
