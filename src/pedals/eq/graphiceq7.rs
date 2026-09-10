@@ -6,7 +6,8 @@ use egui_plot::{HLine, Line, Plot, PlotPoint, VLine};
 use serde::ser::SerializeMap;
 use serde::{Deserialize, Serialize};
 
-use super::{PedalParameter, PedalParameterValue, PedalTrait};
+use super::super::{PedalParameter, PedalParameterValue, PedalTrait};
+use super::{deserialize_plot_points, eq_background, gain_knob, serialize_plot_points};
 
 use crate::{
     dsp_algorithms::{
@@ -21,31 +22,6 @@ const PLOT_POINTS: usize = 80;
 const LIVE_FREQUENCY_UPDATE_MS: usize = 100;
 const EQ_DB_GAIN: f32 = 15.0;
 const OVERSAMPLE: f32 = 10.0;
-
-pub fn serialize_plot_points(plot_points: &mut [PlotPoint]) -> String {
-    // First round the points to 2 decimal places to reduce size
-    for point in plot_points.iter_mut() {
-        point.x = (point.x * 100.0).round() / 100.0;
-        point.y = (point.y * 100.0).round() / 100.0;
-    }
-
-    // Hoping the compiler will optimise this
-    let plot_points_floats: Vec<[f64; 2]> = plot_points.iter().map(|p| [p.x, p.y]).collect();
-
-    serde_json::to_string(&plot_points_floats).expect("Failed to serialize plot points")
-}
-
-pub fn deserialize_plot_points(data: &str) -> serde_json::Result<Vec<PlotPoint>> {
-    let plot_points_floats: Vec<[f64; 2]> = serde_json::from_str(data)?;
-
-    // Hoping the compiler will optimise this
-    let plot_points = plot_points_floats
-        .into_iter()
-        .map(|p| PlotPoint::new(p[0], p[1]))
-        .collect::<Vec<PlotPoint>>();
-
-    Ok(plot_points)
-}
 
 pub struct GraphicEq7 {
     parameters: HashMap<String, PedalParameter>,
@@ -528,9 +504,7 @@ impl PedalTrait for GraphicEq7 {
 
         let pedal_size = ui.available_size();
 
-        let mut img_ui = ui.new_child(UiBuilder::new().max_rect(ui.available_rect_before_wrap()));
-
-        img_ui.add(Image::new(include_image!("images/eq.png")));
+        eq_background(ui);
 
         // Title row with shelf buttons
         ui.add_space(2.0);
@@ -559,7 +533,7 @@ impl PedalTrait for GraphicEq7 {
                     if ui
                         .add(
                             Button::image(
-                                Image::new(include_image!("images/eq/low_shelf.png"))
+                                Image::new(include_image!("../images/eq/low_shelf.png"))
                                     .max_width(pedal_size.x * 0.15),
                             )
                             .corner_radius(3.0)
@@ -580,7 +554,7 @@ impl PedalTrait for GraphicEq7 {
                     if ui
                         .add(
                             Button::image(
-                                Image::new(include_image!("images/eq/high_shelf.png"))
+                                Image::new(include_image!("../images/eq/high_shelf.png"))
                                     .max_width(pedal_size.x * 0.15),
                             )
                             .corner_radius(3.0)
@@ -756,7 +730,7 @@ impl PedalTrait for GraphicEq7 {
             )
             .add(
                 Button::image(
-                    Image::new(include_image!("images/eq/live.png"))
+                    Image::new(include_image!("../images/eq/live.png"))
                         .tint(Color32::from_rgba_unmultiplied(220, 100, 100, 200)),
                 )
                 .corner_radius(3.0)
@@ -791,42 +765,8 @@ fn eq_knob(
     ui.vertical(|ui| {
         let mut changed_param = None;
 
-        let slot = Image::new(include_image!("images/eq/slot.png")).max_width(width);
-        let slot_response = ui.add(slot);
-
-        let knob = Image::new(include_image!("images/eq/knob.png"))
-            .max_width(width)
-            .sense(egui::Sense::click_and_drag());
-
-        let knob_size = knob.calc_size(slot_response.rect.size(), None);
-        let knob_height = knob_size.y;
-        let param_max = param.max.as_ref().unwrap().as_float().unwrap();
-        let param_min = param.min.as_ref().unwrap().as_float().unwrap();
-        let param_value = param.value.as_float().unwrap();
-        let knob_frac = 1.0 - (param_value - param_min) / (param_max - param_min);
-        let knob_y_offset = slot_response.rect.height() * knob_frac;
-        let knob_rect = slot_response
-            .rect
-            .translate(egui::Vec2::new(0.0, knob_y_offset - knob_height / 2.0));
-        let knob_response = ui
-            .new_child(
-                UiBuilder::new()
-                    .max_rect(knob_rect)
-                    .layout(egui::Layout::top_down(egui::Align::Center))
-                    .sense(egui::Sense::click_and_drag()),
-            )
-            .add(knob);
-
-        if knob_response.hovered() {
-            ui.ctx()
-                .output_mut(|o| o.cursor_icon = egui::CursorIcon::ResizeVertical);
-        }
-
-        if knob_response.dragged() {
-            let delta = -knob_response.drag_delta().y / slot_response.rect.height();
-            let new_value = param_value + delta * (param_max - param_min);
-            let clamped_value = new_value.clamp(param_min, param_max);
-            changed_param = Some(EqChange::Gain(clamped_value));
+        if let Some(value) = gain_knob(ui, param, width) {
+            changed_param = Some(EqChange::Gain(value));
         }
 
         ui.add_space(7.0);

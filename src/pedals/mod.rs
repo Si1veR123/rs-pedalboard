@@ -17,7 +17,7 @@ pub use modulation::{Chorus, Flanger};
 mod delay;
 pub use delay::Delay;
 mod eq;
-pub use eq::GraphicEq7;
+pub use eq::{GraphicEq7, SimpleEq};
 mod nam;
 pub use nam::set_nam_save_path;
 pub use nam::Nam;
@@ -346,6 +346,7 @@ pub enum Pedal {
     Flanger(Flanger),
     Fuzz(Fuzz),
     GraphicEq7(GraphicEq7),
+    SimpleEq(SimpleEq),
     ImpulseResponse(ImpulseResponse),
     Nam(Nam),
     NoiseGate(NoiseGate),
@@ -369,6 +370,7 @@ impl PedalDiscriminants {
             PedalDiscriminants::Flanger => Pedal::Flanger(Flanger::new()),
             PedalDiscriminants::Delay => Pedal::Delay(Delay::new()),
             PedalDiscriminants::GraphicEq7 => Pedal::GraphicEq7(GraphicEq7::new()),
+            PedalDiscriminants::SimpleEq => Pedal::SimpleEq(SimpleEq::new()),
             PedalDiscriminants::Nam => Pedal::Nam(Nam::new()),
             PedalDiscriminants::ImpulseResponse => Pedal::ImpulseResponse(ImpulseResponse::new()),
             PedalDiscriminants::NoiseGate => Pedal::NoiseGate(NoiseGate::new()),
@@ -393,6 +395,7 @@ impl PedalDiscriminants {
             PedalDiscriminants::Flanger => "Flanger",
             PedalDiscriminants::Delay => "Delay",
             PedalDiscriminants::GraphicEq7 => "Graphic EQ",
+            PedalDiscriminants::SimpleEq => "Simple EQ",
             PedalDiscriminants::Nam => "Neural Amp Modeler",
             PedalDiscriminants::ImpulseResponse => "Impulse Response",
             PedalDiscriminants::NoiseGate => "Noise Gate",

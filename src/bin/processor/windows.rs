@@ -53,32 +53,30 @@ fn setup_standard_devices(
     output: Option<&str>,
     windows_host: Host,
 ) -> (Host, Device, Device) {
-        let input_device = match input {
-            Some(name) => find_device_by_name(&windows_host, name).expect("Input device not found"),
-            None => {
-                let input_devices =
-                    get_input_devices(Some(&windows_host)).expect("Failed to get input devices");
-                println!("Input Devices:");
-                let input_device_string = device_select_menu(&input_devices);
-                find_device_by_name(&windows_host, &input_device_string).unwrap()
-            }
-        };
+    let input_device = match input {
+        Some(name) => find_device_by_name(&windows_host, name).expect("Input device not found"),
+        None => {
+            let input_devices =
+                get_input_devices(Some(&windows_host)).expect("Failed to get input devices");
+            println!("Input Devices:");
+            let input_device_string = device_select_menu(&input_devices);
+            find_device_by_name(&windows_host, &input_device_string).unwrap()
+        }
+    };
 
-        let output_device = match output {
-            Some(name) => {
-                find_device_by_name(&windows_host, name).expect("Output device not found")
-            }
-            None => {
-                let output_devices: Vec<String> =
-                    get_output_devices(Some(&windows_host)).expect("Failed to get output devices");
+    let output_device = match output {
+        Some(name) => find_device_by_name(&windows_host, name).expect("Output device not found"),
+        None => {
+            let output_devices: Vec<String> =
+                get_output_devices(Some(&windows_host)).expect("Failed to get output devices");
 
-                println!("Output Devices:");
-                let output_device_string = device_select_menu(&output_devices);
-                find_device_by_name(&windows_host, &output_device_string).unwrap()
-            }
-        };
+            println!("Output Devices:");
+            let output_device_string = device_select_menu(&output_devices);
+            find_device_by_name(&windows_host, &output_device_string).unwrap()
+        }
+    };
 
-        (windows_host, input_device, output_device)
+    (windows_host, input_device, output_device)
 }
 
 pub fn after_setup(_out_channels: cpal::ChannelCount) {}

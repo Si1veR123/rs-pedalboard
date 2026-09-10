@@ -427,7 +427,7 @@ impl eframe::App for PedalboardClientApp {
                                 egui::Image::new(include_image!("files/songs_icon.png"))
                                     .tint(Color32::from_white_alpha(200)),
                             )
-                            .corner_radius(3.0)
+                            .corner_radius(3.0),
                         )
                         .clicked()
                     {
@@ -456,7 +456,7 @@ impl eframe::App for PedalboardClientApp {
                                 egui::Image::new(include_image!("files/settings_icon.png"))
                                     .tint(Color32::from_white_alpha(200)),
                             )
-                            .corner_radius(3.0)
+                            .corner_radius(3.0),
                         )
                         .clicked()
                     {
