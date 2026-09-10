@@ -45,6 +45,8 @@ mod overdrive;
 pub use overdrive::Overdrive;
 mod distortion;
 pub use distortion::Distortion;
+mod phaser;
+pub use phaser::Phaser;
 
 pub mod info;
 mod ui;
@@ -351,6 +353,7 @@ pub enum Pedal {
     Nam(Nam),
     NoiseGate(NoiseGate),
     Overdrive(Overdrive),
+    Phaser(Phaser),
     PitchShift(PitchShift),
     Reverb(Reverb),
     Tremolo(Tremolo),
@@ -382,6 +385,7 @@ impl PedalDiscriminants {
             PedalDiscriminants::Wah => Pedal::Wah(Wah::new()),
             PedalDiscriminants::Compressor => Pedal::Compressor(Compressor::new()),
             PedalDiscriminants::Overdrive => Pedal::Overdrive(Overdrive::new()),
+            PedalDiscriminants::Phaser => Pedal::Phaser(Phaser::new()),
             PedalDiscriminants::Distortion => Pedal::Distortion(Distortion::new()),
         }
     }
@@ -407,6 +411,7 @@ impl PedalDiscriminants {
             PedalDiscriminants::Wah => "Wah",
             PedalDiscriminants::Compressor => "Compressor",
             PedalDiscriminants::Overdrive => "Overdrive",
+            PedalDiscriminants::Phaser => "Phaser",
             PedalDiscriminants::Distortion => "Distortion",
         }
     }

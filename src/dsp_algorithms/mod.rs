@@ -4,6 +4,7 @@ pub mod frequency_analysis;
 pub mod impluse_response;
 pub mod moving_bandpass;
 pub mod oscillator;
+pub mod phaser;
 pub mod resampler;
 pub mod variable_delay;
 pub mod variable_delay_phaser;
