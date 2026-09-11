@@ -37,6 +37,16 @@ impl BiquadFilter {
         BiquadFilter::new([a1 / a0, a2 / a0], [b0 / a0, b1 / a0, b2 / a0])
     }
 
+    /// First order (6 dB/oct) low pass. Used by tone controls that are built from a
+    /// single RC section, where a resonant second order filter would be too sharp.
+    pub fn first_order_low_pass(f: f32, sample_rate: f32) -> Self {
+        // Prewarped bilinear transform: H(s) = 1 / (1 + s / wc).
+        let g = (std::f32::consts::PI * f / sample_rate).tan();
+        let a0 = 1.0 + g;
+
+        BiquadFilter::new([(g - 1.0) / a0, 0.0], [g / a0, g / a0, 0.0])
+    }
+
     pub fn high_pass(f: f32, sample_rate: f32, q: f32) -> Self {
         let (w0, alpha) = Self::compute(f, sample_rate, q);
         let b0 = (1.0 + (w0.cos())) / 2.0;
@@ -178,5 +188,36 @@ mod tests {
 
         dbg!(rms_energy(&input), rms_energy(&output));
         dbg!(rms_energy(&input2), rms_energy(&output2));
+    }
+
+    #[test]
+    fn test_first_order_low_pass() {
+        let sample_rate = 48000.0;
+        let corner = 720.0;
+
+        let filter = BiquadFilter::first_order_low_pass(corner, sample_rate);
+
+        let at_corner = filter
+            .response_at_freq(corner as f64, sample_rate as f64)
+            .norm();
+        let well_below = filter
+            .response_at_freq(corner as f64 / 8.0, sample_rate as f64)
+            .norm();
+        let octave_above = filter
+            .response_at_freq(corner as f64 * 2.0, sample_rate as f64)
+            .norm();
+
+        // -3 dB at the corner, flat below it and 6 dB/oct above it.
+        assert!((at_corner - std::f64::consts::FRAC_1_SQRT_2).abs() < 1e-3);
+        assert!(well_below > 0.99);
+        assert!((octave_above - 1.0 / 5.0f64.sqrt()).abs() < 1e-2);
+
+        // A DC input settles at unity gain.
+        let mut settling = BiquadFilter::first_order_low_pass(corner, sample_rate);
+        let mut output = 0.0;
+        for _ in 0..1000 {
+            output = settling.process(1.0);
+        }
+        assert!((output - 1.0).abs() < 1e-3);
     }
 }
