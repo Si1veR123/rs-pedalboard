@@ -49,6 +49,12 @@ impl MovingBandPass {
         self.target_freq = freq;
     }
 
+    /// Frequency the filter is currently sitting at, which lags [`Self::set_freq`] by
+    /// the smoothing time.
+    pub fn current_freq(&self) -> f32 {
+        self.current_freq
+    }
+
     pub fn set_width(&mut self, width: f32) {
         self.q = 1.0 / width;
         self.set_band_filter();
