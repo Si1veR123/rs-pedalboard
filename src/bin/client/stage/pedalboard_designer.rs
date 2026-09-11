@@ -19,23 +19,58 @@ const PEDAL_ROW_COUNT: usize = 6;
 const PEDAL_HEIGHT_RATIO: f32 = 2.2;
 const MAX_PEDAL_COUNT: usize = 12;
 
-/// Assumes scene rect is smaller than available size
-fn bound_scene_rect(scene_rect: &mut Rect, available_size: &Vec2) {
-    let delta_max_x = available_size.x - scene_rect.max.x;
-    let delta_max_y = available_size.y - scene_rect.max.y;
+/// How many rows the CPU/RAM/time column in the status bar has
+const CPU_RAM_TIME_ROW_COUNT: f32 = 3.0;
 
-    scene_rect.min.x = scene_rect.min.x.max(0.0);
-    scene_rect.min.y = scene_rect.min.y.max(0.0);
+const MIN_ZOOM: f32 = 1.0;
+const MAX_ZOOM: f32 = 3.0;
+/// How much one tap on the zoom buttons changes the zoom
+const ZOOM_STEP: f32 = 1.5;
 
-    if delta_max_x < 0.0 {
-        scene_rect.min.x += delta_max_x;
-        scene_rect.max.x += delta_max_x;
-    }
+/// The scene rect (camera) to use for a pedalboard rect of `available_size` at
+/// the given zoom. The Scene scales its content by
+/// `available_size / scene_rect.size()`, so deriving the scene rect from the
+/// current available size and zoom makes the rendered zoom exactly `zoom`, no
+/// matter how the available rect changed since the scene rect was created.
+fn scene_rect_for(center: Pos2, available_size: Vec2, zoom: f32) -> Rect {
+    Rect::from_center_size(center, available_size / zoom)
+}
 
-    if delta_max_y < 0.0 {
-        scene_rect.min.y += delta_max_y;
-        scene_rect.max.y += delta_max_y;
-    }
+/// Size of the pedals in scene coordinates, mirroring the layout in
+/// [`pedalboard_designer`]. Used to bound the camera so that every pedal can be
+/// reached by panning and zooming.
+fn pedalboard_content_size(
+    pedal_width: f32,
+    pedal_x_spacing: f32,
+    pedal_y_spacing: f32,
+    pedal_count: usize,
+) -> Vec2 {
+    let columns = pedal_count.clamp(1, PEDAL_ROW_COUNT);
+    let rows = pedal_count.div_ceil(PEDAL_ROW_COUNT).max(1);
+    let pedal_height = pedal_width * PEDAL_HEIGHT_RATIO;
+
+    Vec2::new(
+        pedal_x_spacing * 0.5
+            + columns as f32 * pedal_width
+            + (columns as f32 - 1.0) * pedal_x_spacing,
+        rows as f32 * pedal_height + (rows as f32 - 1.0) * pedal_y_spacing,
+    )
+}
+
+/// Bounds the scene rect (the camera) to the pedal content, so that the content
+/// can always be reached by panning and so that the camera can't be dragged
+/// into empty space. The camera size, and therefore the zoom, is left alone.
+fn bound_scene_rect(scene_rect: &mut Rect, content_size: Vec2) {
+    let camera_size = scene_rect.size();
+    // When the content is smaller than the camera on an axis, the only valid
+    // position on that axis is the start of the content
+    let max_min = (content_size - camera_size).max(Vec2::ZERO);
+    let min = Pos2::new(
+        scene_rect.min.x.clamp(0.0, max_min.x),
+        scene_rect.min.y.clamp(0.0, max_min.y),
+    );
+
+    *scene_rect = Rect::from_min_size(min, camera_size);
 }
 
 fn add_pedal_menu(screen: &mut PedalboardStageScreen, ui: &mut Ui, rect: Rect) {
@@ -81,11 +116,13 @@ fn current_time_string() -> String {
 #[tracing::instrument(level = "trace", skip_all)]
 pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
     // Status bar at the top. Allocate a top down ui for padding, then a left to right ui inside.
+    // It has to be tall enough for the CPU/RAM/time column, which is three rows
     let vertical_padding = 5.0;
+    let rows_height = ui.text_style_height(&egui::TextStyle::Body) * CPU_RAM_TIME_ROW_COUNT;
     ui.allocate_ui_with_layout(
         Vec2::new(
             ui.available_width(),
-            ui.available_height() * 0.075 + vertical_padding * 2.0,
+            (ui.available_height() * 0.075).max(rows_height) + vertical_padding * 2.0,
         ),
         Layout::top_down(egui::Align::Center),
         |ui| {
@@ -125,7 +162,24 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
                     };
                     ui.add_space(20.0);
 
-                    ui.columns_const(|[ui_1, ui_2, ui_3, ui_4, ui_5]| {
+                    // Zoom controls for the pedalboard. Touch panels that present
+                    // themselves as a mouse can't send pinch gestures, so the
+                    // zoom has to be settable with buttons
+                    let zoom_button_size =
+                        Vec2::splat(ui.available_height().min(ui.available_width() * 0.08));
+                    let zoom = screen.pedalboard_zoom;
+
+                    if ui.add_sized(zoom_button_size, Button::new("-")).clicked() {
+                        screen.pedalboard_zoom = (zoom / ZOOM_STEP).clamp(MIN_ZOOM, MAX_ZOOM);
+                    }
+
+                    if ui.add_sized(zoom_button_size, Button::new("+")).clicked() {
+                        screen.pedalboard_zoom = (zoom * ZOOM_STEP).clamp(MIN_ZOOM, MAX_ZOOM);
+                    }
+
+                    ui.add_space(20.0);
+
+                    ui.columns_const(|[ui_1, ui_2, ui_3]| {
                         if screen.state.is_connected() {
                             // XRun monitor
                             ui_1.allocate_ui_with_layout(
@@ -163,27 +217,30 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
                             );
                         }
 
-                        let col_vertical_padding = (ui_3.available_height() - 20.0) * 0.5;
-                        // CPU Usage
+                        // CPU, RAM and time, stacked in one column so that the
+                        // status bar has room for the zoom buttons
                         ui_3.with_layout(Layout::top_down(egui::Align::Center), |ui| {
-                            ui.add_space(col_vertical_padding);
-                            let cpu_usage = screen.system.global_cpu_usage();
-                            ui.label(format!("CPU: {:.0}%", cpu_usage.round()));
-                        });
+                            ui.spacing_mut().item_spacing = Vec2::ZERO;
 
-                        // RAM Usage
-                        ui_4.with_layout(Layout::top_down(egui::Align::Center), |ui| {
-                            ui.add_space(col_vertical_padding);
+                            let cpu_usage = screen.system.global_cpu_usage();
                             let memory = screen.system.total_memory();
                             let used_memory = screen.system.used_memory();
                             let memory_usage = used_memory as f32 / memory as f32;
-                            ui.label(format!("RAM: {:.0}%", (memory_usage * 100.0).round()));
-                        });
 
-                        // Time
-                        ui_5.with_layout(Layout::top_down(egui::Align::Center), |ui| {
-                            ui.add_space(col_vertical_padding);
-                            ui.label(current_time_string());
+                            let rows = [
+                                format!("CPU: {:.0}%", cpu_usage.round()),
+                                format!("RAM: {:.0}%", (memory_usage * 100.0).round()),
+                                current_time_string(),
+                            ];
+
+                            // Vertically center the rows in the status bar
+                            let rows_height =
+                                ui.text_style_height(&egui::TextStyle::Body) * rows.len() as f32;
+                            ui.add_space(((ui.available_height() - rows_height) * 0.5).max(0.0));
+
+                            for row in rows {
+                                ui.label(row);
+                            }
                         });
                     });
                 },
@@ -219,16 +276,38 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
     let pedal_width = 0.9 * (pedalboard_available_rect.width() / PEDAL_ROW_COUNT as f32);
     let pedal_x_spacing = 0.1 * (pedalboard_available_rect.width() / PEDAL_ROW_COUNT as f32);
 
+    let pedal_count = {
+        let pedalboard_set = screen.state.pedalboards.active_pedalboardstage.borrow();
+        pedalboard_set.pedalboards[pedalboard_set.active_pedalboard]
+            .pedals
+            .len()
+    };
+
     ui.painter().rect_filled(
         pedalboard_available_rect,
         5.0,
         crate::LIGHT_BACKGROUND_COLOR,
     );
 
-    // Initially set to ZERO, so fill in with available pedalboard rect
-    if screen.pedalboard_rect == Rect::ZERO {
-        screen.pedalboard_rect = Rect::from_min_size(Pos2::ZERO, pedalboard_available_rect.size());
-    }
+    // The scene rect is the camera of the Scene, in pedalboard (scene)
+    // coordinates. It is derived from the current available rect and zoom every
+    // frame, because the Scene scales its content by
+    // `available_size / scene_rect.size()`. Only setting it once (as before)
+    // meant that every later change of the available rect - the window sizing
+    // itself on startup, the volume monitor being shown or hidden, the status
+    // bar needing more room, ... - silently changed the zoom and left the camera
+    // a few pixels off, which could then be panned into and snapped back from.
+    let pedalboard_scene_center = if screen.pedalboard_rect == Rect::ZERO {
+        // Initially set to ZERO, so start at the center of the pedalboard rect
+        (pedalboard_available_rect.size() * 0.5).to_pos2()
+    } else {
+        screen.pedalboard_rect.center()
+    };
+    screen.pedalboard_rect = scene_rect_for(
+        pedalboard_scene_center,
+        pedalboard_available_rect.size(),
+        screen.pedalboard_zoom,
+    );
 
     // Delete pedal hover button
     let size = 150.0;
@@ -258,7 +337,7 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
 
         // Main pedalboard rendering
         ui.allocate_ui(pedalboard_available_rect.size(), |ui| {
-            egui::Scene::new().zoom_range(1.0..=3.0).show(ui, &mut screen.pedalboard_rect, |ui| {
+            egui::Scene::new().zoom_range(MIN_ZOOM..=MAX_ZOOM).show(ui, &mut screen.pedalboard_rect, |ui| {
                 ui.scope_builder(
                     UiBuilder::new()
                         .max_rect(Rect { min: Pos2::ZERO, max: pedalboard_available_rect.size().to_pos2() })
@@ -335,7 +414,24 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
             });
         });
 
-        bound_scene_rect(&mut screen.pedalboard_rect, &pedalboard_available_rect.size());
+        // The Scene zooms itself for pinch gestures (multi-touch screens) and
+        // ctrl+scroll (mouse), so adopt whatever zoom it applied, then size the
+        // camera to exactly `available_size / zoom` again so the scale can't
+        // drift
+        let scene_scale =
+            (pedalboard_available_rect.size() / screen.pedalboard_rect.size()).min_elem();
+        if scene_scale.is_finite() && scene_scale > 0.0 {
+            screen.pedalboard_zoom = scene_scale.clamp(MIN_ZOOM, MAX_ZOOM);
+        }
+        screen.pedalboard_rect.max = screen.pedalboard_rect.min
+            + pedalboard_available_rect.size() / screen.pedalboard_zoom;
+
+        // Keep the camera inside the pedals, so that all pedals can be reached
+        // by panning and the camera can't be dragged into empty space
+        bound_scene_rect(
+            &mut screen.pedalboard_rect,
+            pedalboard_content_size(pedal_width, pedal_x_spacing, pedal_y_spacing, pedal_count),
+        );
 
         if drawing_volume_monitor {
             ui.add_space(volume_monitor_inside_padding);
@@ -432,5 +528,157 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
             ui,
             pedalboard_available_rect.scale_from_center2(Vec2::new(0.6, 0.9)),
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The scale that egui's Scene applies to the content for a scene rect
+    fn scene_scale(available_size: Vec2, scene_rect: Rect) -> f32 {
+        (available_size / scene_rect.size()).min_elem()
+    }
+
+    fn approx(a: f32, b: f32) -> bool {
+        (a - b).abs() < 0.001
+    }
+
+    #[test]
+    fn zoom_is_kept_when_the_available_rect_changes() {
+        let available_size = Vec2::new(600.0, 400.0);
+        let scene_rect = scene_rect_for(Pos2::ZERO, available_size, 1.0);
+        assert!(approx(scene_scale(available_size, scene_rect), 1.0));
+
+        // The available rect changed (window startup sizing, the volume monitor
+        // being shown or hidden, a taller status bar, ...). The old code only set
+        // the scene rect once, which gave a scale below 1.0 here. The Scene
+        // clamped that back up to the minimum zoom, leaving a few pixels that
+        // could be panned into and snapped back from.
+        let smaller_size = Vec2::new(580.0, 400.0);
+        assert!(!approx(scene_scale(smaller_size, scene_rect), 1.0));
+
+        // Re-deriving the scene rect from the new available size keeps the zoom
+        let scene_rect = scene_rect_for(scene_rect.center(), smaller_size, 1.0);
+        assert!(approx(scene_scale(smaller_size, scene_rect), 1.0));
+    }
+
+    #[test]
+    fn zooming_keeps_the_center_of_the_view() {
+        let available_size = Vec2::new(600.0, 400.0);
+        let scene_rect = scene_rect_for(Pos2::ZERO, available_size, 1.0);
+
+        let zoomed = scene_rect_for(scene_rect.center(), available_size, 2.0);
+        assert!(approx(scene_scale(available_size, zoomed), 2.0));
+        assert_eq!(zoomed.center(), scene_rect.center());
+    }
+
+    #[test]
+    fn zoom_steps_stay_within_the_zoom_range() {
+        let mut zoom = MIN_ZOOM;
+        for _ in 0..10 {
+            zoom = (zoom * ZOOM_STEP).clamp(MIN_ZOOM, MAX_ZOOM);
+        }
+        assert!(approx(zoom, MAX_ZOOM));
+
+        for _ in 0..10 {
+            zoom = (zoom / ZOOM_STEP).clamp(MIN_ZOOM, MAX_ZOOM);
+        }
+        assert!(approx(zoom, MIN_ZOOM));
+    }
+
+    #[test]
+    fn bound_pins_the_camera_when_the_content_fits() {
+        // At 1x the camera is the whole pedalboard and the pedals fit in it, so
+        // there is nothing to pan and the camera is pinned to the content origin
+        let mut camera = Rect::from_min_size(Pos2::new(50.0, -10.0), Vec2::new(600.0, 400.0));
+        bound_scene_rect(&mut camera, Vec2::new(560.0, 380.0));
+        assert_eq!(
+            camera,
+            Rect::from_min_size(Pos2::ZERO, Vec2::new(600.0, 400.0))
+        );
+    }
+
+    #[test]
+    fn bound_lets_the_camera_reach_the_ends_of_the_content() {
+        let camera_size = Vec2::new(200.0, 100.0);
+        let content_size = Vec2::new(500.0, 400.0);
+
+        // Dragged past the end of the content
+        let mut camera = Rect::from_min_size(Pos2::new(1000.0, 1000.0), camera_size);
+        bound_scene_rect(&mut camera, content_size);
+        assert_eq!(camera.min, Pos2::new(300.0, 300.0));
+        assert_eq!(camera.size(), camera_size);
+
+        // Dragged before the start of the content
+        let mut camera = Rect::from_min_size(Pos2::new(-100.0, -100.0), camera_size);
+        bound_scene_rect(&mut camera, content_size);
+        assert_eq!(camera.min, Pos2::ZERO);
+        assert_eq!(camera.size(), camera_size);
+    }
+
+    #[test]
+    fn bound_pins_only_the_axis_where_the_content_fits() {
+        // Content fits horizontally, is bigger vertically: the x position is
+        // pinned and y can be panned
+        let mut camera = Rect::from_min_size(Pos2::new(120.0, 500.0), Vec2::new(500.0, 100.0));
+        bound_scene_rect(&mut camera, Vec2::new(500.0, 400.0));
+        assert_eq!(camera.min, Pos2::new(0.0, 300.0));
+    }
+
+    #[test]
+    fn zoomed_in_camera_can_pan_over_the_content() {
+        let available_size = Vec2::new(600.0, 400.0);
+        let zoom = 2.0;
+        let pedal_width = 0.9 * (available_size.x / PEDAL_ROW_COUNT as f32);
+        let pedal_x_spacing = 0.1 * (available_size.x / PEDAL_ROW_COUNT as f32);
+        let content_size =
+            pedalboard_content_size(pedal_width, pedal_x_spacing, 10.0, MAX_PEDAL_COUNT);
+
+        let mut camera = scene_rect_for(Pos2::ZERO, available_size, zoom);
+        assert!(approx(scene_scale(available_size, camera), zoom));
+
+        // Zoomed in the camera is smaller than the content, so it can be moved to
+        // the far end of the content instead of being pinned to its start
+        camera = Rect::from_min_size(Pos2::new(10_000.0, 10_000.0), camera.size());
+        bound_scene_rect(&mut camera, content_size);
+        assert!(camera.min.x > 0.0 && camera.min.y > 0.0);
+        assert!(approx(
+            camera.min.x,
+            content_size.x - available_size.x / zoom
+        ));
+        assert!(approx(
+            camera.min.y,
+            content_size.y - available_size.y / zoom
+        ));
+        // Panning never changes the zoom
+        assert!(approx(scene_scale(available_size, camera), zoom));
+    }
+
+    #[test]
+    fn content_size_grows_a_row_at_a_time() {
+        let (pedal_width, x_spacing, y_spacing) = (150.0, 15.0, 10.0);
+        let row_height = pedal_width * PEDAL_HEIGHT_RATIO;
+
+        // Up to PEDAL_ROW_COUNT pedals fit in a single row
+        for pedal_count in 1..=PEDAL_ROW_COUNT {
+            let content = pedalboard_content_size(pedal_width, x_spacing, y_spacing, pedal_count);
+            let expected_x = x_spacing * 0.5
+                + pedal_count as f32 * pedal_width
+                + (pedal_count as f32 - 1.0) * x_spacing;
+            assert!(approx(content.x, expected_x));
+            assert!(approx(content.y, row_height));
+        }
+
+        // More pedals wrap onto a next row
+        for pedal_count in PEDAL_ROW_COUNT + 1..=MAX_PEDAL_COUNT {
+            let content = pedalboard_content_size(pedal_width, x_spacing, y_spacing, pedal_count);
+            assert!(approx(content.y, 2.0 * row_height + y_spacing));
+        }
+
+        // Boards needing more than two rows keep growing
+        let content =
+            pedalboard_content_size(pedal_width, x_spacing, y_spacing, 2 * PEDAL_ROW_COUNT + 1);
+        assert!(approx(content.y, 3.0 * row_height + 2.0 * y_spacing));
     }
 }

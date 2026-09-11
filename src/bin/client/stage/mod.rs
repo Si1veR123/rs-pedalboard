@@ -53,6 +53,8 @@ pub struct PedalboardStageScreen {
     current_action: Option<CurrentAction>,
     // For the Scene in pedalboard designer
     pedalboard_rect: Rect,
+    // Zoom (scale) of the pedalboard designer Scene
+    pedalboard_zoom: f32,
     // For CPU/RAM usage
     system: System,
     last_system_refresh: std::time::Instant,
@@ -82,6 +84,7 @@ impl PedalboardStageScreen {
             show_pedal_menu: false,
             current_action: None,
             pedalboard_rect: Rect::ZERO,
+            pedalboard_zoom: 1.0,
             system,
             last_system_refresh: Instant::now(),
             command_buffer: Vec::new(),
