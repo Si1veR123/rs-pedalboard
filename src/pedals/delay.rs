@@ -143,6 +143,13 @@ impl PedalTrait for Delay {
     }
 
     fn set_config(&mut self, _buffer_size: usize, sample_rate: u32) {
+        // The processor API calls this before every buffer, so only set up the tone EQ and
+        // the delay line when the configuration really changed. Rebuilding them would empty
+        // the delay line, which cuts the echoes off at every buffer boundary.
+        if self.sample_rate == Some(sample_rate as f32) {
+            return;
+        }
+
         self.tone_eq = Some(Self::eq_from_warmth(
             self.parameters
                 .get("Warmth")
@@ -319,5 +326,103 @@ impl PedalTrait for Delay {
         }
 
         to_change
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SAMPLE_RATE: u32 = 48_000;
+    const BLOCK: usize = 1024;
+
+    /// A buffer of a steady tone, phase continuous with the buffers around it.
+    fn tone_buffer(freq: f32, buffer_index: usize) -> Vec<f32> {
+        (0..BLOCK)
+            .map(|i| {
+                let n = buffer_index * BLOCK + i;
+                (std::f32::consts::TAU * freq * n as f32 / SAMPLE_RATE as f32).sin()
+            })
+            .collect()
+    }
+
+    /// A pedal with a delay short enough that the echoes come back within one buffer.
+    fn short_delay_pedal() -> Delay {
+        let mut pedal = Delay::new();
+        pedal.set_parameter_value("Delay", PedalParameterValue::Float(10.0));
+        pedal
+    }
+
+    /// Runs `buffers` buffers of a tone through the pedal, reconfiguring before every
+    /// buffer the way the processor API does when `reconfiguring` is set.
+    fn run(pedal: &mut Delay, buffers: usize, reconfiguring: bool) -> Vec<f32> {
+        let mut messages = Vec::new();
+        let mut output = Vec::with_capacity(buffers * BLOCK);
+
+        if !reconfiguring {
+            pedal.set_config(BLOCK, SAMPLE_RATE);
+        }
+
+        for buffer_index in 0..buffers {
+            if reconfiguring {
+                pedal.set_config(BLOCK, SAMPLE_RATE);
+            }
+
+            let mut buffer = tone_buffer(220.0, buffer_index);
+            pedal.process_audio(&mut buffer, &mut messages);
+            output.extend_from_slice(&buffer);
+        }
+
+        output
+    }
+
+    #[test]
+    fn reconfiguring_between_buffers_does_not_change_the_output() {
+        let mut reference = short_delay_pedal();
+        let expected = run(&mut reference, 4, false);
+
+        let mut reconfigured = short_delay_pedal();
+        let actual = run(&mut reconfigured, 4, true);
+
+        let worst = expected
+            .iter()
+            .zip(&actual)
+            .map(|(a, b)| (a - b).abs())
+            .fold(0.0f32, f32::max);
+        assert!(
+            worst < 1e-9,
+            "the redundant reconfigure changed the output by {worst}"
+        );
+    }
+
+    #[test]
+    fn reconfiguring_between_buffers_keeps_the_delay_line() {
+        let mut messages = Vec::new();
+        let mut pedal = short_delay_pedal();
+        pedal.set_config(BLOCK, SAMPLE_RATE);
+
+        let mut burst = vec![0.5; BLOCK];
+        pedal.process_audio(&mut burst, &mut messages);
+
+        // A configuration that changes nothing has to leave the delay line alone, otherwise
+        // the echoes are cut off at every buffer boundary.
+        pedal.set_config(BLOCK, SAMPLE_RATE);
+        let mut silence = vec![0.0; BLOCK];
+        pedal.process_audio(&mut silence, &mut messages);
+        assert!(
+            silence.iter().any(|sample| *sample != 0.0),
+            "the delay line was emptied"
+        );
+    }
+
+    #[test]
+    fn a_changed_sample_rate_rebuilds_the_delay_line() {
+        let mut pedal = Delay::new();
+        pedal.set_config(BLOCK, SAMPLE_RATE);
+        // the default 430 ms of delay
+        assert_eq!(pedal.delay_buffer.as_ref().map(VecDeque::len), Some(20_640));
+
+        pedal.set_config(BLOCK, SAMPLE_RATE * 2);
+        assert_eq!(pedal.delay_buffer.as_ref().map(VecDeque::len), Some(41_280));
     }
 }
