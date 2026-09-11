@@ -16,6 +16,9 @@ pub struct Phaser {
     parameters: HashMap<String, PedalParameter>,
     // Processor only
     phaser: Option<PhaserAlgorithm>,
+    /// Sample rate the sweep was built for, so that reconfiguring with the same
+    /// sample rate does not restart it.
+    configured_sample_rate: Option<u32>,
     id: u32,
 }
 
@@ -51,6 +54,7 @@ impl<'a> Deserialize<'a> for Phaser {
         Ok(Phaser {
             parameters: helper.parameters,
             phaser: None,
+            configured_sample_rate: None,
             id: helper.id,
         })
     }
@@ -116,6 +120,7 @@ impl Phaser {
         Phaser {
             parameters,
             phaser: None,
+            configured_sample_rate: None,
             id: unique_time_id(),
         }
     }
@@ -127,12 +132,7 @@ impl Phaser {
     }
 
     fn param_float(&self, name: &str) -> f32 {
-        self.parameters
-            .get(name)
-            .unwrap()
-            .value
-            .as_float()
-            .unwrap()
+        self.parameters.get(name).unwrap().value.as_float().unwrap()
     }
 }
 
@@ -228,6 +228,14 @@ impl PedalTrait for Phaser {
         parameter_oscillator.set_sample_rate(sample_rate as f32);
         let oscillator = parameter_oscillator.clone();
 
+        // The processor API calls this before every buffer, so only build the sweep when
+        // the configuration really changed. Rebuilding it would restart the LFO from
+        // phase zero and wipe the all-pass states, which parks the sweep at the start of
+        // its cycle instead of letting it run.
+        if self.configured_sample_rate == Some(sample_rate) {
+            return;
+        }
+
         let width = self.param_float("Width");
         let feedback = self.param_float("Feedback");
         let dry_wet = self.param_float("Dry/Wet");
@@ -241,6 +249,7 @@ impl PedalTrait for Phaser {
             oscillator,
             sample_rate as f32,
         ));
+        self.configured_sample_rate = Some(sample_rate);
     }
 
     fn ui(
@@ -303,5 +312,84 @@ impl PedalTrait for Phaser {
         }
 
         to_change
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SAMPLE_RATE: u32 = 48_000;
+    const BLOCK: usize = 1024;
+
+    fn rms(signal: &[f32]) -> f64 {
+        (signal.iter().map(|x| (*x as f64).powi(2)).sum::<f64>() / signal.len() as f64).sqrt()
+    }
+
+    /// Level of a steady probe in consecutive buffers, with the pedal reconfigured
+    /// before each buffer the way the processor API does it.
+    fn levels_per_buffer(buffers: usize, probe_hz: f32) -> Vec<f64> {
+        let mut pedal = Phaser::new();
+        let mut messages = Vec::new();
+        let mut levels = Vec::with_capacity(buffers);
+
+        for buffer_index in 0..buffers {
+            pedal.set_config(BLOCK, SAMPLE_RATE);
+
+            let mut buffer: Vec<f32> = (0..BLOCK)
+                .map(|i| {
+                    let n = buffer_index * BLOCK + i;
+                    (std::f32::consts::TAU * probe_hz * n as f32 / SAMPLE_RATE as f32).sin()
+                })
+                .collect();
+            pedal.process_audio(&mut buffer, &mut messages);
+            levels.push(rms(&buffer));
+        }
+
+        levels
+    }
+
+    #[test]
+    fn reconfiguring_between_buffers_does_not_restart_the_sweep() {
+        // 100 buffers of 1024 samples is two LFO cycles at the default 0.5 Hz, and the
+        // notches of the sweep cross 500 Hz four times over that.
+        let levels = levels_per_buffer(100, 500.0);
+
+        let quietest = levels.iter().cloned().fold(f64::INFINITY, f64::min);
+        let loudest = levels.iter().cloned().fold(0.0, f64::max);
+        assert!(
+            loudest / quietest > 2.0,
+            "the sweep only moved the level between {quietest} and {loudest}"
+        );
+    }
+
+    #[test]
+    fn reconfiguring_between_buffers_keeps_the_filter_state() {
+        let mut pedal = Phaser::new();
+        let mut messages = Vec::new();
+        pedal.set_config(BLOCK, SAMPLE_RATE);
+
+        let mut buffer = vec![0.5; BLOCK];
+        pedal.process_audio(&mut buffer, &mut messages);
+
+        // A configuration that changes nothing has to leave the running filter alone,
+        // otherwise every buffer starts again from silence.
+        pedal.set_config(BLOCK, SAMPLE_RATE);
+        let mut silence = vec![0.0; BLOCK];
+        pedal.process_audio(&mut silence, &mut messages);
+        assert!(
+            silence.iter().any(|sample| *sample != 0.0),
+            "the all-pass states were wiped"
+        );
+    }
+
+    #[test]
+    fn a_changed_sample_rate_rebuilds_the_sweep() {
+        let mut pedal = Phaser::new();
+        pedal.set_config(BLOCK, SAMPLE_RATE);
+        assert_eq!(pedal.configured_sample_rate, Some(SAMPLE_RATE));
+
+        pedal.set_config(BLOCK, SAMPLE_RATE * 2);
+        assert_eq!(pedal.configured_sample_rate, Some(SAMPLE_RATE * 2));
     }
 }
