@@ -14,6 +14,8 @@ use utilities::UtilitiesScreen;
 mod settings;
 use settings::{ProcessorLaunchState, SettingsScreen};
 mod audio_processor_handler;
+mod drag_scroll;
+use drag_scroll::drag_scroll;
 mod midi;
 
 #[cfg(feature = "virtual_keyboard")]
@@ -306,6 +308,12 @@ impl eframe::App for PedalboardClientApp {
     #[tracing::instrument(level = "trace", skip_all)]
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+
+        // egui only turns a drag into scrolling for touch screens and this panel
+        // reports itself as a mouse, so pass the drag to the lists ourselves
+        // (see `drag_scroll`)
+        drag_scroll(&ctx);
+
         #[cfg(feature = "virtual_keyboard")]
         {
             self.keyboard.pump_events(&ctx);
