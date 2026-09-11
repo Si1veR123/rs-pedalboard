@@ -338,6 +338,7 @@ mod tests {
     use std::path::PathBuf;
 
     #[test]
+    #[ignore = "requires a locally installed VST2 plugin"]
     fn test_load_vst2_plugin() {
         let plugin_path = PathBuf::from(r"C:\Program Files\Steinberg\VSTPlugins\NA Black.dll");
         let instance = Vst2Instance::load(plugin_path);

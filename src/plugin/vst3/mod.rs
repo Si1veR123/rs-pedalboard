@@ -8,8 +8,10 @@
 
 pub mod handler;
 pub mod host;
+pub mod param_changes;
 pub mod stream;
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::ptr::null_mut;
 
@@ -17,15 +19,17 @@ use libloading::Library;
 use vst3::Steinberg::Vst::{
     AudioBusBuffers, AudioBusBuffers__type0, BusDirections_, BusInfo, IAudioProcessor,
     IAudioProcessorTrait, IComponent, IComponentTrait, IConnectionPoint, IConnectionPointTrait,
-    IEditController, IEditControllerTrait, MediaTypes_, ParameterInfo, ParamID, ProcessData,
-    ProcessModes_, ProcessSetup, String128, SymbolicSampleSizes_,
+    IEditController, IEditControllerTrait, IParameterChanges, MediaTypes_, ParameterInfo, ParamID,
+    ParamValue, ProcessData, ProcessModes_, ProcessSetup, String128, SymbolicSampleSizes_,
 };
 use vst3::Steinberg::{
     char8, kResultOk, FIDString, FUnknown, IBStreamTrait, IPluginBaseTrait, IPluginFactory,
     IPluginFactoryTrait, PClassInfo, TUID,
 };
 use vst3::Steinberg::Vst::IHostApplication;
-use vst3::{ComPtr, ComRef, Interface};
+use vst3::{ComPtr, ComRef, ComWrapper, Interface};
+
+use param_changes::ParameterChanges;
 
 #[cfg(target_os = "windows")]
 pub const VST3_PLUGIN_PATH: &str = r"C:\Program Files\Common Files\VST3";
@@ -134,6 +138,11 @@ pub struct Vst3Instance {
     output_channel_count: usize,
     sample_rate: f32,
     buffer_size: usize,
+    /// Parameter values that were changed on the edit controller but have not
+    /// been forwarded to the audio processor yet. The processor only learns
+    /// about parameter changes through the parameter change queue passed to
+    /// `process`, so changes are buffered here until the next block.
+    pending_parameter_changes: HashMap<ParamID, ParamValue>,
     /// Kept alive until every plugin object has been released, so it must be
     /// the last field to be dropped.
     #[allow(dead_code)]
@@ -250,6 +259,7 @@ impl Vst3Instance {
             output_channel_count: 0,
             sample_rate: 0.0,
             buffer_size: 0,
+            pending_parameter_changes: HashMap::new(),
             library,
         })
     }
@@ -561,6 +571,28 @@ impl Vst3Instance {
             })
             .collect();
 
+        // Forward every parameter that changed since the previous block to the
+        // audio processor. For plugins whose component and controller are
+        // separate classes this is the only way the DSP learns about parameter
+        // changes; without it the plugin keeps using its default values and the
+        // effect is inaudible.
+        let input_parameter_changes = ComWrapper::new(ParameterChanges::new());
+        for (&id, &value) in &self.pending_parameter_changes {
+            input_parameter_changes.add_change(id, 0, value);
+        }
+        self.pending_parameter_changes.clear();
+
+        let input_parameter_changes = input_parameter_changes
+            .to_com_ptr::<IParameterChanges>()
+            .expect("ParameterChanges implements IParameterChanges");
+
+        // Give the processor somewhere to report parameter changes back to the
+        // host. The contents are not consumed yet, but passing a valid object
+        // keeps plugins that assume one is present happy.
+        let output_parameter_changes = ComWrapper::new(ParameterChanges::new())
+            .to_com_ptr::<IParameterChanges>()
+            .expect("ParameterChanges implements IParameterChanges");
+
         let mut process_data = ProcessData {
             processMode: ProcessModes_::kRealtime as i32,
             symbolicSampleSize: SymbolicSampleSizes_::kSample32 as i32,
@@ -569,8 +601,8 @@ impl Vst3Instance {
             numOutputs: out_buses.len() as i32,
             inputs: in_buses.as_mut_ptr(),
             outputs: out_buses.as_mut_ptr(),
-            inputParameterChanges: null_mut(),
-            outputParameterChanges: null_mut(),
+            inputParameterChanges: input_parameter_changes.as_ptr(),
+            outputParameterChanges: output_parameter_changes.as_ptr(),
             inputEvents: null_mut(),
             outputEvents: null_mut(),
             processContext: null_mut(),
@@ -641,15 +673,22 @@ impl Vst3Instance {
     }
 
     pub fn set_parameter_value(&mut self, index: usize, value: f32) {
-        let Some(parameter) = self.parameters.get(index) else {
+        let Some(id) = self.parameters.get(index).map(|parameter| parameter.id) else {
             return;
         };
 
-        // SAFETY: `parameter.id` was obtained from the same controller.
+        let value = value.clamp(0.0, 1.0) as f64;
+
+        // SAFETY: `id` was obtained from the same controller.
         unsafe {
-            self.controller
-                .setParamNormalized(parameter.id, value.clamp(0.0, 1.0) as f64);
+            self.controller.setParamNormalized(id, value);
         }
+
+        // The edit controller only stores the value for display and state
+        // saving. The audio processor, which performs the actual DSP, is told
+        // about the change through the parameter change queue built in
+        // `process`, so remember it until the next block is rendered.
+        self.pending_parameter_changes.insert(id, value);
     }
 }
 
@@ -659,6 +698,16 @@ impl Clone for Vst3Instance {
         let mut instance = Self::load(&self.selected_path)
             .expect("Plugin has previously been loaded, so cloning should succeed");
         instance.set_config(self.buffer_size, self.sample_rate as u32);
+
+        // The freshly loaded plugin starts from its default parameter values.
+        // Carry over the values currently held by this instance's controller so
+        // that the clone sounds the same as the original.
+        for parameter in &self.parameters {
+            // SAFETY: `parameter.id` was obtained from this instance's controller.
+            let value = unsafe { self.controller.getParamNormalized(parameter.id) };
+            instance.pending_parameter_changes.insert(parameter.id, value);
+        }
+
         instance
     }
 }
@@ -668,6 +717,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[ignore = "requires a locally installed VST3 plugin"]
     fn test_load_vst3_plugin() {
         let plugin_path = PathBuf::from(r"C:\Program Files\Common Files\VST3\NA Black.vst3");
         if !plugin_path.exists() {
@@ -686,5 +736,86 @@ mod tests {
         instance.process(&mut input, &mut output);
         assert_eq!(output.len(), input.len());
         println!("Output: {:?}", &output[..20]);
+    }
+
+    /// Verifies that a parameter changed on the edit controller is forwarded to
+    /// the audio processor through the parameter change queue.
+    ///
+    /// Two freshly loaded instances are compared: one keeps the plugin's default
+    /// parameters while the other has its `Drive` parameter pushed to maximum.
+    /// If the parameter change queue is not wired up, the processor never sees
+    /// the change and both produce identical output.
+    ///
+    /// This test loads a plugin from disk, so it is ignored by default. Run it
+    /// with `cargo test -- --ignored` on a machine that has the plugin.
+    #[test]
+    #[ignore = "requires a locally installed VST3 plugin"]
+    fn test_parameter_changes_reach_processor() {
+        let plugin_path =
+            PathBuf::from(r"C:\Program Files\Common Files\VST3\TubeSaturatorVintage_64.vst3");
+        if !plugin_path.exists() {
+            eprintln!("Skipping VST3 test: {:?} does not exist", plugin_path);
+            return;
+        }
+
+        let probe = Vst3Instance::load(&plugin_path).expect("Failed to load VST3 plugin");
+        for index in 0..probe.parameter_count() {
+            println!("Parameter {}: {}", index, probe.parameter_name(index));
+        }
+        assert!(probe.parameter_count() > 0, "Plugin exposes no parameters");
+        drop(probe);
+
+        let input: Vec<f32> = (0..512).map(|i| (i as f32 * 0.08).sin() * 0.5).collect();
+
+        let run_blocks = |instance: &mut Vst3Instance, blocks: usize| {
+            let mut output = vec![0.0; input.len()];
+            for _ in 0..blocks {
+                let mut block = input.clone();
+                instance.process(&mut block, &mut output);
+            }
+            output
+        };
+
+        let mut default_instance = Vst3Instance::load(&plugin_path).unwrap();
+        default_instance.set_config(512, 48000);
+        let default_output = run_blocks(&mut default_instance, 8);
+
+        let mut driven_instance = Vst3Instance::load(&plugin_path).unwrap();
+        driven_instance.set_config(512, 48000);
+
+        // Drive the parameter named "Drive" (falling back to the first
+        // parameter) to its maximum. Looking the parameter up by name keeps the
+        // test meaningful for the reference saturator while still exercising
+        // whatever parameter another plugin exposes first.
+        let target = (0..driven_instance.parameter_count())
+            .find(|&index| driven_instance.parameter_name(index).eq_ignore_ascii_case("drive"))
+            .unwrap_or(0);
+        println!(
+            "Driving parameter {}: {}",
+            target,
+            driven_instance.parameter_name(target)
+        );
+        driven_instance.set_parameter_value(target, 1.0);
+
+        let driven_output = run_blocks(&mut driven_instance, 8);
+
+        let max_difference = default_output
+            .iter()
+            .zip(driven_output.iter())
+            .map(|(default, driven)| (default - driven).abs())
+            .fold(0.0_f32, f32::max);
+
+        println!(
+            "Default peak: {}, driven peak: {}, max difference: {}",
+            default_output.iter().fold(0.0_f32, |a, b| a.max(b.abs())),
+            driven_output.iter().fold(0.0_f32, |a, b| a.max(b.abs())),
+            max_difference
+        );
+
+        assert!(
+            max_difference > 1e-4,
+            "Parameter changes never reached the processor (max difference {})",
+            max_difference
+        );
     }
 }
