@@ -785,10 +785,15 @@ impl State {
                     self.tuner_active.set(!currently_active);
                 }
                 Command::ParameterUpdate(mut path, value) => {
-                    let stage_pedalboards = self.pedalboards.active_pedalboardstage.borrow();
-                    if path.resolve_pedalboard_id(&stage_pedalboards) {
+                    let resolved_pedalboard_id = {
+                        let stage_pedalboards = self.pedalboards.active_pedalboardstage.borrow();
+                        path.resolve_pedalboard_id(&stage_pedalboards);
+                        path.pedalboard_id
+                    };
+
+                    if let Some(pedalboard_id) = resolved_pedalboard_id {
                         self.set_parameter(
-                            path.pedalboard_id.expect("Active parameter path should be resolved"),
+                            pedalboard_id,
                             path.pedal_id,
                             path.parameter_name,
                             value,
