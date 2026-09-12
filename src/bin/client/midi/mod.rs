@@ -205,7 +205,7 @@ impl MidiState {
                     }
                 } else {
                     for (path, function_values) in &device.parameter_functions {
-                        if path.pedalboard_id != active_pedalboard_id {
+                        if path.pedalboard_id != Some(active_pedalboard_id) {
                             continue;
                         }
 
@@ -346,9 +346,10 @@ impl MidiState {
 
         for (_port_name, port_settings) in settings_lock.port_settings.iter_mut() {
             for (_cc_channel, device) in port_settings.devices.iter_mut() {
-                device
-                    .parameter_functions
-                    .retain(|f, _| existing_pedalboards.contains(&f.pedalboard_id));
+                device.parameter_functions.retain(|f, _| {
+                    f.pedalboard_id
+                        .is_some_and(|pedalboard_id| existing_pedalboards.contains(&pedalboard_id))
+                });
             }
         }
     }

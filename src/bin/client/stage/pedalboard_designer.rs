@@ -519,7 +519,7 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
 
         screen
             .state
-            .set_parameter(active_pedalboard_id, pedal_id, name, value, false, ui.ctx());
+            .set_parameter(active_pedalboard_id, pedal_id, name, value, false);
     }
 
     if screen.show_pedal_menu {

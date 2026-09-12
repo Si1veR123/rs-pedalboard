@@ -1,6 +1,5 @@
 use crate::{
-    pedals::{Pedal, PedalTrait},
-    unique_time_id,
+    pedalboard_set, pedals::{Pedal, PedalTrait}, unique_time_id,
 };
 use serde::{Deserialize, Serialize};
 use std::{fmt::Write, hash::Hash};
@@ -8,9 +7,44 @@ use std::{fmt::Write, hash::Hash};
 /// Can uniquely identify a parameter.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ParameterPath {
-    pub pedalboard_id: u32,
+    pub pedalboard_id: Option<u32>,
     pub pedal_id: u32,
     pub parameter_name: String,
+}
+
+impl ParameterPath {
+    /// Find the pedalboard that contains the pedal with this path's pedal ID and set
+    /// `pedalboard_id`.
+    ///
+    /// The active pedalboard is preferred, which disambiguates the case where the same pedal ID
+    /// appears in several pedalboards. Note that pedal IDs are only unique within a pedalboard,
+    /// not across pedalboards (for example, duplicated pedalboards keep their pedal IDs).
+    ///
+    /// Returns whether the path now points at a pedalboard in the set.
+    pub fn resolve_pedalboard_id(&mut self, pedalboard_set: &pedalboard_set::PedalboardSet) -> bool {
+        if self.pedalboard_id.is_none() {
+            let pedal_id = self.pedal_id;
+            let contains_pedal =
+                |pedalboard: &&Pedalboard| pedalboard.pedals.iter().any(|p| p.get_id() == pedal_id);
+
+            // Prefer the active pedalboard so ambiguous pedal IDs resolve to the board in view.
+            let active_pedalboard = pedalboard_set
+                .pedalboards
+                .get(pedalboard_set.active_pedalboard)
+                .filter(|pedalboard| contains_pedal(pedalboard));
+
+            let containing_pedalboard = active_pedalboard.or_else(|| {
+                pedalboard_set
+                    .pedalboards
+                    .iter()
+                    .find(|pedalboard| contains_pedal(pedalboard))
+            });
+
+            self.pedalboard_id = containing_pedalboard.map(|pedalboard| pedalboard.get_id());
+        }
+
+        self.pedalboard_id.is_some()
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone)]

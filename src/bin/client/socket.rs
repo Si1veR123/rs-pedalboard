@@ -360,16 +360,21 @@ async fn client_socket_event_loop(
                         break;
                     },
                     Command::ParameterUpdate(parameter_path, value) => {
-                        let message = format!(
-                            "setparameter|{}|{}|{}|{}\n",
-                            parameter_path.pedalboard_id,
-                            parameter_path.pedal_id,
-                            &parameter_path.parameter_name,
-                            serde_json::to_string(&value).expect("Failed to serialize parameter value")
-                        );
+                        if let Some(path_pedalboard_id) = parameter_path.pedalboard_id {
+                            let message = format!(
+                                "setparameter|{}|{}|{}|{}\n",
+                                path_pedalboard_id,
+                                parameter_path.pedal_id,
+                                &parameter_path.parameter_name,
+                                serde_json::to_string(&value).expect("Failed to serialize parameter value")
+                            );
 
-                        if socket_send(&mut stream_writer, &message).await {
-                            break;
+                            if socket_send(&mut stream_writer, &message).await {
+                                break;
+                            }
+                        } else{
+                            tracing::warn!("Parameter path does not have a pedalboard ID: {:?}", parameter_path);
+                            continue;
                         }
                     },
                     Command::SubscribeToResponses(sender) => {

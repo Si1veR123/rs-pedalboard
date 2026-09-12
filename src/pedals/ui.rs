@@ -2,7 +2,7 @@ use eframe::egui::{self, Color32, Id, Vec2, WidgetText};
 
 use crate::{
     dsp_algorithms::oscillator::{self, Oscillator},
-    pedalboard::ParameterPath,
+    pedalboard::ParameterPath
 };
 
 use super::{PedalParameter, PedalParameterValue};
@@ -15,6 +15,23 @@ const KNOB_MAX_ANGLE: f32 = 2.618;
 pub fn float_round(value: f32, step: f32) -> f32 {
     let rounded = (value / step).round() * step;
     rounded
+}
+
+pub fn get_active_parameter(ctx: &eframe::egui::Context) -> Option<ParameterPath> {
+    ctx.data(|reader| {
+        reader
+            .get_temp::<Option<ParameterPath>>(eframe::egui::Id::new("active_parameter"))
+            .clone()
+            .unwrap_or(None)
+    })
+}
+
+pub fn set_active_parameter(ctx: &eframe::egui::Context, path: Option<ParameterPath>) {
+    ctx.memory_mut(|writer| {
+        writer
+            .data
+            .insert_temp(eframe::egui::Id::new("active_parameter"), path);
+    });
 }
 
 pub fn pedal_knob(
@@ -41,11 +58,7 @@ pub fn pedal_knob(
         }
     };
 
-    let active_param = ui.ctx().memory(|m| {
-        m.data
-            .get_temp::<Option<ParameterPath>>(egui::Id::new("active_parameter"))
-            .unwrap_or(None)
-    });
+    let active_param = get_active_parameter(ui.ctx());
     let is_active = if let Some(active) = &active_param {
         active.pedal_id == pedal_id && &active.parameter_name == name
     } else {
@@ -96,6 +109,17 @@ pub fn pedal_knob(
                     .max_width(size_px)
                     .sense(egui::Sense::click_and_drag()),
             );
+
+            if knob_im_shine_overlay.clicked() || knob_im_shine_overlay.drag_started() {
+                set_active_parameter(
+                    ui.ctx(),
+                    Some(ParameterPath {
+                        pedalboard_id: None, // unknown at this point, will be resolved later
+                        pedal_id,
+                        parameter_name: name.to_string(),
+                    }),
+                );
+            }
 
             if knob_im_shine_overlay.dragged() {
                 let current_y = ui

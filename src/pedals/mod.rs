@@ -52,7 +52,7 @@ mod phaser;
 pub use phaser::Phaser;
 
 pub mod info;
-mod ui;
+pub mod ui;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PedalParameter {

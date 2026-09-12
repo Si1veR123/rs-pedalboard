@@ -3,13 +3,13 @@ use crate::{
     saved_pedalboards::SavedPedalboards,
     settings::{ClientSettings, VolumeNormalizationMode},
     socket::{ClientSocket, Command},
-    Screen,
+    Screen
 };
 use crossbeam::channel::Receiver;
 use eframe::egui;
 use rs_pedalboard::{
     pedalboard::{ParameterPath, Pedalboard},
-    pedals::{Pedal, PedalParameterValue, PedalTrait},
+    pedals::{Pedal, PedalParameterValue, PedalTrait, ui::get_active_parameter},
     processor_settings::ProcessorSettingsSave,
 };
 use std::{
@@ -40,23 +40,6 @@ pub struct State {
 }
 
 impl State {
-    pub fn get_active_parameter(ctx: &eframe::egui::Context) -> Option<ParameterPath> {
-        ctx.data(|reader| {
-            reader
-                .get_temp::<Option<ParameterPath>>(eframe::egui::Id::new("active_parameter"))
-                .clone()
-                .unwrap_or(None)
-        })
-    }
-
-    pub fn set_active_parameter(ctx: &eframe::egui::Context, path: Option<ParameterPath>) {
-        ctx.memory_mut(|writer| {
-            writer
-                .data
-                .insert_temp(eframe::egui::Id::new("active_parameter"), path);
-        });
-    }
-
     /// Get a set of all pedalboard IDs in the active pedalboard stage and in the pedalboard library
     ///
     /// Requires a lock on active_pedalboardstage and pedalboard_library
@@ -311,8 +294,7 @@ impl State {
         pedal_id: u32,
         parameter_name: String,
         parameter_value: PedalParameterValue,
-        local: bool,
-        ctx: &eframe::egui::Context,
+        local: bool
     ) {
         // Set parameter on pedalboard stage
         for pedalboard in self
@@ -350,20 +332,12 @@ impl State {
             let mut socket = self.socket.borrow_mut();
             socket.send(Command::ParameterUpdate(
                 ParameterPath {
-                    pedalboard_id,
+                    pedalboard_id: Some(pedalboard_id),
                     pedal_id,
                     parameter_name: parameter_name.clone(),
                 },
                 parameter_value,
             ));
-
-            // if !local, UI is setting parameter, so set active parameter to this
-            let path = ParameterPath {
-                pedalboard_id,
-                pedal_id,
-                parameter_name,
-            };
-            Self::set_active_parameter(ctx, Some(path));
         }
     }
 
@@ -667,7 +641,7 @@ impl State {
         self.selected_screen.set(screen);
     }
 
-    /// Update the state with commands that other threads have sent to the processor
+    /// Update the client state with commands that other threads have sent to the processor (such as the MIDI thread)
     pub fn handle_other_thread_commands(&self, ctx: &eframe::egui::Context) {
         for command in self.midi_command_receiver.try_iter() {
             match command {
@@ -810,15 +784,19 @@ impl State {
                     let currently_active = self.tuner_active.get();
                     self.tuner_active.set(!currently_active);
                 }
-                Command::ParameterUpdate(path, value) => {
-                    self.set_parameter(
-                        path.pedalboard_id,
-                        path.pedal_id,
-                        path.parameter_name,
-                        value,
-                        true,
-                        ctx,
-                    );
+                Command::ParameterUpdate(mut path, value) => {
+                    let stage_pedalboards = self.pedalboards.active_pedalboardstage.borrow();
+                    if path.resolve_pedalboard_id(&stage_pedalboards) {
+                        self.set_parameter(
+                            path.pedalboard_id.expect("Active parameter path should be resolved"),
+                            path.pedal_id,
+                            path.parameter_name,
+                            value,
+                            true
+                        );
+                    } else {
+                        tracing::warn!("Unable to resolve pedalboard ID");
+                    }
                 }
                 Command::VolumeNormalizationReset => {}
                 Command::SetMute(mute) => {
@@ -828,13 +806,20 @@ impl State {
                     tracing::info!("Toggled mute")
                 }
                 Command::ChangeActiveParameter(value) => {
-                    let active_parameter = Self::get_active_parameter(ctx);
-                    if let Some(path) = active_parameter {
+                    let active_parameter = get_active_parameter(ctx);
+                    if let Some(mut path) = active_parameter {
                         let stage_pedalboards = self.pedalboards.active_pedalboardstage.borrow();
+
+                        if !path.resolve_pedalboard_id(&stage_pedalboards) {
+                            tracing::warn!("Unable to resolve pedalboard ID");
+                            continue;
+                        }
+                        let path_pedalboard_id = path.pedalboard_id.expect("Active parameter path should be resolved");
+
                         if let Some(pedalboard) = stage_pedalboards
                             .pedalboards
                             .iter()
-                            .find(|pb| pb.get_id() == path.pedalboard_id)
+                            .find(|pb| pb.get_id() == path_pedalboard_id)
                         {
                             if let Some(pedal) = pedalboard
                                 .pedals
@@ -852,12 +837,11 @@ impl State {
                                             let path = path.clone();
                                             drop(stage_pedalboards);
                                             self.set_parameter(
-                                                path.pedalboard_id,
+                                                path_pedalboard_id,
                                                 path.pedal_id,
                                                 path.parameter_name,
                                                 PedalParameterValue::Bool(new_value),
-                                                false,
-                                                ctx,
+                                                false
                                             );
                                         }
                                         PedalParameterValue::Int(_) => {
@@ -880,12 +864,11 @@ impl State {
                                             let path = path.clone();
                                             drop(stage_pedalboards);
                                             self.set_parameter(
-                                                path.pedalboard_id,
+                                                path_pedalboard_id,
                                                 path.pedal_id,
                                                 path.parameter_name,
                                                 PedalParameterValue::Int(int_value),
-                                                false,
-                                                ctx,
+                                                false
                                             );
                                         }
                                         PedalParameterValue::Float(_) => {
@@ -906,12 +889,11 @@ impl State {
                                             let path = path.clone();
                                             drop(stage_pedalboards);
                                             self.set_parameter(
-                                                path.pedalboard_id,
+                                                path_pedalboard_id,
                                                 path.pedal_id,
                                                 path.parameter_name,
                                                 PedalParameterValue::Float(float_value),
-                                                false,
-                                                ctx,
+                                                false
                                             );
                                         }
                                         _ => tracing::warn!("Unsupported active parameter type"),

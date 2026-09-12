@@ -291,7 +291,7 @@ pub fn draw_midi_function_settings(
                 // Changing device
                 to_change = Some(ParameterWindowChange::ChangeMidiFunctionDevice(
                     ParameterPath {
-                        pedalboard_id,
+                        pedalboard_id: Some(pedalboard_id),
                         pedal_id: pedal.get_id(),
                         parameter_name: name.clone(),
                     },
@@ -303,7 +303,7 @@ pub fn draw_midi_function_settings(
                 // Removing device
                 to_change = Some(ParameterWindowChange::RemoveMidiFunction(
                     ParameterPath {
-                        pedalboard_id,
+                        pedalboard_id: Some(pedalboard_id),
                         pedal_id: pedal.get_id(),
                         parameter_name: name.clone(),
                     },
@@ -314,7 +314,7 @@ pub fn draw_midi_function_settings(
                 // New device
                 to_change = Some(ParameterWindowChange::AddMidiFunction(
                     ParameterPath {
-                        pedalboard_id,
+                        pedalboard_id: Some(pedalboard_id),
                         pedal_id: pedal.get_id(),
                         parameter_name: name.clone(),
                     },
@@ -361,7 +361,7 @@ pub fn draw_midi_function_settings(
             if let Some(selected_device_id) = selected_device_id {
                 to_change = Some(ParameterWindowChange::AddMidiFunction(
                     ParameterPath {
-                        pedalboard_id,
+                        pedalboard_id: Some(pedalboard_id),
                         pedal_id: pedal.get_id(),
                         parameter_name: name.clone(),
                     },
@@ -410,7 +410,7 @@ pub fn draw_midi_function_settings(
             if let Some(selected_device_id) = selected_device_id {
                 to_change = Some(ParameterWindowChange::AddMidiFunction(
                     ParameterPath {
-                        pedalboard_id,
+                        pedalboard_id: Some(pedalboard_id),
                         pedal_id: pedal.get_id(),
                         parameter_name: name.clone(),
                     },
