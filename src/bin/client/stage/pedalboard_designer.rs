@@ -492,8 +492,8 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
                 }
                 Some(ParameterWindowChange::ChangeMidiFunctionDevice(
                     parameter,
-                    old_id,
                     new_id,
+                    old_id,
                 )) => {
                     let midi_state = screen.state.midi_state.borrow_mut();
                     if let Some(parameter_functions) =
