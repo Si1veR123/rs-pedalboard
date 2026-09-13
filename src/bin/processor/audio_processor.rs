@@ -13,7 +13,8 @@ use rs_pedalboard::{
     dsp_algorithms::{resampler::Resampler, yin::Yin},
     pedalboard::Pedalboard,
     pedalboard_set::PedalboardSet,
-    pedals::{Pedal, PedalParameterValue, PedalTrait},
+    pedals::{parameters::ParameterUpdate, Pedal, PedalTrait},
+    processor_settings::FloatSettingUpdate,
     DEFAULT_VOLUME_MONITOR_UPDATE_RATE,
 };
 use tracing::trace_span;
@@ -254,21 +255,22 @@ impl AudioProcessor {
                     .next()
                     .ok_or_else(|| "setparameter: Failed to get parameter name".to_string())?;
 
-                let pedal_parameter_ser_first_word = arguments
+                let parameter_update_ser_first_word = arguments
                     .next()
-                    .ok_or_else(|| "setparameter: Failed to get parameter value".to_string())?;
-                let pedal_parameter_ser_start =
-                    pedal_parameter_ser_first_word.as_ptr() as usize - command.as_ptr() as usize;
-                let pedal_parameter_str = &command[pedal_parameter_ser_start..];
-                let mut parameter_value: PedalParameterValue =
-                    serde_json::from_str(&pedal_parameter_str).map_err(|e| {
-                        format!("setparameter: Failed to deserialize parameter value: {}", e)
+                    .ok_or_else(|| "setparameter: Failed to get parameter update".to_string())?;
+                let parameter_update_ser_start =
+                    parameter_update_ser_first_word.as_ptr() as usize - command.as_ptr() as usize;
+                let parameter_update_str = &command[parameter_update_ser_start..];
+                let mut parameter_update: ParameterUpdate =
+                    serde_json::from_str(parameter_update_str).map_err(|e| {
+                        format!(
+                            "setparameter: Failed to deserialize parameter update: {}",
+                            e
+                        )
                     })?;
 
-                // If the parameter is an oscillator, we must change the sample rate to whatever the processor is using
-                if let Some(oscillator) = parameter_value.as_oscillator_mut() {
-                    oscillator.set_sample_rate(self.processing_sample_rate as f32);
-                }
+                // If the update is an oscillator, we must change the sample rate to whatever the processor is using
+                parameter_update.set_oscillator_sample_rate(self.processing_sample_rate as f32);
 
                 for pedalboard in self
                     .pedalboard_set
@@ -276,7 +278,7 @@ impl AudioProcessor {
                     .iter_mut()
                     .filter(|pedalboard| pedalboard.get_id() == pedalboard_id)
                 {
-                    pedalboard
+                    let pedal = pedalboard
                         .pedals
                         .iter_mut()
                         .find(|pedal| pedal.get_id() == pedal_id)
@@ -285,8 +287,8 @@ impl AudioProcessor {
                                 "setparameter: Pedal with ID {} not found in pedalboard {}",
                                 pedal_id, pedalboard_id
                             )
-                        })?
-                        .set_parameter_value(parameter_name, parameter_value.clone());
+                        })?;
+                    parameter_update.apply_to_pedal(pedal, parameter_name);
                 }
             }
             "movepedalboard" => {
@@ -470,20 +472,20 @@ impl AudioProcessor {
                 }
             }
             "masterin" => {
-                let volume = arguments
+                let volume_update_ser = arguments
                     .next()
-                    .ok_or_else(|| "masterin: Failed to get volume".to_string())?
-                    .parse::<f32>()
-                    .map_err(|e| format!("masterin: Failed to parse volume: {e}"))?;
-                self.master_in_volume = volume;
+                    .ok_or_else(|| "masterin: Failed to get volume update".to_string())?;
+                let volume_update: FloatSettingUpdate = serde_json::from_str(volume_update_ser)
+                    .map_err(|e| format!("masterin: Failed to deserialize volume update: {e}"))?;
+                self.master_in_volume = volume_update.apply(self.master_in_volume, None);
             }
             "masterout" => {
-                let volume = arguments
+                let volume_update_ser = arguments
                     .next()
-                    .ok_or_else(|| "masterout: Failed to get volume".to_string())?
-                    .parse::<f32>()
-                    .map_err(|e| format!("masterout: Failed to parse volume: {e}"))?;
-                self.master_out_volume = volume.clamp(0.0, 1.0);
+                    .ok_or_else(|| "masterout: Failed to get volume update".to_string())?;
+                let volume_update: FloatSettingUpdate = serde_json::from_str(volume_update_ser)
+                    .map_err(|e| format!("masterout: Failed to deserialize volume update: {e}"))?;
+                self.master_out_volume = volume_update.apply(self.master_out_volume, None);
             }
             "mute" => {
                 let enable_str = arguments

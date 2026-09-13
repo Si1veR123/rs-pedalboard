@@ -16,17 +16,17 @@ use std::path::{Path, PathBuf};
 use std::ptr::null_mut;
 
 use libloading::Library;
+use vst3::Steinberg::Vst::IHostApplication;
 use vst3::Steinberg::Vst::{
     AudioBusBuffers, AudioBusBuffers__type0, BusDirections_, BusInfo, IAudioProcessor,
     IAudioProcessorTrait, IComponent, IComponentTrait, IConnectionPoint, IConnectionPointTrait,
-    IEditController, IEditControllerTrait, IParameterChanges, MediaTypes_, ParameterInfo, ParamID,
-    ParamValue, ProcessData, ProcessModes_, ProcessSetup, String128, SymbolicSampleSizes_,
+    IEditController, IEditControllerTrait, IParameterChanges, MediaTypes_, ParamID, ParamValue,
+    ParameterInfo, ProcessData, ProcessModes_, ProcessSetup, String128, SymbolicSampleSizes_,
 };
 use vst3::Steinberg::{
     char8, kResultOk, FIDString, FUnknown, IBStreamTrait, IPluginBaseTrait, IPluginFactory,
     IPluginFactoryTrait, PClassInfo, TUID,
 };
-use vst3::Steinberg::Vst::IHostApplication;
 use vst3::{ComPtr, ComRef, ComWrapper, Interface};
 
 use param_changes::ParameterChanges;
@@ -155,10 +155,7 @@ impl Vst3Instance {
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, ()> {
         let selected_path = path.as_ref().to_path_buf();
         let binary_path = resolve_plugin_binary(&selected_path).ok_or_else(|| {
-            tracing::error!(
-                "Could not find a VST3 binary within {:?}",
-                selected_path
-            );
+            tracing::error!("Could not find a VST3 binary within {:?}", selected_path);
         })?;
 
         // SAFETY: Loading an untrusted plugin is inherently unsafe. We pass a
@@ -455,8 +452,10 @@ impl Vst3Instance {
     /// Returns the channel count of each audio bus in the given direction.
     fn audio_bus_channel_counts(&self, direction: i32) -> Vec<i32> {
         // SAFETY: `direction` is a valid bus direction.
-        let bus_count =
-            unsafe { self.component.getBusCount(MediaTypes_::kAudio as i32, direction) };
+        let bus_count = unsafe {
+            self.component
+                .getBusCount(MediaTypes_::kAudio as i32, direction)
+        };
 
         let mut counts = Vec::new();
         for index in 0..bus_count {
@@ -705,7 +704,9 @@ impl Clone for Vst3Instance {
         for parameter in &self.parameters {
             // SAFETY: `parameter.id` was obtained from this instance's controller.
             let value = unsafe { self.controller.getParamNormalized(parameter.id) };
-            instance.pending_parameter_changes.insert(parameter.id, value);
+            instance
+                .pending_parameter_changes
+                .insert(parameter.id, value);
         }
 
         instance
@@ -788,7 +789,11 @@ mod tests {
         // test meaningful for the reference saturator while still exercising
         // whatever parameter another plugin exposes first.
         let target = (0..driven_instance.parameter_count())
-            .find(|&index| driven_instance.parameter_name(index).eq_ignore_ascii_case("drive"))
+            .find(|&index| {
+                driven_instance
+                    .parameter_name(index)
+                    .eq_ignore_ascii_case("drive")
+            })
             .unwrap_or(0);
         println!(
             "Driving parameter {}: {}",

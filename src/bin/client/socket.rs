@@ -2,12 +2,13 @@ use std::time::Duration;
 
 use futures::{pin_mut, select, FutureExt};
 use ringbuf::traits::{Consumer, Split};
+use rs_pedalboard::pedals::parameters::ParameterUpdate;
+use rs_pedalboard::processor_settings::FloatSettingUpdate;
 use smol::channel::{Receiver, Sender, TryRecvError};
 use smol::io::{AsyncWrite, AsyncWriteExt};
 use smol::net::{Ipv4Addr, TcpStream};
 
 use rs_pedalboard::pedalboard::ParameterPath;
-use rs_pedalboard::pedals::PedalParameterValue;
 use rs_pedalboard::socket_helper::CommandReceiver;
 
 use crate::settings::VolumeNormalizationMode;
@@ -110,7 +111,7 @@ impl ClientSocket {
 #[derive(Debug, Clone)]
 pub enum Command {
     // === Processor Commands ===
-    ParameterUpdate(ParameterPath, PedalParameterValue),
+    ParameterUpdate(ParameterPath, ParameterUpdate),
     // pedalboard id, pedal id, new pedal index
     MovePedal(u32, u32, usize),
     // pedalboard id, pedal id
@@ -124,8 +125,8 @@ pub enum Command {
     // pedalboard id, serialized pedal
     AddPedal(u32, String),
     KillProcessor,
-    MasterIn(f32),
-    MasterOut(f32),
+    MasterIn(FloatSettingUpdate),
+    MasterOut(FloatSettingUpdate),
     VolumeNormalization(VolumeNormalizationMode, Option<f32>),
     VolumeNormalizationReset,
     SetRecording(bool),
@@ -156,7 +157,7 @@ pub enum Command {
     UtilitiesView,
     SongsView,
     SettingsView,
-    ChangeActiveParameter(f32),
+    ChangeActiveParameter(FloatSettingUpdate),
 }
 
 pub struct ClientSocketThreadHandle {
@@ -455,13 +456,21 @@ async fn client_socket_event_loop(
                         }
                     },
                     Command::MasterIn(value) => {
-                        let message = format!("masterin|{}\n", value);
+                        let message = format!(
+                            "masterin|{}\n",
+                            serde_json::to_string(&value)
+                                .expect("Failed to serialize master in volume update")
+                        );
                         if socket_send(&mut stream_writer, &message).await {
                             break;
                         }
                     },
                     Command::MasterOut(value) => {
-                        let message = format!("masterout|{}\n", value);
+                        let message = format!(
+                            "masterout|{}\n",
+                            serde_json::to_string(&value)
+                                .expect("Failed to serialize master out volume update")
+                        );
                         if socket_send(&mut stream_writer, &message).await {
                             break;
                         }

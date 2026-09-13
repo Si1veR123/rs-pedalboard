@@ -1,5 +1,7 @@
 use crate::{
-    pedalboard_set, pedals::{Pedal, PedalTrait}, unique_time_id,
+    pedalboard_set,
+    pedals::{Pedal, PedalTrait},
+    unique_time_id,
 };
 use serde::{Deserialize, Serialize};
 use std::{fmt::Write, hash::Hash};
@@ -21,7 +23,10 @@ impl ParameterPath {
     /// not across pedalboards (for example, duplicated pedalboards keep their pedal IDs).
     ///
     /// Returns whether the path now points at a pedalboard in the set.
-    pub fn resolve_pedalboard_id(&mut self, pedalboard_set: &pedalboard_set::PedalboardSet) -> bool {
+    pub fn resolve_pedalboard_id(
+        &mut self,
+        pedalboard_set: &pedalboard_set::PedalboardSet,
+    ) -> bool {
         if self.pedalboard_id.is_none() {
             let pedal_id = self.pedal_id;
             let contains_pedal =

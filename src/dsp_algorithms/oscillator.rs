@@ -140,7 +140,8 @@ impl Iterator for Sine {
     /// Never returns None
     fn next(&mut self) -> Option<f32> {
         let value = ((self.phase.0 + self.phase_offset.0) * 2.0 * std::f32::consts::PI).sin();
-        self.phase = OrderedFloat((self.phase.0 + self.frequency.0 / self.sample_rate.0).rem_euclid(1.0));
+        self.phase =
+            OrderedFloat((self.phase.0 + self.frequency.0 / self.sample_rate.0).rem_euclid(1.0));
 
         if self.squareness.0 == 0.0 {
             Some(value)
@@ -179,7 +180,8 @@ impl Iterator for Square {
         } else {
             -1.0
         };
-        self.phase = OrderedFloat((self.phase.0 + self.frequency.0 / self.sample_rate.0).rem_euclid(1.0));
+        self.phase =
+            OrderedFloat((self.phase.0 + self.frequency.0 / self.sample_rate.0).rem_euclid(1.0));
 
         Some(value)
     }
@@ -210,7 +212,8 @@ impl Iterator for Sawtooth {
     /// Never returns None
     fn next(&mut self) -> Option<f32> {
         let value = 2.0 * ((self.phase.0 + self.phase_offset.0) % 1.0) - 1.0;
-        self.phase = OrderedFloat((self.phase.0 + self.frequency.0 / self.sample_rate.0).rem_euclid(1.0));
+        self.phase =
+            OrderedFloat((self.phase.0 + self.frequency.0 / self.sample_rate.0).rem_euclid(1.0));
 
         Some(value)
     }
@@ -247,7 +250,8 @@ impl Iterator for Triangle {
             -4.0 * phase_with_offset + 3.0
         };
 
-        self.phase = OrderedFloat((self.phase.0 + self.frequency.0 / self.sample_rate.0).rem_euclid(1.0));
+        self.phase =
+            OrderedFloat((self.phase.0 + self.frequency.0 / self.sample_rate.0).rem_euclid(1.0));
 
         Some(value)
     }

@@ -1,6 +1,7 @@
 pub mod functions;
-use rs_pedalboard::pedalboard::ParameterPath;
+use rs_pedalboard::pedals::parameters::{ParameterUpdate, PedalParameterRange};
 use rs_pedalboard::unique_time_id;
+use rs_pedalboard::{pedalboard::ParameterPath, processor_settings::FloatSettingUpdate};
 use strum::IntoEnumIterator;
 
 use crossbeam::channel::Sender;
@@ -14,7 +15,7 @@ use std::{
 };
 
 use crate::{
-    midi::functions::{GlobalMidiFunction, ParameterMidiFunctionValues},
+    midi::functions::GlobalMidiFunction,
     socket::{ClientSocketThreadHandle, Command},
     SAVE_DIR,
 };
@@ -185,22 +186,29 @@ impl MidiState {
             Self::device_settings_mut(&mut settings_lock, port_id, cc, channel, egui_ctx)
         {
             let old_value = device.current_value;
-            device.update_with_midi_value(value);
+            let change = device.change_from_midi_value(value);
+
+            if change == MidiChange::None || change == MidiChange::RelativeValueChange(0.0) {
+                return;
+            }
+
             egui_ctx.request_repaint();
             if device.current_value != old_value {
                 // Activate any MIDI functions for this device
                 if device.use_global {
                     for function in &device.global_functions {
-                        let command = function.command_from_function(device.current_value);
-                        if let Err(e) = ui_thread_sender.send(command.clone()) {
-                            tracing::error!(
-                                "Failed to send global MIDI command to UI thread: {}",
-                                e
-                            );
-                        }
+                        let command = function.command_from_function(&change);
+                        if let Some(command) = command {
+                            if let Err(e) = ui_thread_sender.send(command.clone()) {
+                                tracing::error!(
+                                    "Failed to send global MIDI command to UI thread: {}",
+                                    e
+                                );
+                            }
 
-                        if let Some(handle) = &socket_handle {
-                            handle.send_command(command);
+                            if let Some(handle) = &socket_handle {
+                                handle.send_command(command);
+                            }
                         }
                     }
                 } else {
@@ -209,19 +217,19 @@ impl MidiState {
                             continue;
                         }
 
-                        let command = Command::ParameterUpdate(
-                            path.clone(),
-                            function_values.parameter_from_value(device.current_value),
-                        );
-                        if let Err(e) = ui_thread_sender.send(command.clone()) {
-                            tracing::error!(
-                                "Failed to send parameter MIDI command to UI thread: {}",
-                                e
-                            );
-                        }
+                        let parameter_update = change.to_parameter_update(function_values);
+                        if let Some(parameter_update) = parameter_update {
+                            let command = Command::ParameterUpdate(path.clone(), parameter_update);
+                            if let Err(e) = ui_thread_sender.send(command.clone()) {
+                                tracing::error!(
+                                    "Failed to send parameter MIDI command to UI thread: {}",
+                                    e
+                                );
+                            }
 
-                        if let Some(handle) = &socket_handle {
-                            handle.send_command(command);
+                            if let Some(handle) = &socket_handle {
+                                handle.send_command(command);
+                            }
                         }
                     }
                 }
@@ -357,7 +365,7 @@ impl MidiState {
     pub fn add_midi_parameter_function_to_device(
         &self,
         parameter_path: ParameterPath,
-        midi_function_values: ParameterMidiFunctionValues,
+        midi_function_values: PedalParameterRange,
         device_id: u32,
     ) {
         let mut settings_lock = self.settings.lock().expect("MidiState: Mutex poisoned.");
@@ -383,7 +391,7 @@ impl MidiState {
         &self,
         parameter: &ParameterPath,
         device_id: u32,
-    ) -> Option<ParameterMidiFunctionValues> {
+    ) -> Option<PedalParameterRange> {
         let mut settings_lock = self.settings.lock().expect("MidiState: Mutex poisoned.");
 
         for (_port_id, port_settings) in settings_lock.port_settings.iter_mut() {
@@ -806,6 +814,39 @@ impl MidiSettings {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum MidiChange {
+    RelativeValueChange(f32),
+    AbsoluteValueChange(f32),
+    Toggled,
+    None,
+}
+
+impl MidiChange {
+    pub fn to_float_setting_update(&self) -> Option<FloatSettingUpdate> {
+        match self {
+            MidiChange::RelativeValueChange(v) => Some(FloatSettingUpdate::Relative(*v)),
+            MidiChange::AbsoluteValueChange(v) => Some(FloatSettingUpdate::Absolute(*v)),
+            MidiChange::Toggled => Some(FloatSettingUpdate::FlipFlop),
+            MidiChange::None => None,
+        }
+    }
+
+    pub fn to_parameter_update(&self, range: &PedalParameterRange) -> Option<ParameterUpdate> {
+        match self {
+            MidiChange::RelativeValueChange(v) => {
+                Some(ParameterUpdate::Relative(*v, Some(range.clone())))
+            }
+            MidiChange::AbsoluteValueChange(v) => {
+                let parameter_value = range.parameter_from_interp(*v);
+                Some(ParameterUpdate::Absolute(parameter_value))
+            }
+            MidiChange::Toggled => Some(ParameterUpdate::FlipFlop(Some(range.clone()))),
+            MidiChange::None => None,
+        }
+    }
+}
+
 use serde_with::{serde_as, Seq};
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -816,12 +857,12 @@ pub struct MidiDevice {
     pub current_value: f32,
     pub global_functions: Vec<GlobalMidiFunction>,
     #[serde_as(as = "Seq<(_, _)>")]
-    pub parameter_functions: HashMap<ParameterPath, ParameterMidiFunctionValues>,
+    pub parameter_functions: HashMap<ParameterPath, PedalParameterRange>,
     pub use_global: bool,
 }
 
 impl MidiDevice {
-    pub fn update_with_midi_value(&mut self, midi_value: u8) {
+    pub fn change_from_midi_value(&mut self, midi_value: u8) -> MidiChange {
         match &self.device_type {
             MidiDeviceType::RelativeEncoder {
                 sensitivity,
@@ -830,23 +871,30 @@ impl MidiDevice {
             } => {
                 if midi_value == *increment_value {
                     self.current_value += *sensitivity;
+                    self.current_value = self.current_value.clamp(0.0, 1.0);
+                    MidiChange::RelativeValueChange(*sensitivity)
                 } else if midi_value == *decrement_value {
                     self.current_value -= *sensitivity;
+                    self.current_value = self.current_value.clamp(0.0, 1.0);
+                    MidiChange::RelativeValueChange(-*sensitivity)
+                } else {
+                    MidiChange::None
                 }
-                self.current_value = self.current_value.clamp(0.0, 1.0);
             }
             MidiDeviceType::AbsoluteEncoder {
                 min_value,
                 max_value,
             } => {
                 let range = *max_value as f32 - *min_value as f32;
-                self.current_value = (midi_value as f32 - *min_value as f32) / range;
+                let new_value = (midi_value as f32 - *min_value as f32) / range;
+                self.current_value = new_value.clamp(0.0, 1.0);
+                MidiChange::AbsoluteValueChange(self.current_value)
             }
             MidiDeviceType::Footswitch {
                 on_value,
                 momentary_to_latching,
             } => {
-                self.current_value = if *momentary_to_latching {
+                let new_state = if *momentary_to_latching {
                     if midi_value == *on_value {
                         if self.current_value == 0.0 {
                             1.0
@@ -862,6 +910,17 @@ impl MidiDevice {
                     } else {
                         0.0
                     }
+                };
+                let toggled = new_state != self.current_value;
+                self.current_value = new_state;
+                if !toggled {
+                    MidiChange::None
+                } else if *momentary_to_latching {
+                    MidiChange::Toggled
+                } else {
+                    // A momentary footswitch follows its position instead of toggling,
+                    // otherwise press and release would each toggle the parameter.
+                    MidiChange::AbsoluteValueChange(new_state)
                 }
             }
         }

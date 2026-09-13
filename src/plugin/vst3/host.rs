@@ -25,10 +25,7 @@ impl IHostApplicationTrait for HostApplication {
             return kNotImplemented;
         }
 
-        let encoded: Vec<u16> = HOST_NAME
-            .encode_utf16()
-            .chain(std::iter::once(0))
-            .collect();
+        let encoded: Vec<u16> = HOST_NAME.encode_utf16().chain(std::iter::once(0)).collect();
         let destination = &mut *name;
         let length = encoded.len().min(destination.len());
         destination[..length].copy_from_slice(&encoded[..length]);

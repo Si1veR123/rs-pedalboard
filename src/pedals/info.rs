@@ -1,4 +1,5 @@
-use super::{Oscillator, PedalParameter, PedalParameterValue};
+use super::{PedalParameter, PedalParameterValue};
+use crate::dsp_algorithms::oscillator::Oscillator;
 use crate::pedals::{PedalDiscriminants, PedalTrait};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

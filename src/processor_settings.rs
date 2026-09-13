@@ -2,6 +2,7 @@ use crate::SAVE_DIR;
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, path::PathBuf, str::FromStr};
 use strum_macros::EnumIter;
+use crate::pedals::parameters::{ParameterUpdate, PedalParameterRange};
 
 const SAVE_NAME: &str = "processor_settings.json";
 
@@ -156,5 +157,56 @@ impl ProcessorSettingsSave {
 
     pub fn buffer_size_samples(&self) -> usize {
         2_usize.pow(self.buffer_size as u32)
+    }
+}
+
+/// Represents a change to a float setting such as master volume or active parameter.
+/// Clamped between 0 and 1.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum FloatSettingUpdate {
+    Relative(f32),
+    Absolute(f32),
+    FlipFlop,
+}
+
+impl FloatSettingUpdate {
+    pub fn apply(&self, current_value: f32, setting_range: Option<(f32, f32)>) -> f32 {
+        let (min, max) = setting_range.unwrap_or((0.0, 1.0));
+        let range = max - min;
+        let current_value_fraction = if range == 0.0 {
+            0.0
+        } else {
+            (current_value - min) / range
+        };
+        let new_value = match self {
+            FloatSettingUpdate::Relative(delta) => {
+                (current_value_fraction + delta).clamp(0.0, 1.0) * range + min
+            }
+            FloatSettingUpdate::Absolute(value) => value.clamp(0.0, 1.0) * range + min,
+            FloatSettingUpdate::FlipFlop => {
+                if current_value_fraction < 0.5 {
+                    max
+                } else {
+                    min
+                }
+            }
+        };
+        new_value.clamp(min, max)
+    }
+
+    /// Converts this fraction based update into a typed parameter update for the given range.
+    pub fn to_parameter_update(
+        &self,
+        range: &PedalParameterRange,
+    ) -> ParameterUpdate {        
+        match self {
+            FloatSettingUpdate::Relative(delta) => {
+                ParameterUpdate::Relative(*delta, Some(range.clone()))
+            }
+            FloatSettingUpdate::Absolute(value) => {
+                ParameterUpdate::Absolute(range.parameter_from_interp(*value))
+            }
+            FloatSettingUpdate::FlipFlop => ParameterUpdate::FlipFlop(Some(range.clone())),
+        }
     }
 }

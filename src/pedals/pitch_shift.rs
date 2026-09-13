@@ -280,11 +280,26 @@ impl PedalTrait for PitchShift {
                                 *sample_rate as f32,
                             ));
                         } else if name == "Semitones" || name == "Tonality Limit" {
-                            let semitones = self.parameters.get("Semitones").unwrap().value.as_int().unwrap() as f32;
-                            let tonality_limit = self.parameters.get("Tonality Limit").unwrap().value.as_float().unwrap() / *sample_rate as f32;
+                            let semitones = self
+                                .parameters
+                                .get("Semitones")
+                                .unwrap()
+                                .value
+                                .as_int()
+                                .unwrap() as f32;
+                            let tonality_limit = self
+                                .parameters
+                                .get("Tonality Limit")
+                                .unwrap()
+                                .value
+                                .as_float()
+                                .unwrap()
+                                / *sample_rate as f32;
                             if let Some(stretch) = &mut self.signalsmith_stretch {
-                                stretch
-                                    .set_transpose_factor_semitones(semitones, Some(tonality_limit));
+                                stretch.set_transpose_factor_semitones(
+                                    semitones,
+                                    Some(tonality_limit),
+                                );
                             }
                         }
                     }

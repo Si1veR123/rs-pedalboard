@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
-use crate::midi::functions::ParameterMidiFunctionValues;
 use eframe::egui::{self, include_image};
 use rs_pedalboard::pedalboard::ParameterPath;
 use rs_pedalboard::pedals::{
-    ParameterUILocation, Pedal, PedalDiscriminants, PedalParameter, PedalParameterValue, PedalTrait,
+    parameters::PedalParameterRange, ParameterUILocation, Pedal, PedalDiscriminants,
+    PedalParameter, PedalParameterValue, PedalTrait,
 };
 
 pub fn get_window_id(pedal: &Pedal) -> egui::Id {
@@ -52,7 +52,7 @@ pub fn get_selected_device_id(pedal: &Pedal, parameter_name: &str) -> egui::Id {
 pub enum ParameterWindowChange {
     ParameterChanged(String, PedalParameterValue),
     // Parameter path, new parameter MIDI function, device id
-    AddMidiFunction(ParameterPath, ParameterMidiFunctionValues, u32),
+    AddMidiFunction(ParameterPath, PedalParameterRange, u32),
     // Changed device on existing MIDI function. (parameter function, new device id, old device id)
     ChangeMidiFunctionDevice(ParameterPath, u32, u32),
     // Remove existing MIDI function (parameter path, device id)
@@ -318,9 +318,9 @@ pub fn draw_midi_function_settings(
                         pedal_id: pedal.get_id(),
                         parameter_name: name.clone(),
                     },
-                    ParameterMidiFunctionValues {
-                        min_value: minimum_parameter.value.clone(),
-                        max_value: maximum_parameter.value.clone(),
+                    PedalParameterRange {
+                        min: minimum_parameter.value.clone(),
+                        max: maximum_parameter.value.clone(),
                     },
                     new_device,
                 ));
@@ -365,9 +365,9 @@ pub fn draw_midi_function_settings(
                         pedal_id: pedal.get_id(),
                         parameter_name: name.clone(),
                     },
-                    ParameterMidiFunctionValues {
-                        min_value: minimum_parameter.value.clone(),
-                        max_value: maximum_parameter.value.clone(),
+                    PedalParameterRange {
+                        min: minimum_parameter.value.clone(),
+                        max: maximum_parameter.value.clone(),
                     },
                     selected_device_id,
                 ));
@@ -414,9 +414,9 @@ pub fn draw_midi_function_settings(
                         pedal_id: pedal.get_id(),
                         parameter_name: name.clone(),
                     },
-                    ParameterMidiFunctionValues {
-                        min_value: minimum_parameter.value.clone(),
-                        max_value: maximum_parameter.value.clone(),
+                    PedalParameterRange {
+                        min: minimum_parameter.value.clone(),
+                        max: maximum_parameter.value.clone(),
                     },
                     selected_device_id,
                 ));

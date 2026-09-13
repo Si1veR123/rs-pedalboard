@@ -311,7 +311,10 @@ mod tests {
     const SAMPLE_RATE: f64 = 48_000.0;
 
     fn db(filter: &BiquadFilter, frequency: f64) -> f64 {
-        20.0 * filter.response_at_freq(frequency, SAMPLE_RATE).norm().log10()
+        20.0 * filter
+            .response_at_freq(frequency, SAMPLE_RATE)
+            .norm()
+            .log10()
     }
 
     #[test]
@@ -330,7 +333,10 @@ mod tests {
             for frequency in [50.0, 100.0, 250.0, 500.0, 1000.0, 2000.0, 4000.0, 8000.0] {
                 // The passive network is normalized to unity peak gain, so it can only
                 // ever make the signal quieter.
-                assert!(db(&filter, frequency) <= 0.5, "tone {tone} at {frequency} Hz");
+                assert!(
+                    db(&filter, frequency) <= 0.5,
+                    "tone {tone} at {frequency} Hz"
+                );
             }
         }
 

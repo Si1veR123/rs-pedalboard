@@ -10,7 +10,9 @@ use super::PedalboardStageScreen;
 use eframe::egui::{
     self, Button, Color32, Layout, Pos2, Rect, RichText, Sense, Ui, UiBuilder, Vec2, Widget,
 };
-use rs_pedalboard::pedals::{PedalDiscriminants, PedalParameterValue, PedalTrait};
+use rs_pedalboard::pedals::{
+    parameters::ParameterUpdate, PedalDiscriminants, PedalParameterValue, PedalTrait,
+};
 use strum::IntoEnumIterator;
 
 const PEDAL_ROW_COUNT: usize = 6;
@@ -517,9 +519,13 @@ pub fn pedalboard_designer(screen: &mut PedalboardStageScreen, ui: &mut Ui) {
             pedalboard_set.pedalboards[pedalboard_set.active_pedalboard].get_id()
         };
 
-        screen
-            .state
-            .set_parameter(active_pedalboard_id, pedal_id, name, value, false);
+        screen.state.set_parameter(
+            active_pedalboard_id,
+            pedal_id,
+            name,
+            ParameterUpdate::Absolute(value),
+            false,
+        );
     }
 
     if screen.show_pedal_menu {

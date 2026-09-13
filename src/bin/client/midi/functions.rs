@@ -1,8 +1,7 @@
-use rs_pedalboard::pedals::PedalParameterValue;
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 
-use crate::socket::Command;
+use crate::{midi::MidiChange, socket::Command};
 
 #[derive(Debug, Clone, Serialize, Deserialize, EnumIter, PartialEq)]
 pub enum GlobalMidiFunction {
@@ -47,53 +46,29 @@ impl std::fmt::Display for GlobalMidiFunction {
 }
 
 impl GlobalMidiFunction {
-    pub fn command_from_function(&self, value: f32) -> Command {
-        match self {
-            GlobalMidiFunction::ToggleMute => Command::ToggleMute,
-            GlobalMidiFunction::SetMasterIn => Command::MasterIn(value),
-            GlobalMidiFunction::SetMasterOut => Command::MasterOut(value),
-            GlobalMidiFunction::NextPedalboard => Command::NextPedalboard,
-            GlobalMidiFunction::PrevPedalboard => Command::PrevPedalboard,
-            GlobalMidiFunction::ToggleRecording => Command::ToggleRecording,
-            GlobalMidiFunction::ToggleMetronome => Command::ToggleMetronome,
-            GlobalMidiFunction::DeleteActivePedalboard => Command::DeleteActivePedalboard,
-            GlobalMidiFunction::StageView => Command::StageView,
-            GlobalMidiFunction::LibraryView => Command::LibraryView,
-            GlobalMidiFunction::UtilitiesView => Command::UtilitiesView,
-            GlobalMidiFunction::SongsView => Command::SongsView,
-            GlobalMidiFunction::SettingsView => Command::SettingsView,
-            GlobalMidiFunction::ChangeActiveParameter => Command::ChangeActiveParameter(value),
-            GlobalMidiFunction::ResetVolumeNormalization => Command::VolumeNormalizationReset,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct ParameterMidiFunctionValues {
-    pub min_value: PedalParameterValue,
-    pub max_value: PedalParameterValue,
-}
-
-impl ParameterMidiFunctionValues {
-    pub fn parameter_from_value(&self, value: f32) -> PedalParameterValue {
-        match self.min_value {
-            PedalParameterValue::Float(min) => {
-                let max = self.max_value.as_float().unwrap_or(min);
-                PedalParameterValue::Float(min + (max - min) * value)
-            }
-            PedalParameterValue::Int(min) => {
-                let max = self.max_value.as_int().unwrap_or(min);
-                PedalParameterValue::Int(min + ((max - min) as f32 * value).round() as i16)
-            }
-            PedalParameterValue::Bool(_)
-            | PedalParameterValue::Oscillator(_)
-            | PedalParameterValue::String(_) => {
-                if value >= 0.5 {
-                    self.max_value.clone()
-                } else {
-                    self.min_value.clone()
+    pub fn command_from_function(&self, change: &MidiChange) -> Option<Command> {
+        let float_setting_update = change.to_float_setting_update();
+        match float_setting_update {
+            None => return None,
+            Some(float_setting_update) => Some(match self {
+                GlobalMidiFunction::ToggleMute => Command::ToggleMute,
+                GlobalMidiFunction::SetMasterIn => Command::MasterIn(float_setting_update),
+                GlobalMidiFunction::SetMasterOut => Command::MasterOut(float_setting_update),
+                GlobalMidiFunction::NextPedalboard => Command::NextPedalboard,
+                GlobalMidiFunction::PrevPedalboard => Command::PrevPedalboard,
+                GlobalMidiFunction::ToggleRecording => Command::ToggleRecording,
+                GlobalMidiFunction::ToggleMetronome => Command::ToggleMetronome,
+                GlobalMidiFunction::DeleteActivePedalboard => Command::DeleteActivePedalboard,
+                GlobalMidiFunction::StageView => Command::StageView,
+                GlobalMidiFunction::LibraryView => Command::LibraryView,
+                GlobalMidiFunction::UtilitiesView => Command::UtilitiesView,
+                GlobalMidiFunction::SongsView => Command::SongsView,
+                GlobalMidiFunction::SettingsView => Command::SettingsView,
+                GlobalMidiFunction::ChangeActiveParameter => {
+                    Command::ChangeActiveParameter(float_setting_update)
                 }
-            }
+                GlobalMidiFunction::ResetVolumeNormalization => Command::VolumeNormalizationReset,
+            }),
         }
     }
 }

@@ -304,15 +304,11 @@ impl PedalTrait for SimpleEq {
                     ]) {
                         column.vertical_centered(|ui| {
                             if enabled {
-                                if let Some(value) = gain_knob(
-                                    ui,
-                                    self.parameters.get(name).unwrap(),
-                                    knob_width,
-                                ) {
-                                    changed = Some((
-                                        name.to_string(),
-                                        PedalParameterValue::Float(value),
-                                    ));
+                                if let Some(value) =
+                                    gain_knob(ui, self.parameters.get(name).unwrap(), knob_width)
+                                {
+                                    changed =
+                                        Some((name.to_string(), PedalParameterValue::Float(value)));
                                 }
                             }
                         });

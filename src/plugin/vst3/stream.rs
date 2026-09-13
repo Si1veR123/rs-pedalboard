@@ -39,11 +39,7 @@ impl IBStreamTrait for MemoryStream {
         let available = data.len().saturating_sub(*position);
         let to_read = (num_bytes.max(0) as usize).min(available);
         if to_read > 0 {
-            std::ptr::copy_nonoverlapping(
-                data[*position..].as_ptr(),
-                buffer as *mut u8,
-                to_read,
-            );
+            std::ptr::copy_nonoverlapping(data[*position..].as_ptr(), buffer as *mut u8, to_read);
             *position += to_read;
         }
 

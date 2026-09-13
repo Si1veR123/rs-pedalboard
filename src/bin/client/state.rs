@@ -3,14 +3,14 @@ use crate::{
     saved_pedalboards::SavedPedalboards,
     settings::{ClientSettings, VolumeNormalizationMode},
     socket::{ClientSocket, Command},
-    Screen
+    Screen,
 };
 use crossbeam::channel::Receiver;
 use eframe::egui;
 use rs_pedalboard::{
     pedalboard::{ParameterPath, Pedalboard},
-    pedals::{Pedal, PedalParameterValue, PedalTrait, ui::get_active_parameter},
-    processor_settings::ProcessorSettingsSave,
+    pedals::{parameters::ParameterUpdate, ui::get_active_parameter, Pedal, PedalTrait},
+    processor_settings::{FloatSettingUpdate, ProcessorSettingsSave},
 };
 use std::{
     cell::{Cell, RefCell},
@@ -293,8 +293,8 @@ impl State {
         pedalboard_id: u32,
         pedal_id: u32,
         parameter_name: String,
-        parameter_value: PedalParameterValue,
-        local: bool
+        mut parameter_update: ParameterUpdate,
+        local: bool,
     ) {
         // Set parameter on pedalboard stage
         for pedalboard in self
@@ -310,7 +310,7 @@ impl State {
                     .iter_mut()
                     .find(|p| p.get_id() == pedal_id)
                 {
-                    pedal.set_parameter_value(&parameter_name, parameter_value.clone());
+                    parameter_update.apply_to_pedal(&mut *pedal, &parameter_name);
                 }
             }
         }
@@ -323,7 +323,7 @@ impl State {
                     .iter_mut()
                     .find(|p| p.get_id() == pedal_id)
                 {
-                    pedal.set_parameter_value(&parameter_name, parameter_value.clone());
+                    parameter_update.apply_to_pedal(&mut *pedal, &parameter_name);
                 }
             }
         }
@@ -336,7 +336,7 @@ impl State {
                     pedal_id,
                     parameter_name: parameter_name.clone(),
                 },
-                parameter_value,
+                parameter_update,
             ));
         }
     }
@@ -454,13 +454,17 @@ impl State {
     pub fn master_in_processor(&self, volume: f32) {
         let mut socket = self.socket.borrow_mut();
         let rounded_volume = (volume * 100.0).round() / 100.0;
-        socket.send(Command::MasterIn(rounded_volume));
+        socket.send(Command::MasterIn(FloatSettingUpdate::Absolute(
+            rounded_volume,
+        )));
     }
 
     pub fn master_out_processor(&self, volume: f32) {
         let mut socket = self.socket.borrow_mut();
         let rounded_volume = (volume * 100.0).round() / 100.0;
-        socket.send(Command::MasterOut(rounded_volume));
+        socket.send(Command::MasterOut(FloatSettingUpdate::Absolute(
+            rounded_volume,
+        )));
     }
 
     pub fn set_recording(&self, active: bool) {
@@ -727,10 +731,14 @@ impl State {
                     self.socket.borrow_mut().handle = None;
                 }
                 Command::MasterIn(vol) => {
-                    self.client_settings.borrow_mut().input_volume = vol;
+                    let mut client_settings = self.client_settings.borrow_mut();
+                    let new_vol = vol.apply(client_settings.input_volume, None); // Volume ranges from 0-1 so keep default range
+                    client_settings.input_volume = new_vol;
                 }
                 Command::MasterOut(vol) => {
-                    self.client_settings.borrow_mut().output_volume = vol;
+                    let mut client_settings = self.client_settings.borrow_mut();
+                    let new_vol = vol.apply(client_settings.output_volume, None); // Volume ranges from 0-1 so keep default range
+                    client_settings.output_volume = new_vol;
                 }
                 Command::VolumeNormalization(mode, decay) => {
                     let mut client_settings = self.client_settings.borrow_mut();
@@ -797,7 +805,7 @@ impl State {
                             path.pedal_id,
                             path.parameter_name,
                             value,
-                            true
+                            true,
                         );
                     } else {
                         tracing::warn!("Unable to resolve pedalboard ID");
@@ -810,102 +818,51 @@ impl State {
                 Command::ToggleMute => {
                     tracing::info!("Toggled mute")
                 }
-                Command::ChangeActiveParameter(value) => {
-                    let active_parameter = get_active_parameter(ctx);
-                    if let Some(mut path) = active_parameter {
+                Command::ChangeActiveParameter(update) => {
+                    let Some(mut path) = get_active_parameter(ctx) else {
+                        continue;
+                    };
+
+                    // Resolve the active parameter to a typed update while holding the stage borrow,
+                    // then apply it with a single call to set_parameter.
+                    let parameter_update = {
                         let stage_pedalboards = self.pedalboards.active_pedalboardstage.borrow();
 
                         if !path.resolve_pedalboard_id(&stage_pedalboards) {
                             tracing::warn!("Unable to resolve pedalboard ID");
                             continue;
                         }
-                        let path_pedalboard_id = path.pedalboard_id.expect("Active parameter path should be resolved");
 
-                        if let Some(pedalboard) = stage_pedalboards
+                        stage_pedalboards
                             .pedalboards
                             .iter()
-                            .find(|pb| pb.get_id() == path_pedalboard_id)
-                        {
-                            if let Some(pedal) = pedalboard
-                                .pedals
-                                .iter()
-                                .find(|p| p.get_id() == path.pedal_id)
-                            {
-                                if let Some((_name, param)) = pedal
-                                    .get_parameters()
+                            .find(|pedalboard| pedalboard.get_id() == path.pedalboard_id.unwrap())
+                            .and_then(|pedalboard| {
+                                pedalboard
+                                    .pedals
                                     .iter()
-                                    .find(|(name, _p)| *name == &path.parameter_name)
-                                {
-                                    match param.value {
-                                        PedalParameterValue::Bool(_) => {
-                                            let new_value = if value > 0.5 { true } else { false };
-                                            let path = path.clone();
-                                            drop(stage_pedalboards);
-                                            self.set_parameter(
-                                                path_pedalboard_id,
-                                                path.pedal_id,
-                                                path.parameter_name,
-                                                PedalParameterValue::Bool(new_value),
-                                                false
-                                            );
-                                        }
-                                        PedalParameterValue::Int(_) => {
-                                            let min_param = param
-                                                .min
-                                                .as_ref()
-                                                .expect("Int parameter should have min")
-                                                .as_int()
-                                                .unwrap();
-                                            let max_param = param
-                                                .max
-                                                .as_ref()
-                                                .expect("Int parameter should have max")
-                                                .as_int()
-                                                .unwrap();
-                                            let int_value =
-                                                ((value * (max_param - min_param) as f32).round()
-                                                    as i16)
-                                                    + min_param;
-                                            let path = path.clone();
-                                            drop(stage_pedalboards);
-                                            self.set_parameter(
-                                                path_pedalboard_id,
-                                                path.pedal_id,
-                                                path.parameter_name,
-                                                PedalParameterValue::Int(int_value),
-                                                false
-                                            );
-                                        }
-                                        PedalParameterValue::Float(_) => {
-                                            let min_param = param
-                                                .min
-                                                .as_ref()
-                                                .expect("Float parameter should have min")
-                                                .as_float()
-                                                .unwrap();
-                                            let max_param = param
-                                                .max
-                                                .as_ref()
-                                                .expect("Float parameter should have max")
-                                                .as_float()
-                                                .unwrap();
-                                            let float_value =
-                                                (value * (max_param - min_param)) + min_param;
-                                            let path = path.clone();
-                                            drop(stage_pedalboards);
-                                            self.set_parameter(
-                                                path_pedalboard_id,
-                                                path.pedal_id,
-                                                path.parameter_name,
-                                                PedalParameterValue::Float(float_value),
-                                                false
-                                            );
-                                        }
-                                        _ => tracing::warn!("Unsupported active parameter type"),
-                                    }
-                                }
-                            }
-                        }
+                                    .find(|pedal| pedal.get_id() == path.pedal_id)
+                            })
+                            .and_then(|pedal| pedal.get_parameters().get(&path.parameter_name))
+                            .and_then(|parameter| {
+                                parameter
+                                    .to_range()
+                                    .map(|range| update.to_parameter_update(&range))
+                            })
+                    };
+
+                    match parameter_update {
+                        Some(parameter_update) => self.set_parameter(
+                            path.pedalboard_id.unwrap(),
+                            path.pedal_id,
+                            path.parameter_name,
+                            parameter_update,
+                            false,
+                        ),
+                        None => tracing::warn!(
+                            "Unsupported or range-less active parameter: {}",
+                            path.parameter_name
+                        ),
                     }
                 }
                 Command::StageView => {

@@ -39,9 +39,8 @@ pub fn gain_knob(ui: &mut eframe::egui::Ui, parameter: &PedalParameter, width: f
             )
             .add(knob);
         if response.hovered() {
-            ui.ctx().output_mut(|output| {
-                output.cursor_icon = eframe::egui::CursorIcon::ResizeVertical
-            });
+            ui.ctx()
+                .output_mut(|output| output.cursor_icon = eframe::egui::CursorIcon::ResizeVertical);
         }
         response.dragged().then(|| {
             (value + (-response.drag_delta().y / slot_response.rect.height()) * (max - min))
