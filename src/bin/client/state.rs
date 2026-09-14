@@ -818,13 +818,37 @@ impl State {
                 Command::ToggleMute => {
                     tracing::info!("Toggled mute")
                 }
-                Command::ChangeActiveParameter(update) => {
-                    let Some(mut path) = get_active_parameter(ctx) else {
-                        continue;
-                    };
+                Command::ChangeActiveParameter(_) | Command::SensibleMidiParameterUpdate(_, _) => {
+                    match command {
+                        Command::ChangeActiveParameter(update) => {
+                            // Get the active parameter path
+                            match get_active_parameter(ctx) {
+                                Some(path) => {
+                                    let update = update;
+                                    let path = path;
+                                },
+                                None => {
+                                    continue;
+                                }
+                            }
+                        }
+                        Command::SensibleMidiParameterUpdate(index, update) => {
+                            // Get a path to a sensible parameter at this index
+                            let stage_pedalboards = self.pedalboards.active_pedalboardstage.borrow();
+                            let active_pedalboard = &stage_pedalboards.pedalboards[stage_pedalboards.active_pedalboard];
+                            let sensible_parameter = active_pedalboard.sensible_parameter_from_index(index, update);
 
-                    // Resolve the active parameter to a typed update while holding the stage borrow,
-                    // then apply it with a single call to set_parameter.
+                            if let Some(path) = sensible_parameter {
+                                let update = update;
+                                let path = path;
+                            } else {
+                                continue;
+                            }
+                        }
+                        _ => { continue }
+                    }
+
+                    // Convert the float update to a parameter update using the parameter's range
                     let parameter_update = {
                         let stage_pedalboards = self.pedalboards.active_pedalboardstage.borrow();
 
@@ -851,6 +875,7 @@ impl State {
                             })
                     };
 
+                    // Apply the parameter update, if it exists
                     match parameter_update {
                         Some(parameter_update) => self.set_parameter(
                             path.pedalboard_id.unwrap(),

@@ -158,6 +158,7 @@ pub enum Command {
     SongsView,
     SettingsView,
     ChangeActiveParameter(FloatSettingUpdate),
+    SensibleMidiParameterUpdate(usize, FloatSettingUpdate)
 }
 
 pub struct ClientSocketThreadHandle {
@@ -596,7 +597,13 @@ async fn client_socket_event_loop(
                     },
                     Command::ThreadAliveTest => { },
                     // Client only
-                    Command::StageView | Command::LibraryView | Command::UtilitiesView | Command::SongsView | Command::SettingsView | Command::ChangeActiveParameter(_) => {}
+                    Command::StageView |
+                    Command::LibraryView |
+                    Command::UtilitiesView |
+                    Command::SongsView |
+                    Command::SettingsView |
+                    Command::ChangeActiveParameter(_) |
+                    Command::SensibleMidiParameterUpdate(_, _) => {}
                 }
             }
         }

@@ -1,7 +1,5 @@
 use crate::{
-    pedalboard_set,
-    pedals::{Pedal, PedalTrait},
-    unique_time_id,
+    pedalboard_set, pedals::{Pedal, PedalParameterValue, PedalTrait}, processor_settings::FloatSettingUpdate, unique_time_id,
 };
 use serde::{Deserialize, Serialize};
 use std::{fmt::Write, hash::Hash};
@@ -153,5 +151,66 @@ impl Pedalboard {
 
     pub fn get_id(&self) -> u32 {
         self.id
+    }
+
+    pub fn sensible_parameter_from_index(&self, index: usize, update: FloatSettingUpdate) -> Option<ParameterPath> {
+        // Find a parameter in a fixed 'sensible parameter' order
+        
+        match update {
+            // For FlipFlop update find an 'Active' parameter
+            FloatSettingUpdate::FlipFlop => {
+                // Find the active parameter of the pedal at given index
+                if self.pedals.len() > index {
+                    let pedal = &self.pedals[index];
+                    if let Some(_parameter) = pedal.get_parameters().get("Active") {
+                        return Some(ParameterPath {
+                            pedalboard_id: Some(self.id),
+                            pedal_id: pedal.get_id(),
+                            parameter_name: "Active".to_string(),
+                        });
+                    }
+                }
+            }
+            // For other updates, find a numerical parameter
+            _ => {
+                // Order of parameters likely to be of 'high importance'
+                let prioritise_parameters = ["Gain", "Drive", "Level", "Dry/Wet", "Tone"];
+                let mut priority_parameters_found = 0;
+
+                for pedal in &self.pedals {
+                    for param_name in prioritise_parameters.iter() {
+                        if let Some(_parameter) = pedal.get_parameters().get(*param_name) {
+                            priority_parameters_found += 1;
+                            if priority_parameters_found - 1 == index {
+                                return Some(ParameterPath {
+                                    pedalboard_id: Some(self.id),
+                                    pedal_id: pedal.get_id(),
+                                    parameter_name: param_name.to_string(),
+                                });
+                            }
+                        }
+                    }
+                }
+
+                // Fallback to first numerical parameter
+                let mut numerical_parameters_found = 0;
+                for pedal in &self.pedals {
+                    for (param_name, parameter) in pedal.get_parameters() {
+                        if matches!(&parameter.value, PedalParameterValue::Float(_) | PedalParameterValue::Int(_)) {
+                            numerical_parameters_found += 1;
+                            if numerical_parameters_found - 1 == index {
+                                return Some(ParameterPath {
+                                    pedalboard_id: Some(self.id),
+                                    pedal_id: pedal.get_id(),
+                                    parameter_name: param_name.clone(),
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        None
     }
 }

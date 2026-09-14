@@ -129,35 +129,6 @@ impl MidiState {
         Some(((message[0] & 0x0F) + 1, message[1], message[2]))
     }
 
-    fn device_settings_mut<'a>(
-        settings: &'a mut MidiSettings,
-        port_id: &str,
-        cc: u8,
-        channel: u8,
-        ctx: &egui::Context,
-    ) -> Option<&'a mut MidiDevice> {
-        if let Some(settings) = settings.port_settings.get_mut(port_id) {
-            Some(settings.devices.entry((cc, channel)).or_insert_with(|| {
-                Self::invalidate_device_name_cache(ctx);
-
-                MidiDevice {
-                    id: unique_time_id(),
-                    name: "New Device".to_string(),
-                    device_type: MidiDeviceType::AbsoluteEncoder {
-                        min_value: 0,
-                        max_value: 127,
-                    },
-                    current_value: 0.5,
-                    global_functions: Vec::new(),
-                    parameter_functions: HashMap::new(),
-                    use_global: true,
-                }
-            }))
-        } else {
-            None
-        }
-    }
-
     fn handle_midi_message(
         settings: &Arc<Mutex<MidiSettings>>,
         port_id: &str,
@@ -182,9 +153,7 @@ impl MidiState {
 
         let mut settings_lock = settings.lock().expect("MidiState: Mutex poisoned.");
 
-        if let Some(device) =
-            Self::device_settings_mut(&mut settings_lock, port_id, cc, channel, egui_ctx)
-        {
+        if let Some(device) = settings_lock.device_settings_mut(port_id, cc, channel, egui_ctx) {
             let old_value = device.current_value;
             let change = device.change_from_midi_value(value);
 
@@ -195,8 +164,8 @@ impl MidiState {
             if device.current_value != old_value {
                 egui_ctx.request_repaint();
 
-                // Activate any MIDI functions for this device
-                if device.use_global {
+                if device.use_global && !device.global_functions.is_empty() {
+                    // Activate any global MIDI functions for this device
                     for function in &device.global_functions {
                         let command = function.command_from_function(&change);
                         if let Some(command) = command {
@@ -213,23 +182,40 @@ impl MidiState {
                         }
                     }
                 } else {
-                    for (path, function_values) in &device.parameter_functions {
-                        if path.pedalboard_id != Some(active_pedalboard_id) {
-                            continue;
-                        }
+                    // Activate parameter functions for this device, or fallback to a `SensibleMidiParameterUpdate` if there are none
 
-                        let parameter_update = change.to_parameter_update(function_values);
-                        if let Some(parameter_update) = parameter_update {
-                            let command = Command::ParameterUpdate(path.clone(), parameter_update);
-                            if let Err(e) = ui_thread_sender.send(command.clone()) {
-                                tracing::error!(
-                                    "Failed to send parameter MIDI command to UI thread: {}",
-                                    e
-                                );
+                    if device.parameter_functions.is_empty() {
+                        let device_index = settings_lock.get_parameter_device_index(device.id);
+                        if let Some(device_index) = device_index {
+                            if let Some(float_update) = change.to_float_setting_update() {
+                                let command = Command::SensibleMidiParameterUpdate(device_index, float_update);
+                                if let Err(e) = ui_thread_sender.send(command.clone()) {
+                                    tracing::error!(
+                                        "Failed to send sensible MIDI parameter update command to UI thread: {}",
+                                        e
+                                    );
+                                }
+                            }
+                        }
+                    } else {
+                        for (path, function_values) in &device.parameter_functions {
+                            if path.pedalboard_id != Some(active_pedalboard_id) {
+                                continue;
                             }
 
-                            if let Some(handle) = &socket_handle {
-                                handle.send_command(command);
+                            let parameter_update = change.to_parameter_update(function_values);
+                            if let Some(parameter_update) = parameter_update {
+                                let command = Command::ParameterUpdate(path.clone(), parameter_update);
+                                if let Err(e) = ui_thread_sender.send(command.clone()) {
+                                    tracing::error!(
+                                        "Failed to send parameter MIDI command to UI thread: {}",
+                                        e
+                                    );
+                                }
+
+                                if let Some(handle) = &socket_handle {
+                                    handle.send_command(command);
+                                }
                             }
                         }
                     }
@@ -675,6 +661,54 @@ impl MidiState {
 pub struct MidiSettings {
     // Port ID, Settings
     pub port_settings: HashMap<String, MidiPortSettings>,
+}
+
+impl MidiSettings {
+    fn device_settings_mut<'a>(
+        &'a mut self,
+        port_id: &str,
+        cc: u8,
+        channel: u8,
+        ctx: &egui::Context,
+    ) -> Option<&'a mut MidiDevice> {
+        if let Some(settings) = self.port_settings.get_mut(port_id) {
+            Some(settings.devices.entry((cc, channel)).or_insert_with(|| {
+                Self::invalidate_device_name_cache(ctx);
+
+                MidiDevice {
+                    id: unique_time_id(),
+                    name: "New Device".to_string(),
+                    device_type: MidiDeviceType::AbsoluteEncoder {
+                        min_value: 0,
+                        max_value: 127,
+                    },
+                    current_value: 0.5,
+                    global_functions: Vec::new(),
+                    parameter_functions: HashMap::new(),
+                    use_global: true,
+                }
+            }))
+        } else {
+            None
+        }
+    }
+
+    /// Give each device which is not using global functions and has no parameter functions a unique index (within its device type)
+    fn get_parameter_device_index(&self, device_id: u32) -> Option<usize> {
+        let mut map = HashMap::new();
+        for (_port_id, port_settings) in &self.port_settings {
+            for (_cc_channel, device) in &port_settings.devices {
+                if device.id == device_id {
+                    return map.get(&device.device_type).copied();
+                }
+                if !device.use_global && device.parameter_functions.is_empty() {
+                    let entry = map.entry(device.device_type.clone()).or_insert(0usize);
+                    *entry += 1;
+                }
+            }
+        }
+        None
+    }
 }
 
 #[derive(Debug, Clone)]
