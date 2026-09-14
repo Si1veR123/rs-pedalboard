@@ -191,7 +191,7 @@ impl MidiState {
             };
 
             (
-                device.function_mode(),
+                device.function_mode(active_pedalboard_id),
                 device.global_functions.clone(),
                 device.parameter_functions.clone(),
             )
@@ -241,7 +241,7 @@ impl MidiState {
             }
             DeviceFunctionMode::Sensible => {
                 // The device has no functions of its own, fall back to a sensible parameter
-                let device_index = settings_lock.get_parameter_device_index(port_id, cc, channel);
+                let device_index = settings_lock.get_parameter_device_index(port_id, cc, channel, active_pedalboard_id);
                 if let Some(device_index) = device_index {
                     if let Some(float_update) = change.to_float_setting_update() {
                         let command =
@@ -733,7 +733,7 @@ impl MidiSettings {
     /// Devices are numbered per [`MidiDeviceKind`] and ordered by `(port_id, cc, channel)` so
     /// that a device keeps its index across runs (the underlying maps are unordered) and when
     /// its configured settings change. The first device of a kind has index 0.
-    fn get_parameter_device_index(&self, port_id: &str, cc: u8, channel: u8) -> Option<usize> {
+    fn get_parameter_device_index(&self, port_id: &str, cc: u8, channel: u8, active_pedalboard_id: u32) -> Option<usize> {
         let target_kind = {
             let target = self
                 .port_settings
@@ -741,7 +741,7 @@ impl MidiSettings {
                 .devices
                 .get(&(cc, channel))?;
 
-            if target.function_mode() != DeviceFunctionMode::Sensible {
+            if target.function_mode(active_pedalboard_id) != DeviceFunctionMode::Sensible {
                 return None;
             }
 
@@ -771,7 +771,7 @@ impl MidiSettings {
             }
 
             if device.device_type.kind() == target_kind
-                && device.function_mode() == DeviceFunctionMode::Sensible
+                && device.function_mode(active_pedalboard_id) == DeviceFunctionMode::Sensible
             {
                 index += 1;
             }
@@ -1035,15 +1035,14 @@ impl MidiDevice {
     ///
     /// A device with no functions of its own is in [`DeviceFunctionMode::Sensible`], which also
     /// covers freshly learned devices (they default to `use_global: true` with no functions).
-    pub fn function_mode(&self) -> DeviceFunctionMode {
+    pub fn function_mode(&self, active_pedalboard_id: u32) -> DeviceFunctionMode {
         if self.use_global {
-            if self.global_functions.is_empty() {
-                // Set to use global functions, but has none of its own
-                DeviceFunctionMode::Sensible
-            } else {
-                DeviceFunctionMode::Global
-            }
-        } else if self.parameter_functions.is_empty() {
+            DeviceFunctionMode::Global
+        } else if self.parameter_functions.iter()
+            // Filter to parameter functions which are on the active pedalboard
+            .filter(|(path, _range)| path.pedalboard_id == Some(active_pedalboard_id))
+            .count() > 0
+        {
             DeviceFunctionMode::Sensible
         } else {
             DeviceFunctionMode::Parameter
