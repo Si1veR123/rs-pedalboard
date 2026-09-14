@@ -28,8 +28,6 @@ use rs_pedalboard::{init_tracing, SAVE_DIR};
 use std::{sync::Arc, time::Instant};
 
 const PROCESSOR_PORT: u16 = 29475;
-const WINDOW_HEIGHT: f32 = 1080.0;
-const WINDOW_WIDTH: f32 = 1920.0;
 
 const LOG_FILE: &str = "pedalboard-client.log";
 

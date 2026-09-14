@@ -3,6 +3,7 @@ use rs_pedalboard::pedals::parameters::{ParameterUpdate, PedalParameterRange};
 use rs_pedalboard::unique_time_id;
 use rs_pedalboard::{pedalboard::ParameterPath, processor_settings::FloatSettingUpdate};
 use strum::IntoEnumIterator;
+use strum_macros::EnumDiscriminants;
 
 use crossbeam::channel::Sender;
 use eframe::egui::{self, Id, Rangef, RichText};
@@ -153,7 +154,15 @@ impl MidiState {
 
         let mut settings_lock = settings.lock().expect("MidiState: Mutex poisoned.");
 
-        if let Some(device) = settings_lock.device_settings_mut(port_id, cc, channel, egui_ctx) {
+        // Mutable phase: create the device if needed and apply the raw MIDI change to it. This
+        // borrow has to end before the phase below, because `get_parameter_device_index` reads
+        // the whole `MidiSettings`.
+        let (change, value_changed) = {
+            let Some(device) = settings_lock.device_settings_mut(port_id, cc, channel, egui_ctx)
+            else {
+                return;
+            };
+
             let old_value = device.current_value;
             let change = device.change_from_midi_value(value);
 
@@ -161,62 +170,87 @@ impl MidiState {
                 return;
             }
 
-            if device.current_value != old_value {
-                egui_ctx.request_repaint();
+            (change, device.current_value != old_value)
+        };
 
-                if device.use_global && !device.global_functions.is_empty() {
-                    // Activate any global MIDI functions for this device
-                    for function in &device.global_functions {
-                        let command = function.command_from_function(&change);
-                        if let Some(command) = command {
-                            if let Err(e) = ui_thread_sender.send(command.clone()) {
-                                tracing::error!(
-                                    "Failed to send global MIDI command to UI thread: {}",
-                                    e
-                                );
-                            }
+        if !value_changed {
+            return;
+        }
 
-                            if let Some(handle) = &socket_handle {
-                                handle.send_command(command);
-                            }
+        egui_ctx.request_repaint();
+
+        // Read phase: which mappings this device is set up with. Nothing may be borrowed mutably
+        // here, because `get_parameter_device_index` reads the whole `MidiSettings`.
+        let (function_mode, global_functions, parameter_functions) = {
+            let Some(device) = settings_lock
+                .port_settings
+                .get(port_id)
+                .and_then(|port_settings| port_settings.devices.get(&(cc, channel)))
+            else {
+                return;
+            };
+
+            (
+                device.function_mode(),
+                device.global_functions.clone(),
+                device.parameter_functions.clone(),
+            )
+        };
+
+        match function_mode {
+            DeviceFunctionMode::Global => {
+                // Activate any global MIDI functions for this device
+                for function in &global_functions {
+                    let command = function.command_from_function(&change);
+                    if let Some(command) = command {
+                        if let Err(e) = ui_thread_sender.send(command.clone()) {
+                            tracing::error!(
+                                "Failed to send global MIDI command to UI thread: {}",
+                                e
+                            );
+                        }
+
+                        if let Some(handle) = &socket_handle {
+                            handle.send_command(command);
                         }
                     }
-                } else {
-                    // Activate parameter functions for this device, or fallback to a `SensibleMidiParameterUpdate` if there are none
+                }
+            }
+            DeviceFunctionMode::Parameter => {
+                // Activate the parameter functions of this device
+                for (path, function_values) in &parameter_functions {
+                    if path.pedalboard_id != Some(active_pedalboard_id) {
+                        continue;
+                    }
 
-                    if device.parameter_functions.is_empty() {
-                        let device_index = settings_lock.get_parameter_device_index(device.id);
-                        if let Some(device_index) = device_index {
-                            if let Some(float_update) = change.to_float_setting_update() {
-                                let command = Command::SensibleMidiParameterUpdate(device_index, float_update);
-                                if let Err(e) = ui_thread_sender.send(command.clone()) {
-                                    tracing::error!(
-                                        "Failed to send sensible MIDI parameter update command to UI thread: {}",
-                                        e
-                                    );
-                                }
-                            }
+                    let parameter_update = change.to_parameter_update(function_values);
+                    if let Some(parameter_update) = parameter_update {
+                        let command = Command::ParameterUpdate(path.clone(), parameter_update);
+                        if let Err(e) = ui_thread_sender.send(command.clone()) {
+                            tracing::error!(
+                                "Failed to send parameter MIDI command to UI thread: {}",
+                                e
+                            );
                         }
-                    } else {
-                        for (path, function_values) in &device.parameter_functions {
-                            if path.pedalboard_id != Some(active_pedalboard_id) {
-                                continue;
-                            }
 
-                            let parameter_update = change.to_parameter_update(function_values);
-                            if let Some(parameter_update) = parameter_update {
-                                let command = Command::ParameterUpdate(path.clone(), parameter_update);
-                                if let Err(e) = ui_thread_sender.send(command.clone()) {
-                                    tracing::error!(
-                                        "Failed to send parameter MIDI command to UI thread: {}",
-                                        e
-                                    );
-                                }
-
-                                if let Some(handle) = &socket_handle {
-                                    handle.send_command(command);
-                                }
-                            }
+                        if let Some(handle) = &socket_handle {
+                            handle.send_command(command);
+                        }
+                    }
+                }
+            }
+            DeviceFunctionMode::Sensible => {
+                // The device has no functions of its own, fall back to a sensible parameter
+                let device_index = settings_lock.get_parameter_device_index(port_id, cc, channel);
+                if let Some(device_index) = device_index {
+                    if let Some(float_update) = change.to_float_setting_update() {
+                        let command =
+                            Command::SensibleMidiParameterUpdate(device_index, float_update);
+                        if let Err(e) = ui_thread_sender.send(command.clone()) {
+                            tracing::error!(
+                                "Failed to send sensible MIDI parameter update command to UI thread: {}",
+                                e
+                            );
                         }
                     }
                 }
@@ -673,7 +707,7 @@ impl MidiSettings {
     ) -> Option<&'a mut MidiDevice> {
         if let Some(settings) = self.port_settings.get_mut(port_id) {
             Some(settings.devices.entry((cc, channel)).or_insert_with(|| {
-                Self::invalidate_device_name_cache(ctx);
+                MidiState::invalidate_device_name_cache(ctx);
 
                 MidiDevice {
                     id: unique_time_id(),
@@ -693,20 +727,56 @@ impl MidiSettings {
         }
     }
 
-    /// Give each device which is not using global functions and has no parameter functions a unique index (within its device type)
-    fn get_parameter_device_index(&self, device_id: u32) -> Option<usize> {
-        let mut map = HashMap::new();
-        for (_port_id, port_settings) in &self.port_settings {
-            for (_cc_channel, device) in &port_settings.devices {
-                if device.id == device_id {
-                    return map.get(&device.device_type).copied();
-                }
-                if !device.use_global && device.parameter_functions.is_empty() {
-                    let entry = map.entry(device.device_type.clone()).or_insert(0usize);
-                    *entry += 1;
-                }
+    /// The index of the device at `(port_id, cc, channel)` among the devices which have no
+    /// functions of their own and therefore fall back to a sensible parameter mapping.
+    ///
+    /// Devices are numbered per [`MidiDeviceKind`] and ordered by `(port_id, cc, channel)` so
+    /// that a device keeps its index across runs (the underlying maps are unordered) and when
+    /// its configured settings change. The first device of a kind has index 0.
+    fn get_parameter_device_index(&self, port_id: &str, cc: u8, channel: u8) -> Option<usize> {
+        let target_kind = {
+            let target = self
+                .port_settings
+                .get(port_id)?
+                .devices
+                .get(&(cc, channel))?;
+
+            if target.function_mode() != DeviceFunctionMode::Sensible {
+                return None;
+            }
+
+            target.device_type.kind()
+        };
+
+        let mut device_keys: Vec<(&str, (u8, u8))> = self
+            .port_settings
+            .iter()
+            .flat_map(|(port_id, port_settings)| {
+                port_settings
+                    .devices
+                    .keys()
+                    .map(move |cc_channel| (port_id.as_str(), *cc_channel))
+            })
+            .collect();
+        device_keys.sort_unstable();
+
+        let mut index = 0;
+        for (device_port_id, cc_channel) in device_keys {
+            let device = &self.port_settings[device_port_id].devices[&cc_channel];
+
+            if device_port_id == port_id && cc_channel == (cc, channel) {
+                // `index` counts the sensibly mapped devices of this kind before the target,
+                // which is the target's own index
+                return Some(index);
+            }
+
+            if device.device_type.kind() == target_kind
+                && device.function_mode() == DeviceFunctionMode::Sensible
+            {
+                index += 1;
             }
         }
+
         None
     }
 }
@@ -961,6 +1031,25 @@ impl MidiDevice {
         }
     }
 
+    /// Which mappings this device's messages should be routed through.
+    ///
+    /// A device with no functions of its own is in [`DeviceFunctionMode::Sensible`], which also
+    /// covers freshly learned devices (they default to `use_global: true` with no functions).
+    pub fn function_mode(&self) -> DeviceFunctionMode {
+        if self.use_global {
+            if self.global_functions.is_empty() {
+                // Set to use global functions, but has none of its own
+                DeviceFunctionMode::Sensible
+            } else {
+                DeviceFunctionMode::Global
+            }
+        } else if self.parameter_functions.is_empty() {
+            DeviceFunctionMode::Sensible
+        } else {
+            DeviceFunctionMode::Parameter
+        }
+    }
+
     pub fn display_value_string(&self) -> String {
         match &self.device_type {
             MidiDeviceType::RelativeEncoder { .. } | MidiDeviceType::AbsoluteEncoder { .. } => {
@@ -977,7 +1066,18 @@ impl MidiDevice {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Which mappings a [`MidiDevice`]'s messages are routed through.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeviceFunctionMode {
+    /// The device's global functions.
+    Global,
+    /// The device's per-parameter functions.
+    Parameter,
+    /// The device has no functions of its own, so a sensible parameter is chosen instead.
+    Sensible,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, EnumDiscriminants)]
+#[strum_discriminants(name(MidiDeviceKind))]
 pub enum MidiDeviceType {
     RelativeEncoder {
         sensitivity: f32,
@@ -994,7 +1094,17 @@ pub enum MidiDeviceType {
     },
 }
 
+
 impl MidiDeviceType {
+    /// The kind of this device type, without its per-device settings.
+    pub fn kind(&self) -> MidiDeviceKind {
+        match self {
+            MidiDeviceType::RelativeEncoder { .. } => MidiDeviceKind::RelativeEncoder,
+            MidiDeviceType::AbsoluteEncoder { .. } => MidiDeviceKind::AbsoluteEncoder,
+            MidiDeviceType::Footswitch { .. } => MidiDeviceKind::Footswitch,
+        }
+    }
+
     pub fn get_name(&self) -> &'static str {
         match self {
             MidiDeviceType::RelativeEncoder { .. } => "Relative Encoder",

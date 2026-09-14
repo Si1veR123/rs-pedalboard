@@ -819,34 +819,33 @@ impl State {
                     tracing::info!("Toggled mute")
                 }
                 Command::ChangeActiveParameter(_) | Command::SensibleMidiParameterUpdate(_, _) => {
-                    match command {
+                    let (mut path, update) = match command {
                         Command::ChangeActiveParameter(update) => {
                             // Get the active parameter path
                             match get_active_parameter(ctx) {
-                                Some(path) => {
-                                    let update = update;
-                                    let path = path;
-                                },
-                                None => {
-                                    continue;
-                                }
+                                Some(path) => (path, update),
+                                None => continue,
                             }
                         }
                         Command::SensibleMidiParameterUpdate(index, update) => {
                             // Get a path to a sensible parameter at this index
-                            let stage_pedalboards = self.pedalboards.active_pedalboardstage.borrow();
-                            let active_pedalboard = &stage_pedalboards.pedalboards[stage_pedalboards.active_pedalboard];
-                            let sensible_parameter = active_pedalboard.sensible_parameter_from_index(index, update);
-
-                            if let Some(path) = sensible_parameter {
-                                let update = update;
-                                let path = path;
-                            } else {
+                            let stage_pedalboards =
+                                self.pedalboards.active_pedalboardstage.borrow();
+                            let Some(active_pedalboard) = stage_pedalboards
+                                .pedalboards
+                                .get(stage_pedalboards.active_pedalboard)
+                            else {
+                                tracing::warn!("No active pedalboard to apply a MIDI update to");
                                 continue;
+                            };
+
+                            match active_pedalboard.sensible_parameter_from_index(index, &update) {
+                                Some(path) => (path, update),
+                                None => continue,
                             }
                         }
-                        _ => { continue }
-                    }
+                        _ => continue,
+                    };
 
                     // Convert the float update to a parameter update using the parameter's range
                     let parameter_update = {

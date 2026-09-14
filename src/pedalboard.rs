@@ -153,64 +153,143 @@ impl Pedalboard {
         self.id
     }
 
-    pub fn sensible_parameter_from_index(&self, index: usize, update: FloatSettingUpdate) -> Option<ParameterPath> {
-        // Find a parameter in a fixed 'sensible parameter' order
-        
-        match update {
+    /// The parameter which a device at the given sensible mapping `index` should control.
+    /// Returns `None` when the pedalboard has no suitable parameter at that index.
+    pub fn sensible_parameter_from_index(
+        &self,
+        index: usize,
+        update: &FloatSettingUpdate,
+    ) -> Option<ParameterPath> {
+        let (pedal_id, parameter_name) = match update {
             // For FlipFlop update find an 'Active' parameter
             FloatSettingUpdate::FlipFlop => {
-                // Find the active parameter of the pedal at given index
-                if self.pedals.len() > index {
-                    let pedal = &self.pedals[index];
-                    if let Some(_parameter) = pedal.get_parameters().get("Active") {
-                        return Some(ParameterPath {
-                            pedalboard_id: Some(self.id),
-                            pedal_id: pedal.get_id(),
-                            parameter_name: "Active".to_string(),
-                        });
-                    }
-                }
+                // Find the 'Active' parameter of the pedal at the given index
+                let pedal_id = self
+                    .pedals
+                    .iter()
+                    .filter(|pedal| pedal.get_parameters().contains_key("Active"))
+                    .map(|pedal| pedal.get_id())
+                    .nth(index)?;
+
+                (pedal_id, "Active".to_string())
             }
             // For other updates, find a numerical parameter
-            _ => {
-                // Order of parameters likely to be of 'high importance'
-                let prioritise_parameters = ["Gain", "Drive", "Level", "Dry/Wet", "Tone"];
-                let mut priority_parameters_found = 0;
+            _ => self.sensible_parameters().into_iter().nth(index)?,
+        };
 
-                for pedal in &self.pedals {
-                    for param_name in prioritise_parameters.iter() {
-                        if let Some(_parameter) = pedal.get_parameters().get(*param_name) {
-                            priority_parameters_found += 1;
-                            if priority_parameters_found - 1 == index {
-                                return Some(ParameterPath {
-                                    pedalboard_id: Some(self.id),
-                                    pedal_id: pedal.get_id(),
-                                    parameter_name: param_name.to_string(),
-                                });
-                            }
-                        }
-                    }
-                }
+        Some(ParameterPath {
+            pedalboard_id: Some(self.id),
+            pedal_id,
+            parameter_name,
+        })
+    }
 
-                // Fallback to first numerical parameter
-                let mut numerical_parameters_found = 0;
-                for pedal in &self.pedals {
-                    for (param_name, parameter) in pedal.get_parameters() {
-                        if matches!(&parameter.value, PedalParameterValue::Float(_) | PedalParameterValue::Int(_)) {
-                            numerical_parameters_found += 1;
-                            if numerical_parameters_found - 1 == index {
-                                return Some(ParameterPath {
-                                    pedalboard_id: Some(self.id),
-                                    pedal_id: pedal.get_id(),
-                                    parameter_name: param_name.clone(),
-                                });
-                            }
-                        }
-                    }
+    /// Every parameter which a sensible mapping index can refer to, in a fixed order.
+    fn sensible_parameters(&self) -> Vec<(u32, String)> {
+        // Order of parameters likely to be of 'high importance'
+        const PRIORITISE_PARAMETERS: [&str; 5] = ["Gain", "Drive", "Level", "Dry/Wet", "Tone"];
+
+        let mut parameters: Vec<(u32, String)> = Vec::new();
+        let mut fallback_parameters: Vec<(u32, String)> = Vec::new();
+
+        for pedal in &self.pedals {
+            let pedal_id = pedal.get_id();
+            let available_parameters = pedal.get_parameters();
+
+            for param_name in PRIORITISE_PARAMETERS {
+                if available_parameters.contains_key(param_name) {
+                    parameters.push((pedal_id, param_name.to_string()));
                 }
             }
+
+            let mut remaining_parameters: Vec<&str> = available_parameters
+                .iter()
+                .filter(|(param_name, parameter)| {
+                    !PRIORITISE_PARAMETERS.contains(&param_name.as_str())
+                        && matches!(
+                            &parameter.value,
+                            PedalParameterValue::Float(_) | PedalParameterValue::Int(_)
+                        )
+                        && parameter.to_range().is_some()
+                })
+                .map(|(param_name, _parameter)| param_name.as_str())
+                .collect();
+            remaining_parameters.sort_unstable();
+
+            fallback_parameters.extend(
+                remaining_parameters
+                    .into_iter()
+                    .map(|param_name| (pedal_id, param_name.to_string())),
+            );
         }
 
-        None
+        parameters.append(&mut fallback_parameters);
+        parameters
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::pedals::Overdrive;
+
+    fn board(pedals: Vec<Pedal>) -> Pedalboard {
+        Pedalboard::from_pedals("Test Pedalboard".to_string(), pedals)
+    }
+
+    /// The pedal index and parameter name which a knob at `index` controls.
+    fn knob_target(board: &Pedalboard, index: usize) -> Option<(usize, String)> {
+        let path =
+            board.sensible_parameter_from_index(index, &FloatSettingUpdate::Relative(0.1))?;
+        let pedal_index = board
+            .pedals
+            .iter()
+            .position(|pedal| pedal.get_id() == path.pedal_id)
+            .expect("a sensible parameter should belong to a pedal of this pedalboard");
+
+        Some((pedal_index, path.parameter_name))
+    }
+
+    /// The index of the pedal which a footswitch at `index` toggles.
+    fn toggle_target(board: &Pedalboard, index: usize) -> Option<usize> {
+        let path = board.sensible_parameter_from_index(index, &FloatSettingUpdate::FlipFlop)?;
+        assert_eq!(path.parameter_name, "Active");
+
+        board
+            .pedals
+            .iter()
+            .position(|pedal| pedal.get_id() == path.pedal_id)
+    }
+
+    #[test]
+    fn the_first_knob_controls_the_first_parameter_worth_controlling() {
+        let board = board(vec![
+            Pedal::Overdrive(Overdrive::new()),
+            Pedal::Overdrive(Overdrive::new()),
+        ]);
+
+        // The parameters which matter most come first ('Drive', then 'Level', then 'Tone' on an
+        // overdrive), and the pedals are visited in the order they are on the pedalboard
+        assert_eq!(knob_target(&board, 0), Some((0, "Drive".to_string())));
+        assert_eq!(knob_target(&board, 1), Some((0, "Level".to_string())));
+        assert_eq!(knob_target(&board, 2), Some((0, "Tone".to_string())));
+        assert_eq!(knob_target(&board, 3), Some((1, "Drive".to_string())));
+    }
+
+    #[test]
+    fn a_footswitch_toggles_a_pedal_which_has_an_active_parameter() {
+        // Pedals can be built without an 'Active' parameter, for example by a plugin which
+        // doesn't report one
+        let mut not_toggleable = Overdrive::new();
+        not_toggleable.get_parameters_mut().remove("Active");
+
+        let board = board(vec![
+            Pedal::Overdrive(not_toggleable),
+            Pedal::Overdrive(Overdrive::new()),
+        ]);
+
+        // The pedal without an 'Active' parameter is skipped rather than swallowing an index
+        assert_eq!(toggle_target(&board, 0), Some(1));
+        assert_eq!(toggle_target(&board, 1), None);
     }
 }
