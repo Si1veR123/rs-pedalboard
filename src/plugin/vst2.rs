@@ -10,9 +10,8 @@ use crate::{pedals::PedalParameterValue, unique_time_id};
 
 use eframe::egui::{self, Id};
 use vst::{
-    buffer::AudioBuffer,
-    host::{Host, PluginInstance, PluginLoader},
-    plugin::{Info, Plugin},
+    host::{Host, HostBuffer, PluginInstance, PluginLoader},
+    plugin::{Info, Plugin, PluginParameters},
 };
 
 #[cfg(target_os = "windows")]
@@ -62,7 +61,7 @@ pub fn path_from_name(name: &str) -> Option<PathBuf> {
 
 struct PedalboardVst2Host;
 impl Host for PedalboardVst2Host {
-    fn automate(&mut self, _index: i32, _value: f32) {
+    fn automate(&self, _index: i32, _value: f32) {
         //tracing::info!("Automating parameter {} with value {}", index, value);
     }
 
@@ -78,10 +77,10 @@ impl Host for PedalboardVst2Host {
 pub struct Vst2Instance {
     pub instance: PluginInstance,
     pub info: Info,
-    in_buffers: Vec<Box<[f32]>>,
-    out_buffers: Vec<Box<[f32]>>,
-    in_buffer_ptrs: Vec<*mut f32>,
-    out_buffer_ptrs: Vec<*mut f32>,
+    params: Arc<dyn PluginParameters>,
+    in_buffers: Vec<Vec<f32>>,
+    out_buffers: Vec<Vec<f32>>,
+    host_buffer: HostBuffer<f32>,
     id: u32,
     pub ui_open: bool,
     dll_path: PathBuf,
@@ -133,18 +132,20 @@ impl Vst2Instance {
 
         instance.init();
 
+        let params = instance.get_parameter_object();
+        // `HostBuffer` owns the per-channel pointers that are handed to the plugin when processing.
+        let host_buffer = HostBuffer::from_info(&info);
+
         let in_buffers = Vec::new();
         let out_buffers = Vec::new();
-        let in_buffer_ptrs = Vec::new();
-        let out_buffer_ptrs = Vec::new();
 
         Ok(Vst2Instance {
             in_buffers,
             out_buffers,
-            in_buffer_ptrs,
-            out_buffer_ptrs,
+            host_buffer,
             info,
             instance: instance,
+            params,
             id: unique_time_id(),
             ui_open: false,
             dll_path: path.as_ref().to_path_buf(),
@@ -160,22 +161,14 @@ impl Vst2Instance {
         self.instance.set_block_size(buffer_size as i64);
         self.instance.set_sample_rate(sample_rate as f32);
 
+        // One channel buffer per plugin channel. `process` trims these to the current block
+        // length, so the capacity allocated here is reused instead of being reallocated.
         self.in_buffers = (0..self.info.inputs)
-            .map(|_| vec![0.0; buffer_size].into_boxed_slice())
-            .collect();
-        self.in_buffer_ptrs = self
-            .in_buffers
-            .iter_mut()
-            .map(|buf| buf.as_mut_ptr())
+            .map(|_| vec![0.0; buffer_size])
             .collect();
 
         self.out_buffers = (0..self.info.outputs)
-            .map(|_| vec![0.0; buffer_size].into_boxed_slice())
-            .collect();
-        self.out_buffer_ptrs = self
-            .out_buffers
-            .iter_mut()
-            .map(|buf| buf.as_mut_ptr())
+            .map(|_| vec![0.0; buffer_size])
             .collect();
     }
 
@@ -200,38 +193,33 @@ impl Vst2Instance {
         );
 
         output.fill(0.0);
+
+        // `HostBuffer::bind` takes the block length from the bound slices, so the channel
+        // buffers are sized to exactly `input.len()` samples before binding them.
+        for in_buf in &mut self.in_buffers {
+            in_buf.clear();
+            in_buf.extend_from_slice(input);
+        }
         for out_buf in &mut self.out_buffers {
-            out_buf[..input.len()].fill(0.0);
+            out_buf.clear();
+            out_buf.resize(input.len(), 0.0);
         }
 
-        for in_buf in &mut self.in_buffer_ptrs {
-            // SAFETY: input.len() <= self.buffer_size, and the buffer was allocated with this size in set_config.
-            // All pointers in in_buffer_ptrs point to valid buffers in in_buffers
-            unsafe {
-                std::ptr::copy_nonoverlapping(input.as_ptr(), *in_buf, input.len());
-            }
+        {
+            // `HostBuffer` owns the per-channel pointers and points them at the channel buffers,
+            // giving the plugin the `AudioBuffer` it expects. The borrows of the channel buffers
+            // end with this scope, so their processed contents can be read back below.
+            let mut buffer = self
+                .host_buffer
+                .bind(&self.in_buffers, self.out_buffers.as_mut_slice());
+
+            self.instance.process(&mut buffer);
         }
-
-        // SAFETY: in_buffer_ptrs and out_buffer_ptrs were set up in set_config to point to valid buffers of the correct size.
-        let mut buffer = unsafe {
-            AudioBuffer::from_raw(
-                self.in_buffer_ptrs.len(),
-                self.out_buffer_ptrs.len(),
-                self.in_buffer_ptrs.as_ptr() as *const *const f32,
-                self.out_buffer_ptrs.as_mut_ptr(),
-                input.len(),
-            )
-        };
-
-        self.instance.process(&mut buffer);
 
         // Average the plugin's output channels into the output buffer.
-        for out_buf in &self.out_buffer_ptrs {
-            for (i, output_sample) in output.iter_mut().enumerate() {
-                // SAFETY: out_buf points to a buffer of output.len() samples, allocated in set_config.
-                // The pointer points to a valid buffer in out_buffers.
-                let channel_output_sample = unsafe { *(*out_buf).add(i) };
-                *output_sample += channel_output_sample / self.out_buffer_ptrs.len() as f32;
+        for out_buf in &self.out_buffers {
+            for (output_sample, channel_sample) in output.iter_mut().zip(out_buf.iter()) {
+                *output_sample += channel_sample / self.out_buffers.len() as f32;
             }
         }
     }
@@ -286,7 +274,7 @@ impl Vst2Instance {
 
     pub fn parameter_name(&self, index: usize) -> String {
         if index < self.info.parameters as usize {
-            self.instance.get_parameter_name(index as i32)
+            self.params.get_parameter_name(index as i32)
         } else {
             tracing::warn!(
                 "Attempted to get name for invalid parameter index: {}",
@@ -298,7 +286,7 @@ impl Vst2Instance {
 
     pub fn parameter_value(&self, index: usize) -> f32 {
         if index < self.info.parameters as usize {
-            self.instance.get_parameter(index as i32)
+            self.params.get_parameter(index as i32)
         } else {
             tracing::warn!(
                 "Attempted to get value for invalid parameter index: {}",
@@ -310,7 +298,7 @@ impl Vst2Instance {
 
     pub fn parameter_label(&self, index: usize) -> String {
         if index < self.info.parameters as usize {
-            self.instance.get_parameter_label(index as i32)
+            self.params.get_parameter_label(index as i32)
         } else {
             tracing::warn!(
                 "Attempted to get label for invalid parameter index: {}",
@@ -322,7 +310,7 @@ impl Vst2Instance {
 
     pub fn set_parameter_value(&mut self, index: usize, value: f32) {
         if index < self.info.parameters as usize {
-            self.instance.set_parameter(index as i32, value);
+            self.params.set_parameter(index as i32, value);
         } else {
             tracing::warn!(
                 "Attempted to set value for invalid parameter index: {}",
@@ -340,7 +328,7 @@ mod tests {
     #[test]
     #[ignore = "requires a locally installed VST2 plugin"]
     fn test_load_vst2_plugin() {
-        let plugin_path = PathBuf::from(r"C:\Program Files\Steinberg\VSTPlugins\NA Black.dll");
+        let plugin_path = PathBuf::from(r"C:\Program Files\Common Files\VST2\ValhallaFreqEcho_x64.dll");
         let instance = Vst2Instance::load(plugin_path);
         assert!(instance.is_ok());
         let mut instance = instance.unwrap();
