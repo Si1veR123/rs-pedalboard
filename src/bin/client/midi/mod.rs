@@ -192,8 +192,9 @@ impl MidiState {
                 return;
             }
 
-            egui_ctx.request_repaint();
             if device.current_value != old_value {
+                egui_ctx.request_repaint();
+
                 // Activate any MIDI functions for this device
                 if device.use_global {
                     for function in &device.global_functions {

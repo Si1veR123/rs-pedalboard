@@ -23,6 +23,11 @@ const LIVE_FREQUENCY_UPDATE_MS: usize = 100;
 const EQ_DB_GAIN: f32 = 15.0;
 const OVERSAMPLE: f32 = 10.0;
 
+/// The colour of the live frequency plot, used for its toggle's icon and for the
+/// outline that shows when that toggle is on. The app's own `THEME_COLOR` lives in the
+/// client binary while the pedals live in the library, so the value is repeated here.
+const LIVE_FREQUENCY_COLOR: Color32 = Color32::from_rgb(220, 100, 100);
+
 pub struct GraphicEq7 {
     parameters: HashMap<String, PedalParameter>,
     eq: eq::Equalizer,
@@ -456,7 +461,12 @@ impl PedalTrait for GraphicEq7 {
             .unwrap();
         if live_frequency_enabled {
             // Update the live frequency plot smoothly
-            if self.prev_live_frequency_plot.is_empty() {
+            if self.prev_live_frequency_plot.len() != self.target_live_frequency_plot.len()
+                || !self
+                    .prev_live_frequency_plot
+                    .iter()
+                    .all(|point| point.x.is_finite() && point.y.is_finite())
+            {
                 self.prev_live_frequency_plot = self.target_live_frequency_plot.clone();
             }
 
@@ -480,21 +490,11 @@ impl PedalTrait for GraphicEq7 {
         if message_buffer.len() > 0 {
             // Deserialize the frequency response plot from the message buffer
             if let Ok(mut plot_points) = deserialize_plot_points(&message_buffer[0]) {
-                // Scale plot points to 0-EQ_DB_GAIN
-                let max_value = plot_points
-                    .iter()
-                    .map(|p| p.y)
-                    .fold(f64::NEG_INFINITY, |a, b| a.max(b));
-
-                // Smoothly adjust dynamic max
-                self.dynamic_max = (self.dynamic_max * 0.9).max(max_value as f32);
-
-                let scale_factor = EQ_DB_GAIN / self.dynamic_max as f32;
-                for point in plot_points.iter_mut() {
-                    point.y *= scale_factor as f64;
+                if scale_live_frequency_plot(&mut plot_points, &mut self.dynamic_max) {
+                    self.target_live_frequency_plot = plot_points;
+                } else {
+                    tracing::trace!("Ignoring frequency response plot without any signal");
                 }
-
-                self.target_live_frequency_plot = plot_points;
             } else {
                 tracing::error!("Failed to deserialize frequency response plot");
             }
@@ -722,7 +722,14 @@ impl PedalTrait for GraphicEq7 {
         let mut live_freq_response_button_rect =
             plot_response.response.rect.translate(Vec2::splat(-2.0));
         live_freq_response_button_rect.min = live_freq_response_button_rect.max - Vec2::splat(13.0);
-        if ui
+
+        let live_frequency_tint = if live_frequency_enabled {
+            LIVE_FREQUENCY_COLOR
+        } else {
+            Color32::from_gray(110)
+        };
+
+        let live_frequency_response = ui
             .new_child(
                 UiBuilder::new()
                     .max_rect(live_freq_response_button_rect)
@@ -730,15 +737,24 @@ impl PedalTrait for GraphicEq7 {
             )
             .add(
                 Button::image(
-                    Image::new(include_image!("../images/eq/live.png"))
-                        .tint(Color32::from_rgba_unmultiplied(220, 100, 100, 200)),
+                    Image::new(include_image!("../images/eq/live.png")).tint(live_frequency_tint),
                 )
                 .corner_radius(3.0)
+                // Kept for accessibility, the outline below is what is actually visible
                 .selected(live_frequency_enabled)
                 .frame(false),
-            )
-            .clicked()
-        {
+            );
+
+        if live_frequency_enabled {
+            ui.painter().rect_stroke(
+                live_frequency_response.rect,
+                3.0,
+                (1.5, LIVE_FREQUENCY_COLOR),
+                egui::StrokeKind::Inside,
+            );
+        }
+
+        if live_frequency_response.clicked() {
             changed_param = Some((
                 "Live Frequency Plot".to_string(),
                 PedalParameterValue::Bool(!live_frequency_enabled),
@@ -791,4 +807,135 @@ fn eq_knob(
         changed_param
     })
     .inner
+}
+
+/// Scale a live frequency plot into `0..EQ_DB_GAIN` using the smoothed maximum
+/// magnitude, and report whether the result may be plotted at all.
+fn scale_live_frequency_plot(plot_points: &mut [PlotPoint], dynamic_max: &mut f32) -> bool {
+    let max_value = plot_points
+        .iter()
+        .map(|point| point.y)
+        .fold(f64::NEG_INFINITY, |a, b| a.max(b));
+
+    if max_value.is_finite() && max_value > 0.0 {
+        // Smoothly adjust dynamic max
+        *dynamic_max = (*dynamic_max * 0.9).max(max_value as f32);
+    }
+    if !dynamic_max.is_finite() {
+        *dynamic_max = 0.0;
+    }
+    if *dynamic_max <= 0.0 {
+        return false;
+    }
+
+    let scale_factor = EQ_DB_GAIN / *dynamic_max;
+    if !scale_factor.is_finite() {
+        return false;
+    }
+
+    for point in plot_points.iter_mut() {
+        point.y *= scale_factor as f64;
+    }
+
+    true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn plot(values: &[f64]) -> Vec<PlotPoint> {
+        values
+            .iter()
+            .enumerate()
+            .map(|(index, value)| PlotPoint::new(index as f64, *value))
+            .collect()
+    }
+
+    fn peak(points: &[PlotPoint]) -> f64 {
+        points
+            .iter()
+            .map(|point| point.y)
+            .fold(f64::NEG_INFINITY, f64::max)
+    }
+
+    fn all_finite(points: &[PlotPoint]) -> bool {
+        points
+            .iter()
+            .all(|point| point.x.is_finite() && point.y.is_finite())
+    }
+
+    #[test]
+    fn a_silent_payload_without_a_previous_peak_is_not_plotted() {
+        let mut points = plot(&[0.0, 0.0, 0.0]);
+        let mut dynamic_max = 0.0;
+
+        assert!(!scale_live_frequency_plot(&mut points, &mut dynamic_max));
+        assert_eq!(dynamic_max, 0.0);
+        assert!(all_finite(&points));
+    }
+
+    #[test]
+    fn a_silent_payload_flattens_the_curve_without_producing_nans() {
+        let mut dynamic_max = 2.0;
+        let mut loud = plot(&[0.5, 2.0]);
+        assert!(scale_live_frequency_plot(&mut loud, &mut dynamic_max));
+        assert_eq!(peak(&loud), EQ_DB_GAIN as f64);
+
+        // Once the note stops every bin comes back at zero, so the curve flattens out.
+        // The scaling is kept as it is, which means the next note needs no re-normalising
+        // and doesn't first decay towards a maximum that only represents silence
+        let mut silent = plot(&[0.0, 0.0]);
+        assert!(scale_live_frequency_plot(&mut silent, &mut dynamic_max));
+        assert_eq!(dynamic_max, 2.0);
+        assert!(silent.iter().all(|point| point.y == 0.0));
+        assert!(all_finite(&silent));
+    }
+
+    #[test]
+    fn a_peak_is_normalised_to_the_gain_limit() {
+        let mut points = plot(&[0.25, 2.0, 0.5]);
+        let mut dynamic_max = 0.0;
+
+        assert!(scale_live_frequency_plot(&mut points, &mut dynamic_max));
+        assert_eq!(dynamic_max, 2.0);
+        assert_eq!(peak(&points), EQ_DB_GAIN as f64);
+        assert_eq!(points[0].y, 0.25 * EQ_DB_GAIN as f64 / 2.0);
+    }
+
+    #[test]
+    fn the_dynamic_max_decays_but_never_drops_below_the_peak() {
+        let mut dynamic_max = 10.0;
+
+        // A quieter payload lets the maximum decay towards it
+        let mut quiet = plot(&[0.5, 1.0]);
+        assert!(scale_live_frequency_plot(&mut quiet, &mut dynamic_max));
+        assert_eq!(dynamic_max, 9.0);
+
+        // A louder payload raises it immediately
+        let mut loud = plot(&[0.5, 20.0]);
+        assert!(scale_live_frequency_plot(&mut loud, &mut dynamic_max));
+        assert_eq!(dynamic_max, 20.0);
+        assert!(all_finite(&loud));
+    }
+
+    #[test]
+    fn a_non_finite_dynamic_max_recovers_with_the_next_note() {
+        for broken in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            let mut dynamic_max = broken;
+
+            // Silence can't be scaled, so nothing is plotted and the state is reset
+            let mut silent = plot(&[0.0, 0.0]);
+            assert!(!scale_live_frequency_plot(&mut silent, &mut dynamic_max));
+            assert_eq!(dynamic_max, 0.0);
+            assert!(all_finite(&silent));
+
+            // The next note re-establishes the scaling
+            let mut audio = plot(&[0.0, 1.0]);
+            assert!(scale_live_frequency_plot(&mut audio, &mut dynamic_max));
+            assert_eq!(dynamic_max, 1.0);
+            assert_eq!(peak(&audio), EQ_DB_GAIN as f64);
+            assert!(all_finite(&audio));
+        }
+    }
 }

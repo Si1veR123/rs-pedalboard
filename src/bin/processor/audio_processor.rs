@@ -98,9 +98,7 @@ impl AudioProcessor {
             self.processing_buffer.extend_from_slice(&self.data_buffer);
         }
 
-        if self.data_buffer.iter().all(|&sample| sample == 0.0) {
-            tracing::debug!("Buffer is silent, skipping processing.");
-        } else if let Some((tuner_writer, frequency_channel_recv, _kill)) = &mut self.tuner_handle {
+        if let Some((tuner_writer, frequency_channel_recv, _kill)) = &mut self.tuner_handle {
             // Tuner
             tuner_writer.push_slice(self.data_buffer.as_slice());
 
