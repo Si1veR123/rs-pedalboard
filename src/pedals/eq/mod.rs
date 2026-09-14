@@ -3,6 +3,7 @@ use egui_plot::PlotPoint;
 
 use crate::pedals::PedalParameter;
 
+pub mod frequency_plot;
 pub mod graphiceq7;
 mod simple;
 pub use graphiceq7::GraphicEq7;

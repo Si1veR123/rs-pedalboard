@@ -7,6 +7,7 @@ use serde::ser::SerializeMap;
 use serde::{Deserialize, Serialize};
 
 use super::super::{PedalParameter, PedalParameterValue, PedalTrait};
+use super::frequency_plot::{self, LIVE_FREQUENCY_COLOR};
 use super::{deserialize_plot_points, eq_background, gain_knob, serialize_plot_points};
 
 use crate::{
@@ -23,10 +24,13 @@ const LIVE_FREQUENCY_UPDATE_MS: usize = 100;
 const EQ_DB_GAIN: f32 = 15.0;
 const OVERSAMPLE: f32 = 10.0;
 
-/// The colour of the live frequency plot, used for its toggle's icon and for the
-/// outline that shows when that toggle is on. The app's own `THEME_COLOR` lives in the
-/// client binary while the pedals live in the library, so the value is repeated here.
-const LIVE_FREQUENCY_COLOR: Color32 = Color32::from_rgb(220, 100, 100);
+/// The range the graph and the live frequency plot are drawn over. The analyser covers the
+/// same range, so the spectrum and the response curve share a frequency axis.
+const MIN_FREQ_HZ: f32 = 30.0;
+const MAX_FREQ_HZ: f32 = 16000.0;
+
+/// The centre frequency of each band, marked with a grey bar behind the graph.
+const BAND_FREQS: [f32; 7] = [100.0, 200.0, 400.0, 800.0, 1600.0, 3200.0, 6400.0];
 
 pub struct GraphicEq7 {
     parameters: HashMap<String, PedalParameter>,
@@ -43,9 +47,6 @@ pub struct GraphicEq7 {
     prev_live_frequency_plot: Vec<PlotPoint>,
     target_live_frequency_plot: Vec<PlotPoint>,
     last_frame: Instant,
-
-    // Used to clamp the live frequency plot values
-    dynamic_max: f32,
 }
 
 impl Clone for GraphicEq7 {
@@ -61,7 +62,6 @@ impl Clone for GraphicEq7 {
             prev_live_frequency_plot: Vec::with_capacity(PLOT_POINTS),
             target_live_frequency_plot: Vec::with_capacity(PLOT_POINTS),
             last_frame: Instant::now(),
-            dynamic_max: 0.0,
         }
     }
 }
@@ -114,10 +114,12 @@ impl<'a> Deserialize<'a> for GraphicEq7 {
             .get("High Shelf")
             .and_then(|p| p.value.as_float())
             .map_or(true, |v| v > 0.0);
+        // Both shelves default to on, so a board saved before these parameters existed gets
+        // the full range of the pedal
         let low_shelf_enabled = parameters
             .get("Low Shelf")
             .and_then(|p| p.value.as_float())
-            .map_or(false, |v| v > 0.0);
+            .map_or(true, |v| v > 0.0);
 
         let eq = Self::build_eq(
             Self::get_bandwidths(&parameters),
@@ -137,7 +139,6 @@ impl<'a> Deserialize<'a> for GraphicEq7 {
             last_frame: Instant::now(),
             frequency_analyser: None,
             last_frequencies_sent: Instant::now(),
-            dynamic_max: 0.0,
         })
     }
 }
@@ -172,7 +173,7 @@ impl GraphicEq7 {
         parameters.insert(
             "Low Shelf".to_string(),
             PedalParameter {
-                value: PedalParameterValue::Float(0.0),
+                value: PedalParameterValue::Float(1.0),
                 min: Some(PedalParameterValue::Float(0.0)),
                 max: Some(PedalParameterValue::Float(1.0)),
                 step: Some(PedalParameterValue::Float(1.0)),
@@ -219,7 +220,7 @@ impl GraphicEq7 {
             },
         );
 
-        let eq = Self::build_eq([init_bandwidth; 7], [init_gain; 7], true, false, 48000.0);
+        let eq = Self::build_eq([init_bandwidth; 7], [init_gain; 7], true, true, 48000.0);
 
         GraphicEq7 {
             response_plot: Self::amplitude_response_plot(&eq, 48000.0),
@@ -232,7 +233,6 @@ impl GraphicEq7 {
             last_frame: Instant::now(),
             frequency_analyser: None,
             last_frequencies_sent: Instant::now(),
-            dynamic_max: 0.0,
         }
     }
 
@@ -243,11 +243,22 @@ impl GraphicEq7 {
     }
 
     pub fn frequency_analyser(sample_rate: f32) -> FrequencyAnalyser {
-        FrequencyAnalyser::new(sample_rate, 60.0, 11000.0, PLOT_POINTS, OVERSAMPLE)
+        FrequencyAnalyser::new(
+            sample_rate,
+            MIN_FREQ_HZ,
+            MAX_FREQ_HZ,
+            PLOT_POINTS,
+            OVERSAMPLE,
+        )
     }
 
     pub fn amplitude_response_plot(eq: &Equalizer, sample_rate: f32) -> Vec<PlotPoint> {
-        eq.amplitude_response_plot(sample_rate as f64, 60.0, 11000.0, PLOT_POINTS)
+        eq.amplitude_response_plot(
+            sample_rate as f64,
+            MIN_FREQ_HZ as f64,
+            MAX_FREQ_HZ as f64,
+            PLOT_POINTS,
+        )
     }
 
     pub fn get_gains(parameters: &HashMap<String, PedalParameter>) -> [f32; 7] {
@@ -317,7 +328,7 @@ impl GraphicEq7 {
         sample_rate: f32,
     ) -> eq::Equalizer {
         let mut b = eq::GraphicEqualizerBuilder::new(sample_rate)
-            .with_bands([100.0, 200.0, 400.0, 800.0, 1600.0, 3200.0, 6400.0])
+            .with_bands(BAND_FREQS)
             .with_bandwidths(bandwidths)
             .with_gains(gains);
 
@@ -459,45 +470,26 @@ impl PedalTrait for GraphicEq7 {
             .value
             .as_bool()
             .unwrap();
-        if live_frequency_enabled {
-            // Update the live frequency plot smoothly
-            if self.prev_live_frequency_plot.len() != self.target_live_frequency_plot.len()
-                || !self
-                    .prev_live_frequency_plot
-                    .iter()
-                    .all(|point| point.x.is_finite() && point.y.is_finite())
-            {
-                self.prev_live_frequency_plot = self.target_live_frequency_plot.clone();
-            }
-
-            let time_since_last_frame_ms = self.last_frame.elapsed().as_millis() as usize;
-            let smooth_factor =
-                (time_since_last_frame_ms as f64 / LIVE_FREQUENCY_UPDATE_MS as f64).min(1.0);
-            self.last_frame = Instant::now();
-
-            for (prev, target) in self
-                .prev_live_frequency_plot
-                .iter_mut()
-                .zip(self.target_live_frequency_plot.iter())
-            {
-                prev.x = prev.x * (1.0 - smooth_factor) + target.x * smooth_factor;
-                prev.y = prev.y * (1.0 - smooth_factor) + target.y * smooth_factor;
-            }
-
-            ui.ctx().request_repaint_after(DEFAULT_REFRESH_DURATION);
-        }
-
         if message_buffer.len() > 0 {
             // Deserialize the frequency response plot from the message buffer
             if let Ok(mut plot_points) = deserialize_plot_points(&message_buffer[0]) {
-                if scale_live_frequency_plot(&mut plot_points, &mut self.dynamic_max) {
-                    self.target_live_frequency_plot = plot_points;
-                } else {
-                    tracing::trace!("Ignoring frequency response plot without any signal");
-                }
+                frequency_plot::payload_to_plot_points(&mut plot_points, EQ_DB_GAIN as f64);
+                self.target_live_frequency_plot = plot_points;
             } else {
                 tracing::error!("Failed to deserialize frequency response plot");
             }
+        }
+
+        if live_frequency_enabled {
+            // Ease the plotted curve towards the newest measurements
+            frequency_plot::update_live_frequency_plot(
+                &mut self.prev_live_frequency_plot,
+                &self.target_live_frequency_plot,
+                self.last_frame.elapsed().as_secs_f64() * 1000.0,
+            );
+            self.last_frame = Instant::now();
+
+            ui.ctx().request_repaint_after(DEFAULT_REFRESH_DURATION);
         }
 
         let mut changed_param = None;
@@ -685,32 +677,33 @@ impl PedalTrait for GraphicEq7 {
             .show_grid(false)
             .set_margin_fraction(Vec2::ZERO)
             .show(ui, |plot_ui| {
+                if live_frequency_enabled {
+                    // Drawn behind the response curve, with a translucent fill, so the curve
+                    // the knobs actually edit stays the clearest thing in the graph
+                    let fill_bottom = frequency_plot::live_plot_fill_bottom(
+                        &self.response_plot,
+                        &self.prev_live_frequency_plot,
+                        EQ_DB_GAIN as f64,
+                    );
+
+                    plot_ui.line(
+                        Line::new("live_frequency", self.prev_live_frequency_plot.as_slice())
+                            .color(LIVE_FREQUENCY_COLOR)
+                            .width(1.0_f32)
+                            .fill(fill_bottom as f32)
+                            .fill_alpha(0.15),
+                    );
+                }
+
                 plot_ui.line(
                     Line::new("freq_response", self.response_plot.as_slice())
                         .width(1.0_f32)
                         .color(Color32::from_rgb(150, 150, 245)),
                 );
 
-                if self
-                    .parameters
-                    .get("Live Frequency Plot")
-                    .unwrap()
-                    .value
-                    .as_bool()
-                    .unwrap()
-                {
-                    plot_ui.line(
-                        Line::new("live_frequency", self.prev_live_frequency_plot.as_slice())
-                            .color(Color32::from_rgb(200, 0, 0))
-                            .width(1.0_f32),
-                    );
-                }
-
-                let freqs: [f64; 7] = [100.0, 200.0, 400.0, 800.0, 1600.0, 3200.0, 6400.0];
-                for hz in freqs {
-                    let log2_hz = hz.log2();
+                for hz in BAND_FREQS {
                     plot_ui.vline(
-                        VLine::new("", log2_hz)
+                        VLine::new("", (hz as f64).log2())
                             .color(Color32::DARK_GRAY)
                             .width(1.0_f32),
                     );
@@ -809,133 +802,45 @@ fn eq_knob(
     .inner
 }
 
-/// Scale a live frequency plot into `0..EQ_DB_GAIN` using the smoothed maximum
-/// magnitude, and report whether the result may be plotted at all.
-fn scale_live_frequency_plot(plot_points: &mut [PlotPoint], dynamic_max: &mut f32) -> bool {
-    let max_value = plot_points
-        .iter()
-        .map(|point| point.y)
-        .fold(f64::NEG_INFINITY, |a, b| a.max(b));
-
-    if max_value.is_finite() && max_value > 0.0 {
-        // Smoothly adjust dynamic max
-        *dynamic_max = (*dynamic_max * 0.9).max(max_value as f32);
-    }
-    if !dynamic_max.is_finite() {
-        *dynamic_max = 0.0;
-    }
-    if *dynamic_max <= 0.0 {
-        return false;
-    }
-
-    let scale_factor = EQ_DB_GAIN / *dynamic_max;
-    if !scale_factor.is_finite() {
-        return false;
-    }
-
-    for point in plot_points.iter_mut() {
-        point.y *= scale_factor as f64;
-    }
-
-    true
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn plot(values: &[f64]) -> Vec<PlotPoint> {
-        values
+    /// The response curve the graph is drawn with for a set of gains.
+    fn response(gains: [f32; 7], bandwidths: [f32; 7]) -> Vec<PlotPoint> {
+        let eq = GraphicEq7::build_eq(bandwidths, gains, true, true, 48000.0);
+
+        GraphicEq7::amplitude_response_plot(&eq, 48000.0)
+    }
+
+    #[test]
+    fn the_fill_reaches_the_bottom_of_a_graph_the_response_grows() {
+        // Summed bands reach well past the range a single knob is allowed, which is what
+        // takes the bottom edge of the graph down with them ...
+        let boosted_response = response([EQ_DB_GAIN; 7], [1.05; 7]);
+        let tallest = boosted_response
             .iter()
-            .enumerate()
-            .map(|(index, value)| PlotPoint::new(index as f64, *value))
-            .collect()
-    }
+            .map(|point| point.y.abs())
+            .fold(0.0_f64, f64::max);
 
-    fn peak(points: &[PlotPoint]) -> f64 {
-        points
-            .iter()
-            .map(|point| point.y)
-            .fold(f64::NEG_INFINITY, f64::max)
-    }
+        assert!(tallest > EQ_DB_GAIN as f64, "tallest: {tallest}");
 
-    fn all_finite(points: &[PlotPoint]) -> bool {
-        points
-            .iter()
-            .all(|point| point.x.is_finite() && point.y.is_finite())
-    }
+        // ... so the fill is asked for the graph's own bottom edge rather than the mapped
+        // floor, which used to leave the shading hanging above it
+        assert_eq!(
+            frequency_plot::live_plot_fill_bottom(&boosted_response, &[], EQ_DB_GAIN as f64),
+            -tallest
+        );
 
-    #[test]
-    fn a_silent_payload_without_a_previous_peak_is_not_plotted() {
-        let mut points = plot(&[0.0, 0.0, 0.0]);
-        let mut dynamic_max = 0.0;
-
-        assert!(!scale_live_frequency_plot(&mut points, &mut dynamic_max));
-        assert_eq!(dynamic_max, 0.0);
-        assert!(all_finite(&points));
-    }
-
-    #[test]
-    fn a_silent_payload_flattens_the_curve_without_producing_nans() {
-        let mut dynamic_max = 2.0;
-        let mut loud = plot(&[0.5, 2.0]);
-        assert!(scale_live_frequency_plot(&mut loud, &mut dynamic_max));
-        assert_eq!(peak(&loud), EQ_DB_GAIN as f64);
-
-        // Once the note stops every bin comes back at zero, so the curve flattens out.
-        // The scaling is kept as it is, which means the next note needs no re-normalising
-        // and doesn't first decay towards a maximum that only represents silence
-        let mut silent = plot(&[0.0, 0.0]);
-        assert!(scale_live_frequency_plot(&mut silent, &mut dynamic_max));
-        assert_eq!(dynamic_max, 2.0);
-        assert!(silent.iter().all(|point| point.y == 0.0));
-        assert!(all_finite(&silent));
-    }
-
-    #[test]
-    fn a_peak_is_normalised_to_the_gain_limit() {
-        let mut points = plot(&[0.25, 2.0, 0.5]);
-        let mut dynamic_max = 0.0;
-
-        assert!(scale_live_frequency_plot(&mut points, &mut dynamic_max));
-        assert_eq!(dynamic_max, 2.0);
-        assert_eq!(peak(&points), EQ_DB_GAIN as f64);
-        assert_eq!(points[0].y, 0.25 * EQ_DB_GAIN as f64 / 2.0);
-    }
-
-    #[test]
-    fn the_dynamic_max_decays_but_never_drops_below_the_peak() {
-        let mut dynamic_max = 10.0;
-
-        // A quieter payload lets the maximum decay towards it
-        let mut quiet = plot(&[0.5, 1.0]);
-        assert!(scale_live_frequency_plot(&mut quiet, &mut dynamic_max));
-        assert_eq!(dynamic_max, 9.0);
-
-        // A louder payload raises it immediately
-        let mut loud = plot(&[0.5, 20.0]);
-        assert!(scale_live_frequency_plot(&mut loud, &mut dynamic_max));
-        assert_eq!(dynamic_max, 20.0);
-        assert!(all_finite(&loud));
-    }
-
-    #[test]
-    fn a_non_finite_dynamic_max_recovers_with_the_next_note() {
-        for broken in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
-            let mut dynamic_max = broken;
-
-            // Silence can't be scaled, so nothing is plotted and the state is reset
-            let mut silent = plot(&[0.0, 0.0]);
-            assert!(!scale_live_frequency_plot(&mut silent, &mut dynamic_max));
-            assert_eq!(dynamic_max, 0.0);
-            assert!(all_finite(&silent));
-
-            // The next note re-establishes the scaling
-            let mut audio = plot(&[0.0, 1.0]);
-            assert!(scale_live_frequency_plot(&mut audio, &mut dynamic_max));
-            assert_eq!(dynamic_max, 1.0);
-            assert_eq!(peak(&audio), EQ_DB_GAIN as f64);
-            assert!(all_finite(&audio));
-        }
+        // A response that fits inside the knobs' range keeps the graph, and so the fill, at
+        // the window the live curve is mapped over
+        assert_eq!(
+            frequency_plot::live_plot_fill_bottom(
+                &response([0.0; 7], [1.05; 7]),
+                &[],
+                EQ_DB_GAIN as f64
+            ),
+            -(EQ_DB_GAIN as f64)
+        );
     }
 }
