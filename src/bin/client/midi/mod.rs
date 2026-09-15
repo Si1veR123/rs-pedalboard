@@ -1041,7 +1041,7 @@ impl MidiDevice {
         } else if self.parameter_functions.iter()
             // Filter to parameter functions which are on the active pedalboard
             .filter(|(path, _range)| path.pedalboard_id == Some(active_pedalboard_id))
-            .count() > 0
+            .count() == 0
         {
             DeviceFunctionMode::Sensible
         } else {
