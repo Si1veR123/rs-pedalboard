@@ -189,16 +189,17 @@ impl Pedalboard {
         // Order of parameters likely to be of 'high importance'
         const PRIORITISE_PARAMETERS: [&str; 5] = ["Gain", "Drive", "Level", "Dry/Wet", "Tone"];
 
-        let mut parameters: Vec<(u32, String)> = Vec::new();
+        // Rank (index into PRIORITISE_PARAMETERS), pedal order (index into self.pedals), pedal ID, parameter name
+        let mut prioritised: Vec<(usize, usize, u32, String)> = Vec::new();
         let mut fallback_parameters: Vec<(u32, String)> = Vec::new();
 
-        for pedal in &self.pedals {
+        for (pedal_order, pedal) in self.pedals.iter().enumerate() {
             let pedal_id = pedal.get_id();
             let available_parameters = pedal.get_parameters();
 
-            for param_name in PRIORITISE_PARAMETERS {
-                if available_parameters.contains_key(param_name) {
-                    parameters.push((pedal_id, param_name.to_string()));
+            for (rank, param_name) in PRIORITISE_PARAMETERS.iter().enumerate() {
+                if available_parameters.contains_key(*param_name) {
+                    prioritised.push((rank, pedal_order, pedal_id, (*param_name).to_string()));
                 }
             }
 
@@ -223,6 +224,15 @@ impl Pedalboard {
             );
         }
 
+        prioritised.sort_by_key(|(rank, pedal_order, _pedal_id, _param_name)| {
+            (*rank, *pedal_order)
+        });
+
+        let mut parameters: Vec<(u32, String)> = prioritised
+            .into_iter()
+            .map(|(_rank, _pedal_order, pedal_id, param_name)| (pedal_id, param_name))
+            .collect();
+
         parameters.append(&mut fallback_parameters);
         parameters
     }
@@ -231,7 +241,7 @@ impl Pedalboard {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pedals::Overdrive;
+    use crate::pedals::{Delay, Fuzz, Overdrive};
 
     fn board(pedals: Vec<Pedal>) -> Pedalboard {
         Pedalboard::from_pedals("Test Pedalboard".to_string(), pedals)
@@ -269,11 +279,26 @@ mod tests {
         ]);
 
         // The parameters which matter most come first ('Drive', then 'Level', then 'Tone' on an
-        // overdrive), and the pedals are visited in the order they are on the pedalboard
+        // overdrive) across the whole pedalboard, and parameters of equal importance are then
+        // ordered by the pedals' positions on the pedalboard
         assert_eq!(knob_target(&board, 0), Some((0, "Drive".to_string())));
-        assert_eq!(knob_target(&board, 1), Some((0, "Level".to_string())));
-        assert_eq!(knob_target(&board, 2), Some((0, "Tone".to_string())));
-        assert_eq!(knob_target(&board, 3), Some((1, "Drive".to_string())));
+        assert_eq!(knob_target(&board, 1), Some((1, "Drive".to_string())));
+        assert_eq!(knob_target(&board, 2), Some((0, "Level".to_string())));
+        assert_eq!(knob_target(&board, 3), Some((1, "Level".to_string())));
+        assert_eq!(knob_target(&board, 4), Some((0, "Tone".to_string())));
+        assert_eq!(knob_target(&board, 5), Some((1, "Tone".to_string())));
+    }
+
+    #[test]
+    fn a_prioritised_parameter_on_a_later_pedal_beats_a_lesser_one_on_an_earlier_pedal() {
+        // The delay only offers 'Dry/Wet', while the fuzz offers 'Gain', 'Level' and 'Dry/Wet'
+        let board = board(vec![Pedal::Delay(Delay::new()), Pedal::Fuzz(Fuzz::new())]);
+
+        // 'Gain' outranks 'Dry/Wet', so the later fuzz is reached before the earlier delay
+        assert_eq!(knob_target(&board, 0), Some((1, "Gain".to_string())));
+        assert_eq!(knob_target(&board, 1), Some((1, "Level".to_string())));
+        assert_eq!(knob_target(&board, 2), Some((0, "Dry/Wet".to_string())));
+        assert_eq!(knob_target(&board, 3), Some((1, "Dry/Wet".to_string())));
     }
 
     #[test]
