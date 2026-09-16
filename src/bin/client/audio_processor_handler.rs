@@ -2,7 +2,7 @@ use rs_pedalboard::processor_settings::ProcessorSettingsSave;
 use std::{env::var, path::PathBuf, process::Child};
 use which::which;
 
-pub const PROCESSOR_EXE_NAME: &str = "pedalboard_processor";
+pub const PROCESSOR_EXE_NAME: &str = "pedalboard-processor";
 pub const PROCESSOR_ENV_VAR: &str = "RSPEDALBOARD_PROCESSOR";
 
 pub fn get_processor_executable_path() -> Option<PathBuf> {
