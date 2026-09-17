@@ -26,7 +26,7 @@ pub struct ProcessorArguments {
     pub frames_per_period: Option<usize>,
     #[arg(short, long, help = "Latency in milliseconds for the internal buffer")]
     pub buffer_latency: Option<f32>,
-    #[arg(long, help = "Number of periods per buffer (JACK) (default: 3)")]
+    #[arg(long, help = "Number of periods per buffer (JACK only) (default: 3)")]
     pub periods_per_buffer: Option<usize>,
     #[arg(long, help = "Minimum frequency for the tuner (default: 40)")]
     pub tuner_min_freq: Option<u32>,
