@@ -93,7 +93,7 @@ cargo build --release --bin pedalboard-client --features="client"
 
     The client is able to start the processor binary by pressing *Start Processor* in Settings, which executes the binary in the environment variable `RSPEDALBOARD_PROCESSOR`, or attempts to execute a `pedalboard-processor` in `PATH` or current working directory.
 
-2) Start the client binary `pedalboard-client`..  The client attempts to connect to the processor via TCP on port 29475, either on startup and when the *Connect* button is pressed in settings. The client has a single command line argument `--no-processor`, which skips connecting to the processor on startup.
+2) Start the client binary `pedalboard-client`. The client attempts to connect to the processor via TCP on port 29475, either on startup and when the *Connect* button is pressed in settings. The client has a single command line argument `--no-processor`, which skips connecting to the processor on startup.
 
 ## Features Flags
 - `processor` - required for the processor binary.

@@ -154,33 +154,26 @@ impl MidiState {
 
         let mut settings_lock = settings.lock().expect("MidiState: Mutex poisoned.");
 
-        // Mutable phase: create the device if needed and apply the raw MIDI change to it. This
-        // borrow has to end before the phase below, because `get_parameter_device_index` reads
-        // the whole `MidiSettings`.
-        let (change, value_changed) = {
+        // Mutable phase
+        let change = {
             let Some(device) = settings_lock.device_settings_mut(port_id, cc, channel, egui_ctx)
             else {
                 return;
             };
 
-            let old_value = device.current_value;
             let change = device.change_from_midi_value(value);
 
             if change == MidiChange::None || change == MidiChange::RelativeValueChange(0.0) {
+                tracing::debug!("No change to MIDI device.");
                 return;
             }
 
-            (change, device.current_value != old_value)
+            change
         };
-
-        if !value_changed {
-            return;
-        }
 
         egui_ctx.request_repaint();
 
-        // Read phase: which mappings this device is set up with. Nothing may be borrowed mutably
-        // here, because `get_parameter_device_index` reads the whole `MidiSettings`.
+        // Read phase
         let (function_mode, global_functions, parameter_functions) = {
             let Some(device) = settings_lock
                 .port_settings
@@ -983,6 +976,7 @@ impl MidiDevice {
                     self.current_value = self.current_value.clamp(0.0, 1.0);
                     MidiChange::RelativeValueChange(-*sensitivity)
                 } else {
+                    tracing::debug!("Received MIDI value {midi_value} for relative encoder, but it is not the increment ({increment_value}) or decrement ({decrement_value}) value. Ignoring.");
                     MidiChange::None
                 }
             }
@@ -1031,10 +1025,6 @@ impl MidiDevice {
         }
     }
 
-    /// Which mappings this device's messages should be routed through.
-    ///
-    /// A device with no functions of its own is in [`DeviceFunctionMode::Sensible`], which also
-    /// covers freshly learned devices (they default to `use_global: true` with no functions).
     pub fn function_mode(&self, active_pedalboard_id: u32) -> DeviceFunctionMode {
         if self.use_global {
             DeviceFunctionMode::Global
