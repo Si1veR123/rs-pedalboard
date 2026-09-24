@@ -28,6 +28,7 @@
     - Use MIDI CC messages to control parameters and a range of other functions
     - Allows integration with physical pedalboard buttons
 - Touchscreen support
+- Global Input and Output EQ
 
 ## How to Use
 The project consists of 2 binaries, `pedalboard-processor` and `pedalboard-client`. The processor handles audio devices, effects processing and more. The client contains the UI, which is used to interact with the processor.

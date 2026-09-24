@@ -8,7 +8,10 @@ use serde::{Deserialize, Serialize};
 
 use super::super::{PedalParameter, PedalParameterValue, PedalTrait};
 use super::frequency_plot::{self, LIVE_FREQUENCY_COLOR};
-use super::{deserialize_plot_points, eq_background, gain_knob, serialize_plot_points};
+use super::{
+    deserialize_plot_points, eq_background, gain_knob, serialize_plot_points, EQ_DB_GAIN,
+    MAX_FREQ_HZ, MIN_FREQ_HZ, PLOT_POINTS, SLOT_ASPECT_RATIO,
+};
 
 use crate::{
     dsp_algorithms::{
@@ -19,18 +22,16 @@ use crate::{
     unique_time_id, DEFAULT_REFRESH_DURATION,
 };
 
-const PLOT_POINTS: usize = 80;
-const LIVE_FREQUENCY_UPDATE_MS: usize = 100;
-const EQ_DB_GAIN: f32 = 15.0;
-const OVERSAMPLE: f32 = 10.0;
-
-/// The range the graph and the live frequency plot are drawn over. The analyser covers the
-/// same range, so the spectrum and the response curve share a frequency axis.
-const MIN_FREQ_HZ: f32 = 30.0;
-const MAX_FREQ_HZ: f32 = 16000.0;
-
-/// The centre frequency of each band, marked with a grey bar behind the graph.
+/// The centre frequency of each of the pedal's seven bands, marked with a grey bar down its graph
+/// and built into the filters its knobs edit.
+///
+/// These are the pedal's own bands, which its face has a knob pair for each of. The global EQ covers
+/// the same range with ten bands a little under an octave apart, which are its own rather than the
+/// pedal's.
 const BAND_FREQS: [f32; 7] = [100.0, 200.0, 400.0, 800.0, 1600.0, 3200.0, 6400.0];
+
+const LIVE_FREQUENCY_UPDATE_MS: usize = 100;
+const OVERSAMPLE: f32 = 10.0;
 
 pub struct GraphicEq7 {
     parameters: HashMap<String, PedalParameter>,
@@ -774,7 +775,15 @@ fn eq_knob(
     ui.vertical(|ui| {
         let mut changed_param = None;
 
-        if let Some(value) = gain_knob(ui, param, width) {
+        // The slot is drawn at the size of the range a band's gain is set over, so the knob travels
+        // over the whole of it
+        if let Some(value) = gain_knob(
+            ui,
+            param,
+            Vec2::new(width, width * SLOT_ASPECT_RATIO),
+            width,
+            1.0,
+        ) {
             changed_param = Some(EqChange::Gain(value));
         }
 

@@ -1,8 +1,8 @@
+use crate::pedals::parameters::{ParameterUpdate, PedalParameterRange};
 use crate::SAVE_DIR;
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, path::PathBuf, str::FromStr};
 use strum_macros::EnumIter;
-use crate::pedals::parameters::{ParameterUpdate, PedalParameterRange};
 
 const SAVE_NAME: &str = "processor_settings.json";
 
@@ -195,10 +195,7 @@ impl FloatSettingUpdate {
     }
 
     /// Converts this fraction based update into a typed parameter update for the given range.
-    pub fn to_parameter_update(
-        &self,
-        range: &PedalParameterRange,
-    ) -> ParameterUpdate {        
+    pub fn to_parameter_update(&self, range: &PedalParameterRange) -> ParameterUpdate {
         match self {
             FloatSettingUpdate::Relative(delta) => {
                 ParameterUpdate::Relative(*delta, Some(range.clone()))

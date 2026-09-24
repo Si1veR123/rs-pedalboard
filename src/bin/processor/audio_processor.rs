@@ -10,10 +10,10 @@ use std::{
 };
 
 use rs_pedalboard::{
-    dsp_algorithms::{resampler::Resampler, yin::Yin},
+    dsp_algorithms::{eq::Equalizer, resampler::Resampler, yin::Yin},
     pedalboard::Pedalboard,
     pedalboard_set::PedalboardSet,
-    pedals::{parameters::ParameterUpdate, Pedal, PedalTrait},
+    pedals::{parameters::ParameterUpdate, GraphicEqSettings, Pedal, PedalTrait},
     processor_settings::FloatSettingUpdate,
     DEFAULT_VOLUME_MONITOR_UPDATE_RATE,
 };
@@ -50,6 +50,12 @@ pub struct AudioProcessor {
         PeakVolumeMonitor,
     ),
     pub volume_normalizer: Option<PeakNormalizer>,
+    /// The EQ applied to the input of the signal chain, shaping what the pedalboards are given,
+    /// and the EQ applied to the output of it, shaping what they output. Both are built for the
+    /// rate audio is processed at, so their bands sit where the client's editor draws them whatever
+    /// the device's rate is.
+    pub global_input_eq: Option<Equalizer>,
+    pub global_output_eq: Option<Equalizer>,
     pub processing_sample_rate: u32,
     pub resamplers: Option<(Resampler, Resampler)>,
     pub recording: RecordingHandle,
@@ -121,6 +127,14 @@ impl AudioProcessor {
             let span = trace_span!("process_audio", frames = self.processing_buffer.len());
             let enter = span.enter();
 
+            // A global EQ belongs to the signal chain rather than to a pedal, so the input one
+            // shapes everything the pedalboards are given, before they process it
+            if let Some(input_eq) = &mut self.global_input_eq {
+                self.processing_buffer
+                    .iter_mut()
+                    .for_each(|sample| *sample = input_eq.process(*sample));
+            }
+
             for i in 0..(self.processing_buffer.len() as f32
                 / self.settings.frames_per_period as f32)
                 .ceil() as usize
@@ -131,6 +145,14 @@ impl AudioProcessor {
                 let frame = &mut self.processing_buffer[start..end];
                 self.pedalboard_set
                     .process_audio(frame, &mut self.pedal_command_to_client_buffer);
+            }
+
+            // And the output one shapes everything the pedalboards output, before the output volume
+            // is applied
+            if let Some(output_eq) = &mut self.global_output_eq {
+                self.processing_buffer
+                    .iter_mut()
+                    .for_each(|sample| *sample = output_eq.process(*sample));
             }
 
             self.processing_buffer
@@ -669,6 +691,14 @@ impl AudioProcessor {
                     }
                 }
             }
+            "setinputeq" => {
+                self.global_input_eq =
+                    parse_eq_command(&command, "setinputeq", self.processing_sample_rate)?;
+            }
+            "setoutputeq" => {
+                self.global_output_eq =
+                    parse_eq_command(&command, "setoutputeq", self.processing_sample_rate)?;
+            }
             "requestsr" => {
                 self.command_sender
                     .try_send(format!("sr {}\n", self.processing_sample_rate).into())
@@ -736,4 +766,28 @@ impl AudioProcessor {
 
         Ok(())
     }
+}
+
+/// The EQ a global EQ command applies, or `None` when it applies no EQ at all.
+///
+/// The EQ is the rest of the command rather than an argument, so a name containing a separator
+/// character cannot be mistaken for another argument. It is built for the rate audio is processed
+/// at, which is higher than the device's when the processor is upsampling.
+fn parse_eq_command(
+    command: &str,
+    command_name: &str,
+    sample_rate: u32,
+) -> Result<Option<Equalizer>, String> {
+    let eq_str = command
+        .strip_prefix(&format!("{command_name}|"))
+        .ok_or_else(|| format!("{command_name}: No EQ was given"))?;
+
+    if eq_str == "none" {
+        return Ok(None);
+    }
+
+    let eq: GraphicEqSettings = serde_json::from_str(eq_str)
+        .map_err(|e| format!("{command_name}: Failed to deserialize global EQ: {e}"))?;
+
+    Ok(Some(eq.build_eq(sample_rate as f32)))
 }

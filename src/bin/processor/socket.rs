@@ -1,6 +1,6 @@
 use futures::{pin_mut, select, FutureExt};
 use ringbuf::traits::{Consumer, Split};
-use rs_pedalboard::socket_helper::CommandReceiver;
+use rs_pedalboard::socket_helper::{truncated_for_log, CommandReceiver};
 use smol::channel::{Receiver, Sender};
 use smol::{
     io::AsyncWriteExt,
@@ -110,7 +110,10 @@ impl ProcessorSocket {
                             if command.len() <= 20 || cfg!(feature="log_full_commands") {
                                 tracing::debug!("Sent command: {:?}", command);
                             } else {
-                                tracing::debug!("Sent command: {:?}...", &command[..20]);
+                                tracing::debug!(
+                                    "Sent command: {:?}...",
+                                    truncated_for_log(&command, 20)
+                                );
                             }
                         },
                         Err(_) => {

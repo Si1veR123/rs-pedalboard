@@ -169,7 +169,12 @@ impl Equalizer {
         response
     }
 
-    /// log2 frequency response in dB from start_freq to end_freq with num_points points
+    /// log2 frequency response in dB from start_freq to end_freq with num_points points.
+    ///
+    /// The first point is drawn at the start of the range and the last at the end of it, so that a
+    /// curve drawn over the range reaches both ends of it rather than stopping a step short of the
+    /// end it was given. A single point is drawn at the start of the range, as there is no range
+    /// for it to be spaced over.
     pub fn amplitude_response_plot(
         &self,
         sample_rate: f64,
@@ -184,7 +189,11 @@ impl Equalizer {
         let mut response = Vec::with_capacity(num_points);
         let log2_start = start_freq.log2();
         let log2_end = end_freq.log2();
-        let step = (log2_end - log2_start) / num_points as f64;
+        let step = if num_points > 1 {
+            (log2_end - log2_start) / (num_points - 1) as f64
+        } else {
+            0.0
+        };
 
         for i in 0..num_points {
             let log2_f = log2_start + i as f64 * step;

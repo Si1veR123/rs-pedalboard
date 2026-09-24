@@ -1,9 +1,9 @@
 use std::{collections::HashMap, hash::Hash};
 
-use eframe::egui::{self, include_image, Button, Color32, Image};
+use eframe::egui::{self, include_image, Button, Color32, Image, Vec2};
 use serde::{Deserialize, Serialize};
 
-use super::{eq_background, gain_knob};
+use super::{eq_background, gain_knob, SLOT_ASPECT_RATIO};
 use crate::{
     dsp_algorithms::biquad::BiquadFilter,
     pedals::{PedalParameter, PedalParameterValue, PedalTrait},
@@ -304,9 +304,16 @@ impl PedalTrait for SimpleEq {
                     ]) {
                         column.vertical_centered(|ui| {
                             if enabled {
-                                if let Some(value) =
-                                    gain_knob(ui, self.parameters.get(name).unwrap(), knob_width)
-                                {
+                                // The slot is drawn at the size of the range a band's gain is set
+                                // over, in the proportions of the image it is drawn from, and the
+                                // knob as wide as it, so the knob travels over the whole of it
+                                if let Some(value) = gain_knob(
+                                    ui,
+                                    self.parameters.get(name).unwrap(),
+                                    Vec2::new(knob_width, knob_width * SLOT_ASPECT_RATIO),
+                                    knob_width,
+                                    1.0,
+                                ) {
                                     changed =
                                         Some((name.to_string(), PedalParameterValue::Float(value)));
                                 }

@@ -11,6 +11,7 @@ use crate::audio_processor_handler::start_processor_process;
 use crate::state::State;
 use rs_pedalboard::{
     audio_devices::{get_input_devices, get_output_devices},
+    pedals::{graphic_eq_editor_ui, EqPresets},
     processor_settings::SupportedHost,
     SAVE_DIR,
 };
@@ -39,6 +40,14 @@ pub struct ClientSettings {
     pub nam_folders: Vec<PathBuf>,
     pub ir_folders: Vec<PathBuf>,
     pub vst2_folders: Vec<PathBuf>,
+    /// The EQs the user has created for the input, and the one that is applied to it
+    pub global_input_eq: EqPresets,
+    /// The EQs the user has created for the output, and the one that is applied to it
+    ///
+    /// EQs saved before the input and the output EQ were separate are saved under the key the
+    /// output EQ used to have, so they are read as the EQs of this side of the signal chain
+    #[serde(alias = "global_eq")]
+    pub global_output_eq: EqPresets,
 }
 
 impl ClientSettings {
@@ -109,6 +118,8 @@ impl Default for ClientSettings {
             nam_folders: vec![],
             ir_folders: vec![],
             vst2_folders: vec![],
+            global_input_eq: EqPresets::default(),
+            global_output_eq: EqPresets::default(),
         }
     }
 }
@@ -175,9 +186,45 @@ pub struct SettingsScreen {
     pub processor_launch_state: ProcessorLaunchState,
     audio_devices: AudioDevices,
 
+    input_eq_editor: EqEditorState,
+    output_eq_editor: EqEditorState,
+    /// Identifies the input EQ editor's widgets: the graph the editor draws is named under it. The
+    /// input and the output editor are drawn in the same frame, so each is named with an ID of its
+    /// own. A global EQ belongs to no pedal, so these are IDs no pedal has.
+    input_eq_editor_id: u32,
+    output_eq_editor_id: u32,
+
     nam_file_dialog: egui_file::FileDialog,
     ir_file_dialog: egui_file::FileDialog,
     vst2_file_dialog: egui_file::FileDialog,
+}
+
+/// The parts of one of the Global EQ sections that are not saved with the EQs themselves
+#[derive(Default)]
+struct EqEditorState {
+    /// The open name field, if any: a new EQ being named, or one being renamed
+    name_input: Option<EqNameInput>,
+}
+
+/// A name field for creating or renaming an EQ
+struct EqNameInput {
+    /// Index of the EQ being renamed, or `None` when the EQ does not exist yet
+    rename: Option<usize>,
+    /// The name being typed
+    name: String,
+    /// Whether the field has been given the keyboard yet, as it takes it when it opens
+    focused: bool,
+}
+
+impl EqNameInput {
+    /// A name field holding `name`, renaming the EQ at `rename`, or creating a new EQ if `None`
+    fn new(rename: Option<usize>, name: String) -> Self {
+        Self {
+            rename,
+            name,
+            focused: false,
+        }
+    }
 }
 
 impl SettingsScreen {
@@ -186,6 +233,12 @@ impl SettingsScreen {
             audio_devices: AudioDevices::new(state.processor_settings.borrow().host.into()),
             state,
             processor_launch_state: ProcessorLaunchState::None,
+            input_eq_editor: EqEditorState::default(),
+            output_eq_editor: EqEditorState::default(),
+            // A global EQ belongs to no pedal, so its editors are named with IDs no pedal has. The
+            // two editors are drawn in the same frame, so each is named with an ID of its own.
+            input_eq_editor_id: rs_pedalboard::unique_time_id(),
+            output_eq_editor_id: rs_pedalboard::unique_time_id(),
             nam_file_dialog: egui_file::FileDialog::select_folder(),
             ir_file_dialog: egui_file::FileDialog::select_folder(),
             vst2_file_dialog: egui_file::FileDialog::select_folder(),
@@ -276,6 +329,10 @@ impl SettingsScreen {
 const SETTING_ROW_HEIGHT_FRACT: f32 = 0.1;
 const BUTTON_EXPANSION: f32 = 2.0;
 const SECTION_SPACE: f32 = 40.0;
+/// The size a subheading under a section heading is written in, as a share of the size a heading is
+/// written in, so that a subheading reads as being under its heading however large the font the
+/// window is drawn with is.
+const SUBHEADING_SIZE_FRACTION: f32 = 0.75;
 
 impl Widget for &mut SettingsScreen {
     fn ui(self, ui: &mut egui::Ui) -> Response {
@@ -631,6 +688,42 @@ impl Widget for &mut SettingsScreen {
 
                     ui.add_space(SECTION_SPACE);
 
+                    let input_eq_editor_id = self.input_eq_editor_id;
+                    let output_eq_editor_id = self.output_eq_editor_id;
+
+                    ui.heading("Global EQ");
+                    ui.separator();
+
+                    if global_eq_side_ui(
+                        ui,
+                        "Input EQ",
+                        "Applied to the input, before the pedalboards are given it",
+                        &mut self.input_eq_editor,
+                        input_eq_editor_id,
+                        &mut client_settings.global_input_eq,
+                    ) {
+                        self.state.set_input_global_eq_processor(
+                            client_settings.global_input_eq.selected_eq().cloned(),
+                        );
+                    }
+
+                    ui.add_space(SECTION_SPACE);
+
+                    if global_eq_side_ui(
+                        ui,
+                        "Output EQ",
+                        "Applied to the output, after the pedalboards have processed it",
+                        &mut self.output_eq_editor,
+                        output_eq_editor_id,
+                        &mut client_settings.global_output_eq,
+                    ) {
+                        self.state.set_output_global_eq_processor(
+                            client_settings.global_output_eq.selected_eq().cloned(),
+                        );
+                    }
+
+                    ui.add_space(SECTION_SPACE);
+
                     ui.heading("Neural Amp Modeler Folders");
                     ui.separator();
                     ui.add_space(20.0);
@@ -793,9 +886,235 @@ fn multiple_directories_select_ui(
     changed
 }
 
+/// The font a subheading under a section heading is written in
+fn subheading_font(ui: &egui::Ui) -> egui::FontId {
+    let mut font = egui::TextStyle::Heading.resolve(ui.style());
+    font.size *= SUBHEADING_SIZE_FRACTION;
+    font
+}
+
+/// The Global EQ section: the EQs a user has saved for either side of the signal chain, which of
+/// them is applied, and the editor for each of the applied ones.
+///
+/// Each side is a section of its own, under a subheading, as the two sides shape what is heard at
+/// either end of the signal chain and so are kept, and chosen between, apart from each other.
+///
+/// The EQs are kept with the client's settings instead of on a processor, so they can be created,
+/// edited and kept whether or not a processor is connected. Everything the editor changes is
+/// therefore saved by the client, and only the EQ that is applied has to be sent to a processor.
+///
+/// Returns whether the EQ the processor should apply to that side of the signal chain changed.
+fn global_eq_side_ui(
+    ui: &mut egui::Ui,
+    subheading: &str,
+    note: &str,
+    editor: &mut EqEditorState,
+    id: u32,
+    presets: &mut EqPresets,
+) -> bool {
+    // A selection that settings were saved with before its EQ was deleted applies nothing, and is
+    // shown as such rather than as an EQ that is applied
+    let selected = presets.selected;
+    presets.select(selected);
+
+    let mut changed = false;
+    let available_width = ui.available_width();
+
+    ui.label(RichText::new(subheading).font(subheading_font(ui)));
+    ui.label(RichText::new(note).color(crate::FAINT_TEXT_COLOR));
+    ui.add_space(20.0);
+
+    ui.horizontal(|ui| {
+        egui::ComboBox::from_id_salt((id, "global_eq_dropdown"))
+            .width(available_width * 0.3)
+            .selected_text(selected_eq_name(presets))
+            .wrap_mode(egui::TextWrapMode::Truncate)
+            .show_ui(ui, |ui| {
+                changed |= ui
+                    .selectable_value(&mut presets.selected, None, "No EQ")
+                    .on_hover_text("Apply no EQ to the signal chain")
+                    .changed();
+
+                for (index, eq) in presets.eqs.iter().enumerate() {
+                    changed |= ui
+                        .selectable_value(&mut presets.selected, Some(index), &eq.name)
+                        .changed();
+                }
+            });
+
+        if ui
+            .button("New")
+            .on_hover_text("Create an EQ, named after one no other EQ is using")
+            .clicked()
+        {
+            editor.name_input = Some(EqNameInput::new(None, presets.unused_name()));
+        }
+
+        let selected = presets.selected;
+
+        // Renaming and deleting act on the EQ that is applied, and there is nothing to act on when
+        // none is
+        ui.add_enabled_ui(selected.is_some(), |ui| {
+            if ui.button("Rename").clicked() {
+                if let Some(eq) = presets.selected_eq() {
+                    editor.name_input = Some(EqNameInput::new(selected, eq.name.clone()));
+                }
+            }
+
+            if ui.button("Delete").clicked() {
+                if let Some(index) = selected {
+                    if presets.remove(index) {
+                        // The EQs after the deleted one have moved up, so an open name field would
+                        // be renaming a different EQ than the one it was opened for
+                        editor.name_input = None;
+                        changed = true;
+                    }
+                }
+            }
+        });
+    });
+
+    // The name field is taken out of the editor's state while it is edited, so the name that was
+    // typed can be applied, or kept, once the field has been drawn
+    if let Some(mut input) = editor.name_input.take() {
+        ui.add_space(10.0);
+
+        let mut confirmed = false;
+        let mut cancelled = false;
+
+        ui.horizontal(|ui| {
+            ui.label(if input.rename.is_some() {
+                "Rename EQ"
+            } else {
+                "New EQ"
+            });
+
+            let name_field = ui.add(
+                egui::TextEdit::singleline(&mut input.name)
+                    .desired_width(available_width * 0.3)
+                    .hint_text("Name"),
+            );
+
+            // The field takes the keyboard as it opens, so the name that is offered can be typed
+            // over right away
+            if !input.focused {
+                input.focused = true;
+                name_field.request_focus();
+            }
+
+            let name_is_empty = input.name.trim().is_empty();
+            let name_is_taken = eq_name_is_taken(presets, &input);
+
+            confirmed = ui
+                .add_enabled(!name_is_empty && !name_is_taken, egui::Button::new("OK"))
+                .clicked()
+                || (name_field.lost_focus()
+                    && ui.input(|input| input.key_pressed(egui::Key::Enter)));
+            cancelled = ui.button("Cancel").clicked()
+                || ui.input(|input| input.key_pressed(egui::Key::Escape));
+
+            if name_is_empty {
+                ui.label(RichText::new("An EQ needs a name").color(Color32::RED));
+            } else if name_is_taken {
+                ui.label(
+                    RichText::new("Another EQ is already using that name").color(Color32::RED),
+                );
+            }
+        });
+
+        ui.add_space(10.0);
+
+        let name = input.name.trim().to_string();
+        // Enter applies the name just like the button does, but not when the name was left empty,
+        // or is one another EQ is using
+        let name_is_taken = name.is_empty() || eq_name_is_taken(presets, &input);
+
+        if confirmed && !name_is_taken {
+            match input.rename {
+                Some(index) => {
+                    // Renaming changes nothing that is heard, so the processor needs nothing
+                    presets.rename(index, name);
+                }
+                None => {
+                    // A new EQ is applied as soon as it is created
+                    presets.add(name);
+                    changed = true;
+                }
+            }
+        } else if !cancelled {
+            // Keep the field open, holding what has been typed so far
+            editor.name_input = Some(input);
+        }
+    }
+
+    ui.add_space(20.0);
+
+    if let Some(eq) = presets.selected_eq_mut() {
+        changed |= graphic_eq_editor_ui(ui, eq, id);
+    } else {
+        ui.vertical_centered(|ui| {
+            ui.add_space(60.0);
+            ui.label(
+                RichText::new("No EQ is applied. Choose one, or create a new one.")
+                    .color(crate::FAINT_TEXT_COLOR),
+            );
+        });
+    }
+
+    changed
+}
+
+/// The name the dropdown shows for the EQ that is applied
+fn selected_eq_name(presets: &EqPresets) -> String {
+    match presets.selected_eq() {
+        Some(eq) => eq.name.clone(),
+        None => "No EQ".to_string(),
+    }
+}
+
+/// Whether the name being typed is one another EQ is already using, which would leave two entries
+/// in the dropdown that cannot be told apart
+fn eq_name_is_taken(presets: &EqPresets, input: &EqNameInput) -> bool {
+    presets
+        .eqs
+        .iter()
+        .enumerate()
+        .any(|(index, eq)| eq.name == input.name.trim() && Some(index) != input.rename)
+}
+
 pub fn set_large_checkbox_style(ui: &mut egui::Ui) {
     ui.style_mut().spacing.icon_width = 35.0;
     ui.style_mut().spacing.icon_width_inner = 12.0;
     ui.style_mut().visuals.widgets.inactive.fg_stroke =
         egui::Stroke::new(2.0_f32, Color32::from_rgb(200, 200, 200));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Settings saved before the input and the output EQ were separate hold one set of EQs, under
+    /// the key the output EQ had then, and are read as the EQs of the output side of the signal
+    /// chain. They are saved again under the key each side is saved under now.
+    #[test]
+    fn eqs_saved_under_the_key_the_output_eq_had_are_read_as_the_output_eqs() {
+        let saved = r#"{"global_eq":{"eqs":[{"name":"Saved"}],"selected":0}}"#;
+
+        let settings: ClientSettings =
+            serde_json::from_str(saved).expect("Failed to deserialize client settings");
+
+        assert_eq!(
+            settings
+                .global_output_eq
+                .selected_eq()
+                .map(|eq| eq.name.as_str()),
+            Some("Saved")
+        );
+        assert!(settings.global_input_eq.eqs.is_empty());
+
+        let saved_again =
+            serde_json::to_string(&settings).expect("Failed to serialize client settings");
+        assert!(saved_again.contains(r#""global_output_eq""#));
+        assert!(!saved_again.contains(r#""global_eq""#));
+    }
 }

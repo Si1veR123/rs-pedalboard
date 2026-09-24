@@ -234,7 +234,12 @@ impl MidiState {
             }
             DeviceFunctionMode::Sensible => {
                 // The device has no functions of its own, fall back to a sensible parameter
-                let device_index = settings_lock.get_parameter_device_index(port_id, cc, channel, active_pedalboard_id);
+                let device_index = settings_lock.get_parameter_device_index(
+                    port_id,
+                    cc,
+                    channel,
+                    active_pedalboard_id,
+                );
                 if let Some(device_index) = device_index {
                     if let Some(float_update) = change.to_float_setting_update() {
                         let command =
@@ -726,7 +731,13 @@ impl MidiSettings {
     /// Devices are numbered per [`MidiDeviceKind`] and ordered by `(port_id, cc, channel)` so
     /// that a device keeps its index across runs (the underlying maps are unordered) and when
     /// its configured settings change. The first device of a kind has index 0.
-    fn get_parameter_device_index(&self, port_id: &str, cc: u8, channel: u8, active_pedalboard_id: u32) -> Option<usize> {
+    fn get_parameter_device_index(
+        &self,
+        port_id: &str,
+        cc: u8,
+        channel: u8,
+        active_pedalboard_id: u32,
+    ) -> Option<usize> {
         let target_kind = {
             let target = self
                 .port_settings
@@ -1028,10 +1039,13 @@ impl MidiDevice {
     pub fn function_mode(&self, active_pedalboard_id: u32) -> DeviceFunctionMode {
         if self.use_global {
             DeviceFunctionMode::Global
-        } else if self.parameter_functions.iter()
+        } else if self
+            .parameter_functions
+            .iter()
             // Filter to parameter functions which are on the active pedalboard
             .filter(|(path, _range)| path.pedalboard_id == Some(active_pedalboard_id))
-            .count() == 0
+            .count()
+            == 0
         {
             DeviceFunctionMode::Sensible
         } else {
@@ -1082,7 +1096,6 @@ pub enum MidiDeviceType {
         momentary_to_latching: bool,
     },
 }
-
 
 impl MidiDeviceType {
     /// The kind of this device type, without its per-device settings.

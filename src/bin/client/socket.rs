@@ -3,13 +3,14 @@ use std::time::Duration;
 use futures::{pin_mut, select, FutureExt};
 use ringbuf::traits::{Consumer, Split};
 use rs_pedalboard::pedals::parameters::ParameterUpdate;
+use rs_pedalboard::pedals::GraphicEqSettings;
 use rs_pedalboard::processor_settings::FloatSettingUpdate;
 use smol::channel::{Receiver, Sender, TryRecvError};
 use smol::io::{AsyncWrite, AsyncWriteExt};
 use smol::net::{Ipv4Addr, TcpStream};
 
 use rs_pedalboard::pedalboard::ParameterPath;
-use rs_pedalboard::socket_helper::CommandReceiver;
+use rs_pedalboard::socket_helper::{truncated_for_log, CommandReceiver};
 
 use crate::settings::VolumeNormalizationMode;
 
@@ -127,6 +128,10 @@ pub enum Command {
     KillProcessor,
     MasterIn(FloatSettingUpdate),
     MasterOut(FloatSettingUpdate),
+    // Serialized EQ applied to the input of the signal chain, or none for no EQ at all
+    SetInputEq(Option<GraphicEqSettings>),
+    // Serialized EQ applied to the output of the signal chain, or none for no EQ at all
+    SetOutputEq(Option<GraphicEqSettings>),
     VolumeNormalization(VolumeNormalizationMode, Option<f32>),
     VolumeNormalizationReset,
     SetRecording(bool),
@@ -158,7 +163,7 @@ pub enum Command {
     SongsView,
     SettingsView,
     ChangeActiveParameter(FloatSettingUpdate),
-    SensibleMidiParameterUpdate(usize, FloatSettingUpdate)
+    SensibleMidiParameterUpdate(usize, FloatSettingUpdate),
 }
 
 pub struct ClientSocketThreadHandle {
@@ -476,6 +481,18 @@ async fn client_socket_event_loop(
                             break;
                         }
                     },
+                    Command::SetInputEq(eq) => {
+                        let message = eq_command_message("setinputeq", eq.as_ref());
+                        if socket_send(&mut stream_writer, &message).await {
+                            break;
+                        }
+                    },
+                    Command::SetOutputEq(eq) => {
+                        let message = eq_command_message("setoutputeq", eq.as_ref());
+                        if socket_send(&mut stream_writer, &message).await {
+                            break;
+                        }
+                    },
                     Command::VolumeNormalization(mode, auto_decay) => {
                         let message: String;
 
@@ -610,6 +627,21 @@ async fn client_socket_event_loop(
     }
 }
 
+/// The message that applies an EQ to one side of the signal chain, or that removes the EQ
+/// applied to it when there is none.
+///
+/// The EQ is the rest of the message rather than an argument, so a name containing a
+/// separator character cannot be mistaken for another argument.
+fn eq_command_message(command_name: &str, eq: Option<&GraphicEqSettings>) -> String {
+    match eq {
+        Some(eq) => format!(
+            "{command_name}|{}\n",
+            serde_json::to_string(eq).expect("Failed to serialize EQ")
+        ),
+        None => format!("{command_name}|none\n"),
+    }
+}
+
 /// Returns true if closed
 async fn socket_send(mut stream: impl AsyncWrite + Unpin, message: &str) -> bool {
     match stream.write_all(message.as_bytes()).await {
@@ -617,7 +649,7 @@ async fn socket_send(mut stream: impl AsyncWrite + Unpin, message: &str) -> bool
             if message.len() < 40 || cfg!(feature = "log_full_commands") {
                 tracing::info!("Sent: {:?}", message);
             } else {
-                tracing::info!("Sent: {:?}...", &message[..40]);
+                tracing::info!("Sent: {:?}...", truncated_for_log(message, 40));
             }
             false
         }

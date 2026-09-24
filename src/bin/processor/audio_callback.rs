@@ -564,6 +564,8 @@ pub fn create_linked_streams(
                             PeakVolumeMonitor::new(),
                         ),
                         volume_normalizer: None,
+                        global_input_eq: None,
+                        global_output_eq: None,
                         processing_sample_rate,
                         resamplers,
                         recording: RecordingHandle::new(

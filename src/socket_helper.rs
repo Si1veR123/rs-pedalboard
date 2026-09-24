@@ -2,6 +2,24 @@ use std::io::{self, Read};
 
 use smol::io::{AsyncRead, AsyncReadExt};
 
+/// Returns the start of `s`, cut to at most `max_bytes` bytes, for log messages that would
+/// otherwise be too long.
+///
+/// Commands carry user entered text such as pedal names, so a cut has to land on a character
+/// boundary rather than a byte one to avoid panicking on multi byte characters.
+pub fn truncated_for_log(s: &str, max_bytes: usize) -> &str {
+    if s.len() <= max_bytes {
+        return s;
+    }
+
+    let mut end = max_bytes;
+    while !s.is_char_boundary(end) {
+        end -= 1;
+    }
+
+    &s[..end]
+}
+
 pub struct CommandReceiver {
     partial_buffer: Vec<u8>,
     temp_command_buffer: Vec<String>,
@@ -39,7 +57,7 @@ impl CommandReceiver {
                 if line.len() < 40 || cfg!(feature = "log_full_commands") {
                     tracing::debug!("Received command: {:?}", line);
                 } else {
-                    tracing::debug!("Received command: {:?}...", &line[..40]);
+                    tracing::debug!("Received command: {:?}...", truncated_for_log(&line, 40));
                 }
 
                 self.temp_command_buffer.push(line);
@@ -104,5 +122,36 @@ impl CommandReceiver {
 
     pub fn reset(&mut self) {
         self.partial_buffer.clear();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::truncated_for_log;
+
+    #[test]
+    fn a_message_is_cut_to_the_limit_without_splitting_a_character() {
+        // A message short enough to be logged whole is left alone, and a longer one is cut to the
+        // limit it is given
+        assert_eq!(truncated_for_log("setoutputeq|none", 40), "setoutputeq|none");
+
+        let message = "setoutputeq|".to_string() + &"a".repeat(200);
+        assert_eq!(truncated_for_log(&message, 40).len(), 40);
+
+        // A cut that lands in the middle of a multi byte character, which a name in a command can
+        // hold, is taken back to the character before it, so that every cut leaves a message that
+        // can be logged
+        let message = "setoutputeq|{\"name\":\"аааааааааааааааааааааа\"}";
+
+        for max_bytes in 0..message.len() {
+            let truncated = truncated_for_log(message, max_bytes);
+
+            assert!(message.starts_with(truncated), "cut to {max_bytes} bytes");
+            assert!(
+                truncated.len() <= max_bytes,
+                "cut to {max_bytes} bytes left {}",
+                truncated.len()
+            );
+        }
     }
 }

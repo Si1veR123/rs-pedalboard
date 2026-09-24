@@ -1,5 +1,8 @@
 use crate::{
-    pedalboard_set, pedals::{Pedal, PedalParameterValue, PedalTrait}, processor_settings::FloatSettingUpdate, unique_time_id,
+    pedalboard_set,
+    pedals::{Pedal, PedalParameterValue, PedalTrait},
+    processor_settings::FloatSettingUpdate,
+    unique_time_id,
 };
 use serde::{Deserialize, Serialize};
 use std::{fmt::Write, hash::Hash};
@@ -224,9 +227,8 @@ impl Pedalboard {
             );
         }
 
-        prioritised.sort_by_key(|(rank, pedal_order, _pedal_id, _param_name)| {
-            (*rank, *pedal_order)
-        });
+        prioritised
+            .sort_by_key(|(rank, pedal_order, _pedal_id, _param_name)| (*rank, *pedal_order));
 
         let mut parameters: Vec<(u32, String)> = prioritised
             .into_iter()

@@ -328,7 +328,8 @@ mod tests {
     #[test]
     #[ignore = "requires a locally installed VST2 plugin"]
     fn test_load_vst2_plugin() {
-        let plugin_path = PathBuf::from(r"C:\Program Files\Common Files\VST2\ValhallaFreqEcho_x64.dll");
+        let plugin_path =
+            PathBuf::from(r"C:\Program Files\Common Files\VST2\ValhallaFreqEcho_x64.dll");
         let instance = Vst2Instance::load(plugin_path);
         assert!(instance.is_ok());
         let mut instance = instance.unwrap();

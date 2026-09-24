@@ -16,7 +16,10 @@ pub use modulation::{Chorus, Flanger};
 mod delay;
 pub use delay::Delay;
 mod eq;
-pub use eq::{GraphicEq7, SimpleEq};
+pub use eq::{
+    graphic_eq_editor_ui, EqPresets, GraphicEq7, GraphicEqSettings, SimpleEq, BAND_COUNT,
+    BAND_FREQS, EQ_DB_GAIN, MAX_FREQ_HZ, MIN_FREQ_HZ,
+};
 mod nam;
 pub use nam::set_nam_save_path;
 pub use nam::Nam;

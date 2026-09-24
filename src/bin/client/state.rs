@@ -9,7 +9,9 @@ use crossbeam::channel::Receiver;
 use eframe::egui;
 use rs_pedalboard::{
     pedalboard::{ParameterPath, Pedalboard},
-    pedals::{parameters::ParameterUpdate, ui::get_active_parameter, Pedal, PedalTrait},
+    pedals::{
+        parameters::ParameterUpdate, ui::get_active_parameter, GraphicEqSettings, Pedal, PedalTrait,
+    },
     processor_settings::{FloatSettingUpdate, ProcessorSettingsSave},
 };
 use std::{
@@ -467,6 +469,20 @@ impl State {
         )));
     }
 
+    /// Apply an EQ to the input of the whole signal chain, or `None` to remove the EQ that is
+    /// applied to it
+    pub fn set_input_global_eq_processor(&self, eq: Option<GraphicEqSettings>) {
+        let mut socket = self.socket.borrow_mut();
+        socket.send(Command::SetInputEq(eq));
+    }
+
+    /// Apply an EQ to the output of the whole signal chain, or `None` to remove the EQ that is
+    /// applied to it
+    pub fn set_output_global_eq_processor(&self, eq: Option<GraphicEqSettings>) {
+        let mut socket = self.socket.borrow_mut();
+        socket.send(Command::SetOutputEq(eq));
+    }
+
     pub fn set_recording(&self, active: bool) {
         let mut socket = self.socket.borrow_mut();
         socket.send(Command::SetRecording(active));
@@ -600,6 +616,14 @@ impl State {
                     client_settings.auto_volume_normalization_decay,
                 );
                 self.master_in_processor(client_settings.input_volume);
+                // The processor starts without an EQ, so the EQs the client has selected have to be
+                // sent along with the rest of the settings
+                self.set_input_global_eq_processor(
+                    client_settings.global_input_eq.selected_eq().cloned(),
+                );
+                self.set_output_global_eq_processor(
+                    client_settings.global_output_eq.selected_eq().cloned(),
+                );
                 self.set_recorder_clean(self.recording_save_clean.get());
                 self.set_metronome(
                     self.metronome_active.get(),
@@ -932,6 +956,12 @@ impl State {
 
                 Command::RequestSampleRate => {
                     tracing::error!("Unexpected RequestSampleRate command in other thread commands")
+                }
+                Command::SetInputEq(_) => {
+                    tracing::error!("Unexpected SetInputEq command in other thread commands")
+                }
+                Command::SetOutputEq(_) => {
+                    tracing::error!("Unexpected SetOutputEq command in other thread commands")
                 }
                 Command::ThreadAliveTest => {
                     tracing::error!("Unexpected ThreadAliveTest command in other thread commands")
