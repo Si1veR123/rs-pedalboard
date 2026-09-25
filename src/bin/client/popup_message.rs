@@ -1,4 +1,7 @@
+use std::ffi::os_str::Display;
+
 use eframe::egui;
+use serde::{Deserialize, Serialize};
 
 const POPUP_MESSAGE_INFO_TIME: f32 = 2.5;
 const POPUP_MESSAGE_WARNING_TIME: f32 = 5.0;
@@ -56,11 +59,21 @@ pub fn back_out(t: f32) -> f32 {
   1.0 - f * f * f + ANIMATION_BOUNCE * f * (f * std::f32::consts::PI).sin()
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy, Debug, strum_macros::EnumIter, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord)]
 pub enum PopupMessageType {
-    Info,
-    Warning,
-    Error
+    Info = 0,
+    Warning = 1,
+    Error = 2
+}
+
+impl std::fmt::Display for PopupMessageType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PopupMessageType::Info => write!(f, "Info"),
+            PopupMessageType::Warning => write!(f, "Warning"),
+            PopupMessageType::Error => write!(f, "Error"),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -154,6 +167,16 @@ impl PopupWidget {
 
 impl egui::Widget for &mut PopupWidget {
     fn ui(self, ui: &mut egui::Ui) -> egui::Response {
+        let popup_level = self.ctx.memory(|reader| {
+            reader
+                .data
+                .get_temp::<Option<PopupMessageType>>(egui::Id::new("popup_level"))
+                .unwrap_or(Some(PopupMessageType::Info))
+        });
+        if popup_level.is_none() {
+            return ui.allocate_response(egui::Vec2::ZERO, egui::Sense::hover());
+        }
+
         // Count the messages down and drop the ones which have finished sliding off
         let dt = ui.input(|input| input.stable_dt).min(0.1);
         for message in &mut self.messages {
@@ -182,6 +205,12 @@ impl egui::Widget for &mut PopupWidget {
 
         let mut top = screen_rect.top() + MESSAGE_EDGE_MARGIN;
         for message in &self.messages {
+            if let Some(popup_level) = popup_level {
+                if message.message_type < popup_level {
+                    continue;
+                }
+            }
+
             let galley = painter.layout_no_wrap(
                 message.message.clone(),
                 font.clone(),

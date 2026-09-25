@@ -1,10 +1,5 @@
 use crate::{
-    midi::{MidiSettings, MidiState},
-    saved_pedalboards::SavedPedalboards,
-    settings::{ClientSettings, VolumeNormalizationMode},
-    socket::{ClientSocket, Command},
-    Screen,
-    popup_message::popup
+    Screen, midi::{MidiSettings, MidiState}, popup_message::{PopupMessageType, popup}, saved_pedalboards::SavedPedalboards, settings::{ClientSettings, VolumeNormalizationMode}, socket::{ClientSocket, Command}
 };
 use crossbeam::channel::Receiver;
 use eframe::egui;
@@ -532,7 +527,7 @@ impl State {
         tracing::debug!("State::load_state: loading client settings");
         let client_settings = ClientSettings::load_or_default();
 
-        // Set NAM folders, IR folders and VST2 in ctx memory so pedals can access
+        // Set NAM folders, IR folders, VST2 and more in ctx memory
         tracing::info!("Indexing NAM, IR and VST2 folders...");
         let nam_root_nodes: Vec<_> = client_settings
             .nam_folders
@@ -572,6 +567,9 @@ impl State {
                 .data
                 .insert_temp(egui::Id::new("vst2_folders"), vst2_root_nodes);
         });
+
+        let popup_level = client_settings.show_popups.clone();
+        Self::set_popup_level_memory(&egui_ctx, popup_level);
 
         tracing::debug!("State::load_state: loading processor settings");
         let processor_settings = ProcessorSettingsSave::load_or_default();
@@ -1003,5 +1001,13 @@ impl State {
                 ),
             }
         }
+    }
+
+    pub fn set_popup_level_memory(ctx: &egui::Context, level: Option<PopupMessageType>) {
+        ctx.memory_mut(|writer| {
+            writer
+                .data
+                .insert_temp(egui::Id::new("popup_level"), level);
+        });
     }
 }

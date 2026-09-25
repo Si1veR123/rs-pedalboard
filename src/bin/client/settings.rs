@@ -8,8 +8,7 @@ use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
 use crate::{
-    audio_processor_handler::{start_processor_process, StartProcessorResult},
-    popup_message::popup,
+    audio_processor_handler::{StartProcessorResult, start_processor_process}, popup_message::{PopupMessageType, popup},
 };
 use crate::state::State;
 use rs_pedalboard::{
@@ -40,16 +39,12 @@ pub struct ClientSettings {
     pub auto_volume_normalization_decay: f32,
     pub input_volume: f32,
     pub output_volume: f32,
+    pub show_popups: Option<PopupMessageType>,
     pub nam_folders: Vec<PathBuf>,
     pub ir_folders: Vec<PathBuf>,
     pub vst2_folders: Vec<PathBuf>,
-    /// The EQs the user has created for the input, and the one that is applied to it
+
     pub global_input_eq: EqPresets,
-    /// The EQs the user has created for the output, and the one that is applied to it
-    ///
-    /// EQs saved before the input and the output EQ were separate are saved under the key the
-    /// output EQ used to have, so they are read as the EQs of this side of the signal chain
-    #[serde(alias = "global_eq")]
     pub global_output_eq: EqPresets,
 }
 
@@ -118,6 +113,7 @@ impl Default for ClientSettings {
             auto_volume_normalization_decay: 0.95,
             input_volume: 1.0,
             output_volume: 1.0,
+            show_popups: Some(PopupMessageType::Info),
             nam_folders: vec![],
             ir_folders: vec![],
             vst2_folders: vec![],
@@ -596,7 +592,7 @@ impl Widget for &mut SettingsScreen {
 
                     ui.add_space(SECTION_SPACE);
 
-                    ui.label(RichText::new("Client Settings").font(egui::TextStyle::Heading.resolve(ui.style())));
+                    ui.heading("Client Settings");
                     ui.separator();
 
                     egui::Grid::new("client_settings_grid")
@@ -675,10 +671,35 @@ impl Widget for &mut SettingsScreen {
                                 ui.end_row();
                             };
 
+                            ui.label("Show Popups");
+                            let mut show_popups_changed = false;
+                            egui::ComboBox::from_id_salt("show_popups_dropdown")
+                                .selected_text(match client_settings.show_popups {
+                                    Some(value) => format!("{}", value),
+                                    None => "None".to_string()
+                                })
+                                .wrap_mode(egui::TextWrapMode::Truncate)
+                                .show_ui(ui, |ui| {
+                                    let response = ui.selectable_value(&mut client_settings.show_popups, None, "None");
+                                    show_popups_changed |= response.changed();
+
+                                    for value in PopupMessageType::iter() {
+                                        let response = ui.selectable_value(&mut client_settings.show_popups, Some(value.clone()), format!("{:?}", value));
+                                        show_popups_changed |= response.changed();
+                                    }
+                                });
+                            
+                            if show_popups_changed {
+                                State::set_popup_level_memory(ui.ctx(), client_settings.show_popups.clone());
+                            }
+
+                            ui.end_row();
+
                             set_large_checkbox_style(ui);
 
+                            let startup_processor_message = "Start the processor when the client starts";
                             ui.label("Startup Processor");
-                            ui.checkbox(&mut client_settings.startup_processor, "");
+                            ui.checkbox(&mut client_settings.startup_processor, "").on_hover_text(startup_processor_message);
                             ui.end_row();
 
                             ui.label("Kill Processor on Close");
@@ -686,8 +707,7 @@ impl Widget for &mut SettingsScreen {
                             ui.end_row();
 
                             ui.label("Show Volume Monitor");
-                            let volume_monitor_message = "This can affect performance as the UI will have to frequently update";
-                            if ui.checkbox(&mut client_settings.show_volume_monitor, "").on_hover_text(volume_monitor_message).changed() {
+                            if ui.checkbox(&mut client_settings.show_volume_monitor, "").changed() {
                                 self.state.set_volume_monitor_active_processor(client_settings.show_volume_monitor);
                             }
                             ui.end_row();
