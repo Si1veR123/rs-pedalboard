@@ -316,7 +316,7 @@ impl State {
                     parameter_update.apply_to_pedal(&mut *pedal, &parameter_name);
                     let new_value = pedal.get_parameters().get(&parameter_name).map(|p| p.value.clone());
                     new_value_string = new_value.map(|value| {
-                        pedal.parameter_value_display_string(&parameter_name, &value).unwrap_or_else(|| format!("{:?}", value))
+                        pedal.parameter_value_display_string(&parameter_name, &value).unwrap_or_else(|| format!("{}", value))
                     });
                 }
             }

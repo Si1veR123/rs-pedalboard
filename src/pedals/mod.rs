@@ -1,4 +1,4 @@
-use eframe::egui;
+﻿use eframe::egui;
 use enum_dispatch::enum_dispatch;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -73,7 +73,6 @@ pub trait PedalTrait {
         _name: &str,
         _value: &PedalParameterValue,
     ) -> Option<String> {
-        // By default a parameter has no display string, so its raw number is shown
         None
     }
 

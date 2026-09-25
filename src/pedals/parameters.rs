@@ -12,6 +12,18 @@ pub enum PedalParameterValue {
     Oscillator(Oscillator),
 }
 
+impl std::fmt::Display for PedalParameterValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PedalParameterValue::Float(value) => write!(f, "{:.2}", value),
+            PedalParameterValue::String(value) => write!(f, "{}", value),
+            PedalParameterValue::Bool(value) => if *value { write!(f, "On") } else { write!(f, "Off") },
+            PedalParameterValue::Int(value) => write!(f, "{}", value),
+            PedalParameterValue::Oscillator(osc) => write!(f, "{:.2}", osc.get_frequency()),
+        }
+    }
+}
+
 impl Hash for PedalParameterValue {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
