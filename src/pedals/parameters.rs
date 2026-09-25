@@ -175,6 +175,7 @@ impl PedalParameter {
     pub fn parameter_editor_ui(
         &self,
         ui: &mut egui::Ui,
+        value_display_string: Option<&str>,
     ) -> egui::InnerResponse<Option<PedalParameterValue>> {
         let width = ui.available_width() * 0.8;
         let mut to_change = None;
@@ -184,7 +185,11 @@ impl PedalParameter {
                 let init_value = f;
                 let min = self.min.clone().unwrap().as_float().unwrap_or(0.0);
                 let max = self.max.clone().unwrap().as_float().unwrap_or(1.0);
-                let response = ui.add(egui::Slider::new(&mut f, min..=max).max_decimals(2));
+                let mut slider = egui::Slider::new(&mut f, min..=max).max_decimals(2);
+                if let Some(value_display_string) = value_display_string {
+                    slider = with_value_display_string(slider, value_display_string);
+                }
+                let response = ui.add(slider);
                 f = f.clamp(min, max);
                 if f != init_value {
                     to_change = Some(PedalParameterValue::Float(f));
@@ -193,6 +198,8 @@ impl PedalParameter {
             }
             PedalParameterValue::Bool(mut b) => {
                 let init_value = b;
+                // A checkbox shows its state itself and has no value readout for a display
+                // string to take the place of
                 let response = ui.checkbox(&mut b, "");
                 if b != init_value {
                     to_change = Some(PedalParameterValue::Bool(b));
@@ -203,7 +210,11 @@ impl PedalParameter {
                 let init_value = i;
                 let min = self.min.clone().unwrap().as_int().unwrap_or(0);
                 let max = self.max.clone().unwrap().as_int().unwrap_or(100);
-                let response = ui.add(egui::Slider::new(&mut i, min..=max));
+                let mut slider = egui::Slider::new(&mut i, min..=max);
+                if let Some(value_display_string) = value_display_string {
+                    slider = with_value_display_string(slider, value_display_string);
+                }
+                let response = ui.add(slider);
 
                 if i != init_value {
                     to_change = Some(PedalParameterValue::Int(i));
@@ -231,6 +242,43 @@ impl PedalParameter {
         };
 
         egui::InnerResponse::new(to_change, response)
+    }
+}
+
+/// Makes a slider show `value_display_string`, e.g. "6000.0 Hz", instead of its own number
+/// readout, and parse what is typed into it back.
+///
+/// The string is rendered by egui's value field, which is as wide as the text needs and never
+/// truncates it, so no space has to be reserved for it and short or long strings alike are shown
+/// completely.
+fn with_value_display_string<'a>(
+    slider: egui::Slider<'a>,
+    value_display_string: &'a str,
+) -> egui::Slider<'a> {
+    slider
+        .custom_formatter(move |_, _| value_display_string.to_string())
+        .custom_parser(parse_value_display_string)
+}
+
+/// Reads the number out of a parameter's value display string, undoing the unit that
+/// [`PedalTrait::parameter_value_display_string`] puts behind it, so that a value can be typed the
+/// same way it is displayed: "6000.0 Hz" is 6000, "+6.0 dB" is 6 and "-5 st" is -5.
+///
+/// Percentages are displayed as their fraction, e.g. 0.5 as "50%", and are typed that way too.
+///
+/// Text that doesn't start with a number, e.g. "Off", has no value and is rejected.
+fn parse_value_display_string(text: &str) -> Option<f64> {
+    let number: f64 = text
+        .trim_start()
+        .split(|c: char| !(c.is_ascii_digit() || c == '.' || c == '-' || c == '+'))
+        .next()?
+        .parse()
+        .ok()?;
+
+    if text.contains('%') {
+        Some(number / 100.0)
+    } else {
+        Some(number)
     }
 }
 
@@ -409,4 +457,88 @@ pub enum ParameterUILocation {
     ParameterWindow,
     MidiMin,
     MidiMax,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn float_parameter(value: f32) -> PedalParameter {
+        PedalParameter {
+            value: PedalParameterValue::Float(value),
+            min: Some(PedalParameterValue::Float(0.0)),
+            max: Some(PedalParameterValue::Float(1.0)),
+            step: None,
+        }
+    }
+
+    fn raw_input(width: f32, height: f32) -> egui::RawInput {
+        egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(width, height),
+            )),
+            ..Default::default()
+        }
+    }
+
+    /// The texts egui has drawn, as the text itself, the rectangle it covers and whether it was
+    /// shortened with an ellipsis.
+    fn drawn_texts(output: &egui::FullOutput) -> Vec<(String, egui::Rect, bool)> {
+        output
+            .shapes
+            .iter()
+            .filter_map(|clipped_shape| match &clipped_shape.shape {
+                egui::Shape::Text(text_shape) => Some((
+                    text_shape.galley.text().to_string(),
+                    text_shape.visual_bounding_rect(),
+                    text_shape.galley.elided,
+                )),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// A parameter's display string is shown completely, however long it is and however little
+    /// room the field has.
+    #[test]
+    fn a_long_value_display_string_is_not_truncated() {
+        const DISPLAY_STRING: &str = "20000.0 Hz";
+
+        let ctx = egui::Context::default();
+        // A window that is narrower than the field, so the field has to fit its display string
+        // into the least room it will ever have
+        let mut output = ctx.run_ui(raw_input(200.0, 200.0), |ui| {
+            float_parameter(1.0).parameter_editor_ui(ui, Some(DISPLAY_STRING));
+        });
+        output.textures_delta.clear();
+
+        let texts = drawn_texts(&output);
+        assert!(
+            texts
+                .iter()
+                .any(|(text, _, elided)| text == DISPLAY_STRING && !elided),
+            "the display string was drawn truncated: {texts:?}"
+        );
+    }
+
+    /// A value can be typed the way it is displayed: the unit behind it is dropped again and a
+    /// percentage is read as the fraction it displays.
+    #[test]
+    fn a_value_display_string_is_parsed_back_into_its_value() {
+        assert_eq!(parse_value_display_string("6000.0 Hz"), Some(6000.0));
+        assert_eq!(parse_value_display_string("+6.0 dB"), Some(6.0));
+        assert_eq!(parse_value_display_string("-5 st"), Some(-5.0));
+        assert_eq!(parse_value_display_string("1.50x"), Some(1.5));
+        assert_eq!(parse_value_display_string("512 samples"), Some(512.0));
+        assert_eq!(parse_value_display_string("4.0:1"), Some(4.0));
+        assert_eq!(parse_value_display_string("50%"), Some(0.5));
+        assert_eq!(parse_value_display_string("100%"), Some(1.0));
+        // The raw number of a parameter without a display string parses as itself
+        assert_eq!(parse_value_display_string("0.50"), Some(0.5));
+        // Text without a number in front, e.g. a boolean display string, has no value and is
+        // rejected rather than parsed as something else
+        assert_eq!(parse_value_display_string("Off"), None);
+        assert_eq!(parse_value_display_string(""), None);
+    }
 }

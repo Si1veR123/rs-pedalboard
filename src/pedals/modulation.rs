@@ -164,6 +164,21 @@ macro_rules! var_delay_phaser {
                 }
             }
 
+            fn parameter_value_display_string(
+                &self,
+                name: &str,
+                value: &PedalParameterValue,
+            ) -> Option<String> {
+                match name {
+                    "Min Depth" | "Max Depth" => {
+                        Some(format!("{:.2} ms", value.as_float().unwrap()))
+                    }
+                    "Feedback" => Some(format!("{:.0}%", value.as_float().unwrap() * 100.0)),
+                    "Dry/Wet" => Some(format!("{:.0}%", value.as_float().unwrap() * 100.0)),
+                    _ => None,
+                }
+            }
+
             fn get_parameters(&self) -> &HashMap<String, PedalParameter> {
                 &self.parameters
             }

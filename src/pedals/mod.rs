@@ -66,6 +66,16 @@ pub trait PedalTrait {
 
     fn get_parameters(&self) -> &HashMap<String, PedalParameter>;
     fn get_parameters_mut(&mut self) -> &mut HashMap<String, PedalParameter>;
+    /// The string a parameter's value is displayed as, e.g. "6000.0 Hz", instead of its raw
+    /// number. It takes the place of the number readout of the parameter's slider.
+    fn parameter_value_display_string(
+        &self,
+        _name: &str,
+        _value: &PedalParameterValue,
+    ) -> Option<String> {
+        // By default a parameter has no display string, so its raw number is shown
+        None
+    }
 
     fn set_parameter_value(&mut self, name: &str, value: PedalParameterValue) {
         let parameters = self.get_parameters_mut();
@@ -110,11 +120,12 @@ pub trait PedalTrait {
     fn parameter_editor_ui(
         &mut self,
         ui: &mut egui::Ui,
-        _name: &str,
+        name: &str,
         parameter: &PedalParameter,
         _location: ParameterUILocation,
     ) -> egui::InnerResponse<Option<PedalParameterValue>> {
-        parameter.parameter_editor_ui(ui)
+        let value_display_string = self.parameter_value_display_string(name, &parameter.value);
+        parameter.parameter_editor_ui(ui, value_display_string.as_deref())
     }
 
     fn get_string_values(&self, _parameter_name: &str) -> Option<Vec<String>> {
@@ -207,5 +218,64 @@ impl PedalDiscriminants {
             PedalDiscriminants::Phaser => "Phaser",
             PedalDiscriminants::Distortion => "Distortion",
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A real pedal's parameter shows its display string in its slider, in the place of the
+    /// slider's own number.
+    #[test]
+    fn a_parameter_slider_shows_the_display_string_of_its_pedal() {
+        let mut pedal = Pedal::Tremolo(Tremolo::new());
+        let name = "Depth";
+        pedal.set_parameter_value(name, PedalParameterValue::Float(0.5));
+        let parameter = pedal
+            .get_parameters()
+            .get(name)
+            .unwrap_or_else(|| panic!("no {name} parameter"))
+            .clone();
+
+        let ctx = egui::Context::default();
+        let mut output = ctx.run_ui(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(800.0, 600.0),
+                )),
+                ..Default::default()
+            },
+            |ui| {
+                pedal.parameter_editor_ui(
+                    ui,
+                    name,
+                    &parameter,
+                    ParameterUILocation::ParameterWindow,
+                );
+            },
+        );
+        // Nothing renders the frame, so the font texture updates are discarded by hand
+        output.textures_delta.clear();
+
+        let drawn_texts: Vec<&str> = output
+            .shapes
+            .iter()
+            .filter_map(|clipped_shape| match &clipped_shape.shape {
+                egui::Shape::Text(text_shape) => Some(text_shape.galley.text()),
+                _ => None,
+            })
+            .collect();
+
+        assert!(
+            drawn_texts.contains(&"50%"),
+            "the slider doesn't show the parameter's display string: {drawn_texts:?}"
+        );
+        // The display string takes the place of the slider's own number, which is gone
+        assert!(
+            !drawn_texts.iter().any(|text| text.parse::<f64>().is_ok()),
+            "the slider still shows its own number: {drawn_texts:?}"
+        );
     }
 }

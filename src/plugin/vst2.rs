@@ -308,6 +308,20 @@ impl Vst2Instance {
         }
     }
 
+    /// The plugin's own string for the current value of the given parameter, e.g. "3.5 kHz"
+    /// (`getParameterDisplay`). Plugins that don't provide one return an empty string.
+    pub fn parameter_display(&self, index: usize) -> String {
+        if index < self.info.parameters as usize {
+            self.params.get_parameter_text(index as i32)
+        } else {
+            tracing::warn!(
+                "Attempted to get display string for invalid parameter index: {}",
+                index
+            );
+            String::new()
+        }
+    }
+
     pub fn set_parameter_value(&mut self, index: usize, value: f32) {
         if index < self.info.parameters as usize {
             self.params.set_parameter(index as i32, value);

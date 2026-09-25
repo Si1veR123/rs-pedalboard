@@ -449,6 +449,19 @@ impl PedalTrait for Overdrive {
         }
     }
 
+    fn parameter_value_display_string(
+        &self,
+        name: &str,
+        value: &PedalParameterValue,
+    ) -> Option<String> {
+        match name {
+            "Drive" => Some(format!("{:.1}x", value.as_float().unwrap())),
+            "Tone" => Some(format!("{:.0}%", value.as_float().unwrap() * 100.0)),
+            "Level" => Some(format!("{:.2}x", value.as_float().unwrap())),
+            _ => None,
+        }
+    }
+
     fn get_parameters(&self) -> &HashMap<String, PedalParameter> {
         &self.parameters
     }

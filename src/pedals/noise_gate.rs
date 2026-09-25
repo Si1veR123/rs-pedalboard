@@ -197,6 +197,21 @@ impl PedalTrait for NoiseGate {
         self.level = 0.0;
     }
 
+    fn parameter_value_display_string(
+        &self,
+        name: &str,
+        value: &PedalParameterValue,
+    ) -> Option<String> {
+        match name {
+            "Threshold Db" => Some(format!("{:.1} dB", value.as_float().unwrap())),
+            "Reduction" => Some(format!("{:.1}x", value.as_float().unwrap())),
+            "Attack" => Some(format!("{:.0} ms", value.as_float().unwrap())),
+            "Release" => Some(format!("{:.0} ms", value.as_float().unwrap())),
+            "Dry/Wet" => Some(format!("{:.0}%", value.as_float().unwrap() * 100.0)),
+            _ => None,
+        }
+    }
+
     fn get_parameters(&self) -> &HashMap<String, PedalParameter> {
         &self.parameters
     }

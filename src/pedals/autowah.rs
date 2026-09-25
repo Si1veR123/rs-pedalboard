@@ -251,6 +251,21 @@ impl PedalTrait for AutoWah {
         }
     }
 
+    fn parameter_value_display_string(
+        &self,
+        name: &str,
+        value: &PedalParameterValue,
+    ) -> Option<String> {
+        match name {
+            "Base Freq" => Some(format!("{:.1} Hz", value.as_float().unwrap())),
+            "Sensitivity" => Some(format!("{:.0} Hz", value.as_float().unwrap())),
+            "Width" => Some(format!("{:.2}", value.as_float().unwrap())),
+            "Envelope Smoothing" => Some(format!("{:.5}", value.as_float().unwrap())),
+            "Dry Wet" => Some(format!("{:.0}%", value.as_float().unwrap() * 100.0)),
+            _ => None,
+        }
+    }
+
     fn set_config(&mut self, _buffer_size: usize, sample_rate: u32) {
         // The processor API calls this before every buffer, so only build the filter when
         // the configuration really changed: rebuilding it would snap the sweep back to

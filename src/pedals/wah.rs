@@ -239,6 +239,21 @@ impl PedalTrait for Wah {
         }
     }
 
+    fn parameter_value_display_string(
+        &self,
+        name: &str,
+        value: &PedalParameterValue,
+    ) -> Option<String> {
+        match name {
+            "Position" => Some(format!("{:.0}%", value.as_float().unwrap() * 100.0)),
+            "Base Frequency" => Some(format!("{:.0} Hz", value.as_float().unwrap())),
+            "Width" => Some(format!("{:.2}", value.as_float().unwrap())),
+            "Sensitivity" => Some(format!("{:.0} Hz", value.as_float().unwrap())),
+            "Dry/Wet" => Some(format!("{:.0}%", value.as_float().unwrap() * 100.0)),
+            _ => None,
+        }
+    }
+
     fn get_parameters(&self) -> &HashMap<String, PedalParameter> {
         &self.parameters
     }

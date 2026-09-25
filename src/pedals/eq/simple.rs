@@ -172,6 +172,20 @@ impl PedalTrait for SimpleEq {
         }
     }
 
+    fn parameter_value_display_string(
+        &self,
+        name: &str,
+        value: &PedalParameterValue,
+    ) -> Option<String> {
+        match name {
+            "Low Gain" | "Mid Gain" | "High Gain" => {
+                Some(format!("{:+.1} dB", value.as_float().unwrap()))
+            }
+            "High Pass" | "Low Pass" => Some(format!("{:.0} Hz", value.as_float().unwrap())),
+            _ => None,
+        }
+    }
+
     fn get_parameters(&self) -> &HashMap<String, PedalParameter> {
         &self.parameters
     }

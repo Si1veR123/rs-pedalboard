@@ -113,6 +113,17 @@ impl PedalTrait for Tremolo {
         }
     }
 
+    fn parameter_value_display_string(
+        &self,
+        name: &str,
+        value: &PedalParameterValue,
+    ) -> Option<String> {
+        match name {
+            "Depth" => Some(format!("{:.0}%", value.as_float().unwrap() * 100.0)),
+            _ => None,
+        }
+    }
+
     fn get_parameters(&self) -> &HashMap<String, PedalParameter> {
         &self.parameters
     }

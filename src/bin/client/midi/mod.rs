@@ -15,6 +15,7 @@ use std::{
     sync::{atomic::AtomicU32, Arc, Mutex},
 };
 
+use crate::popup_message::popup;
 use crate::{
     midi::functions::GlobalMidiFunction,
     socket::{ClientSocketThreadHandle, Command},
@@ -43,11 +44,8 @@ impl MidiState {
         active_pedalboard_id: u32,
     ) -> Self {
         let mut available_named_input_ports = vec![];
-        match Self::create_midi_input() {
-            Some(input) => available_named_input_ports = Self::resolve_port_names(input),
-            None => {
-                tracing::error!("Cannot list MIDI ports: MIDI input creation failed");
-            }
+        if let Ok(input) = Self::create_midi_input(Some(egui_ctx.clone())) {
+            available_named_input_ports = Self::resolve_port_names(input);
         }
 
         Self {
@@ -113,12 +111,20 @@ impl MidiState {
             .save()
     }
 
-    fn create_midi_input() -> Option<MidiInput> {
+    fn create_midi_input(ctx: Option<egui::Context>) -> Result<MidiInput, midir::InitError> {
         match MidiInput::new("Pedalboard MIDI Input") {
-            Ok(input) => Some(input),
+            Ok(input) => Ok(input),
             Err(e) => {
                 tracing::error!("Failed to create MIDI input: {}", e);
-                None
+                if let Some(egui_ctx) = ctx {
+                    popup!(
+                        egui_ctx,
+                        "Failed to create MIDI input",
+                        Some("midi-input-error"),
+                        crate::popup_message::PopupMessageType::Error
+                    );
+                }
+                Err(e)
             }
         }
     }
@@ -196,15 +202,24 @@ impl MidiState {
                 for function in &global_functions {
                     let command = function.command_from_function(&change);
                     if let Some(command) = command {
-                        if let Err(e) = ui_thread_sender.send(command.clone()) {
-                            tracing::error!(
-                                "Failed to send global MIDI command to UI thread: {}",
-                                e
-                            );
-                        }
+                        match ui_thread_sender.send(command.clone()) {
+                            Ok(()) => {
+                                if let Some(handle) = &socket_handle {
+                                    handle.send_command(command);
 
-                        if let Some(handle) = &socket_handle {
-                            handle.send_command(command);
+                                    if function.should_show_popup() {
+                                        // Do the popup here instead of in state, so that it is only shown when triggered by MIDI
+                                        // A popup shouldnt be shown when the user clicks a button in the UI
+                                        popup!(egui_ctx.clone(), format!("MIDI: {}", function));
+                                    }
+                                }
+                            },
+                            Err(e) => {
+                                tracing::error!(
+                                    "Failed to send global MIDI command to UI thread: {}",
+                                    e
+                                );
+                            }
                         }
                     }
                 }
@@ -219,15 +234,18 @@ impl MidiState {
                     let parameter_update = change.to_parameter_update(function_values);
                     if let Some(parameter_update) = parameter_update {
                         let command = Command::ParameterUpdate(path.clone(), parameter_update);
-                        if let Err(e) = ui_thread_sender.send(command.clone()) {
-                            tracing::error!(
-                                "Failed to send parameter MIDI command to UI thread: {}",
-                                e
-                            );
-                        }
-
-                        if let Some(handle) = &socket_handle {
-                            handle.send_command(command);
+                        match ui_thread_sender.send(command.clone()) {
+                            Ok(()) => {
+                                if let Some(handle) = &socket_handle {
+                                    handle.send_command(command);
+                                }
+                            },
+                            Err(e) => {
+                                tracing::error!(
+                                    "Failed to send parameter MIDI command to UI thread: {}",
+                                    e
+                                );
+                            }
                         }
                     }
                 }
@@ -267,10 +285,9 @@ impl MidiState {
                 .iter()
                 .any(|(_name, conn_id, _c)| conn_id == id)
             {
-                let midi_input = match Self::create_midi_input() {
-                    Some(input) => input,
-                    None => {
-                        tracing::error!("Cannot connect to port: MIDI input creation failed");
+                let midi_input = match Self::create_midi_input(Some(self.egui_ctx.clone())) {
+                    Ok(input) => input,
+                    Err(_) => {
                         return;
                     }
                 };
@@ -319,6 +336,12 @@ impl MidiState {
             }
         } else {
             tracing::error!("MIDI port {} not found", id);
+            popup!(
+                self.egui_ctx.clone(),
+                format!("MIDI port {} not found", id),
+                Some("midi-port-not-found"),
+                crate::popup_message::PopupMessageType::Error
+            );
         }
     }
 
@@ -349,10 +372,9 @@ impl MidiState {
     }
 
     pub fn refresh_available_ports(&mut self) {
-        let midi_input = match Self::create_midi_input() {
-            Some(input) => input,
-            None => {
-                tracing::error!("Cannot refresh ports: MIDI input creation failed");
+        let midi_input = match Self::create_midi_input(Some(self.egui_ctx.clone())) {
+            Ok(input) => input,
+            Err(_) => {
                 return;
             }
         };

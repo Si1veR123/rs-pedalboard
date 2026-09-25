@@ -73,11 +73,19 @@ impl ClientSocket {
         }
     }
 
-    pub fn send(&mut self, command: Command) {
-        if let Some(handle) = &self.handle {
-            if handle.send_command(command) {
-                self.handle = None;
+    /// Send a command to the processor.
+    /// Returns true if the command was sent successfully.
+    pub fn send(&mut self, command: Command) -> bool {
+        match &self.handle {
+            Some(handle) => {
+                if !handle.send_command(command) {
+                    self.handle = None;
+                    false
+                } else {
+                    true
+                }
             }
+            None => false
         }
     }
 
@@ -179,12 +187,13 @@ impl ClientSocketThreadHandle {
         }
     }
 
+    // Returns true if the command was sent successfully
     pub fn send_command(&self, command: Command) -> bool {
         match smol::block_on(self.message_sender.send(command)) {
-            Ok(_) => false,
+            Ok(_) => true,
             Err(_) => {
                 tracing::error!("Failed to send command to socket thread");
-                true
+                false
             }
         }
     }

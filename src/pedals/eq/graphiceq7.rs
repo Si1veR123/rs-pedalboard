@@ -415,6 +415,28 @@ impl PedalTrait for GraphicEq7 {
         );
     }
 
+    fn parameter_value_display_string(
+        &self,
+        name: &str,
+        value: &PedalParameterValue,
+    ) -> Option<String> {
+        let value = value.as_float()?;
+
+        if name.starts_with("Gain ") {
+            return Some(format!("{:+.1} dB", value));
+        }
+
+        if name.starts_with("Bandwidth ") {
+            return Some(format!("{:.2}", value));
+        }
+
+        match name {
+            "Low Shelf" | "High Shelf" => Some(if value > 0.0 { "On" } else { "Off" }.to_string()),
+            "Dry/Wet" => Some(format!("{:.0}%", value * 100.0)),
+            _ => None,
+        }
+    }
+
     fn get_parameters(&self) -> &HashMap<String, PedalParameter> {
         &self.parameters
     }

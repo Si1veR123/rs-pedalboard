@@ -4,6 +4,7 @@ use crate::{
     settings::{ClientSettings, VolumeNormalizationMode},
     socket::{ClientSocket, Command},
     Screen,
+    popup_message::popup
 };
 use crossbeam::channel::Receiver;
 use eframe::egui;
@@ -39,6 +40,8 @@ pub struct State {
 
     pub prev_selected_screen: Cell<Option<Screen>>,
     pub selected_screen: Cell<Screen>,
+
+    pub egui_ctx: egui::Context,
 }
 
 impl State {
@@ -72,7 +75,8 @@ impl State {
         let mut pedalboard_set = self.pedalboards.active_pedalboardstage.borrow_mut();
 
         if pedalboard_set.pedalboards.len() <= 1 {
-            tracing::error!("Cannot remove the last pedalboard from the stage");
+            tracing::warn!("Cannot remove the last pedalboard from the stage");
+            popup!(self.egui_ctx.clone(), "Cannot remove the last pedalboard from the stage", Some("remove-last-pedalboard-error"), crate::popup_message::PopupMessageType::Warning);
             return;
         }
 
@@ -298,6 +302,8 @@ impl State {
         mut parameter_update: ParameterUpdate,
         local: bool,
     ) {
+        let mut new_value_string = None;
+
         // Set parameter on pedalboard stage
         for pedalboard in self
             .pedalboards
@@ -313,6 +319,10 @@ impl State {
                     .find(|p| p.get_id() == pedal_id)
                 {
                     parameter_update.apply_to_pedal(&mut *pedal, &parameter_name);
+                    let new_value = pedal.get_parameters().get(&parameter_name).map(|p| p.value.clone());
+                    new_value_string = new_value.map(|value| {
+                        pedal.parameter_value_display_string(&parameter_name, &value).unwrap_or_else(|| format!("{:?}", value))
+                    });
                 }
             }
         }
@@ -340,6 +350,10 @@ impl State {
                 },
                 parameter_update,
             ));
+        }
+
+        if let Some(value) = new_value_string {
+            popup!(self.egui_ctx.clone(), format!("{} set to {}", parameter_name, value), Some(&format!("parameter-{}-{}-{}", pedalboard_id, pedal_id, parameter_name)));
         }
     }
 
@@ -451,6 +465,12 @@ impl State {
     pub fn reset_volume_normalization_peak(&self) {
         let mut socket = self.socket.borrow_mut();
         socket.send(Command::VolumeNormalizationReset);
+
+        // Show a popup message if not on the settings screen
+        // Likely caused by MIDI, therefore a popup shows the user that the peak has been reset
+        if self.selected_screen.get() != Screen::Settings {
+            popup!(self.egui_ctx.clone(), "Volume normalization peak reset");
+        }
     }
 
     pub fn master_in_processor(&self, volume: f32) {
@@ -584,6 +604,7 @@ impl State {
             tuner_active: Cell::new(false),
             prev_selected_screen: Cell::new(None),
             selected_screen: Cell::new(Screen::Stage),
+            egui_ctx
         }
     }
 
@@ -598,8 +619,19 @@ impl State {
     pub fn connect_to_processor(&self) -> Result<(), std::io::Error> {
         let mut socket = self.socket.borrow_mut();
         if !socket.is_connected() {
-            socket.connect()?;
+            match socket.connect() {
+                Ok(()) => {},
+                Err(e) => {
+                    // Show popup and log the error
+                    let error_msg = format!("Failed to connect to processor: {}", e);
+                    tracing::error!(error_msg);
+                    popup!(self.egui_ctx.clone(), error_msg, Some("processor-connection-error"), crate::popup_message::PopupMessageType::Error);
+                    return Err(e);
+                }
+            }
             if socket.is_connected() {
+                popup!(self.egui_ctx.clone(), "Connected to processor", Some("processor-connection-success"), crate::popup_message::PopupMessageType::Info);
+
                 socket.send(Command::RequestSampleRate);
 
                 let new_handle = socket.handle.clone();

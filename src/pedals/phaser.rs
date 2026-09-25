@@ -155,6 +155,19 @@ impl PedalTrait for Phaser {
         }
     }
 
+    fn parameter_value_display_string(
+        &self,
+        name: &str,
+        value: &PedalParameterValue,
+    ) -> Option<String> {
+        match name {
+            "Width" => Some(format!("{:.0}%", value.as_float().unwrap() * 100.0)),
+            "Feedback" => Some(format!("{:.0}%", value.as_float().unwrap() * 100.0)),
+            "Dry/Wet" => Some(format!("{:.0}%", value.as_float().unwrap() * 100.0)),
+            _ => None,
+        }
+    }
+
     fn get_parameters(&self) -> &HashMap<String, PedalParameter> {
         &self.parameters
     }

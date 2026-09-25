@@ -249,6 +249,21 @@ impl PedalTrait for PitchShift {
         }
     }
 
+    fn parameter_value_display_string(
+        &self,
+        name: &str,
+        value: &PedalParameterValue,
+    ) -> Option<String> {
+        match name {
+            "Semitones" => Some(format!("{:+} st", value.as_int().unwrap())),
+            // The block size parameter is a multiple of 128 samples
+            "Block Size" => Some(format!("{} samples", value.as_int().unwrap() as i32 * 128)),
+            "Tonality Limit" => Some(format!("{:.0} Hz", value.as_float().unwrap())),
+            "Presence" => Some(format!("{:.1} dB", value.as_float().unwrap())),
+            _ => None,
+        }
+    }
+
     fn get_parameters(&self) -> &HashMap<String, PedalParameter> {
         &self.parameters
     }

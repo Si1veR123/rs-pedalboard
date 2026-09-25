@@ -141,6 +141,19 @@ impl PedalTrait for Fuzz {
         }
     }
 
+    fn parameter_value_display_string(
+        &self,
+        name: &str,
+        value: &PedalParameterValue,
+    ) -> Option<String> {
+        match name {
+            "Gain" => Some(format!("{:.0}x", value.as_float().unwrap())),
+            "Level" => Some(format!("{:.2}x", value.as_float().unwrap())),
+            "Dry/Wet" => Some(format!("{:.0}%", value.as_float().unwrap() * 100.0)),
+            _ => None,
+        }
+    }
+
     fn get_parameters(&self) -> &HashMap<String, PedalParameter> {
         &self.parameters
     }

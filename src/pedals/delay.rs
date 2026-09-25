@@ -208,6 +208,20 @@ impl PedalTrait for Delay {
         }
     }
 
+    fn parameter_value_display_string(
+        &self,
+        name: &str,
+        value: &PedalParameterValue,
+    ) -> Option<String> {
+        match name {
+            "Delay" => Some(format!("{:.0} ms", value.as_float().unwrap())),
+            "Decay" => Some(format!("{:.0}%", value.as_float().unwrap() * 100.0)),
+            "Warmth" => Some(format!("{:.0}%", value.as_float().unwrap() * 100.0)),
+            "Dry/Wet" => Some(format!("{:.0}%", value.as_float().unwrap() * 100.0)),
+            _ => None,
+        }
+    }
+
     fn get_parameters(&self) -> &HashMap<String, PedalParameter> {
         &self.parameters
     }

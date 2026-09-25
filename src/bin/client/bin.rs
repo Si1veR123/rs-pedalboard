@@ -14,9 +14,12 @@ use utilities::UtilitiesScreen;
 mod settings;
 use settings::{ProcessorLaunchState, SettingsScreen};
 mod audio_processor_handler;
+use audio_processor_handler::StartProcessorResult;
 mod drag_scroll;
 use drag_scroll::drag_scroll;
 mod midi;
+mod popup_message;
+use popup_message::{PopupWidget, popup};
 
 #[cfg(feature = "virtual_keyboard")]
 use egui_keyboard::{layouts::KeyboardLayout, Keyboard};
@@ -238,6 +241,8 @@ pub struct PedalboardClientApp {
     utilities_screen: UtilitiesScreen,
     songs_screen: SongsScreen,
     settings_screen: SettingsScreen,
+
+    popup_widget: PopupWidget
 }
 
 impl PedalboardClientApp {
@@ -261,27 +266,33 @@ impl PedalboardClientApp {
         {
             tracing::info!("Starting processor on startup");
             if settings_screen.ready_to_start_processor(&leaked_state.processor_settings.borrow()) {
-                match audio_processor_handler::start_processor_process(
+                if let StartProcessorResult::Started(child) = audio_processor_handler::start_processor_process(
                     &leaked_state.processor_settings.borrow(),
-                ) {
-                    Some(child) => {
-                        settings_screen.processor_launch_state =
-                            ProcessorLaunchState::AwaitingStart {
-                                start_time: Instant::now(),
-                                process: child,
-                            };
-                        loop {
-                            settings_screen.handle_processor_launch();
-                            if !settings_screen.processor_launch_state.is_awaiting() {
-                                break;
-                            }
-                            std::thread::sleep(std::time::Duration::from_millis(100));
+                    Some(cc.egui_ctx.clone()))
+                {
+                    settings_screen.processor_launch_state =
+                        ProcessorLaunchState::AwaitingStart {
+                            start_time: Instant::now(),
+                            process: child,
+                        };
+                    loop {
+                        settings_screen.handle_processor_launch();
+                        if !settings_screen.processor_launch_state.is_awaiting() {
+                            break;
                         }
+                        std::thread::sleep(std::time::Duration::from_millis(100));
                     }
-                    None => tracing::error!("Failed to start processor process"),
                 }
             } else {
-                tracing::error!("Set input and output device to launch processor on start");
+                let message = "Set input and output device to launch processor on start";
+                tracing::warn!(message);
+                popup!(
+                    cc.egui_ctx.clone(),
+                    message,
+                    Some("processor-startup-error"),
+                    crate::popup_message::PopupMessageType::Warning
+                );
+
             }
         }
 
@@ -301,6 +312,7 @@ impl PedalboardClientApp {
             utilities_screen: UtilitiesScreen::new(leaked_state),
             settings_screen,
             state: leaked_state,
+            popup_widget: PopupWidget::new(cc.egui_ctx.clone()),
             #[cfg(feature = "virtual_keyboard")]
             keyboard: Keyboard::default().layout(KeyboardLayout::Qwerty),
         }
@@ -477,6 +489,7 @@ impl eframe::App for PedalboardClientApp {
             });
         drop(enter);
 
+        // Central panel for main content
         let span = trace_span!("CentralPanel");
         let enter = span.enter();
         egui::CentralPanel::default().show(ui, |ui| {
@@ -499,6 +512,14 @@ impl eframe::App for PedalboardClientApp {
             };
         });
         drop(enter);
+
+        // Popup messages overlayed at top right of the window
+        let span = trace_span!("PopupMessages");
+        let enter = span.enter();
+
+        self.popup_widget.get_messages_from_ctx();
+        ui.add(&mut self.popup_widget);
+        drop(enter);
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
@@ -512,6 +533,12 @@ impl eframe::App for PedalboardClientApp {
         tracing::info!("Saving state");
         if let Err(e) = self.state.save_state() {
             tracing::error!("Failed to save state: {}", e);
+            popup!(
+                self.state.egui_ctx.clone(),
+                "Failed to save state. Check logs.",
+                Some("state-save-error"),
+                crate::popup_message::PopupMessageType::Error
+            );
         } else {
             tracing::info!("State saved successfully");
         }

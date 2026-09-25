@@ -618,6 +618,17 @@ impl PedalTrait for Vst3 {
         }
     }
 
+    fn parameter_value_display_string(
+        &self,
+        _name: &str,
+        value: &PedalParameterValue,
+    ) -> Option<String> {
+        // The string parameters ("Plugin") have no float value, so no string is shown for them.
+        // VST3 plugins can format their parameter values themselves, but the wrapper doesn't
+        // expose that yet, so plugin parameters show their normalized value
+        Some(format!("{:.0}%", value.as_float()? * 100.0))
+    }
+
     fn get_parameters(&self) -> &HashMap<String, PedalParameter> {
         &self.parameters
     }
@@ -679,7 +690,8 @@ impl PedalTrait for Vst3 {
 
             self.show_vst_combobox(ui, Some(parameter), location)
         } else {
-            parameter.parameter_editor_ui(ui)
+            let value_display_string = self.parameter_value_display_string(name, &parameter.value);
+            parameter.parameter_editor_ui(ui, value_display_string.as_deref())
         }
     }
 

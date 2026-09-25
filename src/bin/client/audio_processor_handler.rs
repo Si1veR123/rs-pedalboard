@@ -1,6 +1,8 @@
+use eframe::egui;
 use rs_pedalboard::processor_settings::ProcessorSettingsSave;
 use std::{env::var, path::PathBuf, process::Child};
 use which::which;
+use crate::popup_message::popup;
 
 pub const PROCESSOR_EXE_NAME: &str = "pedalboard-processor";
 pub const PROCESSOR_ENV_VAR: &str = "RSPEDALBOARD_PROCESSOR";
@@ -24,7 +26,13 @@ pub fn get_processor_executable_path() -> Option<PathBuf> {
         .or_else(|| which(PROCESSOR_EXE_NAME).ok())
 }
 
-pub fn start_processor_process(settings: &ProcessorSettingsSave) -> Option<Child> {
+pub enum StartProcessorResult {
+    Started(Child),
+    FailedToStart,
+    ExecutableNotFound,
+}
+
+pub fn start_processor_process(settings: &ProcessorSettingsSave, egui_ctx: Option<egui::Context>) -> StartProcessorResult {
     match get_processor_executable_path() {
         Some(path) => {
             let mut command = std::process::Command::new(path);
@@ -58,7 +66,7 @@ pub fn start_processor_process(settings: &ProcessorSettingsSave) -> Option<Child
                     .arg(preferred_sample_rate.to_string());
             }
 
-            tracing::info!("Full command to start processor: {:?}", full_command);
+            tracing::debug!("Full command to start processor: {:?}", full_command);
             let process = full_command.spawn();
 
             match process {
@@ -67,17 +75,33 @@ pub fn start_processor_process(settings: &ProcessorSettingsSave) -> Option<Child
                         "Processor process started successfully with PID: {}",
                         child.id()
                     );
-                    Some(child)
+                    StartProcessorResult::Started(child)
                 }
                 Err(e) => {
+                    if let Some(ctx) = egui_ctx {
+                        popup!(
+                            ctx,
+                            "Failed to start processor process. Check logs.",
+                            Some("processor-start-error"),
+                            crate::popup_message::PopupMessageType::Error
+                        );
+                    }
                     tracing::error!("Failed to start processor process: {}", e);
-                    None
+                    StartProcessorResult::FailedToStart
                 }
             }
         }
         None => {
-            tracing::error!("Processor executable not found. Please set the {} environment variable or ensure the executable ({}) is in your PATH.", PROCESSOR_ENV_VAR, PROCESSOR_EXE_NAME);
-            None
+            tracing::warn!("Processor executable not found. Please set the {} environment variable or ensure the executable ({}) is in your PATH.", PROCESSOR_ENV_VAR, PROCESSOR_EXE_NAME);
+            if let Some(ctx) = egui_ctx {
+                popup!(
+                    ctx,
+                    "Processor executable not found.",
+                    Some("processor-executable-not-found"),
+                    crate::popup_message::PopupMessageType::Warning
+                );
+            }
+            StartProcessorResult::ExecutableNotFound
         }
     }
 }

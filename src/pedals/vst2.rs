@@ -612,6 +612,32 @@ impl PedalTrait for Vst2 {
         }
     }
 
+    fn parameter_value_display_string(
+        &self,
+        name: &str,
+        value: &PedalParameterValue,
+    ) -> Option<String> {
+        let value = value.as_float()?;
+
+        // Plugin parameters can format their own values, but the plugin formats the value it
+        // currently holds, so only use that string for the parameter that is being displayed
+        let plugin_parameter = self.param_index_map.get(name).zip(self.instance.as_ref());
+
+        if let Some((&index, instance)) = plugin_parameter {
+            if instance.parameter_value(index) == value {
+                let display = instance.parameter_display(index);
+
+                if !display.is_empty() {
+                    return Some(display);
+                }
+            }
+        }
+
+        // Parameters that aren't from the plugin (e.g. Dry/Wet) and plugins that don't provide a
+        // display string show the parameter's normalized value
+        Some(format!("{:.0}%", value * 100.0))
+    }
+
     fn get_parameters(&self) -> &HashMap<String, PedalParameter> {
         &self.parameters
     }
@@ -673,7 +699,8 @@ impl PedalTrait for Vst2 {
 
             self.show_vst_combobox(ui, Some(parameter), location)
         } else {
-            parameter.parameter_editor_ui(ui)
+            let value_display_string = self.parameter_value_display_string(name, &parameter.value);
+            parameter.parameter_editor_ui(ui, value_display_string.as_deref())
         }
     }
 

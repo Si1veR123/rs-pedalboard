@@ -536,6 +536,18 @@ impl PedalTrait for Nam {
         }
     }
 
+    fn parameter_value_display_string(
+        &self,
+        name: &str,
+        value: &PedalParameterValue,
+    ) -> Option<String> {
+        match name {
+            "Gain" | "Level" => Some(format!("{:.2}x", value.as_float().unwrap())),
+            "Dry/Wet" => Some(format!("{:.0}%", value.as_float().unwrap() * 100.0)),
+            _ => None,
+        }
+    }
+
     fn get_parameters(&self) -> &HashMap<String, PedalParameter> {
         &self.parameters
     }
@@ -608,7 +620,8 @@ impl PedalTrait for Nam {
 
             self.show_model_combobox(ui, Some(parameter), location)
         } else {
-            parameter.parameter_editor_ui(ui)
+            let value_display_string = self.parameter_value_display_string(name, &parameter.value);
+            parameter.parameter_editor_ui(ui, value_display_string.as_deref())
         }
     }
 

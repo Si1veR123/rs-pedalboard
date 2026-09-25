@@ -7,7 +7,10 @@ use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
-use crate::audio_processor_handler::start_processor_process;
+use crate::{
+    audio_processor_handler::{start_processor_process, StartProcessorResult},
+    popup_message::popup,
+};
 use crate::state::State;
 use rs_pedalboard::{
     audio_devices::{get_input_devices, get_output_devices},
@@ -294,15 +297,12 @@ impl SettingsScreen {
                 self.processor_launch_state = ProcessorLaunchState::KillError;
             } else if start_time.elapsed().as_secs() > 1 {
                 if !self.state.is_processor_available() {
-                    if let Some(process) =
-                        start_processor_process(&self.state.processor_settings.borrow())
-                    {
+                    if let StartProcessorResult::Started(process) = start_processor_process(&self.state.processor_settings.borrow(), Some(self.state.egui_ctx.clone())){
                         self.processor_launch_state = ProcessorLaunchState::AwaitingStart {
                             start_time: Instant::now(),
                             process,
                         };
                     } else {
-                        tracing::error!("Failed to start processor process");
                         self.processor_launch_state = ProcessorLaunchState::None;
                     }
                 }
@@ -314,7 +314,14 @@ impl SettingsScreen {
         {
             // `try_wait` returns Ok(Some(status)) if the process has exited
             if start_time.elapsed().as_secs() > 5 || matches!(process.try_wait(), Ok(Some(_))) {
-                tracing::error!("Processor process started but did not connect, or closed. Check processor logs");
+                let message = "Processor process started but did not connect, or closed. Check processor logs";
+                tracing::error!(message);
+                popup!(
+                    self.state.egui_ctx.clone(),
+                    message,
+                    Some("processor-startup-error"),
+                    crate::popup_message::PopupMessageType::Error
+                );
                 self.processor_launch_state = ProcessorLaunchState::StartError;
             } else {
                 if self.state.connect_to_processor().is_ok() {
@@ -557,13 +564,13 @@ impl Widget for &mut SettingsScreen {
                                 self.state.kill_processor();
                                 self.processor_launch_state = ProcessorLaunchState::AwaitingKill(Instant::now());
                             } else {
-                                if let Some(process) = start_processor_process(&processor_settings) {
+                                if let StartProcessorResult::Started(child) = start_processor_process(&processor_settings, Some(self.state.egui_ctx.clone())) {
                                     self.processor_launch_state = ProcessorLaunchState::AwaitingStart {
                                         start_time: Instant::now(),
-                                        process
+                                        process: child,
                                     };
                                 } else {
-                                    tracing::error!("Failed to start processor process");
+                                    self.processor_launch_state = ProcessorLaunchState::StartError;
                                 }
                             }
                         };
