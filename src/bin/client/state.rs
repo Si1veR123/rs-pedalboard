@@ -10,6 +10,7 @@ use rs_pedalboard::{
     },
     processor_settings::{FloatSettingUpdate, ProcessorSettingsSave},
 };
+use strum::IntoDiscriminant;
 use std::{
     cell::{Cell, RefCell},
     collections::HashSet,
@@ -298,6 +299,7 @@ impl State {
         local: bool,
     ) {
         let mut new_value_string = None;
+        let mut pedal_name = None;
 
         // Set parameter on pedalboard stage
         for pedalboard in self
@@ -318,6 +320,7 @@ impl State {
                     new_value_string = new_value.map(|value| {
                         pedal.parameter_value_display_string(&parameter_name, &value).unwrap_or_else(|| format!("{}", value))
                     });
+                    pedal_name = Some(pedal.discriminant().display_name());
                 }
             }
         }
@@ -348,7 +351,11 @@ impl State {
         }
 
         if let Some(value) = new_value_string {
-            popup!(self.egui_ctx.clone(), format!("{} set to {}", parameter_name, value), Some(&format!("parameter-{}-{}-{}", pedalboard_id, pedal_id, parameter_name)));
+            popup!(
+                self.egui_ctx.clone(),
+                format!("{} - {} set to {}", pedal_name.unwrap_or_else(|| "Unknown".into()), parameter_name, value),
+                Some(&format!("parameter-{}-{}-{}", pedalboard_id, pedal_id, parameter_name))
+            );
         }
     }
 
