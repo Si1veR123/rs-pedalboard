@@ -210,7 +210,7 @@ impl MidiState {
                                     if function.should_show_popup() {
                                         // Do the popup here instead of in state, so that it is only shown when triggered by MIDI
                                         // A popup shouldnt be shown when the user clicks a button in the UI
-                                        popup!(egui_ctx.clone(), format!("MIDI: {}", function));
+                                        popup!(egui_ctx.clone(), format!("{}: {}", function, change), Some(&format!("midi-{}", function)));
                                     }
                                 }
                             },
@@ -951,6 +951,23 @@ pub enum MidiChange {
     AbsoluteValueChange(f32),
     Toggled,
     None,
+}
+
+impl std::fmt::Display for MidiChange {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MidiChange::RelativeValueChange(v) => {
+                if *v >= 0.0 {
+                    write!(f, "+{v:.2}")
+                } else {
+                    write!(f, "{v:.2}")
+                }
+            },
+            MidiChange::AbsoluteValueChange(v) => write!(f, "{v:.2}"),
+            MidiChange::Toggled => write!(f, "Toggle"),
+            MidiChange::None => write!(f, "No Change"),
+        }
+    }
 }
 
 impl MidiChange {

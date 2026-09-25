@@ -201,7 +201,7 @@ impl egui::Widget for &mut PopupWidget {
             egui::Order::Foreground,
             egui::Id::new("popup_messages"),
         ));
-        let font = egui::FontId::proportional(42.0);
+        let font = ui.style().text_styles.get(&egui::TextStyle::Body).unwrap().clone();
 
         let mut top = screen_rect.top() + MESSAGE_EDGE_MARGIN;
         for message in &self.messages {
