@@ -43,6 +43,7 @@ pub struct ClientSettings {
     pub nam_folders: Vec<PathBuf>,
     pub ir_folders: Vec<PathBuf>,
     pub vst2_folders: Vec<PathBuf>,
+    pub vst3_folders: Vec<PathBuf>,
 
     pub global_input_eq: EqPresets,
     pub global_output_eq: EqPresets,
@@ -117,6 +118,7 @@ impl Default for ClientSettings {
             nam_folders: vec![],
             ir_folders: vec![],
             vst2_folders: vec![],
+            vst3_folders: vec![],
             global_input_eq: EqPresets::default(),
             global_output_eq: EqPresets::default(),
         }
@@ -196,6 +198,7 @@ pub struct SettingsScreen {
     nam_file_dialog: egui_file::FileDialog,
     ir_file_dialog: egui_file::FileDialog,
     vst2_file_dialog: egui_file::FileDialog,
+    vst3_file_dialog: egui_file::FileDialog,
 }
 
 /// The parts of one of the Global EQ sections that are not saved with the EQs themselves
@@ -241,6 +244,7 @@ impl SettingsScreen {
             nam_file_dialog: egui_file::FileDialog::select_folder(),
             ir_file_dialog: egui_file::FileDialog::select_folder(),
             vst2_file_dialog: egui_file::FileDialog::select_folder(),
+            vst3_file_dialog: egui_file::FileDialog::select_folder(),
         }
     }
 
@@ -815,6 +819,29 @@ impl Widget for &mut SettingsScreen {
                             let vst2_state = writer.data.get_temp_mut_or(egui::Id::new("vst2_folders_state"), 1u32);
                             *vst2_state += 1;
                             writer.data.insert_temp(egui::Id::new("vst2_folders"), vst2_root_nodes);
+                        });
+                    }
+
+                    ui.add_space(SECTION_SPACE);
+
+                    ui.heading("VST3 Plugin Folders");
+                    ui.separator();
+                    ui.add_space(20.0);
+                    if multiple_directories_select_ui(
+                        ui,
+                        &mut client_settings.vst3_folders,
+                        Some(PathBuf::from(rs_pedalboard::plugin::vst3::VST3_PLUGIN_PATH)),
+                        "vst3_folders",
+                        &mut self.vst3_file_dialog
+                    ) {
+                        let vst3_root_nodes: Vec<_> = client_settings.vst3_folders.iter().map(|p| {
+                            egui_directory_combobox::DirectoryNode::from_path(p)
+                        }).collect();
+
+                        ui.ctx().memory_mut(|writer| {
+                            let vst3_state = writer.data.get_temp_mut_or(egui::Id::new("vst3_folders_state"), 1u32);
+                            *vst3_state += 1;
+                            writer.data.insert_temp(egui::Id::new("vst3_folders"), vst3_root_nodes);
                         });
                     }
 

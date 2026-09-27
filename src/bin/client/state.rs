@@ -527,8 +527,8 @@ impl State {
         tracing::debug!("State::load_state: loading client settings");
         let client_settings = ClientSettings::load_or_default();
 
-        // Set NAM folders, IR folders, VST2 and more in ctx memory
-        tracing::info!("Indexing NAM, IR and VST2 folders...");
+        // Set NAM folders, IR folders, VST2/VST3 and more in ctx memory
+        tracing::info!("Indexing NAM, IR, VST2 and VST3 folders...");
         let nam_root_nodes: Vec<_> = client_settings
             .nam_folders
             .iter()
@@ -543,6 +543,12 @@ impl State {
 
         let vst2_root_nodes: Vec<_> = client_settings
             .vst2_folders
+            .iter()
+            .map(|p| egui_directory_combobox::DirectoryNode::from_path(p))
+            .collect();
+
+        let vst3_root_nodes: Vec<_> = client_settings
+            .vst3_folders
             .iter()
             .map(|p| egui_directory_combobox::DirectoryNode::from_path(p))
             .collect();
@@ -566,6 +572,12 @@ impl State {
             writer
                 .data
                 .insert_temp(egui::Id::new("vst2_folders"), vst2_root_nodes);
+            writer
+                .data
+                .insert_temp(egui::Id::new("vst3_folders_state"), 1u32);
+            writer
+                .data
+                .insert_temp(egui::Id::new("vst3_folders"), vst3_root_nodes);
         });
 
         let popup_level = client_settings.show_popups.clone();
