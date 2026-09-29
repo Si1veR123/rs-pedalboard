@@ -505,6 +505,27 @@ impl State {
         socket.send(Command::SetOutputEq(eq));
     }
 
+    /// `next` - true to move to the next EQ, false to move to the previous EQ
+    /// `input` - true to move the input EQ, false to move the output EQ
+    pub fn move_global_eq(&self, next: bool, input: bool) {
+        let mut settings = self.client_settings.borrow_mut();
+
+        let eq = if input { &mut settings.global_input_eq } else { &mut settings.global_output_eq };
+        if next {
+            eq.next_eq();
+        } else {
+            eq.prev_eq();
+        }
+
+        if input {
+            self.set_input_global_eq_processor(eq.selected_eq().cloned());
+            popup!(self.egui_ctx.clone(), format!("Input EQ set to {}", eq.selected_eq_name()));
+        } else {
+            self.set_output_global_eq_processor(eq.selected_eq().cloned());
+            popup!(self.egui_ctx.clone(), format!("Output EQ set to {}", eq.selected_eq_name()));
+        }
+    }
+
     pub fn set_recording(&self, active: bool) {
         let mut socket = self.socket.borrow_mut();
         socket.send(Command::SetRecording(active));
@@ -1001,6 +1022,18 @@ impl State {
                     } else {
                         self.set_screen(Screen::Settings);
                     }
+                }
+                Command::NextGlobalInputEQ => {
+                    self.move_global_eq(true, true);
+                }
+                Command::NextGlobalOutputEQ => {
+                    self.move_global_eq(true, false);
+                }
+                Command::PrevGlobalInputEQ => {
+                    self.move_global_eq(false, true);
+                }
+                Command::PrevGlobalOutputEQ => {
+                    self.move_global_eq(false, false);
                 }
 
                 Command::RequestSampleRate => {

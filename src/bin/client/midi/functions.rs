@@ -20,6 +20,10 @@ pub enum GlobalMidiFunction {
     SettingsView,
     ChangeActiveParameter,
     ResetVolumeNormalization,
+    NextInputEQ,
+    NextOutputEQ,
+    PrevInputEQ,
+    PrevOutputEQ
 }
 
 impl std::fmt::Display for GlobalMidiFunction {
@@ -40,6 +44,10 @@ impl std::fmt::Display for GlobalMidiFunction {
             GlobalMidiFunction::SettingsView => "Settings View",
             GlobalMidiFunction::ChangeActiveParameter => "Change Active Parameter",
             GlobalMidiFunction::ResetVolumeNormalization => "Reset Volume Normalization",
+            GlobalMidiFunction::NextInputEQ => "Next Input EQ",
+            GlobalMidiFunction::NextOutputEQ => "Next Output EQ",
+            GlobalMidiFunction::PrevInputEQ => "Previous Input EQ",
+            GlobalMidiFunction::PrevOutputEQ => "Previous Output EQ"
         };
         write!(f, "{name}")
     }
@@ -68,6 +76,10 @@ impl GlobalMidiFunction {
                     Command::ChangeActiveParameter(float_setting_update)
                 }
                 GlobalMidiFunction::ResetVolumeNormalization => Command::VolumeNormalizationReset,
+                GlobalMidiFunction::NextInputEQ => Command::NextGlobalInputEQ,
+                GlobalMidiFunction::NextOutputEQ => Command::NextGlobalOutputEQ,
+                GlobalMidiFunction::PrevInputEQ => Command::PrevGlobalInputEQ,
+                GlobalMidiFunction::PrevOutputEQ => Command::PrevGlobalOutputEQ
             }),
         }
     }
@@ -87,8 +99,12 @@ impl GlobalMidiFunction {
             GlobalMidiFunction::UtilitiesView => false,
             GlobalMidiFunction::SongsView => false,
             GlobalMidiFunction::SettingsView => false,
-            GlobalMidiFunction::ChangeActiveParameter => true,
+            GlobalMidiFunction::ChangeActiveParameter => false,
             GlobalMidiFunction::ResetVolumeNormalization => true,
+            GlobalMidiFunction::NextInputEQ => false,
+            GlobalMidiFunction::NextOutputEQ => false,
+            GlobalMidiFunction::PrevInputEQ => false,
+            GlobalMidiFunction::PrevOutputEQ => false,
         }
     }
 }

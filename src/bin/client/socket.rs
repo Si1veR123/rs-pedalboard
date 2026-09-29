@@ -172,6 +172,10 @@ pub enum Command {
     SettingsView,
     ChangeActiveParameter(FloatSettingUpdate),
     SensibleMidiParameterUpdate(usize, FloatSettingUpdate),
+    NextGlobalInputEQ,
+    NextGlobalOutputEQ,
+    PrevGlobalInputEQ,
+    PrevGlobalOutputEQ
 }
 
 pub struct ClientSocketThreadHandle {
@@ -629,7 +633,11 @@ async fn client_socket_event_loop(
                     Command::SongsView |
                     Command::SettingsView |
                     Command::ChangeActiveParameter(_) |
-                    Command::SensibleMidiParameterUpdate(_, _) => {}
+                    Command::SensibleMidiParameterUpdate(_, _) |
+                    Command::NextGlobalInputEQ |
+                    Command::NextGlobalOutputEQ |
+                    Command::PrevGlobalInputEQ |
+                    Command::PrevGlobalOutputEQ => {}
                 }
             }
         }

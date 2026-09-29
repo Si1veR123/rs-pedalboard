@@ -201,6 +201,12 @@ impl EqPresets {
         self.selected.and_then(|index| self.eqs.get(index))
     }
 
+    pub fn selected_eq_name(&self) -> &str {
+        self.selected_eq()
+            .map(|eq| eq.name.as_str())
+            .unwrap_or_else(|| "None")
+    }
+
     /// The EQ that is applied to the signal chain, if any
     pub fn selected_eq_mut(&mut self) -> Option<&mut GraphicEqSettings> {
         self.selected.and_then(|index| self.eqs.get_mut(index))
@@ -261,6 +267,38 @@ impl EqPresets {
             }
 
             number += 1;
+        }
+    }
+
+    pub fn next_eq(&mut self) {
+        if let Some(selected) = self.selected {
+            if selected == self.eqs.len() - 1 {
+                // Wrap around the last EQ to no EQ
+                self.selected = None;
+            } else {
+                self.selected = Some(selected + 1);
+            }
+        } else {
+            // No EQ -> first EQ
+            if !self.eqs.is_empty() {
+                self.selected = Some(0);
+            }
+        }
+    }
+
+    pub fn prev_eq(&mut self) {
+        if let Some(selected) = self.selected {
+            if selected == 0 {
+                // Wrap around the first EQ to no EQ
+                self.selected = None;
+            } else {
+                self.selected = Some(selected - 1);
+            }
+        } else {
+            // No EQ -> last EQ
+            if !self.eqs.is_empty() {
+                self.selected = Some(self.eqs.len() - 1);
+            }
         }
     }
 }
