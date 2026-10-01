@@ -683,7 +683,7 @@ impl MidiState {
                                                                 } else {
                                                                     // Sensible parameter priority
                                                                     ui.label("Sensible Parameter Priority:");
-                                                                    if !device.sensible_parameter_priority.is_some() {
+                                                                    if device.sensible_parameter_priority.is_some() {
                                                                         let mut priority = device.sensible_parameter_priority.unwrap_or(0);
                                                                         let old_priority = priority;
                                                                         ui.add(egui::Slider::new(&mut priority, 0..=100).text("Priority"))
@@ -700,7 +700,6 @@ impl MidiState {
                                                                         }
                                                                         ui.end_row();
                                                                     } else {
-                                                                        ui.label("");
                                                                         if ui.button("Set Priority").clicked() {
                                                                             device.sensible_parameter_priority = Some(100);
                                                                         }
