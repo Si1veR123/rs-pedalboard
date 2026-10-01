@@ -680,6 +680,32 @@ impl MidiState {
                                                                             }
                                                                         });
                                                                     ui.end_row();
+                                                                } else {
+                                                                    // Sensible parameter priority
+                                                                    ui.label("Sensible Parameter Priority:");
+                                                                    if !device.sensible_parameter_priority.is_some() {
+                                                                        let mut priority = device.sensible_parameter_priority.unwrap_or(0);
+                                                                        let old_priority = priority;
+                                                                        ui.add(egui::Slider::new(&mut priority, 0..=100).text("Priority"))
+                                                                            .on_hover_text("Lower numbers have higher priority. Higher priority devices will be mapped to sensible parameters before lower priority devices.");
+                                                                        if priority != old_priority {
+                                                                            device.sensible_parameter_priority = Some(priority);
+                                                                        }
+                                                                        ui.end_row();
+
+                                                                        // Remove priority
+                                                                        ui.label("");
+                                                                        if ui.button("Remove Priority").clicked() {
+                                                                            device.sensible_parameter_priority = None;
+                                                                        }
+                                                                        ui.end_row();
+                                                                    } else {
+                                                                        ui.label("");
+                                                                        if ui.button("Set Priority").clicked() {
+                                                                            device.sensible_parameter_priority = Some(100);
+                                                                        }
+                                                                        ui.end_row();
+                                                                    }
                                                                 }
                                                             }
                                                         );
@@ -737,6 +763,7 @@ impl MidiSettings {
                         max_value: 127,
                     },
                     current_value: 0.5,
+                    sensible_parameter_priority: None,
                     global_functions: Vec::new(),
                     parameter_functions: HashMap::new(),
                     use_global: true,
@@ -774,20 +801,20 @@ impl MidiSettings {
             target.device_type.kind()
         };
 
-        let mut device_keys: Vec<(&str, (u8, u8))> = self
+        let mut device_keys: Vec<(u32, &str, (u8, u8))> = self
             .port_settings
             .iter()
             .flat_map(|(port_id, port_settings)| {
                 port_settings
                     .devices
-                    .keys()
-                    .map(move |cc_channel| (port_id.as_str(), *cc_channel))
+                    .iter()
+                    .map(move |(cc_channel, device)| (device.get_sensible_parameter_priority(), port_id.as_str(), *cc_channel))
             })
             .collect();
         device_keys.sort_unstable();
 
         let mut index = 0;
-        for (device_port_id, cc_channel) in device_keys {
+        for (_priority, device_port_id, cc_channel) in device_keys {
             let device = &self.port_settings[device_port_id].devices[&cc_channel];
 
             if device_port_id == port_id && cc_channel == (cc, channel) {
@@ -1007,9 +1034,14 @@ pub struct MidiDevice {
     #[serde_as(as = "Seq<(_, _)>")]
     pub parameter_functions: HashMap<ParameterPath, PedalParameterRange>,
     pub use_global: bool,
+    pub sensible_parameter_priority: Option<u32>
 }
 
 impl MidiDevice {
+    fn get_sensible_parameter_priority(&self) -> u32 {
+        self.sensible_parameter_priority.unwrap_or(u32::MAX)
+    }
+
     pub fn change_from_midi_value(&mut self, midi_value: u8) -> MidiChange {
         match &self.device_type {
             MidiDeviceType::RelativeEncoder {
