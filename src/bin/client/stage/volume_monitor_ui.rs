@@ -6,6 +6,7 @@ use std::time::{Duration, Instant};
 pub struct VolumeMonitorWidget {
     current_volume: f32,
     target_volume: f32,
+    volume_limit: Option<f32>,
     smoothing_factor: f32,
     bar_color: Color32,
     clipping: (bool, Instant),
@@ -18,6 +19,7 @@ impl VolumeMonitorWidget {
         Self {
             current_volume: 0.0,
             target_volume: 0.0,
+            volume_limit: None,
             smoothing_factor,
             bar_color,
             clipping: (false, Instant::now()),
@@ -37,6 +39,10 @@ impl VolumeMonitorWidget {
         }
     }
 
+    pub fn set_volume_limit(&mut self, limit: f32) {
+        self.volume_limit = Some(limit.clamp(0.0, 1.0));
+    }
+
     fn compute_smoothing_factor(update_interval: Duration) -> f32 {
         let tau = 0.3;
         let dt = update_interval.as_secs_f32();
@@ -45,6 +51,25 @@ impl VolumeMonitorWidget {
 
     fn apply_smoothing(&mut self) {
         self.current_volume += self.smoothing_factor * (self.target_volume - self.current_volume);
+    }
+
+    fn draw_bar(ui: &mut Ui, rect: Rect, volume: f32, bar_color: Color32, border: Option<f32>) {
+        let volume_height = rect.height() * volume;
+        let bar_rect = Rect::from_min_max(
+            rect.left_bottom() - Vec2::Y * volume_height,
+            rect.right_bottom(),
+        );
+
+        ui.painter().rect_filled(bar_rect, 1.0, bar_color);
+
+        if let Some(border_width) = border {
+            ui.painter().rect_stroke(
+                bar_rect,
+                1.0,
+                (border_width, Color32::RED),
+                eframe::egui::StrokeKind::Outside,
+            );
+        }
     }
 }
 
@@ -56,30 +81,23 @@ impl Widget for &mut VolumeMonitorWidget {
 
         let vertical_padding = 0.01 * rect.height();
 
-        // Compute volume height
         let padded_rect = rect.shrink2(Vec2::new(0.0, vertical_padding));
 
-        let volume_height = padded_rect.height() * self.current_volume;
 
-        let bar_rect = Rect::from_min_max(
-            padded_rect.left_bottom() - Vec2::Y * volume_height,
-            padded_rect.right_bottom(),
-        );
+        if let Some(limit) = self.volume_limit {
+            // Dont draw out of bounds or normal (1) volume limit
+            if limit > 0.0 && limit < 1.0 {
+                // Draw a gray bar behind the volume bar to indicate the limit
+                VolumeMonitorWidget::draw_bar(ui, padded_rect, limit, Color32::from_gray(100), None);
+            }
+        }
 
-        let color = if self.clipping.0 {
-            // Change color to red and add border if clipping
-            ui.painter().rect_stroke(
-                bar_rect,
-                1.0,
-                (3.0, Color32::RED),
-                eframe::egui::StrokeKind::Outside,
-            );
-            Color32::DARK_RED
+        let (color, border) = if self.clipping.0 {
+            (Color32::DARK_RED, Some(3.0))
         } else {
-            self.bar_color
+            (self.bar_color, None)
         };
-
-        ui.painter().rect_filled(bar_rect, 1.0, color);
+        VolumeMonitorWidget::draw_bar(ui, padded_rect, self.current_volume, color, border);
 
         response
     }

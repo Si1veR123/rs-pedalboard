@@ -62,7 +62,7 @@ pub struct PedalboardStageScreen {
     command_buffer: Vec<String>,
     xrun_state: XRunState,
     clipping_state: ClippingState,
-    volume_monitors: (VolumeMonitorWidget, VolumeMonitorWidget),
+    pub volume_monitors: (VolumeMonitorWidget, VolumeMonitorWidget),
     cached_midi_devices: HashMap<u32, String>, // id to name
 }
 
@@ -184,6 +184,14 @@ impl PedalboardStageScreen {
         tracing::error!("Invalid volume monitor command format: {}", latest_command);
     }
 
+    pub fn set_input_volume_limit(&mut self, limit: f32) {
+        self.volume_monitors.0.set_volume_limit(limit);
+    }
+
+    pub fn set_output_volume_limit(&mut self, limit: f32) {
+        self.volume_monitors.1.set_volume_limit(limit);
+    }
+
     fn save_song_input_window(
         &mut self,
         ui: &mut egui::Ui,
@@ -245,11 +253,14 @@ impl Widget for &mut PedalboardStageScreen {
             self.last_system_refresh = Instant::now();
         }
 
-        if self.state.client_settings.borrow().show_volume_monitor {
+        let client_settings= self.state.client_settings.borrow();
+        if client_settings.show_volume_monitor {
             self.update_volume_monitors_from_commands();
             ui.ctx()
                 .request_repaint_after(rs_pedalboard::DEFAULT_REFRESH_DURATION);
         }
+        self.set_input_volume_limit(client_settings.input_volume);
+        self.set_output_volume_limit(client_settings.output_volume);
 
         self.update_xrun_from_commands();
         self.update_clipping_from_commands();
