@@ -15,8 +15,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{frequency_plot, gain_knob, SLOT_ASPECT_RATIO};
 use crate::{
-    dsp_algorithms::eq::{self, Equalizer},
-    pedals::{PedalParameter, PedalParameterValue},
+    dsp_algorithms::eq::{self, Equalizer}, pedals::{PedalParameter, PedalParameterValue},
 };
 
 /// Number of points the response curve is drawn with.
@@ -512,7 +511,7 @@ fn band_gain_ui(
     ui: &mut egui::Ui,
     settings: &mut GraphicEqSettings,
     band: usize,
-    band_slot: egui::Rect,
+    band_slot: egui::Rect
 ) -> bool {
     // The slot is given exactly the rectangle it was laid out over, so that nothing drawn in it can
     // make it any wider or any taller: a wider slot would reach over the band beside it, and a
@@ -531,6 +530,7 @@ fn band_gain_ui(
         band_slot.size(),
         band_slot.width(),
         KNOB_TRAVEL_FRACTION,
+        None
     ) {
         Some(value) => {
             settings.gains[band] = value;

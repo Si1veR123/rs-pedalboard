@@ -8,6 +8,7 @@ use crate::{
     dsp_algorithms::biquad::BiquadFilter,
     pedals::{PedalParameter, PedalParameterValue, PedalTrait},
     unique_time_id,
+    pedalboard::ParameterPath,
 };
 
 const MAX_GAIN_DB: f32 = 15.0;
@@ -327,6 +328,11 @@ impl PedalTrait for SimpleEq {
                                     Vec2::new(knob_width, knob_width * SLOT_ASPECT_RATIO),
                                     knob_width,
                                     1.0,
+                                    Some(&ParameterPath {
+                                        pedalboard_id: None,
+                                        pedal_id: self.id,
+                                        parameter_name: name.to_string(),
+                                    }),
                                 ) {
                                     changed =
                                         Some((name.to_string(), PedalParameterValue::Float(value)));

@@ -1,7 +1,12 @@
-use eframe::egui::{include_image, Align, Image, Layout, Sense, UiBuilder, Vec2};
+use eframe::egui::{Align, Color32, Image, Layout, Sense, UiBuilder, Vec2, include_image};
 use egui_plot::PlotPoint;
 
-use crate::pedals::PedalParameter;
+use crate::{
+    pedals::{
+        PedalParameter,
+        ui::{set_active_parameter, is_active_parameter}},
+    pedalboard::ParameterPath
+};
 
 pub mod frequency_plot;
 pub mod global_eq;
@@ -44,22 +49,37 @@ pub fn eq_background(ui: &mut eframe::egui::Ui) {
 /// whatever size fits the space they are placed in. An image reports no size at all until it has
 /// loaded, and the space a knob is given shrinks as the knobs before it are placed, so either would
 /// make a knob a different size in every column and every frame.
+/// 
+/// parameter_path.pedalboard_id can be None
 pub fn gain_knob(
     ui: &mut eframe::egui::Ui,
     parameter: &PedalParameter,
     slot_size: Vec2,
     knob_width: f32,
     travel_fraction: f32,
+    parameter_path: Option<&ParameterPath>,
 ) -> Option<f32> {
     ui.vertical(|ui| {
         let knob_size = Vec2::new(knob_width, knob_width * KNOB_ASPECT_RATIO);
+
+        let is_active = if let Some(path) = parameter_path {
+            is_active_parameter(ui.ctx(), path)
+        } else {
+            false
+        };
+        let tint = if is_active {
+            Color32::from_rgb(150, 150, 255)
+        } else {
+            Color32::WHITE
+        };
 
         let slot_response = ui.add(
             Image::new(include_image!("../images/eq/slot.png"))
                 .fit_to_exact_size(slot_size)
                 // The slot is drawn at the size it is given rather than one fitted to whatever
                 // size the image reports
-                .maintain_aspect_ratio(false),
+                .maintain_aspect_ratio(false)
+                .tint(tint)
         );
         let max = parameter.max.as_ref().unwrap().as_float().unwrap();
         let min = parameter.min.as_ref().unwrap().as_float().unwrap();
@@ -96,6 +116,9 @@ pub fn gain_knob(
         if response.hovered() {
             ui.ctx()
                 .output_mut(|output| output.cursor_icon = eframe::egui::CursorIcon::ResizeVertical);
+        }
+        if (response.clicked() || response.dragged()) && parameter_path.is_some() {
+            set_active_parameter(ui.ctx(), Some(&parameter_path.unwrap()));
         }
         response
             .dragged()

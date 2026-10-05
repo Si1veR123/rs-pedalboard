@@ -26,11 +26,28 @@ pub fn get_active_parameter(ctx: &eframe::egui::Context) -> Option<ParameterPath
     })
 }
 
-pub fn set_active_parameter(ctx: &eframe::egui::Context, path: Option<ParameterPath>) {
+/// Returns true if the parameter at the given path is active.
+/// 
+/// If the parameter path has a pedalboard_id, it will check for an exact match.
+/// If the parameter path does not have a pedalboard_id, it will check for a match on pedal_id and parameter_name only.
+pub fn is_active_parameter(ctx: &eframe::egui::Context, path: &ParameterPath) -> bool {
+    if let Some(active_param) = get_active_parameter(ctx) {
+        if path.pedalboard_id.is_some() {
+            active_param == *path
+        } else {
+            active_param.pedal_id == path.pedal_id
+                && active_param.parameter_name == path.parameter_name
+        }
+    } else {
+        false
+    }
+}
+
+pub fn set_active_parameter(ctx: &eframe::egui::Context, path: Option<&ParameterPath>) {
     ctx.memory_mut(|writer| {
         writer
             .data
-            .insert_temp(eframe::egui::Id::new("active_parameter"), path);
+            .insert_temp(eframe::egui::Id::new("active_parameter"), path.map(|p| p.clone()));
     });
 }
 
@@ -43,6 +60,11 @@ pub fn pedal_knob(
     size: f32,
     pedal_id: u32,
 ) -> Option<PedalParameterValue> {
+    let parameter_path = ParameterPath {
+        pedalboard_id: None,
+        pedal_id,
+        parameter_name: name.to_string(),
+    };
     let pedal_parameter_float;
 
     match parameter.value {
@@ -58,12 +80,10 @@ pub fn pedal_knob(
         }
     };
 
-    let active_param = get_active_parameter(ui.ctx());
-    let is_active = if let Some(active) = &active_param {
-        active.pedal_id == pedal_id && &active.parameter_name == name
-    } else {
-        false
-    };
+    let is_active = is_active_parameter(
+        ui.ctx(),
+        &parameter_path,
+    );
     let tint = if is_active {
         Color32::from_rgb(150, 150, 255)
     } else {
@@ -113,11 +133,7 @@ pub fn pedal_knob(
             if knob_im_shine_overlay.clicked() || knob_im_shine_overlay.drag_started() {
                 set_active_parameter(
                     ui.ctx(),
-                    Some(ParameterPath {
-                        pedalboard_id: None, // unknown at this point, will be resolved later
-                        pedal_id,
-                        parameter_name: name.to_string(),
-                    }),
+                    Some(&parameter_path),
                 );
             }
 

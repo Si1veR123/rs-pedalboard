@@ -13,6 +13,7 @@ use super::{
     MAX_FREQ_HZ, MIN_FREQ_HZ, PLOT_POINTS, SLOT_ASPECT_RATIO,
 };
 
+use crate::pedalboard::ParameterPath;
 use crate::{
     dsp_algorithms::{
         eq::{self, Equalizer},
@@ -792,8 +793,14 @@ fn eq_knob(
     bandwidth_param: &PedalParameter,
     param_num: usize,
     width: f32,
-    id: u32,
+    pedal_id: u32,
 ) -> Option<EqChange> {
+    let parameter_path = ParameterPath {
+        pedalboard_id: None,
+        pedal_id,
+        parameter_name: format!("Gain {param_num}"),
+    };
+
     ui.vertical(|ui| {
         let mut changed_param = None;
 
@@ -805,6 +812,7 @@ fn eq_knob(
             Vec2::new(width, width * SLOT_ASPECT_RATIO),
             width,
             1.0,
+            Some(&parameter_path)
         ) {
             changed_param = Some(EqChange::Gain(value));
         }
@@ -823,7 +831,7 @@ fn eq_knob(
             bandwidth_param,
             Vec2::ZERO,
             1.0,
-            id,
+            pedal_id,
         ) {
             changed_param = Some(EqChange::Bandwidth(value.as_float().unwrap()));
         }
