@@ -170,7 +170,7 @@ pub enum Command {
     UtilitiesView,
     SongsView,
     SettingsView,
-    ChangeActiveParameter(FloatSettingUpdate),
+    ChangeActiveFeature(FloatSettingUpdate),
     SensibleMidiParameterUpdate(usize, FloatSettingUpdate),
     NextGlobalInputEQ,
     NextGlobalOutputEQ,
@@ -632,7 +632,7 @@ async fn client_socket_event_loop(
                     Command::UtilitiesView |
                     Command::SongsView |
                     Command::SettingsView |
-                    Command::ChangeActiveParameter(_) |
+                    Command::ChangeActiveFeature(_) |
                     Command::SensibleMidiParameterUpdate(_, _) |
                     Command::NextGlobalInputEQ |
                     Command::NextGlobalOutputEQ |

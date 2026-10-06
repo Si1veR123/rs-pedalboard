@@ -1,4 +1,4 @@
-use crate::{dsp_algorithms::oscillator::Oscillator, pedals::PedalTrait};
+use crate::{dsp_algorithms::oscillator::Oscillator, pedals::{Pedal, PedalTrait}};
 use eframe::egui;
 use serde::{Deserialize, Serialize};
 use std::hash::Hash;
@@ -353,7 +353,7 @@ impl ParameterUpdate {
         }
     }
 
-    pub fn apply_to_pedal(&mut self, pedal: &mut dyn PedalTrait, parameter_name: &str) {
+    pub fn apply_to_pedal(&mut self, pedal: &mut Pedal, parameter_name: &str) {
         if let Some(parameter) = pedal.get_parameters().get(parameter_name) {
             if let Some(new_value) = self.apply_to_parameter(parameter) {
                 pedal.set_parameter_value(parameter_name, new_value);

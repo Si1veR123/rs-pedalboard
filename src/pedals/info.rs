@@ -1,6 +1,6 @@
 use super::{PedalParameter, PedalParameterValue};
 use crate::dsp_algorithms::oscillator::Oscillator;
-use crate::pedals::{PedalDiscriminants, PedalTrait};
+use crate::pedals::{Pedal, PedalDiscriminants, PedalTrait};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use strum::IntoEnumIterator;
@@ -19,7 +19,7 @@ pub struct PedalInfo {
 }
 
 impl PedalInfo {
-    pub fn parameters_from_pedal(pedal: &dyn PedalTrait, name: Option<String>) -> Self {
+    pub fn parameters_from_pedal(pedal: &Pedal, name: Option<String>) -> Self {
         let mut pedal_info = PedalInfo {
             name: name.unwrap_or_else(|| "Unknown Pedal".to_string()),
             parameters: HashMap::new(),

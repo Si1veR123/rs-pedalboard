@@ -6,7 +6,7 @@ use eframe::egui;
 use rs_pedalboard::{
     pedalboard::{ParameterPath, Pedalboard},
     pedals::{
-        parameters::ParameterUpdate, ui::get_active_parameter, GraphicEqSettings, Pedal, PedalTrait,
+        parameters::ParameterUpdate, ui::get_active_feature, GraphicEqSettings, Pedal, PedalTrait, ActiveFeature
     },
     processor_settings::{FloatSettingUpdate, ProcessorSettingsSave},
 };
@@ -912,12 +912,58 @@ impl State {
                 Command::ToggleMute => {
                     tracing::info!("Toggled mute")
                 }
-                Command::ChangeActiveParameter(_) | Command::SensibleMidiParameterUpdate(_, _) => {
+                Command::ChangeActiveFeature(_) | Command::SensibleMidiParameterUpdate(_, _) => {
                     let (mut path, update) = match command {
-                        Command::ChangeActiveParameter(update) => {
+                        Command::ChangeActiveFeature(update) => {
                             // Get the active parameter path
-                            match get_active_parameter(ctx) {
-                                Some(path) => (path, update),
+                            match get_active_feature(ctx) {
+                                Some(feature) => {
+                                    match feature {
+                                        ActiveFeature::Parameter { parameter_path } => (parameter_path, update),
+                                        ActiveFeature::Function { pedalboard_id, pedal_id, function_name } => {
+                                            // Slightly hacky way to resolve pedalboard ID by creating a parameter path with an empty parameter name and resolving it
+                                            let resolved_pedalboard_id = {
+                                                let mut parameter_path = ParameterPath {
+                                                    pedalboard_id: pedalboard_id,
+                                                    pedal_id,
+                                                    parameter_name: String::new(),
+                                                };
+                                                if !parameter_path.resolve_pedalboard_id(&self.pedalboards.active_pedalboardstage.borrow()) {
+                                                    tracing::warn!("Functions: Unable to resolve pedalboard ID");
+                                                    continue;
+                                                }
+                                                parameter_path.pedalboard_id.expect("Pedalboard ID has been resolved")
+                                            };
+
+                                            let mut active_pedalboardstage = self.pedalboards.active_pedalboardstage.borrow_mut();
+                                            let pedal = active_pedalboardstage.find_pedal_mut(
+                                                resolved_pedalboard_id,
+                                                pedal_id
+                                            );
+                                            
+                                            if let Some(pedal) = pedal {
+                                                // Create a list of updated parameters to apply after the function is triggered
+                                                // This is because of RefCell borrow rules
+                                                let mut updated_parameters = Vec::new();
+                                                pedal.trigger_function(function_name.as_str(), |name, value| {
+                                                    updated_parameters.push((name, value));
+                                                });
+                                                drop(active_pedalboardstage);
+
+                                                for (name, value) in updated_parameters {
+                                                    self.set_parameter(
+                                                        resolved_pedalboard_id,
+                                                        pedal_id,
+                                                        name,
+                                                        ParameterUpdate::Absolute(value),
+                                                        true,
+                                                    );
+                                                }
+                                            }
+                                            continue;
+                                        }
+                                    }
+                                },
                                 None => continue,
                             }
                         }
@@ -950,16 +996,7 @@ impl State {
                             continue;
                         }
 
-                        stage_pedalboards
-                            .pedalboards
-                            .iter()
-                            .find(|pedalboard| pedalboard.get_id() == path.pedalboard_id.unwrap())
-                            .and_then(|pedalboard| {
-                                pedalboard
-                                    .pedals
-                                    .iter()
-                                    .find(|pedal| pedal.get_id() == path.pedal_id)
-                            })
+                        stage_pedalboards.find_pedal(path.pedalboard_id.expect("Pedalboard ID has been resolved"), path.pedal_id)
                             .and_then(|pedal| pedal.get_parameters().get(&path.parameter_name))
                             .and_then(|parameter| {
                                 parameter

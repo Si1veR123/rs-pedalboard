@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::hash::Hash;
 use strum_macros::{EnumDiscriminants, EnumIter};
+use crate::pedalboard::ParameterPath;
 
 mod volume;
 pub use volume::Volume;
@@ -59,6 +60,13 @@ pub use parameters::{ParameterUILocation, PedalParameter, PedalParameterValue};
 pub mod info;
 pub mod ui;
 
+/// A currently selected active parameter or function
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum ActiveFeature {
+    Parameter { parameter_path: ParameterPath },
+    Function { pedalboard_id: Option<u32>, pedal_id: u32, function_name: String },
+}
+
 #[enum_dispatch]
 pub trait PedalTrait {
     /// message_buffer is where messages to send to the client can be passed
@@ -89,6 +97,10 @@ pub trait PedalTrait {
                 );
             }
         }
+    }
+
+    fn trigger_function(&mut self, name: &str, mut _change_parameter: impl FnMut(String, PedalParameterValue)) {
+        tracing::warn!("Pedal does not have function {}", name);
     }
 
     /// Returns the name of the parameter that needs to be changed, and its value

@@ -1,4 +1,4 @@
-use crate::{pedalboard::Pedalboard, pedals::PedalTrait};
+use crate::{pedalboard::Pedalboard, pedals::{Pedal, PedalTrait}};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -81,5 +81,29 @@ impl PedalboardSet {
             tracing::error!("Pedalboard index out of bounds");
             self.active_pedalboard = 0;
         }
+    }
+
+    pub fn find_pedal(&self, pedalboard_id: u32, pedal_id: u32) -> Option<&Pedal> {
+        self.pedalboards
+            .iter()
+            .find(|pedalboard| pedalboard.get_id() == pedalboard_id)
+            .and_then(|pedalboard| {
+                pedalboard
+                    .pedals
+                    .iter()
+                    .find(|pedal| pedal.get_id() == pedal_id)
+            })
+    }
+
+    pub fn find_pedal_mut(&mut self, pedalboard_id: u32, pedal_id: u32) -> Option<&mut Pedal> {
+        self.pedalboards
+            .iter_mut()
+            .find(|pedalboard| pedalboard.get_id() == pedalboard_id)
+            .and_then(|pedalboard| {
+                pedalboard
+                    .pedals
+                    .iter_mut()
+                    .find(|pedal| pedal.get_id() == pedal_id)
+            })
     }
 }

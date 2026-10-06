@@ -4,8 +4,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::dsp_algorithms::impluse_response::IRConvolver;
-use crate::pedals::ui::{pedal_switch, sideways_arrow};
-use crate::pedals::ParameterUILocation;
+use crate::pedals::ui::{is_function_active_feature, pedal_switch, set_active_feature, sideways_arrow};
+use crate::pedals::{ActiveFeature, ParameterUILocation};
 use crate::processor_api::load_wav;
 use crate::{forward_slash_path, unique_time_id, SAVE_DIR};
 use eframe::egui::{self, include_image, Vec2};
@@ -431,6 +431,36 @@ impl ImpulseResponse {
             response,
         }
     }
+
+    fn next_button_clicked(&mut self) -> Option<(String, PedalParameterValue)> {
+        self.combobox_widget.select_next_file();
+        if let Some(path) = self.combobox_widget.selected() {
+            if let Some(s) = path.to_str() {
+                return Some((
+                    String::from("IR"),
+                    PedalParameterValue::String(s.to_string()),
+                ));
+            } else {
+                tracing::warn!("Selected IR path is not valid unicode");
+            }
+        }
+        None
+    }
+
+    fn previous_button_clicked(&mut self) -> Option<(String, PedalParameterValue)> {
+        self.combobox_widget.select_previous_file();
+        if let Some(path) = self.combobox_widget.selected() {
+            if let Some(s) = path.to_str() {
+                return Some((
+                    String::from("IR"),
+                    PedalParameterValue::String(s.to_string()),
+                ));
+            } else {
+                tracing::warn!("Selected IR path is not valid unicode");
+            }
+        }
+        None
+    }
 }
 
 impl PedalTrait for ImpulseResponse {
@@ -557,6 +587,24 @@ impl PedalTrait for ImpulseResponse {
         )
     }
 
+    fn trigger_function(&mut self, name: &str, mut change_parameter: impl FnMut(String, PedalParameterValue)) {
+        match name {
+            "Next IR" => {
+                if let Some((param_name, value)) = self.next_button_clicked() {
+                    change_parameter(param_name, value);
+                }
+            }
+            "Previous IR" => {
+                if let Some((param_name, value)) = self.previous_button_clicked() {
+                    change_parameter(param_name, value);
+                }
+            }
+            _ => {
+                tracing::warn!("Unknown function triggered: {}", name);
+            }
+        }
+    }
+
     fn parameter_editor_ui(
         &mut self,
         ui: &mut egui::Ui,
@@ -610,38 +658,30 @@ impl PedalTrait for ImpulseResponse {
         let button_size = Vec2::new(button_rect.width() * 0.47, button_rect.height());
         let left_button_response = button_ui.add_sized(button_size, egui::Button::new(""));
 
-        sideways_arrow(ui, left_button_response.rect, true);
+        let is_left_active = is_function_active_feature(ui.ctx(), self.id, "Previous IR");
+        sideways_arrow(ui, left_button_response.rect, true, is_left_active);
 
         if left_button_response.clicked() {
-            self.combobox_widget.select_previous_file();
-            if let Some(path) = self.combobox_widget.selected() {
-                if let Some(s) = path.to_str() {
-                    to_change = Some((
-                        String::from("IR"),
-                        PedalParameterValue::String(s.to_string()),
-                    ));
-                } else {
-                    tracing::warn!("Selected IR path is not valid unicode");
-                }
-            }
+            self.previous_button_clicked();
+            set_active_feature(ui.ctx(), Some(&ActiveFeature::Function {
+                pedalboard_id: None,
+                pedal_id: self.id,
+                function_name: "Previous IR".to_string(),
+            }));
         };
         button_ui.add_space(button_rect.width() * 0.06);
         let right_button_response = button_ui.add_sized(button_size, egui::Button::new(""));
 
-        sideways_arrow(ui, right_button_response.rect, false);
+        let is_right_active = is_function_active_feature(ui.ctx(), self.id, "Next IR");
+        sideways_arrow(ui, right_button_response.rect, false, is_right_active);
 
         if right_button_response.clicked() {
-            self.combobox_widget.select_next_file();
-            if let Some(path) = self.combobox_widget.selected() {
-                if let Some(s) = path.to_str() {
-                    to_change = Some((
-                        String::from("IR"),
-                        PedalParameterValue::String(s.to_string()),
-                    ));
-                } else {
-                    tracing::warn!("Selected IR path is not valid unicode");
-                }
-            }
+            self.next_button_clicked();
+            set_active_feature(ui.ctx(), Some(&ActiveFeature::Function {
+                pedalboard_id: None,
+                pedal_id: self.id,
+                function_name: "Next IR".to_string(),
+            }));
         };
 
         if let Some(value) = pedal_knob(

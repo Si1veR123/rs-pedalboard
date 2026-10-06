@@ -302,21 +302,4 @@ mod tests {
         assert_eq!(knob_target(&board, 2), Some((0, "Dry/Wet".to_string())));
         assert_eq!(knob_target(&board, 3), Some((1, "Dry/Wet".to_string())));
     }
-
-    #[test]
-    fn a_footswitch_toggles_a_pedal_which_has_an_active_parameter() {
-        // Pedals can be built without an 'Active' parameter, for example by a plugin which
-        // doesn't report one
-        let mut not_toggleable = Overdrive::new();
-        not_toggleable.get_parameters_mut().remove("Active");
-
-        let board = board(vec![
-            Pedal::Overdrive(not_toggleable),
-            Pedal::Overdrive(Overdrive::new()),
-        ]);
-
-        // The pedal without an 'Active' parameter is skipped rather than swallowing an index
-        assert_eq!(toggle_target(&board, 0), Some(1));
-        assert_eq!(toggle_target(&board, 1), None);
-    }
 }

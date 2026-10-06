@@ -1,8 +1,7 @@
 use eframe::egui::{self, Color32, Id, Vec2, WidgetText};
 
 use crate::{
-    dsp_algorithms::oscillator::{self, Oscillator},
-    pedalboard::ParameterPath,
+    dsp_algorithms::oscillator::{self, Oscillator}, pedalboard::ParameterPath, pedals::ActiveFeature,
 };
 
 use super::{PedalParameter, PedalParameterValue};
@@ -17,10 +16,10 @@ pub fn float_round(value: f32, step: f32) -> f32 {
     rounded
 }
 
-pub fn get_active_parameter(ctx: &eframe::egui::Context) -> Option<ParameterPath> {
+pub fn get_active_feature(ctx: &eframe::egui::Context) -> Option<ActiveFeature> {
     ctx.data(|reader| {
         reader
-            .get_temp::<Option<ParameterPath>>(eframe::egui::Id::new("active_parameter"))
+            .get_temp::<Option<ActiveFeature>>(eframe::egui::Id::new("active_feature"))
             .clone()
             .unwrap_or(None)
     })
@@ -30,24 +29,42 @@ pub fn get_active_parameter(ctx: &eframe::egui::Context) -> Option<ParameterPath
 /// 
 /// If the parameter path has a pedalboard_id, it will check for an exact match.
 /// If the parameter path does not have a pedalboard_id, it will check for a match on pedal_id and parameter_name only.
-pub fn is_active_parameter(ctx: &eframe::egui::Context, path: &ParameterPath) -> bool {
-    if let Some(active_param) = get_active_parameter(ctx) {
-        if path.pedalboard_id.is_some() {
-            active_param == *path
-        } else {
-            active_param.pedal_id == path.pedal_id
-                && active_param.parameter_name == path.parameter_name
+pub fn is_parameter_active_feature(ctx: &eframe::egui::Context, path: &ParameterPath) -> bool {
+    if let Some(active_feature) = get_active_feature(ctx) {
+        match active_feature {
+            ActiveFeature::Function { .. } => return false,
+            ActiveFeature::Parameter { parameter_path } => {
+                if path.pedalboard_id.is_some() {
+                    parameter_path == *path
+                } else {
+                    parameter_path.pedal_id == path.pedal_id
+                        && parameter_path.parameter_name == path.parameter_name
+                }
+            }
         }
     } else {
         false
     }
 }
 
-pub fn set_active_parameter(ctx: &eframe::egui::Context, path: Option<&ParameterPath>) {
+pub fn is_function_active_feature(ctx: &eframe::egui::Context, pedal_id: u32, function_name: &str) -> bool {
+    if let Some(active_feature) = get_active_feature(ctx) {
+        match active_feature {
+            ActiveFeature::Function { pedalboard_id: _, pedal_id: active_pedal_id, function_name: active_function_name } => {
+                active_pedal_id == pedal_id && active_function_name == function_name
+            },
+            ActiveFeature::Parameter { .. } => false,
+        }
+    } else {
+        false
+    }
+}
+
+pub fn set_active_feature(ctx: &eframe::egui::Context, feature: Option<&ActiveFeature>) {
     ctx.memory_mut(|writer| {
         writer
             .data
-            .insert_temp(eframe::egui::Id::new("active_parameter"), path.map(|p| p.clone()));
+            .insert_temp(eframe::egui::Id::new("active_feature"), feature.map(|f| f.clone()));
     });
 }
 
@@ -80,7 +97,7 @@ pub fn pedal_knob(
         }
     };
 
-    let is_active = is_active_parameter(
+    let is_active = is_parameter_active_feature(
         ui.ctx(),
         &parameter_path,
     );
@@ -131,9 +148,9 @@ pub fn pedal_knob(
             );
 
             if knob_im_shine_overlay.clicked() || knob_im_shine_overlay.drag_started() {
-                set_active_parameter(
+                set_active_feature(
                     ui.ctx(),
-                    Some(&parameter_path),
+                    Some(&ActiveFeature::Parameter { parameter_path }),
                 );
             }
 
@@ -222,7 +239,7 @@ pub fn pedal_switch(ui: &mut egui::Ui, active: bool, at: egui::Vec2, height: f32
     }
 }
 
-pub fn sideways_arrow(ui: &mut egui::Ui, button_rect: egui::Rect, left: bool) {
+pub fn sideways_arrow(ui: &mut egui::Ui, button_rect: egui::Rect, left: bool, active: bool) {
     let icon_size = Vec2::splat(ui.spacing().icon_width);
     let right_arrow_rect =
         egui::Align2::CENTER_CENTER.align_size_within_rect(icon_size, button_rect);
@@ -239,9 +256,14 @@ pub fn sideways_arrow(ui: &mut egui::Ui, button_rect: egui::Rect, left: bool) {
             right_arrow_rect.left_bottom(),
         ]
     };
+    let color = if active {
+        Color32::from_rgb(150, 150, 255)
+    } else {
+        Color32::from_gray(200)
+    };
     ui.painter().add(egui::Shape::convex_polygon(
         points,
-        Color32::from_gray(200),
+        color,
         egui::Stroke::NONE,
     ));
 }

@@ -9,8 +9,8 @@ use neural_amp_modeler::NeuralAmpModeler;
 use serde::{ser::SerializeMap, Deserialize, Serialize};
 
 use super::{ui::pedal_knob, PedalParameter, PedalParameterValue, PedalTrait};
-use crate::pedals::ui::{pedal_switch, sideways_arrow};
-use crate::pedals::ParameterUILocation;
+use crate::pedals::ui::{is_function_active_feature, pedal_switch, set_active_feature, sideways_arrow};
+use crate::pedals::{ActiveFeature, ParameterUILocation};
 use crate::{forward_slash_path, unique_time_id, SAVE_DIR};
 
 pub const NAM_SAVE_PATH: &str = r"NAM";
@@ -468,6 +468,36 @@ impl Nam {
             response,
         }
     }
+
+    fn next_button_clicked(&mut self) -> Option<(String, PedalParameterValue)> {
+        self.combobox_widget.select_next_file();
+        if let Some(path) = self.combobox_widget.selected() {
+            if let Some(s) = path.to_str() {
+                return Some((
+                    String::from("Model"),
+                    PedalParameterValue::String(s.to_string()),
+                ));
+            } else {
+                tracing::warn!("Selected model path is not valid unicode");
+            }
+        }
+        None
+    }
+
+    fn previous_button_clicked(&mut self) -> Option<(String, PedalParameterValue)> {
+        self.combobox_widget.select_previous_file();
+        if let Some(path) = self.combobox_widget.selected() {
+            if let Some(s) = path.to_str() {
+                return Some((
+                    String::from("Model"),
+                    PedalParameterValue::String(s.to_string()),
+                ));
+            } else {
+                tracing::warn!("Selected model path is not valid unicode");
+            }
+        }
+        None
+    }
 }
 
 impl PedalTrait for Nam {
@@ -598,6 +628,24 @@ impl PedalTrait for Nam {
         }
     }
 
+    fn trigger_function(&mut self, name: &str, mut change_parameter: impl FnMut(String, PedalParameterValue)) {
+        match name {
+            "Next Model" => {
+                if let Some((param_name, value)) = self.next_button_clicked() {
+                    change_parameter(param_name, value);
+                }
+            }
+            "Previous Model" => {
+                if let Some((param_name, value)) = self.previous_button_clicked() {
+                    change_parameter(param_name, value);
+                }
+            }
+            _ => {
+                tracing::warn!("Unknown function triggered: {}", name);
+            }
+        }
+    }
+
     fn get_string_values(&self, _parameter_name: &str) -> Option<Vec<String>> {
         Some(
             self.combobox_widget
@@ -661,39 +709,31 @@ impl PedalTrait for Nam {
         );
         let button_size = Vec2::new(button_rect.width() * 0.47, button_rect.height());
         let left_button_response = button_ui.add_sized(button_size, egui::Button::new(""));
-
-        sideways_arrow(ui, left_button_response.rect, true);
+        
+        let is_left_active = is_function_active_feature(ui.ctx(), self.id, "Previous Model");
+        sideways_arrow(ui, left_button_response.rect, true, is_left_active);
 
         if left_button_response.clicked() {
-            self.combobox_widget.select_previous_file();
-            if let Some(path) = self.combobox_widget.selected() {
-                if let Some(s) = path.to_str() {
-                    to_change = Some((
-                        String::from("Model"),
-                        PedalParameterValue::String(s.to_string()),
-                    ));
-                } else {
-                    tracing::warn!("Selected model path is not valid unicode");
-                }
-            }
+            to_change = self.previous_button_clicked();
+            set_active_feature(ui.ctx(), Some(&ActiveFeature::Function {
+                pedalboard_id: None,
+                pedal_id: self.id,
+                function_name: "Previous Model".to_string(),
+            }));
         };
         button_ui.add_space(button_rect.width() * 0.06);
         let right_button_response = button_ui.add_sized(button_size, egui::Button::new(""));
 
-        sideways_arrow(ui, right_button_response.rect, false);
+        let is_right_active = is_function_active_feature(ui.ctx(), self.id, "Next Model");
+        sideways_arrow(ui, right_button_response.rect, false, is_right_active);
 
         if right_button_response.clicked() {
-            self.combobox_widget.select_next_file();
-            if let Some(path) = self.combobox_widget.selected() {
-                if let Some(s) = path.to_str() {
-                    to_change = Some((
-                        String::from("Model"),
-                        PedalParameterValue::String(s.to_string()),
-                    ));
-                } else {
-                    tracing::warn!("Selected model path is not valid unicode");
-                }
-            }
+            to_change = self.next_button_clicked();
+            set_active_feature(ui.ctx(), Some(&ActiveFeature::Function {
+                pedalboard_id: None,
+                pedal_id: self.id,
+                function_name: "Next Model".to_string(),
+            }));
         };
 
         if let Some(value) = pedal_knob(

@@ -2,10 +2,8 @@ use eframe::egui::{Align, Color32, Image, Layout, Sense, UiBuilder, Vec2, includ
 use egui_plot::PlotPoint;
 
 use crate::{
-    pedals::{
-        PedalParameter,
-        ui::{set_active_parameter, is_active_parameter}},
-    pedalboard::ParameterPath
+    pedalboard::ParameterPath, pedals::{
+        ActiveFeature, PedalParameter, ui::{is_parameter_active_feature, set_active_feature}}
 };
 
 pub mod frequency_plot;
@@ -63,7 +61,7 @@ pub fn gain_knob(
         let knob_size = Vec2::new(knob_width, knob_width * KNOB_ASPECT_RATIO);
 
         let is_active = if let Some(path) = parameter_path {
-            is_active_parameter(ui.ctx(), path)
+            is_parameter_active_feature(ui.ctx(), path)
         } else {
             false
         };
@@ -111,14 +109,15 @@ pub fn gain_knob(
                 Image::new(include_image!("../images/eq/knob.png"))
                     .fit_to_exact_size(knob_size)
                     .maintain_aspect_ratio(false)
-                    .sense(Sense::click_and_drag()),
+                    .sense(Sense::click_and_drag())
+                    .tint(tint)
             );
         if response.hovered() {
             ui.ctx()
                 .output_mut(|output| output.cursor_icon = eframe::egui::CursorIcon::ResizeVertical);
         }
         if (response.clicked() || response.dragged()) && parameter_path.is_some() {
-            set_active_parameter(ui.ctx(), Some(&parameter_path.unwrap()));
+            set_active_feature(ui.ctx(), Some(&ActiveFeature::Parameter { parameter_path: parameter_path.unwrap().clone() }));
         }
         response
             .dragged()

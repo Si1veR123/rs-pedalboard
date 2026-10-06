@@ -18,7 +18,7 @@ pub enum GlobalMidiFunction {
     UtilitiesView,
     SongsView,
     SettingsView,
-    ChangeActiveParameter,
+    ActiveFeature,
     ResetVolumeNormalization,
     NextInputEQ,
     NextOutputEQ,
@@ -42,7 +42,7 @@ impl std::fmt::Display for GlobalMidiFunction {
             GlobalMidiFunction::UtilitiesView => "Utilities View",
             GlobalMidiFunction::SongsView => "Songs View",
             GlobalMidiFunction::SettingsView => "Settings View",
-            GlobalMidiFunction::ChangeActiveParameter => "Change Active Parameter",
+            GlobalMidiFunction::ActiveFeature => "Active Feature",
             GlobalMidiFunction::ResetVolumeNormalization => "Reset Volume Normalization",
             GlobalMidiFunction::NextInputEQ => "Next Input EQ",
             GlobalMidiFunction::NextOutputEQ => "Next Output EQ",
@@ -72,8 +72,8 @@ impl GlobalMidiFunction {
                 GlobalMidiFunction::UtilitiesView => Command::UtilitiesView,
                 GlobalMidiFunction::SongsView => Command::SongsView,
                 GlobalMidiFunction::SettingsView => Command::SettingsView,
-                GlobalMidiFunction::ChangeActiveParameter => {
-                    Command::ChangeActiveParameter(float_setting_update)
+                GlobalMidiFunction::ActiveFeature => {
+                    Command::ChangeActiveFeature(float_setting_update)
                 }
                 GlobalMidiFunction::ResetVolumeNormalization => Command::VolumeNormalizationReset,
                 GlobalMidiFunction::NextInputEQ => Command::NextGlobalInputEQ,
@@ -99,7 +99,7 @@ impl GlobalMidiFunction {
             GlobalMidiFunction::UtilitiesView => false,
             GlobalMidiFunction::SongsView => false,
             GlobalMidiFunction::SettingsView => false,
-            GlobalMidiFunction::ChangeActiveParameter => false,
+            GlobalMidiFunction::ActiveFeature => false,
             GlobalMidiFunction::ResetVolumeNormalization => true,
             GlobalMidiFunction::NextInputEQ => false,
             GlobalMidiFunction::NextOutputEQ => false,
