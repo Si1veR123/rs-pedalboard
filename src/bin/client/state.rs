@@ -945,7 +945,7 @@ impl State {
                                                 // Create a list of updated parameters to apply after the function is triggered
                                                 // This is because of RefCell borrow rules
                                                 let mut updated_parameters = Vec::new();
-                                                pedal.trigger_function(function_name.as_str(), |name, value| {
+                                                pedal.trigger_function(function_name.as_str(), Some(update), |name, value| {
                                                     updated_parameters.push((name, value));
                                                 });
                                                 drop(active_pedalboardstage);
