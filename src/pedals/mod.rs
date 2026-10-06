@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::hash::Hash;
 use strum_macros::{EnumDiscriminants, EnumIter};
 use crate::pedalboard::ParameterPath;
+use crate::processor_settings::FloatSettingUpdate;
 
 mod volume;
 pub use volume::Volume;
@@ -67,6 +68,26 @@ pub enum ActiveFeature {
     Function { pedalboard_id: Option<u32>, pedal_id: u32, function_name: String },
 }
 
+/// Decides whether a function trigger should be considered "next" or "previous" based on the float update and the function name.
+pub fn decide_trigger_direction(float_update: Option<FloatSettingUpdate>, function_name_is_next: bool) -> bool {
+    match float_update {
+        Some(FloatSettingUpdate::Relative(f)) => {
+            if f >= 0.0 {
+                true
+            } else {
+                false
+            }
+        }
+        _ => {
+            if function_name_is_next {
+                true
+            } else {
+                false
+            }
+        }
+    }
+}
+
 #[enum_dispatch]
 pub trait PedalTrait {
     /// message_buffer is where messages to send to the client can be passed
@@ -99,7 +120,7 @@ pub trait PedalTrait {
         }
     }
 
-    fn trigger_function(&mut self, name: &str, mut _change_parameter: impl FnMut(String, PedalParameterValue)) {
+    fn trigger_function(&mut self, name: &str, _float_update: Option<FloatSettingUpdate>, mut _change_parameter: impl FnMut(String, PedalParameterValue)) {
         tracing::warn!("Pedal does not have function {}", name);
     }
 

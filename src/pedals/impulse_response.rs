@@ -5,8 +5,9 @@ use std::sync::Arc;
 
 use crate::dsp_algorithms::impluse_response::IRConvolver;
 use crate::pedals::ui::{is_function_active_feature, pedal_switch, set_active_feature, sideways_arrow};
-use crate::pedals::{ActiveFeature, ParameterUILocation};
+use crate::pedals::{ActiveFeature, ParameterUILocation, decide_trigger_direction};
 use crate::processor_api::load_wav;
+use crate::processor_settings::FloatSettingUpdate;
 use crate::{forward_slash_path, unique_time_id, SAVE_DIR};
 use eframe::egui::{self, include_image, Vec2};
 use egui_directory_combobox::{DirectoryComboBox, DirectoryNode};
@@ -587,20 +588,27 @@ impl PedalTrait for ImpulseResponse {
         )
     }
 
-    fn trigger_function(&mut self, name: &str, mut change_parameter: impl FnMut(String, PedalParameterValue)) {
-        match name {
+    fn trigger_function(&mut self, name: &str, float_update: Option<FloatSettingUpdate>, mut change_parameter: impl FnMut(String, PedalParameterValue)) {
+        let is_next = match name {
             "Next IR" => {
-                if let Some((param_name, value)) = self.next_button_clicked() {
-                    change_parameter(param_name, value);
-                }
-            }
+                decide_trigger_direction(float_update, true)
+            },
             "Previous IR" => {
-                if let Some((param_name, value)) = self.previous_button_clicked() {
-                    change_parameter(param_name, value);
-                }
-            }
+                decide_trigger_direction(float_update, false)
+            },
             _ => {
-                tracing::warn!("Unknown function triggered: {}", name);
+                tracing::warn!("ImpulseResponse: Unknown function name {}.", name);
+                return;
+            }
+        };
+
+        if is_next {
+            if let Some((param_name, value)) = self.next_button_clicked() {
+                change_parameter(param_name, value);
+            }
+        } else {
+            if let Some((param_name, value)) = self.previous_button_clicked() {
+                change_parameter(param_name, value);
             }
         }
     }
