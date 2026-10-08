@@ -24,6 +24,13 @@ use crate::{
 
 pub const MIDI_SETTINGS_SAVE_NAME: &'static str = "midi_settings.json";
 
+/// Name used for MIDI ports whose name was never recorded (e.g. settings saved before port names
+/// were stored).
+const UNKNOWN_PORT_NAME: &str = "Unknown";
+
+/// Space added between the sections of the MIDI settings UI.
+const SECTION_SPACE: f32 = 40.0;
+
 pub struct MidiState {
     settings: Arc<Mutex<MidiSettings>>,
     // Name, Id, Connection
@@ -314,6 +321,9 @@ impl MidiState {
                     id.to_string(),
                 ) {
                     Ok(connection) => {
+                        // Own the name before calling &mut self methods, so that the borrow of
+                        // available_input_ports ends here.
+                        let port_name = port_name.to_string();
                         self.input_connections.push((
                             port_name.clone(),
                             id.to_string(),
@@ -321,12 +331,20 @@ impl MidiState {
                         ));
                         tracing::info!("Connected to MIDI port: {}", id);
                         self.available_input_ports.retain(|(_name, p)| p.id() != id);
-                        self.settings
-                            .lock()
-                            .expect("MidiState: Mutex poisoned.")
+                        let mut settings_lock =
+                            self.settings.lock().expect("MidiState: Mutex poisoned.");
+                        let port_settings = settings_lock
                             .port_settings
                             .entry(id.to_string())
-                            .or_default();
+                            .or_insert_with(|| MidiPortSettings {
+                                name: port_name.clone(),
+                                ..Default::default()
+                            });
+                        // Ports saved before names were recorded pick up their name on the next
+                        // connect.
+                        if port_settings.name == UNKNOWN_PORT_NAME {
+                            port_settings.name = port_name.clone();
+                        }
                     }
                     Err(e) => {
                         tracing::error!("Failed to connect to MIDI port {}: {}", id, e);
@@ -457,6 +475,64 @@ impl MidiState {
         None
     }
 
+    /// Draws a subheading of the MIDI settings UI. Subheadings use the heading font so that they
+    /// match the surrounding section headings, but without the separator used under those headings.
+    fn midi_subheading_ui(ui: &mut egui::Ui, text: &str) {
+        ui.label(RichText::new(text).font(egui::TextStyle::Heading.resolve(ui.style())));
+    }
+
+    /// Background colour of the row at `index` in a list of MIDI ports, alternating between
+    /// [`crate::ROW_COLOR_LIGHT`] and [`crate::ROW_COLOR_DARK`] like the library and songs lists do.
+    fn midi_row_color(index: usize) -> egui::Color32 {
+        if index % 2 == 1 {
+            crate::ROW_COLOR_DARK
+        } else {
+            crate::ROW_COLOR_LIGHT
+        }
+    }
+
+    /// Draws a single MIDI port row: the port name (with the raw port id as hover text), an action
+    /// button, and, for ports that have settings, the auto-connect toggle.
+    ///
+    /// Returns true when the action button was clicked.
+    fn midi_port_row_ui(
+        ui: &mut egui::Ui,
+        port_name: &str,
+        port_id: &str,
+        action: &str,
+        background: egui::Color32,
+        mut auto_connect: Option<&mut bool>,
+    ) -> bool {
+        ui.painter()
+            .rect_filled(ui.available_rect_before_wrap(), 5.0, background);
+
+        let width = ui.available_width();
+        let mut action_clicked = false;
+        StripBuilder::new(ui)
+            .size(Size::Absolute { initial: width*0.5, range: Rangef::new(0.0, width*0.5) }) // Port name
+            .size(Size::Absolute { initial: width*0.25, range: Rangef::new(0.0, width*0.25) }) // Action button
+            .size(Size::Absolute { initial: width*0.25, range: Rangef::new(0.0, width*0.25) }) // Auto-connect toggle
+            .horizontal(|mut strip| {
+                strip.cell(|ui| {
+                    ui.horizontal_centered(|ui| {
+                        ui.label(port_name).on_hover_text(port_id);
+                    });
+                });
+                strip.cell(|ui| {
+                    if ui.horizontal_centered(|ui| ui.button(action)).inner.clicked() {
+                        action_clicked = true;
+                    }
+                });
+                strip.cell(|ui| {
+                    if let Some(auto_connect) = &mut auto_connect {
+                        ui.horizontal_centered(|ui| ui.toggle_value(auto_connect, "Auto-Connect"));
+                    }
+                });
+            });
+
+        action_clicked
+    }
+
     fn midi_port_device_settings_ui(&mut self, ui: &mut egui::Ui, ports: &[(&str, &str)], connected: bool) {
         let mut disconnect: Option<String> = None;
         let mut forget_port: Option<String> = None;
@@ -478,33 +554,36 @@ impl MidiState {
         StripBuilder::new(ui)
             .sizes(Size::Absolute { initial: row_height, range: Rangef::new(0.0, row_height) }, row_count)
             .vertical(|mut strip| {
-                for &(port_name, port_id) in ports {
+                for (port_index, &(port_name, port_id)) in ports.iter().enumerate() {
                     // Port summary
                     strip.cell(|ui| {
-                        ui.painter().rect_filled(ui.available_rect_before_wrap(), 5.0, crate::LIGHT_BACKGROUND_COLOR);
-                        let width = ui.available_width();
-                        StripBuilder::new(ui)
-                            .size(Size::Absolute { initial: width*0.5, range: Rangef::new(0.0, width*0.5) }) // Port name
-                            .size(Size::Absolute { initial: width*0.25, range: Rangef::new(0.0, width*0.25) }) // Disconnect button/Forget button
-                            .size(Size::Absolute { initial: width*0.25, range: Rangef::new(0.0, width*0.25) }) // Auto-connect button
-                            .horizontal(|mut strip| {
-                                strip.cell(|ui| { ui.horizontal_centered(|ui| ui.label(port_name)); });
-                                strip.cell(|ui| {
-                                    if connected {
-                                        if ui.horizontal_centered(|ui| ui.button("Disconnect")).inner.clicked() {
-                                            disconnect = Some(port_id.to_string());
-                                        }
-                                    } else {
-                                        if ui.horizontal_centered(|ui| ui.button("Forget")).inner.clicked() {
-                                            forget_port = Some(port_id.to_string());
-                                        }
-                                    }
-                                });
-                                strip.cell(|ui| {
-                                    let port_settings = settings_lock.port_settings.get_mut(port_id).expect("Any listed MIDI port should have an entry in port settings.");
-                                    ui.horizontal_centered(|ui| ui.toggle_value(&mut port_settings.auto_connect, "Auto-Connect"));
-                                });
-                            });
+                        // Connected ports all use the same colour, known ports alternate so that the
+                        // rows of different ports can be told apart.
+                        let background = if connected {
+                            crate::ROW_COLOR_LIGHT
+                        } else {
+                            Self::midi_row_color(port_index)
+                        };
+
+                        let port_settings = settings_lock
+                            .port_settings
+                            .get_mut(port_id)
+                            .expect("Any listed MIDI port should have an entry in port settings.");
+
+                        if Self::midi_port_row_ui(
+                            ui,
+                            port_name,
+                            port_id,
+                            if connected { "Disconnect" } else { "Forget" },
+                            background,
+                            Some(&mut port_settings.auto_connect),
+                        ) {
+                            if connected {
+                                disconnect = Some(port_id.to_string());
+                            } else {
+                                forget_port = Some(port_id.to_string());
+                            }
+                        }
                     });
 
                     // Device rows for this port
@@ -518,7 +597,7 @@ impl MidiState {
                                 let mut rect = ui.ctx().memory(|m| m.data.get_temp::<egui::Rect>(Id::new("device_rect").with((i, port_id))).unwrap_or(ui.available_rect_before_wrap()));
                                 rect.set_width(ui.available_width());
                                 if i % 2 == 0 {
-                                    ui.painter().rect_filled(rect, 5.0, crate::LIGHT_BACKGROUND_COLOR.gamma_multiply(0.6));
+                                    ui.painter().rect_filled(rect, 5.0, crate::ROW_COLOR_DARK);
                                 }
                                 StripBuilder::new(ui)
                                     .size(Size::Absolute { initial: row_height, range: Rangef::new(0.0, row_height) }) // Device name etc.
@@ -552,11 +631,11 @@ impl MidiState {
                                             ui.push_id((port_id, cc, channel), |ui| {
                                                 ui.vertical_centered(|ui| {
                                                     egui::CollapsingHeader::new("Device Settings")
-                                                    .id_salt(egui::Id::new("midi_device_settings").with(i))
+                                                    .id_salt(egui::Id::new("midi_device_settings").with((port_id, cc, channel)))
                                                     .show(ui, |ui| {
                                                         ui.add_space(5.0);
 
-                                                        egui::Grid::new(egui::Id::new("midi_device_settings_grid").with(i))
+                                                        egui::Grid::new(egui::Id::new("midi_device_settings_grid").with((port_id, cc, channel)))
                                                             .num_columns(2)
                                                             .min_col_width(ui.available_width()/2.0)
                                                             .min_row_height(40.0)
@@ -724,43 +803,71 @@ impl MidiState {
     pub fn midi_settings_ui(&mut self, ui: &mut egui::Ui) {
         let row_height = 60.0;
 
-        ui.add_space(10.0);
-        egui::Grid::new("midi_ports_grid")
-            .striped(true)
-            .min_row_height(row_height)
-            .min_col_width(ui.available_width() / 2.0)
-            .num_columns(2)
-            .show(ui, |ui| {
-                ui.label("Available MIDI Ports:");
-                ui.button("Refresh")
+        ui.add_space(SECTION_SPACE);
+
+        // Available ports
+        let mut refresh_ports = false;
+        ui.horizontal(|ui| {
+            Self::midi_subheading_ui(ui, "Available MIDI Ports:");
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                refresh_ports = ui
+                    .button("Refresh")
                     .on_hover_text("Refresh available MIDI ports")
-                    .clicked()
-                    .then(|| self.refresh_available_ports());
-                ui.end_row();
-
-                if self.available_input_ports.is_empty() {
-                    ui.label("No available MIDI input ports found");
-                    ui.end_row();
-                } else {
-                    let mut connect = None;
-
-                    for (name, port) in &self.available_input_ports {
-                        ui.label(name);
-                        if ui.button("Connect").clicked() {
-                            connect = Some(port.id());
-                        }
-                        ui.end_row();
-                    }
-
-                    if let Some(port_id) = connect {
-                        self.connect_to_port(&port_id);
-                    }
-                }
+                    .clicked();
             });
+        });
 
-        ui.add_space(40.0);
+        if refresh_ports {
+            self.refresh_available_ports();
+        }
 
-        ui.label("Connected MIDI Ports:");
+        let available_ports: Vec<(String, String)> = self
+            .available_input_ports
+            .iter()
+            .map(|(name, port)| (name.clone(), port.id()))
+            .collect();
+
+        if available_ports.is_empty() {
+            ui.label(
+                RichText::new("No available MIDI input ports found").color(crate::FAINT_TEXT_COLOR),
+            );
+        } else {
+            let available_port_refs: Vec<(&str, &str)> = available_ports
+                .iter()
+                .map(|(name, id)| (name.as_str(), id.as_str()))
+                .collect();
+
+            let mut connect: Option<String> = None;
+            StripBuilder::new(ui)
+                .sizes(Size::Absolute { initial: row_height, range: Rangef::new(0.0, row_height) }, available_port_refs.len())
+                .vertical(|mut strip| {
+                    for (i, &(port_name, port_id)) in available_port_refs.iter().enumerate() {
+                        strip.cell(|ui| {
+                            let clicked = Self::midi_port_row_ui(
+                                ui,
+                                port_name,
+                                port_id,
+                                "Connect",
+                                Self::midi_row_color(i),
+                                None,
+                            );
+
+                            if clicked {
+                                connect = Some(port_id.to_string());
+                            }
+                        });
+                    }
+                });
+
+            if let Some(port_id) = connect {
+                self.connect_to_port(&port_id);
+            }
+        }
+
+        ui.add_space(SECTION_SPACE);
+
+        // Connected ports
+        Self::midi_subheading_ui(ui, "Connected MIDI Ports:");
         let connected_ports: Vec<(String, String)> = self
             .input_connections
             .iter()
@@ -768,7 +875,7 @@ impl MidiState {
             .collect();
 
         if connected_ports.is_empty() {
-            ui.label("No connected MIDI input ports");
+            ui.label(RichText::new("No connected MIDI input ports").color(crate::FAINT_TEXT_COLOR));
         } else {
             let connected_port_refs: Vec<(&str, &str)> = connected_ports
                 .iter()
@@ -778,13 +885,16 @@ impl MidiState {
             self.midi_port_device_settings_ui(ui, &connected_port_refs, true);
         }
 
-        ui.label("Known MIDI Ports:");
+        ui.add_space(SECTION_SPACE);
+
+        // Known ports: ports we have settings for, but that are not currently connected
+        Self::midi_subheading_ui(ui, "Known MIDI Ports:");
         let known_ports: Vec<(String, String)> = {
             let settings_lock = self.settings.lock().expect("MidiState: Mutex poisoned.");
             settings_lock
                 .port_settings
-                .keys()
-                .filter_map(|id| {
+                .iter()
+                .filter_map(|(id, port_settings)| {
                     // Exclude any ports that are already connected
                     if self
                         .input_connections
@@ -793,14 +903,15 @@ impl MidiState {
                     {
                         None
                     } else {
-                        Some((id.clone(), id.clone()))
+                        // Entries saved before names were recorded show UNKNOWN_PORT_NAME
+                        Some((port_settings.name.clone(), id.clone()))
                     }
                 })
                 .collect()
         };
 
         if known_ports.is_empty() {
-            ui.label("No known MIDI input ports");
+            ui.label(RichText::new("No known MIDI input ports").color(crate::FAINT_TEXT_COLOR));
         } else {
             let known_port_refs: Vec<(&str, &str)> = known_ports
                 .iter()
@@ -814,6 +925,7 @@ impl MidiState {
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct MidiSettings {
     // Port ID, Settings
+    #[serde(default)]
     pub port_settings: HashMap<String, MidiPortSettings>,
 }
 
@@ -913,13 +1025,17 @@ pub struct MidiPortSettings {
     // (cc, channel)
     pub devices: HashMap<(u8, u8), MidiDevice>,
     pub auto_connect: bool,
+    /// User-facing name of the port, recorded when the port is connected. Defaults to
+    /// [`UNKNOWN_PORT_NAME`] for entries saved before names were recorded.
+    pub name: String,
 }
 
 impl Default for MidiPortSettings {
     fn default() -> Self {
         MidiPortSettings {
             devices: HashMap::new(),
-            auto_connect: true,
+            auto_connect: false,
+            name: UNKNOWN_PORT_NAME.to_string(),
         }
     }
 }
@@ -939,9 +1055,10 @@ impl Serialize for MidiPortSettings {
             })
             .collect();
 
-        let mut struct_serializer = serializer.serialize_struct("Port", 2)?;
+        let mut struct_serializer = serializer.serialize_struct("Port", 3)?;
         struct_serializer.serialize_field("devices", &converted)?;
         struct_serializer.serialize_field("auto_connect", &self.auto_connect)?;
+        struct_serializer.serialize_field("name", &self.name)?;
 
         struct_serializer.end()
     }
@@ -953,9 +1070,24 @@ impl<'de> Deserialize<'de> for MidiPortSettings {
         D: Deserializer<'de>,
     {
         #[derive(Deserialize)]
+        #[serde(default)]
         struct Port {
             devices: HashMap<String, MidiDevice>,
             auto_connect: bool,
+            name: String,
+        }
+
+        // Missing fields fall back to the same values as MidiPortSettings::default(), so a port
+        // saved by an older version of the client can still be loaded.
+        impl Default for Port {
+            fn default() -> Self {
+                let defaults = MidiPortSettings::default();
+                Port {
+                    devices: HashMap::new(),
+                    auto_connect: defaults.auto_connect,
+                    name: defaults.name,
+                }
+            }
         }
 
         // first deserialize into HashMap<String, HashMap<String, MidiDevice>>
@@ -980,6 +1112,7 @@ impl<'de> Deserialize<'de> for MidiPortSettings {
         Ok(MidiPortSettings {
             devices: actual_map,
             auto_connect: raw.auto_connect,
+            name: raw.name,
         })
     }
 }
@@ -1307,3 +1440,78 @@ impl MidiDeviceType {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Ports saved before names were recorded have no name field. They are read with the unknown
+    /// port name instead of the file being rejected, so the settings of their devices are kept.
+    #[test]
+    fn ports_saved_before_names_were_recorded_load_with_the_unknown_port_name() {
+        let saved = r#"{"port_settings":{"some-port":{"devices":{},"auto_connect":true}}}"#;
+
+        let settings: MidiSettings =
+            serde_json::from_str(saved).expect("Failed to deserialize MIDI settings");
+
+        let port_settings = settings
+            .port_settings
+            .get("some-port")
+            .expect("The port saved in the file should be loaded");
+        assert_eq!(port_settings.name, UNKNOWN_PORT_NAME);
+        assert!(port_settings.auto_connect);
+    }
+
+    /// Fields that are missing from the save file fall back to their defaults, instead of the whole
+    /// file being rejected and every MIDI setting being lost.
+    #[test]
+    fn ports_missing_fields_load_with_the_defaults() {
+        let saved = r#"{"port_settings":{"some-port":{}}}"#;
+
+        let settings: MidiSettings =
+            serde_json::from_str(saved).expect("Failed to deserialize MIDI settings");
+
+        let port_settings = settings
+            .port_settings
+            .get("some-port")
+            .expect("The port saved in the file should be loaded");
+        assert!(port_settings.devices.is_empty());
+        assert_eq!(
+            port_settings.auto_connect,
+            MidiPortSettings::default().auto_connect
+        );
+        assert_eq!(port_settings.name, UNKNOWN_PORT_NAME);
+
+        // A save file without any ports at all is read as empty settings
+        let settings: MidiSettings =
+            serde_json::from_str("{}").expect("Failed to deserialize MIDI settings");
+        assert!(settings.port_settings.is_empty());
+    }
+
+    /// The name of a port is saved along with the rest of the settings of that port.
+    #[test]
+    fn port_names_are_saved_and_loaded() {
+        let mut settings = MidiSettings::default();
+        settings.port_settings.insert(
+            "some-port".to_string(),
+            MidiPortSettings {
+                name: "My Pedalboard Port".to_string(),
+                auto_connect: true,
+                ..Default::default()
+            },
+        );
+
+        let saved = serde_json::to_string(&settings).expect("Failed to serialize MIDI settings");
+        assert!(saved.contains("My Pedalboard Port"));
+
+        let loaded: MidiSettings =
+            serde_json::from_str(&saved).expect("Failed to deserialize MIDI settings");
+        let port_settings = loaded
+            .port_settings
+            .get("some-port")
+            .expect("The port saved in the file should be loaded");
+        assert_eq!(port_settings.name, "My Pedalboard Port");
+        assert!(port_settings.auto_connect);
+    }
+}
+
