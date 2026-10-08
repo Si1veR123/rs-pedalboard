@@ -330,17 +330,23 @@ impl MidiState {
                     }
                     Err(e) => {
                         tracing::error!("Failed to connect to MIDI port {}: {}", id, e);
+                        popup!(
+                            self.egui_ctx.clone(),
+                            format!("Failed to connect to MIDI port {}: {}", id, e),
+                            Some("midi-port-connect-error"),
+                            crate::popup_message::PopupMessageType::Error
+                        );
                         return;
                     }
                 }
             }
         } else {
-            tracing::error!("MIDI port {} not found", id);
+            tracing::warn!("MIDI port {} not found", id);
             popup!(
                 self.egui_ctx.clone(),
                 format!("MIDI port {} not found", id),
                 Some("midi-port-not-found"),
-                crate::popup_message::PopupMessageType::Error
+                crate::popup_message::PopupMessageType::Warning
             );
         }
     }
@@ -451,54 +457,16 @@ impl MidiState {
         None
     }
 
-    /// This UI contains a list of ports that we can connect to, and a list of connected ports.
-    /// Connected ports have a list of devices from MidiSettings, that can be removed, edited, etc.
-    pub fn midi_port_device_settings_ui(&mut self, ui: &mut egui::Ui) {
-        let row_height = 60.0;
-
-        ui.add_space(10.0);
-        egui::Grid::new("midi_ports_grid")
-            .striped(true)
-            .min_row_height(row_height)
-            .min_col_width(ui.available_width() / 2.0)
-            .num_columns(2)
-            .show(ui, |ui| {
-                ui.label("Available MIDI Ports:");
-                ui.button("Refresh")
-                    .on_hover_text("Refresh available MIDI ports")
-                    .clicked()
-                    .then(|| self.refresh_available_ports());
-                ui.end_row();
-
-                if self.available_input_ports.is_empty() {
-                    ui.label("No available MIDI input ports found");
-                    ui.end_row();
-                } else {
-                    let mut connect = None;
-
-                    for (name, port) in &self.available_input_ports {
-                        ui.label(name);
-                        if ui.button("Connect").clicked() {
-                            connect = Some(port.id());
-                        }
-                        ui.end_row();
-                    }
-
-                    if let Some(port_id) = connect {
-                        self.connect_to_port(&port_id);
-                    }
-                }
-            });
-
-        ui.add_space(40.0);
-
-        ui.label("Connected MIDI Ports:");
+    fn midi_port_device_settings_ui(&mut self, ui: &mut egui::Ui, ports: &[(&str, &str)], connected: bool) {
+        let mut disconnect: Option<String> = None;
+        let mut forget_port: Option<String> = None;
 
         let mut settings_lock = self.settings.lock().expect("MidiState: Mutex poisoned.");
 
+        
         let row_count = {
-            let mut row_count = self.input_connections.len();
-            for (_port_name, port_id, _connection) in &self.input_connections {
+            let mut row_count = ports.len();
+            for &(_port_name, port_id) in ports {
                 if let Some(settings) = settings_lock.port_settings.get(port_id) {
                     row_count += settings.devices.len();
                 }
@@ -506,29 +474,34 @@ impl MidiState {
             row_count
         };
 
-        let mut disconnect: Option<String> = None;
         let row_height = 60.0;
         StripBuilder::new(ui)
             .sizes(Size::Absolute { initial: row_height, range: Rangef::new(0.0, row_height) }, row_count)
             .vertical(|mut strip| {
-                for (port_name, port_id, _connection) in &self.input_connections {
+                for &(port_name, port_id) in ports {
                     // Port summary
                     strip.cell(|ui| {
                         ui.painter().rect_filled(ui.available_rect_before_wrap(), 5.0, crate::LIGHT_BACKGROUND_COLOR);
                         let width = ui.available_width();
                         StripBuilder::new(ui)
                             .size(Size::Absolute { initial: width*0.5, range: Rangef::new(0.0, width*0.5) }) // Port name
-                            .size(Size::Absolute { initial: width*0.25, range: Rangef::new(0.0, width*0.25) }) // Disconnect
-                            .size(Size::Absolute { initial: width*0.25, range: Rangef::new(0.0, width*0.25) }) // Auto-connect
+                            .size(Size::Absolute { initial: width*0.25, range: Rangef::new(0.0, width*0.25) }) // Disconnect button/Forget button
+                            .size(Size::Absolute { initial: width*0.25, range: Rangef::new(0.0, width*0.25) }) // Auto-connect button
                             .horizontal(|mut strip| {
-                                strip.cell(|ui| { ui.horizontal_centered(|ui| ui.label(port_name.as_str())); });
+                                strip.cell(|ui| { ui.horizontal_centered(|ui| ui.label(port_name)); });
                                 strip.cell(|ui| {
-                                    if ui.horizontal_centered(|ui| ui.button("Disconnect")).inner.clicked() {
-                                        disconnect = Some(port_id.clone());
+                                    if connected {
+                                        if ui.horizontal_centered(|ui| ui.button("Disconnect")).inner.clicked() {
+                                            disconnect = Some(port_id.to_string());
+                                        }
+                                    } else {
+                                        if ui.horizontal_centered(|ui| ui.button("Forget")).inner.clicked() {
+                                            forget_port = Some(port_id.to_string());
+                                        }
                                     }
                                 });
                                 strip.cell(|ui| {
-                                    let port_settings = settings_lock.port_settings.get_mut(port_id).expect("Any connected port should have an entry in port settings.");
+                                    let port_settings = settings_lock.port_settings.get_mut(port_id).expect("Any listed MIDI port should have an entry in port settings.");
                                     ui.horizontal_centered(|ui| ui.toggle_value(&mut port_settings.auto_connect, "Auto-Connect"));
                                 });
                             });
@@ -536,13 +509,13 @@ impl MidiState {
 
                     // Device rows for this port
                     if let Some(device_settings) = settings_lock.port_settings.get_mut(port_id) {
-                        let mut forget: Option<(u8, u8)> = None;
+                        let mut forget_device: Option<(u8, u8)> = None;
 
                         for (i, ((cc, channel), device)) in device_settings.devices.iter_mut().enumerate() {
                             // Device summary row
                             strip.cell(|ui| {
                                 // Use the rect saved in the last frame to paint the background
-                                let mut rect = ui.ctx().memory(|m| m.data.get_temp::<egui::Rect>(Id::new("device_rect").with(i)).unwrap_or(ui.available_rect_before_wrap()));
+                                let mut rect = ui.ctx().memory(|m| m.data.get_temp::<egui::Rect>(Id::new("device_rect").with((i, port_id))).unwrap_or(ui.available_rect_before_wrap()));
                                 rect.set_width(ui.available_width());
                                 if i % 2 == 0 {
                                     ui.painter().rect_filled(rect, 5.0, crate::LIGHT_BACKGROUND_COLOR.gamma_multiply(0.6));
@@ -567,7 +540,7 @@ impl MidiState {
                                                     strip.cell(|ui| {
                                                         ui.horizontal_centered(|ui| {
                                                             if ui.button("Forget").clicked() {
-                                                                forget = Some((*cc, *channel));
+                                                                forget_device = Some((*cc, *channel));
                                                             }
                                                         });
                                                     });
@@ -576,7 +549,7 @@ impl MidiState {
 
                                         // Full-width row for collapsible details/settings
                                         strip.cell(|ui| {
-                                            ui.push_id((port_id.as_str(), cc, channel), |ui| {
+                                            ui.push_id((port_id, cc, channel), |ui| {
                                                 ui.vertical_centered(|ui| {
                                                     egui::CollapsingHeader::new("Device Settings")
                                                     .id_salt(egui::Id::new("midi_device_settings").with(i))
@@ -716,22 +689,124 @@ impl MidiState {
                                     });
                                 let min_rect = ui.min_rect();
                                 ui.ctx().memory_mut(|m| {
-                                    m.data.insert_temp(Id::new("device_rect").with(i), min_rect);
+                                    m.data.insert_temp(Id::new("device_rect").with((i, port_id)), min_rect);
                                 });
                             });
                         }
 
-                        if let Some((cc, channel)) = forget {
-                            Self::invalidate_device_name_cache(&self.egui_ctx);
+                        if let Some((cc, channel)) = forget_device {
                             device_settings.devices.remove(&(cc, channel));
+                            Self::invalidate_device_name_cache(&self.egui_ctx);
                         }
                     }
                 }
             });
-        drop(settings_lock);
+            
+            // Remove the forgotten port's settings while we still hold the lock
+            if let Some(port_id) = &forget_port {
+                settings_lock.port_settings.remove(port_id);
+                Self::invalidate_device_name_cache(&self.egui_ctx);
+            }
 
-        if let Some(port_id) = disconnect {
-            self.disconnect_from_port(&port_id);
+            drop(settings_lock);
+
+            if let Some(port_id) = disconnect {
+                self.disconnect_from_port(&port_id);
+            }
+
+            if let Some(port_id) = forget_port {
+                self.disconnect_from_port(&port_id);
+            }
+    }
+
+    /// This UI contains a list of ports that we can connect to, and a list of connected ports.
+    /// Connected ports have a list of devices from MidiSettings, that can be removed, edited, etc.
+    pub fn midi_settings_ui(&mut self, ui: &mut egui::Ui) {
+        let row_height = 60.0;
+
+        ui.add_space(10.0);
+        egui::Grid::new("midi_ports_grid")
+            .striped(true)
+            .min_row_height(row_height)
+            .min_col_width(ui.available_width() / 2.0)
+            .num_columns(2)
+            .show(ui, |ui| {
+                ui.label("Available MIDI Ports:");
+                ui.button("Refresh")
+                    .on_hover_text("Refresh available MIDI ports")
+                    .clicked()
+                    .then(|| self.refresh_available_ports());
+                ui.end_row();
+
+                if self.available_input_ports.is_empty() {
+                    ui.label("No available MIDI input ports found");
+                    ui.end_row();
+                } else {
+                    let mut connect = None;
+
+                    for (name, port) in &self.available_input_ports {
+                        ui.label(name);
+                        if ui.button("Connect").clicked() {
+                            connect = Some(port.id());
+                        }
+                        ui.end_row();
+                    }
+
+                    if let Some(port_id) = connect {
+                        self.connect_to_port(&port_id);
+                    }
+                }
+            });
+
+        ui.add_space(40.0);
+
+        ui.label("Connected MIDI Ports:");
+        let connected_ports: Vec<(String, String)> = self
+            .input_connections
+            .iter()
+            .map(|(name, id, _conn)| (name.clone(), id.clone()))
+            .collect();
+
+        if connected_ports.is_empty() {
+            ui.label("No connected MIDI input ports");
+        } else {
+            let connected_port_refs: Vec<(&str, &str)> = connected_ports
+                .iter()
+                .map(|(name, id)| (name.as_str(), id.as_str()))
+                .collect();
+
+            self.midi_port_device_settings_ui(ui, &connected_port_refs, true);
+        }
+
+        ui.label("Known MIDI Ports:");
+        let known_ports: Vec<(String, String)> = {
+            let settings_lock = self.settings.lock().expect("MidiState: Mutex poisoned.");
+            settings_lock
+                .port_settings
+                .keys()
+                .filter_map(|id| {
+                    // Exclude any ports that are already connected
+                    if self
+                        .input_connections
+                        .iter()
+                        .any(|(_name, conn_id, _conn)| conn_id == id)
+                    {
+                        None
+                    } else {
+                        Some((id.clone(), id.clone()))
+                    }
+                })
+                .collect()
+        };
+
+        if known_ports.is_empty() {
+            ui.label("No known MIDI input ports");
+        } else {
+            let known_port_refs: Vec<(&str, &str)> = known_ports
+                .iter()
+                .map(|(name, id)| (name.as_str(), id.as_str()))
+                .collect();
+            self.midi_port_device_settings_ui(ui, &known_port_refs, false);
         }
     }
 }
