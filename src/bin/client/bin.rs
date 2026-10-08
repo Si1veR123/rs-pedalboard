@@ -43,6 +43,7 @@ pub const THEME_COLOR: egui::Color32 = egui::Color32::from_rgb(255, 105, 46);
 pub const FAINT_THEME_COLOR_ALPHA: f32 = 0.5;
 pub const ROW_COLOR_LIGHT: egui::Color32 = egui::Color32::from_gray(28);
 pub const ROW_COLOR_DARK: egui::Color32 = egui::Color32::from_gray(22);
+pub const ROW_COLOR_DARKER: egui::Color32 = egui::Color32::from_gray(15);
 pub const TEXT_COLOR: egui::Color32 = egui::Color32::from_gray(200);
 pub const FAINT_TEXT_COLOR: egui::Color32 = egui::Color32::from_gray(130);
 pub const EXTREME_BACKGROUND_COLOR: egui::Color32 = egui::Color32::from_gray(2);

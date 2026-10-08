@@ -482,12 +482,20 @@ impl MidiState {
     }
 
     /// Background colour of the row at `index` in a list of MIDI ports, alternating between
-    /// [`crate::ROW_COLOR_LIGHT`] and [`crate::ROW_COLOR_DARK`] like the library and songs lists do.
+    /// [`crate::ROW_COLOR_LIGHT`] and [`crate::ROW_COLOR_DARK`]
     fn midi_row_color(index: usize) -> egui::Color32 {
         if index % 2 == 1 {
             crate::ROW_COLOR_DARK
         } else {
             crate::ROW_COLOR_LIGHT
+        }
+    }
+
+    fn midi_device_row_color(index: usize) -> egui::Color32 {
+        if index % 2 == 1 {
+            crate::ROW_COLOR_DARK
+        } else {
+            crate::ROW_COLOR_DARKER
         }
     }
 
@@ -557,14 +565,6 @@ impl MidiState {
                 for (port_index, &(port_name, port_id)) in ports.iter().enumerate() {
                     // Port summary
                     strip.cell(|ui| {
-                        // Connected ports all use the same colour, known ports alternate so that the
-                        // rows of different ports can be told apart.
-                        let background = if connected {
-                            crate::ROW_COLOR_LIGHT
-                        } else {
-                            Self::midi_row_color(port_index)
-                        };
-
                         let port_settings = settings_lock
                             .port_settings
                             .get_mut(port_id)
@@ -575,7 +575,7 @@ impl MidiState {
                             port_name,
                             port_id,
                             if connected { "Disconnect" } else { "Forget" },
-                            background,
+                            Self::midi_row_color(port_index),
                             Some(&mut port_settings.auto_connect),
                         ) {
                             if connected {
@@ -593,20 +593,35 @@ impl MidiState {
                         for (i, ((cc, channel), device)) in device_settings.devices.iter_mut().enumerate() {
                             // Device summary row
                             strip.cell(|ui| {
-                                // Use the rect saved in the last frame to paint the background
-                                let mut rect = ui.ctx().memory(|m| m.data.get_temp::<egui::Rect>(Id::new("device_rect").with((i, port_id))).unwrap_or(ui.available_rect_before_wrap()));
-                                rect.set_width(ui.available_width());
-                                if i % 2 == 0 {
-                                    ui.painter().rect_filled(rect, 5.0, crate::ROW_COLOR_DARK);
-                                }
+                                // A device row is taller than its cell when its settings are expanded,
+                                // and how tall a row turns out to be is only known after its contents
+                                // have been laid out. The background therefore uses the rectangle that
+                                // the previous frame saved, unioned with the cell of this frame so that
+                                // a background is painted on the very first frame as well. It is painted
+                                // before the contents so that it ends up behind them.
+                                let cell_rect = ui.available_rect_before_wrap();
+                                let row_width = cell_rect.width();
+                                let last_frame_rect = ui
+                                    .ctx()
+                                    .memory(|m| {
+                                        m.data.get_temp::<egui::Rect>(Id::new("device_rect").with((i, port_id)))
+                                    })
+                                    .unwrap_or(egui::Rect::NOTHING);
+                                let mut background_rect = cell_rect.union(last_frame_rect);
+                                // Rows are always exactly as wide as their cell
+                                background_rect.min.x = cell_rect.min.x;
+                                background_rect.max.x = cell_rect.max.x;
+
+                                ui.painter().rect_filled(background_rect, 5.0, Self::midi_device_row_color(i));
+
                                 StripBuilder::new(ui)
                                     .size(Size::Absolute { initial: row_height, range: Rangef::new(0.0, row_height) }) // Device name etc.
                                     .size(Size::Absolute { initial: 40.0, range: Rangef::new(0.0, 40.0) }) // Device settings collapsing header
                                     .vertical(|mut strip| {
                                         strip.strip(|builder| {
                                             builder
-                                                .size(Size::Absolute { initial: rect.width()*0.75, range: Rangef::new(0.0, rect.width()*0.75) })
-                                                .size(Size::Absolute { initial: rect.width()*0.25, range: Rangef::new(0.0, rect.width()*0.25) })
+                                                .size(Size::Absolute { initial: row_width*0.75, range: Rangef::new(0.0, row_width*0.75) })
+                                                .size(Size::Absolute { initial: row_width*0.25, range: Rangef::new(0.0, row_width*0.25) })
 
                                                 .horizontal(|mut strip| {
                                                     strip.cell(|ui| {
