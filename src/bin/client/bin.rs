@@ -20,6 +20,7 @@ use drag_scroll::drag_scroll;
 mod midi;
 mod popup_message;
 use popup_message::{PopupWidget, popup};
+mod github_sync;
 
 #[cfg(feature = "virtual_keyboard")]
 use egui_keyboard::{layouts::KeyboardLayout, Keyboard};
@@ -318,6 +319,23 @@ impl PedalboardClientApp {
             keyboard: Keyboard::default().layout(KeyboardLayout::Qwerty),
         }
     }
+
+    pub fn _on_exit(&mut self) {
+        tracing::debug!("PedalboardClientApp::on_exit: saving state");
+        if let Err(e) = self.state.save_state() {
+            tracing::error!("Failed to save state: {}", e);
+        } else {
+            tracing::info!("State saved successfully");
+        }
+
+        if self.state.client_settings.borrow().kill_processor_on_close {
+            tracing::info!("Killing processor on exit");
+            self.state.kill_processor();
+        }
+
+        let github_sync_settings = self.state.github_sync_settings.borrow();
+        github_sync_settings.push_changes_blocking(&self.state.egui_ctx);
+    }
 }
 
 impl eframe::App for PedalboardClientApp {
@@ -543,23 +561,20 @@ impl eframe::App for PedalboardClientApp {
         } else {
             tracing::info!("State saved successfully");
         }
+
+        let github_sync_settings = self.state.github_sync_settings.borrow();
+        github_sync_settings.push_changes(&self.state.egui_ctx);
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
     #[cfg(feature = "glow")]
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
-        if self.state.client_settings.borrow().kill_processor_on_close {
-            tracing::info!("Killing processor on exit");
-            self.state.kill_processor();
-        }
+        self._on_exit();
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
     #[cfg(not(feature = "glow"))]
     fn on_exit(&mut self) {
-        if self.state.client_settings.borrow().kill_processor_on_close {
-            tracing::info!("Killing processor on exit");
-            self.state.kill_processor();
-        }
+        self._on_exit();
     }
 }

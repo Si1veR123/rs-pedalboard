@@ -14,8 +14,7 @@ use crate::state::State;
 use rs_pedalboard::{
     audio_devices::{get_input_devices, get_output_devices},
     pedals::{graphic_eq_editor_ui, EqPresets},
-    processor_settings::SupportedHost,
-    SAVE_DIR,
+    processor_settings::SupportedHost
 };
 
 pub const CLIENT_SAVE_NAME: &'static str = "client_settings.json";
@@ -51,12 +50,7 @@ pub struct ClientSettings {
 
 impl ClientSettings {
     fn get_save_path() -> Option<PathBuf> {
-        Some(
-            homedir::my_home()
-                .ok()??
-                .join(SAVE_DIR)
-                .join(CLIENT_SAVE_NAME),
-        )
+        Some(rs_pedalboard::get_save_dir().ok()?.join(CLIENT_SAVE_NAME))
     }
 
     pub fn load_or_default() -> Self {
@@ -716,6 +710,17 @@ impl Widget for &mut SettingsScreen {
                             }
                             ui.end_row();
                         });
+
+                    ui.add_space(SECTION_SPACE);
+
+                    ui.heading("GitHub Sync");
+                    ui.separator();
+
+                    let mut github_sync_settings = self.state.github_sync_settings.borrow_mut();
+                    ui.scope(|ui| {
+                        set_large_checkbox_style(ui);
+                        github_sync_settings.settings_ui(ui, SETTING_ROW_HEIGHT_FRACT * ui.ctx().viewport_rect().height());
+                    });
 
                     ui.add_space(SECTION_SPACE);
 

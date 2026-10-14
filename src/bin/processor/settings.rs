@@ -1,7 +1,7 @@
 use std::{path::PathBuf, str::FromStr};
 
 use clap::Parser;
-use rs_pedalboard::processor_settings::{ProcessorSettingsSave, SupportedHost};
+use rs_pedalboard::processor_settings::{ProcessorSettingsSave, SupportedHost, RECORDINGS_SAVE_DIR};
 
 #[cfg(target_os = "linux")]
 mod constants {
@@ -161,7 +161,7 @@ impl ProcessorSettings {
 
     pub fn default_recording_dir() -> Option<PathBuf> {
         let dir = homedir::my_home().ok().and_then(|p| {
-            p.and_then(|p| Some(p.join(rs_pedalboard::SAVE_DIR).join("Recordings")))
+            p.and_then(|p| Some(p.join(rs_pedalboard::SAVE_DIR).join(RECORDINGS_SAVE_DIR)))
         })?;
 
         if !dir.exists() {

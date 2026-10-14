@@ -4,7 +4,8 @@ use serde::{Deserialize, Serialize};
 use std::{fmt::Display, path::PathBuf, str::FromStr};
 use strum_macros::EnumIter;
 
-const SAVE_NAME: &str = "processor_settings.json";
+pub const SAVE_NAME: &str = "processor_settings.json";
+pub const RECORDINGS_SAVE_DIR: &str = "Recordings";
 
 #[cfg(target_os = "linux")]
 #[derive(Serialize, Deserialize, Clone, Copy, Default, Debug, EnumIter, PartialEq)]

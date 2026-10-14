@@ -1,5 +1,5 @@
 use crate::{
-    Screen, midi::{MidiSettings, MidiState}, popup_message::{PopupMessageType, popup}, saved_pedalboards::SavedPedalboards, settings::{ClientSettings, VolumeNormalizationMode}, socket::{ClientSocket, Command}
+    Screen, github_sync::GithubSyncSettings, midi::{MidiSettings, MidiState}, popup_message::{PopupMessageType, popup}, saved_pedalboards::SavedPedalboards, settings::{ClientSettings, VolumeNormalizationMode}, socket::{ClientSocket, Command}
 };
 use crossbeam::channel::Receiver;
 use eframe::egui;
@@ -23,6 +23,7 @@ pub struct State {
 
     pub client_settings: RefCell<ClientSettings>,
     pub processor_settings: RefCell<ProcessorSettingsSave>,
+    pub github_sync_settings: RefCell<GithubSyncSettings>,
     pub midi_state: RefCell<MidiState>,
     pub midi_command_receiver: Receiver<Command>,
 
@@ -543,6 +544,10 @@ impl State {
     }
 
     pub fn load_state(egui_ctx: eframe::egui::Context) -> Self {
+        tracing::debug!("State::load_state: loading github sync settings");
+        let github_sync_settings = GithubSyncSettings::load_or_default();
+        github_sync_settings.pull_changes_blocking(&egui_ctx);
+
         tracing::debug!("State::load_state: loading saved pedalboards");
         let pedalboards = SavedPedalboards::load_or_default();
         let active_pedalboard = pedalboards.active_pedalboardstage.borrow();
@@ -632,6 +637,7 @@ impl State {
             socket: RefCell::new(socket),
             client_settings: RefCell::new(client_settings),
             processor_settings: RefCell::new(processor_settings),
+            github_sync_settings: RefCell::new(github_sync_settings),
             midi_state: RefCell::new(midi_state),
             midi_command_receiver,
             recording_time: Cell::new(None),
@@ -651,6 +657,7 @@ impl State {
         self.client_settings.borrow().save()?;
         self.processor_settings.borrow().save()?;
         self.midi_state.borrow().save_settings()?;
+        self.github_sync_settings.borrow().save()?;
         Ok(())
     }
 

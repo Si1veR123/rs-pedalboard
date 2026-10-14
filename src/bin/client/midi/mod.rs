@@ -1136,10 +1136,7 @@ impl MidiSettings {
     pub fn save(&self) -> Result<(), std::io::Error> {
         let stringified = serde_json::to_string(self)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
-        let dir_path = homedir::my_home()
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?
-            .unwrap()
-            .join(SAVE_DIR);
+        let dir_path = rs_pedalboard::get_save_dir()?;
 
         if !dir_path.exists() {
             std::fs::create_dir_all(&dir_path)?;

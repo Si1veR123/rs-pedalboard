@@ -23,10 +23,10 @@ pub use eq::{
     BAND_FREQS, EQ_DB_GAIN, MAX_FREQ_HZ, MIN_FREQ_HZ,
 };
 mod nam;
-pub use nam::set_nam_save_path;
+pub use nam::{set_nam_save_path, NAM_SAVE_PATH};
 pub use nam::Nam;
 mod impulse_response;
-pub use impulse_response::set_ir_save_path;
+pub use impulse_response::{set_ir_save_path, IR_SAVE_PATH};
 pub use impulse_response::ImpulseResponse;
 mod noise_gate;
 pub use noise_gate::NoiseGate;

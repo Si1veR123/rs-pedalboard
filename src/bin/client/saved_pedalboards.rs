@@ -3,7 +3,7 @@ use std::{cell::RefCell, collections::HashMap};
 use rs_pedalboard::{pedalboard::Pedalboard, pedalboard_set::PedalboardSet, SAVE_DIR};
 use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
 
-const SAVE_NAME: &str = "pedalboards.json";
+pub const SAVE_NAME: &str = "pedalboards.json";
 
 pub struct SavedPedalboards {
     pub active_pedalboardstage: RefCell<PedalboardSet>,
@@ -146,10 +146,7 @@ impl SavedPedalboards {
     pub fn save(&self) -> Result<(), std::io::Error> {
         let stringified = serde_json::to_string(self)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
-        let dir_path = homedir::my_home()
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?
-            .unwrap()
-            .join(SAVE_DIR);
+        let dir_path = rs_pedalboard::get_save_dir()?;
 
         if !dir_path.exists() {
             std::fs::create_dir_all(&dir_path)?;

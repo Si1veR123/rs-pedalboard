@@ -12,7 +12,7 @@ use super::{ui::pedal_knob, PedalParameter, PedalParameterValue, PedalTrait};
 use crate::pedals::ui::{is_function_active_feature, pedal_switch, set_active_feature, sideways_arrow};
 use crate::pedals::{ActiveFeature, ParameterUILocation, decide_trigger_direction};
 use crate::processor_settings::FloatSettingUpdate;
-use crate::{forward_slash_path, unique_time_id, SAVE_DIR};
+use crate::{forward_slash_path, unique_time_id};
 
 pub const NAM_SAVE_PATH: &str = r"NAM";
 pub const OVERRIDE_DEFAULT_FOLDERS_ENV_VAR: &str = "RSPEDALBOARD_NAM_FOLDER";
@@ -349,8 +349,7 @@ impl Nam {
             return Some(dunce::canonicalize(path_buf).ok()?);
         }
         Some(
-            dunce::canonicalize(homedir::my_home().ok()??.join(SAVE_DIR).join(NAM_SAVE_PATH))
-                .ok()?,
+            dunce::canonicalize(crate::get_save_dir().ok()?.join(NAM_SAVE_PATH)).ok()?,
         )
     }
 

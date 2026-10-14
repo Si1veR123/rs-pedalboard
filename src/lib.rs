@@ -35,6 +35,19 @@ pub fn forward_slash_path<P: AsRef<Path>>(path: P) -> PathBuf {
     PathBuf::from(s.replace('\\', "/"))
 }
 
+pub fn get_save_dir() -> Result<PathBuf, std::io::Error> {
+    let dir_path = homedir::my_home()
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?
+        .unwrap()
+        .join(SAVE_DIR);
+
+    if !dir_path.exists() {
+        std::fs::create_dir_all(&dir_path)?;
+    }
+
+    Ok(dunce::canonicalize(&dir_path).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?)
+}
+
 use std::fs::File;
 use std::io;
 use tracing_subscriber::{
