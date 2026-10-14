@@ -68,6 +68,34 @@ pub fn restore_directory_backup<P: AsRef<Path>>(dir: P) -> Result<(), String> {
     Ok(())
 }
 
+/// Restore files from the backup directory, only for files that are missing in the original directory.
+fn restore_remaining_files_from_backup<P: AsRef<Path>>(dir: P) -> Result<(), String> {
+    let dir_path = dir.as_ref();
+    let backup_dir = dir_path.with_file_name(format!("{}_backup", dir_path.file_name().unwrap().to_string_lossy()));
+
+    if !backup_dir.exists() {
+        return Err(format!("Backup directory {} does not exist", backup_dir.display()));
+    }
+
+    for entry in std::fs::read_dir(&backup_dir).map_err(|e| format!("Failed to read backup directory {}: {}", backup_dir.display(), e))? {
+        let entry = entry.map_err(|e| format!("Failed to read directory entry in {}: {}", backup_dir.display(), e))?;
+        let path = entry.path();
+        let relative_path = path.strip_prefix(&backup_dir).map_err(|e| format!("Failed to get relative path for {}: {}", path.display(), e))?;
+        let original_path = dir_path.join(relative_path);
+
+        if !original_path.exists() {
+            if path.is_dir() {
+                std::fs::create_dir_all(&original_path).map_err(|e| format!("Failed to create directory {}: {}", original_path.display(), e))?;
+                copy_dir_all(&path, &original_path).map_err(|e| format!("Failed to copy directory {} to {}: {}", path.display(), original_path.display(), e))?;
+            } else {
+                std::fs::copy(&path, &original_path).map_err(|e| format!("Failed to copy file {} to {}: {}", path.display(), original_path.display(), e))?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
 pub fn partial_restore_directory_backup<P: AsRef<Path>>(dir: P, sync_settings: &super::GithubSyncSettings) -> Result<(), String> {
     let dir_path = dir.as_ref();
     let backup_dir = dir_path.with_file_name(format!("{}_backup", dir_path.file_name().unwrap().to_string_lossy()));
@@ -135,6 +163,8 @@ pub fn partial_restore_directory_backup<P: AsRef<Path>>(dir: P, sync_settings: &
                 .map_err(|e| format!("Failed to restore Recordings from backup: {}", e))?;
         }
     }
+
+    restore_remaining_files_from_backup(dir)?;
 
     Ok(())
 }
