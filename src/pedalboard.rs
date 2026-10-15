@@ -262,17 +262,6 @@ mod tests {
         Some((pedal_index, path.parameter_name))
     }
 
-    /// The index of the pedal which a footswitch at `index` toggles.
-    fn toggle_target(board: &Pedalboard, index: usize) -> Option<usize> {
-        let path = board.sensible_parameter_from_index(index, &FloatSettingUpdate::FlipFlop)?;
-        assert_eq!(path.parameter_name, "Active");
-
-        board
-            .pedals
-            .iter()
-            .position(|pedal| pedal.get_id() == path.pedal_id)
-    }
-
     #[test]
     fn the_first_knob_controls_the_first_parameter_worth_controlling() {
         let board = board(vec![

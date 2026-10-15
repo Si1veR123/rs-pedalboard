@@ -5,7 +5,7 @@ use std::{path::PathBuf, vec};
 
 use eframe::egui::{self, include_image, Vec2};
 use egui_directory_combobox::{DirectoryComboBox, DirectoryNode};
-use neural_amp_modeler::NeuralAmpModeler;
+use rs_neural_audio::NeuralAudio;
 use serde::{ser::SerializeMap, Deserialize, Serialize};
 
 use super::{ui::pedal_knob, PedalParameter, PedalParameterValue, PedalTrait};
@@ -22,7 +22,7 @@ pub fn set_nam_save_path(new_path: &str) {
 }
 
 pub struct Nam {
-    modeler: NeuralAmpModeler,
+    modeler: NeuralAudio,
     parameters: HashMap<String, PedalParameter>,
 
     dry_buffer: Vec<f32>,
@@ -36,14 +36,12 @@ pub struct Nam {
 
 impl Clone for Nam {
     fn clone(&self) -> Self {
-        let buf_size = self.modeler.get_maximum_buffer_size();
-        let new_modeler = NeuralAmpModeler::new_with_maximum_buffer_size(buf_size)
-            .expect("Failed to create neural amp modeler");
+        let new_modeler = NeuralAudio::new().expect("Failed to create neural audio loader");
 
         let mut new_nam = Nam {
             modeler: new_modeler,
             parameters: self.parameters.clone(),
-            dry_buffer: vec![0.0; buf_size],
+            dry_buffer: vec![0.0; self.dry_buffer.len()],
             combobox_widget: self.combobox_widget.clone(),
             midi_min_combobox_widget: self.midi_min_combobox_widget.clone(),
             midi_max_combobox_widget: self.midi_max_combobox_widget.clone(),
@@ -52,7 +50,8 @@ impl Clone for Nam {
         };
 
         if cfg!(feature = "processor") {
-            if let Some(model_path) = self.modeler.get_model_path() {
+            new_nam.modeler.set_default_max_audio_buffer_size(self.dry_buffer.len()).expect("Failed to set default max audio buffer size");
+            if let Some(model_path) = self.modeler.model_path() {
                 new_nam.set_model(model_path.to_path_buf());
             }
         }
@@ -136,9 +135,7 @@ impl<'a> Deserialize<'a> for Nam {
             model_path
         };
 
-        // Default buffer size, can be changed later with `set_config`
-        let modeler = NeuralAmpModeler::new_with_maximum_buffer_size(512)
-            .expect("Failed to create neural amp modeler");
+        let modeler = NeuralAudio::new().map_err(serde::de::Error::custom)?;
 
         let mut pedal = Nam {
             modeler,
@@ -231,8 +228,7 @@ impl Nam {
             },
         );
 
-        let modeler = NeuralAmpModeler::new_with_maximum_buffer_size(buffer_size)
-            .expect("Failed to create neural amp modeler");
+        let modeler = NeuralAudio::new().expect("Failed to create neural audio loader");
 
         let id = unique_time_id();
         Nam {
@@ -286,7 +282,7 @@ impl Nam {
 
     fn has_loaded_model(&self) -> bool {
         if cfg!(feature = "processor") {
-            self.modeler.get_model_path().is_some()
+            self.modeler.model_path().is_some()
         } else {
             self.parameters
                 .get("Model")
@@ -317,14 +313,14 @@ impl Nam {
             }
         };
 
-        if let Err(e) = self.modeler.set_model(model_path) {
+        if let Err(e) = self.modeler.load(model_path) {
             tracing::error!("Failed to set model: {}", e);
         } else {
             self.parameters.get_mut("Model").unwrap().value =
                 PedalParameterValue::String(string_path);
 
             // Update combobox to match new selection (in case it was not set from the combobox itself)
-            let model_path = self.modeler.get_model_path();
+            let model_path = self.modeler.model_path();
             self.combobox_widget.set_selection(model_path);
         }
     }
@@ -332,9 +328,7 @@ impl Nam {
     pub fn remove_model(&mut self) {
         self.parameters.get_mut("Model").unwrap().value =
             PedalParameterValue::String("".to_string());
-        let buffer_size = self.modeler.get_maximum_buffer_size();
-        self.modeler = NeuralAmpModeler::new_with_maximum_buffer_size(buffer_size)
-            .expect("Failed to create neural amp modeler");
+        self.modeler.unload();
         self.combobox_widget.set_selection::<&str>(None);
     }
 
@@ -505,14 +499,11 @@ impl PedalTrait for Nam {
         self.id
     }
 
-    fn set_config(&mut self, buffer_size: usize, sample_rate: u32) {
+    fn set_config(&mut self, buffer_size: usize, _sample_rate: u32) {
         if self.has_loaded_model() {
-            self.modeler.set_maximum_buffer_size(buffer_size);
-            let expected_sample_rate = self.modeler.expected_sample_rate() as u32;
-            if expected_sample_rate != 0 && expected_sample_rate != sample_rate {
-                tracing::warn!("NeuralAmpModeler expected sample rate {} does not match provided sample rate {}", self.modeler.expected_sample_rate(), sample_rate);
-            }
+            self.modeler.set_max_audio_buffer_size(buffer_size).expect("Failed to set max audio buffer size");
         }
+        self.modeler.set_default_max_audio_buffer_size(buffer_size).expect("Failed to set default max audio buffer size");
         self.dry_buffer.resize(buffer_size, 0.0);
     }
 
@@ -549,7 +540,9 @@ impl PedalTrait for Nam {
 
         self.dry_buffer.clear();
         self.dry_buffer.extend_from_slice(buffer);
-        self.modeler.process_buffer(buffer);
+        if let Err(e) = self.modeler.process(buffer) {
+            tracing::error!("NAM: Failed to process audio: {}", e);
+        }
 
         for (i, sample) in buffer.iter_mut().enumerate() {
             let mixed_sample = (*sample * dry_wet) + (self.dry_buffer[i] * (1.0 - dry_wet));
@@ -559,10 +552,9 @@ impl PedalTrait for Nam {
 
     fn reset_buffer(&mut self) {
         if self.has_loaded_model() {
-            self.modeler.reset_and_prewarm_model(
-                self.modeler.expected_sample_rate(),
-                self.modeler.get_maximum_buffer_size(),
-            );
+            let model = self.modeler.model_path().map(|p| p.to_path_buf());
+            self.modeler.unload();
+            self.modeler.load(model.expect("A model is loaded")).expect("Failed to load model");
         }
     }
 
