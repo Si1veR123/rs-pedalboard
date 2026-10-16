@@ -1,9 +1,11 @@
-use eframe::egui::{Align, Color32, Image, Layout, Sense, UiBuilder, Vec2, include_image};
+use eframe::egui::{Align, Color32, Image, Layout, Sense, UiBuilder, Vec2, include_image, ImageSource};
 use egui_plot::PlotPoint;
 
 use crate::{
     pedalboard::ParameterPath, pedals::{
-        ActiveFeature, PedalParameter, ui::{is_parameter_active_feature, set_active_feature}}
+        ActiveFeature, PedalParameter, ui::{is_parameter_active_feature, set_active_feature}
+    },
+    dsp_algorithms::eq
 };
 
 pub mod frequency_plot;
@@ -142,4 +144,26 @@ pub fn deserialize_plot_points(data: &str) -> serde_json::Result<Vec<PlotPoint>>
         .into_iter()
         .map(|p| PlotPoint::new(p[0], p[1]))
         .collect())
+}
+
+pub fn get_band_type_from_value(value: i16) -> Option<eq::BandType> {
+    match value {
+        0 => Some(eq::BandType::Peaking),
+        1 => Some(eq::BandType::Shelf),
+        2 => Some(eq::BandType::Pass),
+        _ => None,
+    }
+}
+
+pub fn get_band_image_from_value(value: i16) -> ImageSource<'static> {
+    match value {
+        0 => include_image!("../images/eq/peak.png"),
+        1 => include_image!("../images/eq/shelf.png"),
+        2 => include_image!("../images/eq/pass.png"),
+        _ => include_image!("../images/eq/peak.png"),
+    }
+}
+
+pub fn get_band_type_next_value(value: i16) -> i16 {
+    (value + 1) % 3
 }

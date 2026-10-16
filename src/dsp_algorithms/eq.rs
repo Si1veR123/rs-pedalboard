@@ -63,13 +63,20 @@ impl DynamicEqualizerBuilder {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BandType {
+    Peaking,
+    Shelf,
+    Pass
+}
+
 pub struct GraphicEqualizerBuilder<const N: usize> {
     pub sample_rate: f32,
     pub bands: [f32; N],
     pub gains: [f32; N],
     pub bandwidth: [f32; N],
-    pub upper_shelf: bool,
-    pub lower_shelf: bool,
+    pub upper_band_type: BandType,
+    pub lower_band_type: BandType,
 }
 
 impl<const N: usize> GraphicEqualizerBuilder<N> {
@@ -79,8 +86,8 @@ impl<const N: usize> GraphicEqualizerBuilder<N> {
             gains: [0.0; N],
             bandwidth: [1.0; N],
             sample_rate,
-            upper_shelf: false,
-            lower_shelf: false,
+            upper_band_type: BandType::Peaking,
+            lower_band_type: BandType::Peaking,
         }
     }
 
@@ -108,14 +115,13 @@ impl<const N: usize> GraphicEqualizerBuilder<N> {
         self
     }
 
-    pub fn with_upper_shelf(mut self) -> Self {
-        self.upper_shelf = true;
+    pub fn with_upper_band_type(mut self, band_type: BandType) -> Self {
+        self.upper_band_type = band_type;
         self
     }
 
-    /// If single band, lower shelf takes precedence over upper shelf
-    pub fn with_lower_shelf(mut self) -> Self {
-        self.lower_shelf = true;
+    pub fn with_lower_band_type(mut self, band_type: BandType) -> Self {
+        self.lower_band_type = band_type;
         self
     }
 
@@ -129,10 +135,30 @@ impl<const N: usize> GraphicEqualizerBuilder<N> {
 
             let bq;
 
-            if self.lower_shelf && i == 0 {
-                bq = BiquadFilter::low_shelf(f, self.sample_rate, q, gain);
-            } else if self.upper_shelf && i == N - 1 {
-                bq = BiquadFilter::high_shelf(f, self.sample_rate, q, gain);
+            if i == 0 {
+                match self.lower_band_type {
+                    BandType::Shelf => {
+                        bq = BiquadFilter::low_shelf(f, self.sample_rate, q, gain);
+                    }
+                    BandType::Peaking => {
+                        bq = BiquadFilter::peaking(f, self.sample_rate, q, gain);
+                    }
+                    BandType::Pass => {
+                        bq = BiquadFilter::high_pass(f, self.sample_rate, q);
+                    }
+                }
+            } else if i == N - 1 {
+                match self.upper_band_type {
+                    BandType::Shelf => {
+                        bq = BiquadFilter::high_shelf(f, self.sample_rate, q, gain);
+                    }
+                    BandType::Peaking => {
+                        bq = BiquadFilter::peaking(f, self.sample_rate, q, gain);
+                    }
+                    BandType::Pass => {
+                        bq = BiquadFilter::low_pass(f, self.sample_rate, q);
+                    }
+                }
             } else {
                 bq = BiquadFilter::peaking(f, self.sample_rate, q, gain);
             }

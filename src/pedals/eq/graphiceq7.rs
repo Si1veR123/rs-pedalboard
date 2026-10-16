@@ -11,6 +11,7 @@ use super::frequency_plot::{self, LIVE_FREQUENCY_COLOR};
 use super::{
     deserialize_plot_points, eq_background, gain_knob, serialize_plot_points, EQ_DB_GAIN,
     MAX_FREQ_HZ, MIN_FREQ_HZ, PLOT_POINTS, SLOT_ASPECT_RATIO,
+    get_band_image_from_value, get_band_type_from_value, get_band_type_next_value
 };
 
 use crate::pedalboard::ParameterPath;
@@ -29,10 +30,10 @@ use crate::{
 /// These are the pedal's own bands, which its face has a knob pair for each of. The global EQ covers
 /// the same range with ten bands a little under an octave apart, which are its own rather than the
 /// pedal's.
-const BAND_FREQS: [f32; 7] = [100.0, 200.0, 400.0, 800.0, 1600.0, 3200.0, 6400.0];
+const BAND_FREQS: [f32; 7] = [80.0, 250.0, 500.0, 1000.0, 2000.0, 4000.0, 8000.0];
 
 const LIVE_FREQUENCY_UPDATE_MS: usize = 100;
-const OVERSAMPLE: f32 = 10.0;
+const OVERSAMPLE: f32 = 10.0; // Oversample for frequency analysis
 
 pub struct GraphicEq7 {
     parameters: HashMap<String, PedalParameter>,
@@ -112,22 +113,21 @@ impl<'a> Deserialize<'a> for GraphicEq7 {
                 step: None,
             });
 
-        let high_shelf_enabled = parameters
-            .get("High Shelf")
-            .and_then(|p| p.value.as_float())
-            .map_or(true, |v| v > 0.0);
-        // Both shelves default to on, so a board saved before these parameters existed gets
-        // the full range of the pedal
-        let low_shelf_enabled = parameters
-            .get("Low Shelf")
-            .and_then(|p| p.value.as_float())
-            .map_or(true, |v| v > 0.0);
+        let high_band_mode = parameters
+            .get("High Band Mode")
+            .and_then(|p| p.value.as_int())
+            .unwrap_or(0);
+
+        let low_band_mode = parameters
+            .get("Low Band Mode")
+            .and_then(|p| p.value.as_int())
+            .unwrap_or(0);
 
         let eq = Self::build_eq(
             Self::get_bandwidths(&parameters),
             Self::get_gains(&parameters),
-            high_shelf_enabled,
-            low_shelf_enabled,
+            high_band_mode,
+            low_band_mode,
             48000.0,
         );
         Ok(GraphicEq7 {
@@ -173,22 +173,22 @@ impl GraphicEq7 {
         }
 
         parameters.insert(
-            "Low Shelf".to_string(),
+            "Low Band Mode".to_string(),
             PedalParameter {
-                value: PedalParameterValue::Float(1.0),
-                min: Some(PedalParameterValue::Float(0.0)),
-                max: Some(PedalParameterValue::Float(1.0)),
-                step: Some(PedalParameterValue::Float(1.0)),
+                value: PedalParameterValue::Int(0),
+                min: Some(PedalParameterValue::Int(0)),
+                max: Some(PedalParameterValue::Int(2)),
+                step: None,
             },
         );
 
         parameters.insert(
-            "High Shelf".to_string(),
+            "High Band Mode".to_string(),
             PedalParameter {
-                value: PedalParameterValue::Float(1.0),
-                min: Some(PedalParameterValue::Float(0.0)),
-                max: Some(PedalParameterValue::Float(1.0)),
-                step: Some(PedalParameterValue::Float(1.0)),
+                value: PedalParameterValue::Int(0),
+                min: Some(PedalParameterValue::Int(0)),
+                max: Some(PedalParameterValue::Int(2)),
+                step: None,
             },
         );
 
@@ -222,7 +222,7 @@ impl GraphicEq7 {
             },
         );
 
-        let eq = Self::build_eq([init_bandwidth; 7], [init_gain; 7], true, true, 48000.0);
+        let eq = Self::build_eq([init_bandwidth; 7], [init_gain; 7], 0, 0, 48000.0);
 
         GraphicEq7 {
             response_plot: Self::amplitude_response_plot(&eq, 48000.0),
@@ -325,8 +325,8 @@ impl GraphicEq7 {
     fn build_eq(
         bandwidths: [f32; 7],
         gains: [f32; 7],
-        high_shelf: bool,
-        low_shelf: bool,
+        high_band_mode: i16,
+        low_band_mode: i16,
         sample_rate: f32,
     ) -> eq::Equalizer {
         let mut b = eq::GraphicEqualizerBuilder::new(sample_rate)
@@ -334,13 +334,13 @@ impl GraphicEq7 {
             .with_bandwidths(bandwidths)
             .with_gains(gains);
 
-        if high_shelf {
-            b = b.with_upper_shelf()
-        };
+        if let Some(band_type) = get_band_type_from_value(high_band_mode) {
+            b = b.with_upper_band_type(band_type);
+        }
 
-        if low_shelf {
-            b = b.with_lower_shelf()
-        };
+        if let Some(band_type) = get_band_type_from_value(low_band_mode) {
+            b = b.with_lower_band_type(band_type);
+        }
 
         b.build()
     }
@@ -395,23 +395,23 @@ impl PedalTrait for GraphicEq7 {
         if self.frequency_analyser.is_none() {
             self.frequency_analyser = Some(Self::frequency_analyser(self.sample_rate));
         }
+
+        let high_band_mode = self
+            .parameters
+            .get("High Band Mode")
+            .map(|p| p.value.as_int().unwrap_or(0))
+            .unwrap_or(0);
+        let low_band_mode = self
+            .parameters
+            .get("Low Band Mode")
+            .map(|p| p.value.as_int().unwrap_or(0))
+            .unwrap_or(0);
+
         self.eq = Self::build_eq(
             Self::get_bandwidths(&self.parameters),
             Self::get_gains(&self.parameters),
-            self.parameters
-                .get("High Shelf")
-                .unwrap()
-                .value
-                .as_float()
-                .unwrap()
-                > 0.0,
-            self.parameters
-                .get("Low Shelf")
-                .unwrap()
-                .value
-                .as_float()
-                .unwrap()
-                > 0.0,
+            high_band_mode,
+            low_band_mode,
             self.sample_rate,
         );
     }
@@ -421,20 +421,19 @@ impl PedalTrait for GraphicEq7 {
         name: &str,
         value: &PedalParameterValue,
     ) -> Option<String> {
-        let value = value.as_float()?;
-
-        if name.starts_with("Gain ") {
-            return Some(format!("{:+.1} dB", value));
-        }
-
-        if name.starts_with("Bandwidth ") {
-            return Some(format!("{:.2}", value));
-        }
-
-        match name {
-            "Low Shelf" | "High Shelf" => Some(if value > 0.0 { "On" } else { "Off" }.to_string()),
-            "Dry/Wet" => Some(format!("{:.0}%", value * 100.0)),
-            _ => None,
+        if name.starts_with("Gain ") || name.starts_with("Bandwidth ") {
+            Some(format!("{:.2}", value.as_float().unwrap()))
+        } else if name == "Low Band Mode" || name == "High Band Mode" {
+            match value.as_int().unwrap() {
+                0 => Some("Peaking".to_string()),
+                1 => Some("Shelf".to_string()),
+                2 => Some("Pass".to_string()),
+                _ => None,
+            }
+        } else if name == "Dry/Wet" {
+            Some(format!("{:.0}%", value.as_float().unwrap() * 100.0))
+        } else {
+            None
         }
     }
 
@@ -453,29 +452,23 @@ impl PedalTrait for GraphicEq7 {
 
                 if name.starts_with("Gain ")
                     || name.starts_with("Bandwidth ")
-                    || name == "Low Shelf"
-                    || name == "High Shelf"
+                    || name == "Low Band Mode"
+                    || name == "High Band Mode"
                 {
-                    let low_shelf = self
+                    let low_band_mode = self
                         .parameters
-                        .get("Low Shelf")
-                        .unwrap()
-                        .value
-                        .as_float()
-                        .unwrap()
-                        > 0.0;
-                    let high_shelf = self
+                        .get("Low Band Mode")
+                        .map(|p| p.value.as_int().unwrap_or(0))
+                        .unwrap_or(0);
+                    let high_band_mode = self
                         .parameters
-                        .get("High Shelf")
-                        .unwrap()
-                        .value
-                        .as_float()
-                        .unwrap()
-                        > 0.0;
+                        .get("High Band Mode")
+                        .map(|p| p.value.as_int().unwrap_or(0))
+                        .unwrap_or(0);
+
                     let gains = Self::get_gains(&self.parameters);
                     let bandwidths = Self::get_bandwidths(&self.parameters);
-                    self.eq =
-                        Self::build_eq(bandwidths, gains, high_shelf, low_shelf, self.sample_rate);
+                    self.eq = Self::build_eq(bandwidths, gains, high_band_mode, low_band_mode, self.sample_rate);
                     self.response_plot = Self::amplitude_response_plot(&self.eq, self.sample_rate);
                 }
             }
@@ -522,46 +515,43 @@ impl PedalTrait for GraphicEq7 {
 
         eq_background(ui);
 
+        let low_band_mode = self
+            .parameters
+            .get("Low Band Mode")
+            .unwrap()
+            .value
+            .as_int()
+            .unwrap();
+
+        let high_band_mode = self
+            .parameters
+            .get("High Band Mode")
+            .unwrap()
+            .value
+            .as_int()
+            .unwrap();
+
         // Title row with shelf buttons
         ui.add_space(2.0);
         ui.horizontal(|ui| {
             ui.style_mut().visuals.widgets.inactive.weak_bg_fill = Color32::from_black_alpha(50);
             ui.style_mut().visuals.widgets.hovered.weak_bg_fill = Color32::from_black_alpha(80);
             ui.columns_const(|[col1, _col2, col3]| {
-                let high_shelf_enabled = self
-                    .parameters
-                    .get("High Shelf")
-                    .unwrap()
-                    .value
-                    .as_float()
-                    .unwrap()
-                    > 0.0;
-                let low_shelf_enabled = self
-                    .parameters
-                    .get("Low Shelf")
-                    .unwrap()
-                    .value
-                    .as_float()
-                    .unwrap()
-                    > 0.0;
-
                 col1.centered_and_justified(|ui| {
                     if ui
                         .add(
                             Button::image(
-                                Image::new(include_image!("../images/eq/low_shelf.png"))
+                                Image::new(get_band_image_from_value(low_band_mode))
                                     .max_width(pedal_size.x * 0.15),
                             )
-                            .corner_radius(3.0)
-                            .selected(low_shelf_enabled),
+                            .corner_radius(3.0),
                         )
-                        .on_hover_text("Low Shelf")
+                        .on_hover_text("Low Band Mode")
                         .clicked()
                     {
-                        let new_value = if low_shelf_enabled { 0.0 } else { 1.0 };
                         changed_param = Some((
-                            "Low Shelf".to_string(),
-                            PedalParameterValue::Float(new_value),
+                            "Low Band Mode".to_string(),
+                            PedalParameterValue::Int(get_band_type_next_value(low_band_mode)),
                         ));
                     }
                 });
@@ -570,19 +560,17 @@ impl PedalTrait for GraphicEq7 {
                     if ui
                         .add(
                             Button::image(
-                                Image::new(include_image!("../images/eq/high_shelf.png"))
+                                Image::new(get_band_image_from_value(high_band_mode))
                                     .max_width(pedal_size.x * 0.15),
                             )
-                            .corner_radius(3.0)
-                            .selected(high_shelf_enabled),
+                            .corner_radius(3.0),
                         )
-                        .on_hover_text("High Shelf")
+                        .on_hover_text("High Band Mode")
                         .clicked()
                     {
-                        let new_value = if high_shelf_enabled { 0.0 } else { 1.0 };
                         changed_param = Some((
-                            "High Shelf".to_string(),
-                            PedalParameterValue::Float(new_value),
+                            "High Band Mode".to_string(),
+                            PedalParameterValue::Int(get_band_type_next_value(high_band_mode)),
                         ));
                     }
                 });
@@ -598,75 +586,22 @@ impl PedalTrait for GraphicEq7 {
             ui.add_space(spacing / 2.0);
 
             let mut changed_eq_param = None;
-            if let Some(change) = eq_knob(
-                ui,
-                self.parameters.get("Gain 1").unwrap(),
-                self.parameters.get("Bandwidth 1").unwrap(),
-                1,
-                width,
-                self.id,
-            ) {
-                changed_eq_param = Some((1, change));
-            }
-            if let Some(change) = eq_knob(
-                ui,
-                self.parameters.get("Gain 2").unwrap(),
-                self.parameters.get("Bandwidth 2").unwrap(),
-                2,
-                width,
-                self.id,
-            ) {
-                changed_eq_param = Some((2, change));
-            }
-            if let Some(change) = eq_knob(
-                ui,
-                self.parameters.get("Gain 3").unwrap(),
-                self.parameters.get("Bandwidth 3").unwrap(),
-                3,
-                width,
-                self.id,
-            ) {
-                changed_eq_param = Some((3, change));
-            }
-            if let Some(change) = eq_knob(
-                ui,
-                self.parameters.get("Gain 4").unwrap(),
-                self.parameters.get("Bandwidth 4").unwrap(),
-                4,
-                width,
-                self.id,
-            ) {
-                changed_eq_param = Some((4, change));
-            }
-            if let Some(change) = eq_knob(
-                ui,
-                self.parameters.get("Gain 5").unwrap(),
-                self.parameters.get("Bandwidth 5").unwrap(),
-                5,
-                width,
-                self.id,
-            ) {
-                changed_eq_param = Some((5, change));
-            }
-            if let Some(change) = eq_knob(
-                ui,
-                self.parameters.get("Gain 6").unwrap(),
-                self.parameters.get("Bandwidth 6").unwrap(),
-                6,
-                width,
-                self.id,
-            ) {
-                changed_eq_param = Some((6, change));
-            }
-            if let Some(change) = eq_knob(
-                ui,
-                self.parameters.get("Gain 7").unwrap(),
-                self.parameters.get("Bandwidth 7").unwrap(),
-                7,
-                width,
-                self.id,
-            ) {
-                changed_eq_param = Some((7, change));
+
+            for i in 1..=7 {
+                // Low/High pass filters dont have a gain knob
+                let bandwidth_only = (i == 1 && low_band_mode == 2) || (i == 7 && high_band_mode == 2);
+
+                if let Some(change) = eq_knob(
+                    ui,
+                    self.parameters.get(&format!("Gain {}", i)).unwrap(),
+                    self.parameters.get(&format!("Bandwidth {}", i)).unwrap(),
+                    i,
+                    width,
+                    self.id,
+                    bandwidth_only
+                ) {
+                    changed_eq_param = Some((i, change));
+                }
             }
 
             if let Some((i, change)) = changed_eq_param {
@@ -794,6 +729,7 @@ fn eq_knob(
     param_num: usize,
     width: f32,
     pedal_id: u32,
+    bandwidth_only: bool
 ) -> Option<EqChange> {
     let parameter_path = ParameterPath {
         pedalboard_id: None,
@@ -804,17 +740,22 @@ fn eq_knob(
     ui.vertical(|ui| {
         let mut changed_param = None;
 
-        // The slot is drawn at the size of the range a band's gain is set over, so the knob travels
-        // over the whole of it
-        if let Some(value) = gain_knob(
-            ui,
-            param,
-            Vec2::new(width, width * SLOT_ASPECT_RATIO),
-            width,
-            1.0,
-            Some(&parameter_path)
-        ) {
-            changed_param = Some(EqChange::Gain(value));
+        if bandwidth_only {
+            // Allocate space for gain knob but don't draw it
+            ui.allocate_space(Vec2::new(width, width * SLOT_ASPECT_RATIO));
+        } else {
+            // The slot is drawn at the size of the range a band's gain is set over, so the knob travels
+            // over the whole of it
+            if let Some(value) = gain_knob(
+                ui,
+                param,
+                Vec2::new(width, width * SLOT_ASPECT_RATIO),
+                width,
+                1.0,
+                Some(&parameter_path)
+            ) {
+                changed_param = Some(EqChange::Gain(value));
+            }
         }
 
         ui.add_space(7.0);
@@ -847,7 +788,7 @@ mod tests {
 
     /// The response curve the graph is drawn with for a set of gains.
     fn response(gains: [f32; 7], bandwidths: [f32; 7]) -> Vec<PlotPoint> {
-        let eq = GraphicEq7::build_eq(bandwidths, gains, true, true, 48000.0);
+        let eq = GraphicEq7::build_eq(bandwidths, gains, 0, 0, 48000.0);
 
         GraphicEq7::amplitude_response_plot(&eq, 48000.0)
     }

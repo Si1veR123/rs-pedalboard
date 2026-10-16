@@ -166,8 +166,8 @@ impl GraphicEqSettings {
             .with_bands(BAND_FREQS)
             .with_bandwidths(self.bandwidths)
             .with_gains(self.gains)
-            .with_upper_shelf()
-            .with_lower_shelf()
+            .with_upper_band_type(eq::BandType::Pass)
+            .with_lower_band_type(eq::BandType::Pass)
             .build()
     }
 
@@ -533,7 +533,14 @@ fn band_gain_ui(
         None
     ) {
         Some(value) => {
-            settings.gains[band] = value;
+            if band == 0 || band == BAND_COUNT - 1 {
+                // The first and last bands are low/high pass, so the knob should control bandwidth instead
+                // Map -15 - 15 dB to 0.5 - 1.5
+                settings.bandwidths[band] = 1.0 + (value / EQ_DB_GAIN) * 0.5;
+            } else {
+                settings.gains[band] = value;
+            }
+
             true
         }
         None => false,
