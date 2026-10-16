@@ -59,9 +59,15 @@ fn replace_working_directory_with_settings_repo(github_repo: &str) -> Result<(),
     Ok(())
 }
 
+pub struct SyncSettingsResponse {
+    pub egui_response: egui::Response,
+    pub push_triggered: bool,
+    pub pull_triggered: bool
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct GithubSyncSettings {
-    pub is_sync_enabled: bool,
+    pub is_auto_sync_enabled: bool,
     pub github_repo: String,
     pub sync_processor_settings: bool,
     pub sync_client_settings: bool,
@@ -74,7 +80,7 @@ pub struct GithubSyncSettings {
 impl Default for GithubSyncSettings {
     fn default() -> Self {
         Self {
-            is_sync_enabled: false,
+            is_auto_sync_enabled: false,
             github_repo: String::new(),
             sync_processor_settings: false,
             sync_client_settings: true,
@@ -145,8 +151,11 @@ impl GithubSyncSettings {
         ui.selectable_label(*value, label).clicked().then(|| *value = !*value);
     }
 
-    pub fn settings_ui(&mut self, ui: &mut egui::Ui, row_height: f32) -> egui::Response {
-        egui::Grid::new("processor_settings_grid")
+    pub fn settings_ui(&mut self, ui: &mut egui::Ui, row_height: f32) -> SyncSettingsResponse {
+        let mut push_triggered = false;
+        let mut pull_triggered = false;
+
+        let egui_response = egui::Grid::new("processor_settings_grid")
             .num_columns(2)
             .min_col_width(ui.available_width()*0.5)
             .min_row_height(row_height)
@@ -167,8 +176,8 @@ impl GithubSyncSettings {
                     .ui(ui);
                 ui.end_row();
 
-                ui.label("Enable Sync");
-                ui.checkbox(&mut self.is_sync_enabled, "");
+                ui.label("Enable Auto Sync");
+                ui.checkbox(&mut self.is_auto_sync_enabled, "");
                 ui.end_row();
 
                 ui.label("Synced Settings");
@@ -183,7 +192,37 @@ impl GithubSyncSettings {
                         Self::sync_selectable_label(ui, &mut self.sync_recordings_directory, "Recordings Directory");
                         Self::sync_selectable_label(ui, &mut self.sync_pedalboards, "Pedalboards");
                     });
-            }).response
+                
+                ui.end_row();
+
+                ui.label("");
+                if ui.add_sized(ui.available_size_before_wrap() * 0.75, egui::Button::new("Push")).clicked() {
+                    push_triggered = true;
+                }
+                ui.end_row();
+
+                ui.label("");
+                
+                let is_currently_pulling_on_start = ui.ctx().data_mut(|d| d.get_persisted(egui::Id::from("force_pull_on_start")).unwrap_or(false));
+                let button_fill = if is_currently_pulling_on_start {
+                    ui.visuals().widgets.active.bg_fill
+                } else {
+                    ui.visuals().widgets.inactive.bg_fill
+                };
+                if ui.add_sized(
+                    ui.available_size_before_wrap() * 0.75,
+                    egui::Button::new("Pull On Next Startup").fill(button_fill)
+                ).clicked() {
+                    pull_triggered = true;
+                }
+                ui.end_row();
+            }).response;
+        
+        SyncSettingsResponse {
+            egui_response,
+            push_triggered,
+            pull_triggered
+        }
     }
 
     fn construct_ignores(&self) -> String {
@@ -242,8 +281,8 @@ impl GithubSyncSettings {
         }
     }
 
-    fn ready_to_sync(&self) -> Result<bool, String> {
-        if !self.is_sync_enabled {
+    fn ready_to_sync(&self, is_auto: bool) -> Result<bool, String> {
+        if !self.is_auto_sync_enabled && is_auto {
             return Ok(false);
         }
         if !self.validate_github_repo() {
@@ -255,13 +294,13 @@ impl GithubSyncSettings {
         Ok(true)
     }
 
-    pub fn pull_changes_blocking(&self, ctx: &egui::Context) {
+    pub fn pull_changes_blocking(&self, ctx: &egui::Context, is_auto: bool) {
         let _guard = match lock_git() {
             Some(guard) => guard,
             None => return
         };
 
-        match self.ready_to_sync() {
+        match self.ready_to_sync(is_auto) {
             Ok(true) => {}
             Ok(false) => {
                 info!("GitHub sync is disabled, skipping pull");
@@ -302,23 +341,23 @@ impl GithubSyncSettings {
         self.restore_working_directory_with_handling(old_working_directory, ctx);
     }    
 
-    pub fn pull_changes(&self, ctx: &egui::Context) {
+    pub fn pull_changes(&self, ctx: &egui::Context, is_auto: bool) {
         std::thread::spawn({
             let self_clone = self.clone();
             let ctx_clone = ctx.clone();
             move || {
-                self_clone.pull_changes_blocking(&ctx_clone);
+                self_clone.pull_changes_blocking(&ctx_clone, is_auto);
             }
         });
     }
 
-    pub fn push_changes_blocking(&self, ctx: &egui::Context) {
+    pub fn push_changes_blocking(&self, ctx: &egui::Context, is_auto: bool) {
         let _guard = match lock_git() {
             Some(guard) => guard,
             None => return
         };
 
-        match self.ready_to_sync() {
+        match self.ready_to_sync(is_auto) {
             Ok(true) => {}
             Ok(false) => {
                 info!("GitHub sync is disabled, skipping push");
@@ -381,12 +420,12 @@ impl GithubSyncSettings {
         self.restore_working_directory_with_handling(old_working_directory, ctx);
     }
 
-    pub fn push_changes(&self, ctx: &egui::Context) {
+    pub fn push_changes(&self, ctx: &egui::Context, is_auto: bool) {
         std::thread::spawn({
             let self_clone = self.clone();
             let ctx_clone = ctx.clone();
             move || {
-                self_clone.push_changes_blocking(&ctx_clone);
+                self_clone.push_changes_blocking(&ctx_clone, is_auto);
             }
         });
     }

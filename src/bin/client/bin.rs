@@ -249,8 +249,16 @@ pub struct PedalboardClientApp {
 
 impl PedalboardClientApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        let should_force_pull: bool = cc.egui_ctx.data_mut(
+            |d| {
+                let id = egui::Id::from("force_pull_on_start");
+                let current = d.get_persisted(egui::Id::from("should_pull_on_start")).unwrap_or(false);
+                d.insert_persisted(id, false);
+                current
+            });
+
         tracing::debug!("PedalboardClientApp::new: load_state start");
-        let loaded_state = State::load_state(cc.egui_ctx.clone());
+        let loaded_state = State::load_state(cc.egui_ctx.clone(), should_force_pull);
         tracing::debug!("PedalboardClientApp::new: load_state done");
         let leaked_state = Box::leak(Box::new(loaded_state));
         tracing::debug!("PedalboardClientApp::new: connect_to_processor start");
@@ -334,7 +342,7 @@ impl PedalboardClientApp {
         }
 
         let github_sync_settings = self.state.github_sync_settings.borrow();
-        github_sync_settings.push_changes_blocking(&self.state.egui_ctx);
+        github_sync_settings.push_changes_blocking(&self.state.egui_ctx, true);
     }
 }
 
@@ -563,7 +571,7 @@ impl eframe::App for PedalboardClientApp {
         }
 
         let github_sync_settings = self.state.github_sync_settings.borrow();
-        github_sync_settings.push_changes(&self.state.egui_ctx);
+        github_sync_settings.push_changes(&self.state.egui_ctx, true);
     }
 
     #[tracing::instrument(level = "debug", skip_all)]

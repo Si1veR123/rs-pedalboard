@@ -543,10 +543,10 @@ impl State {
         self.recording_save_clean.set(clean);
     }
 
-    pub fn load_state(egui_ctx: eframe::egui::Context) -> Self {
+    pub fn load_state(egui_ctx: eframe::egui::Context, force_pull: bool) -> Self {
         tracing::debug!("State::load_state: loading github sync settings");
         let github_sync_settings = GithubSyncSettings::load_or_default();
-        github_sync_settings.pull_changes_blocking(&egui_ctx);
+        github_sync_settings.pull_changes_blocking(&egui_ctx, !force_pull);
 
         tracing::debug!("State::load_state: loading saved pedalboards");
         let pedalboards = SavedPedalboards::load_or_default();

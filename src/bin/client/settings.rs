@@ -719,7 +719,20 @@ impl Widget for &mut SettingsScreen {
                     let mut github_sync_settings = self.state.github_sync_settings.borrow_mut();
                     ui.scope(|ui| {
                         set_large_checkbox_style(ui);
-                        github_sync_settings.settings_ui(ui, SETTING_ROW_HEIGHT_FRACT * ui.ctx().viewport_rect().height());
+                        let response = github_sync_settings.settings_ui(ui, SETTING_ROW_HEIGHT_FRACT * ui.ctx().viewport_rect().height());
+
+                        if response.push_triggered {
+                            github_sync_settings.push_changes(ui.ctx(), false);
+                        }
+                        if response.pull_triggered {
+                            ui.ctx().data_mut(
+                                |m| {
+                                    let id = egui::Id::from("force_pull_on_start");
+                                    let current = m.get_persisted::<bool>(id).unwrap_or(false);
+                                    m.insert_persisted(id, !current);
+                                }
+                            );
+                        }
                     });
 
                     ui.add_space(SECTION_SPACE);
