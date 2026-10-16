@@ -91,6 +91,9 @@ pub fn pedal_knob(
         PedalParameterValue::Int(_) => {
             pedal_parameter_float = parameter.int_to_float();
         }
+        PedalParameterValue::Oscillator(_) => {
+            pedal_parameter_float = parameter.oscillator_to_float();
+        }
         _ => {
             ui.label("Invalid parameter type.");
             return None;

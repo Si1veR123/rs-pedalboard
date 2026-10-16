@@ -164,6 +164,7 @@ impl PedalTrait for Phaser {
             "Width" => Some(format!("{:.0}%", value.as_float().unwrap() * 100.0)),
             "Feedback" => Some(format!("{:.0}%", value.as_float().unwrap() * 100.0)),
             "Dry/Wet" => Some(format!("{:.0}%", value.as_float().unwrap() * 100.0)),
+            "Oscillator" => Some(format!("{:.2} Hz", value.as_oscillator().unwrap().get_frequency())),
             _ => None,
         }
     }
@@ -293,7 +294,7 @@ impl PedalTrait for Phaser {
             "",
             "Feedback",
             feedback_param,
-            egui::Vec2::new(0.61, 0.036),
+            egui::Vec2::new(0.095, 0.3),
             0.3,
             self.id,
         ) {
@@ -306,11 +307,27 @@ impl PedalTrait for Phaser {
             "",
             "Dry/Wet",
             dry_wet_param,
-            egui::Vec2::new(0.35, 0.3),
+            egui::Vec2::new(0.605, 0.3),
             0.3,
             self.id,
         ) {
             to_change = Some(("Dry/Wet".to_string(), value));
+        }
+
+        let frequency_param = self.get_parameters().get("Oscillator").unwrap();
+        if let Some(value) = pedal_knob(
+            ui,
+            "",
+            "Oscillator",
+            frequency_param,
+            egui::Vec2::new(0.61, 0.036),
+            0.3,
+            self.id,
+        ) {
+            // value will be a float value, convert to oscillator
+            let mut oscillator = frequency_param.value.as_oscillator().expect("Oscillator param should be an oscillator").clone();
+            oscillator.set_frequency(value.as_float().unwrap());
+            to_change = Some(("Oscillator".to_string(), PedalParameterValue::Oscillator(oscillator)));
         }
 
         let active_param = self

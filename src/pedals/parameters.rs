@@ -184,6 +184,24 @@ impl PedalParameter {
         }
     }
 
+    pub fn oscillator_to_float(&self) -> Self {
+        if let PedalParameterValue::Oscillator(osc) = &self.value {
+            let new_parameter = PedalParameter {
+                value: PedalParameterValue::Float(osc.get_frequency()),
+                min: Some(PedalParameterValue::Float(
+                    self.min.clone().unwrap().as_float().unwrap(),
+                )),
+                max: Some(PedalParameterValue::Float(
+                    self.max.clone().unwrap().as_float().unwrap(),
+                )),
+                step: None,
+            };
+            new_parameter
+        } else {
+            panic!("PedalParameter::oscillator_to_float called on non-oscillator parameter");
+        }
+    }
+
     pub fn parameter_editor_ui(
         &self,
         ui: &mut egui::Ui,

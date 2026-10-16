@@ -332,7 +332,7 @@ macro_rules! var_delay_phaser {
                         "",
                         "Dry/Wet",
                         dry_wet_param,
-                        eframe::egui::Vec2::new(0.605, 0.3),
+                        Vec2::new(0.605, 0.3),
                         0.3,
                         self.id,
                     ) {
