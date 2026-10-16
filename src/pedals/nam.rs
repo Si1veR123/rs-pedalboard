@@ -551,10 +551,12 @@ impl PedalTrait for Nam {
     }
 
     fn reset_buffer(&mut self) {
-        if self.has_loaded_model() {
-            let model = self.modeler.model_path().map(|p| p.to_path_buf());
+        #[cfg(feature = "processor")]
+        if let Some(model) = self.modeler.model_path().map(|p| p.to_path_buf()) {
             self.modeler.unload();
-            self.modeler.load(model.expect("A model is loaded")).expect("Failed to load model");
+            if let Err(e) = self.modeler.load(model) {
+                tracing::error!("NAM: Failed to reload model while resetting buffer: {}", e);
+            }
         }
     }
 
