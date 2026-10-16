@@ -68,9 +68,10 @@ pub fn git_commit(commit_message: &str) -> Result<bool, String> {
 }
 
 
-pub fn git_push() -> Result<(), String> {
+pub fn git_force_push() -> Result<(), String> {
     let status = std::process::Command::new("git")
         .arg("push")
+        .arg("--force")
         .status()
         .map_err(|e| format!("Failed to execute git push command: {}", e))?;
 

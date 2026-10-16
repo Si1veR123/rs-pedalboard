@@ -1,5 +1,5 @@
 mod git_commands;
-use git_commands::{git_clone, add_all_files_to_git, git_commit, git_push};
+use git_commands::{git_clone, add_all_files_to_git, git_commit, git_force_push};
 pub use git_commands::git_exists;
 mod backup_settings;
 use backup_settings::{clear_directory_contents, create_directory_backup, restore_directory_backup};
@@ -406,7 +406,7 @@ impl GithubSyncSettings {
                 info!("No changes to commit");
             }
             Ok(true) => {
-                if let Err(e) = git_push() {
+                if let Err(e) = git_force_push() {
                     error!(e);
                     popup!(ctx, e, None, PopupMessageType::Error);
                 }
