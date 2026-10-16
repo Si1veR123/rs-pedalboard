@@ -3,7 +3,7 @@ use std::{collections::HashMap, hash::Hash};
 use eframe::egui::{self, include_image, Button, Color32, Image, Vec2};
 use serde::{Deserialize, Serialize};
 
-use super::{eq_background, gain_knob, SLOT_ASPECT_RATIO, get_band_image_from_value, get_band_type_next_value, get_band_type_from_value};
+use super::{gain_knob, SLOT_ASPECT_RATIO, get_band_image_from_value, get_band_type_next_value, get_band_type_from_value};
 use crate::{
     dsp_algorithms::eq::{Equalizer, GraphicEqualizerBuilder, BandType}, pedalboard::ParameterPath, pedals::{PedalParameter, PedalParameterValue, PedalTrait}, unique_time_id,
 };
@@ -190,13 +190,17 @@ impl PedalTrait for SimpleEq {
         _message_buffer: &[String],
     ) -> Option<(String, PedalParameterValue)> {
         let pedal_rect = ui.available_rect_before_wrap();
-        eq_background(ui);
+        
+        ui.new_child(egui::UiBuilder::new().max_rect(pedal_rect))
+            .add(Image::new(include_image!("../images/simple_eq.png")));
+
         let mut changed = None;
         let pedal_size = pedal_rect.size();
         let low_band_mode = self.parameter_int("Low Band Mode");
         let high_band_mode = self.parameter_int("High Band Mode");
 
-        ui.horizontal(|ui| {
+        let top_section_height = pedal_size.y * 0.075;
+        ui.allocate_ui_with_layout(Vec2::new(pedal_rect.width(), top_section_height), egui::Layout::left_to_right(egui::Align::Center), |ui| {
             ui.style_mut().visuals.widgets.inactive.weak_bg_fill = Color32::from_black_alpha(50);
             ui.style_mut().visuals.widgets.hovered.weak_bg_fill = Color32::from_black_alpha(80);
             ui.columns_const(|[left, _, right]| {
@@ -227,15 +231,13 @@ impl PedalTrait for SimpleEq {
             });
         });
 
-        ui.add_space(4.0);
-
         // The pedal is allocated slightly taller than the `eq.png` artwork, which is drawn
         // top-aligned and leaves a blank strip at the bottom. Bound the knob row to the
         // visible artwork so the knobs are centered within the pedal itself.
         let background_size = Image::new(include_image!("../images/eq.png"))
             .load_and_calc_size(ui, pedal_size)
             .unwrap_or(pedal_size);
-        let artwork_bottom = pedal_rect.top() + background_size.y;
+        let artwork_bottom = pedal_rect.top() + background_size.y - pedal_size.y * 0.05; // subtract 5% for frequency band text at bottom
         let knob_area = egui::Vec2::new(
             ui.available_width(),
             (artwork_bottom - ui.cursor().top()).max(0.0),

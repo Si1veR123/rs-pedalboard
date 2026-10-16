@@ -25,12 +25,6 @@ pub const SLOT_ASPECT_RATIO: f32 = 298.0 / 39.0;
 /// `knob.png` is 160x255, so a band's gain knob is this many times as tall as it is wide.
 pub const KNOB_ASPECT_RATIO: f32 = 255.0 / 160.0;
 
-pub fn eq_background(ui: &mut eframe::egui::Ui) {
-    let rect = ui.available_rect_before_wrap();
-    ui.new_child(UiBuilder::new().max_rect(rect))
-        .add(Image::new(include_image!("../images/eq.png")));
-}
-
 /// A band's gain knob: the slot that marks the range a band's gain is set over, with the knob
 /// drawn at the gain's place along it. Returns the gain the user has dragged the knob to.
 ///

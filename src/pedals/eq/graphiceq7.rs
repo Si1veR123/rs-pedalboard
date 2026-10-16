@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use super::super::{PedalParameter, PedalParameterValue, PedalTrait};
 use super::frequency_plot::{self, LIVE_FREQUENCY_COLOR};
 use super::{
-    deserialize_plot_points, eq_background, gain_knob, serialize_plot_points, EQ_DB_GAIN,
+    deserialize_plot_points, gain_knob, serialize_plot_points, EQ_DB_GAIN,
     MAX_FREQ_HZ, MIN_FREQ_HZ, PLOT_POINTS, SLOT_ASPECT_RATIO,
     get_band_image_from_value, get_band_type_from_value, get_band_type_next_value
 };
@@ -513,7 +513,9 @@ impl PedalTrait for GraphicEq7 {
 
         let pedal_size = ui.available_size();
 
-        eq_background(ui);
+        let rect = ui.available_rect_before_wrap();
+        ui.new_child(UiBuilder::new().max_rect(rect))
+            .add(Image::new(include_image!("../images/eq_new.png")));
 
         let low_band_mode = self
             .parameters
@@ -533,7 +535,8 @@ impl PedalTrait for GraphicEq7 {
 
         // Title row with shelf buttons
         ui.add_space(2.0);
-        ui.horizontal(|ui| {
+        let top_section_height = pedal_size.y * 0.075;
+        ui.allocate_ui_with_layout(Vec2::new(pedal_size.x, top_section_height), egui::Layout::left_to_right(egui::Align::Center), |ui| {
             ui.style_mut().visuals.widgets.inactive.weak_bg_fill = Color32::from_black_alpha(50);
             ui.style_mut().visuals.widgets.hovered.weak_bg_fill = Color32::from_black_alpha(80);
             ui.columns_const(|[col1, _col2, col3]| {
@@ -619,7 +622,7 @@ impl PedalTrait for GraphicEq7 {
         });
 
         // Frequency Response Graph
-        ui.add_space(2.0);
+        ui.add_space(pedal_size.y * 0.03);
 
         let plot_response = Plot::new(self.id)
             .height(ui.available_height() * 0.75)
@@ -758,7 +761,7 @@ fn eq_knob(
             }
         }
 
-        ui.add_space(7.0);
+        ui.add_space(2.0);
 
         // Allocate space for bandwidth knob
         // Using allocate_ui_with_layout doesn't seem to allocate the correct space so this is a hack
