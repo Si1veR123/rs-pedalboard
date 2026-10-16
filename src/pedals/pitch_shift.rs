@@ -109,13 +109,13 @@ impl PitchShift {
             },
         );
 
-        // Multiples of 128
+        // 1024 -> 16384 in multiples of 1024
         parameters.insert(
             "Block Size".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Int(init_block_size),
                 min: Some(PedalParameterValue::Int(1)),
-                max: Some(PedalParameterValue::Int(4096 / 128)),
+                max: Some(PedalParameterValue::Int(16)),
                 step: None,
             },
         );
@@ -170,17 +170,22 @@ impl PitchShift {
         Equalizer::new(vec![biquad])
     }
 
+    fn block_size_from_param(param_value: i16) -> usize {
+        (param_value.clamp(1, 16) as usize) * 1024
+    }
+
     pub fn stretch_from_parameters(
         parameters: &HashMap<String, PedalParameter>,
         sample_rate: f32,
     ) -> Stretch {
-        let block_size = parameters
-            .get("Block Size")
-            .unwrap()
-            .value
-            .as_int()
-            .unwrap() as usize
-            * 128;
+        let block_size = Self::block_size_from_param(
+            parameters
+                .get("Block Size")
+                .unwrap()
+                .value
+                .as_int()
+                .unwrap() as i16
+        );
         let semitones = parameters.get("Semitones").unwrap().value.as_int().unwrap();
         let tonality_limit_hz = parameters
             .get("Tonality Limit")
@@ -256,8 +261,7 @@ impl PedalTrait for PitchShift {
     ) -> Option<String> {
         match name {
             "Semitones" => Some(format!("{:+} st", value.as_int().unwrap())),
-            // The block size parameter is a multiple of 128 samples
-            "Block Size" => Some(format!("{} samples", value.as_int().unwrap() as i32 * 128)),
+            "Block Size" => Some(format!("{} samples", Self::block_size_from_param(value.as_int().unwrap()))),
             "Tonality Limit" => Some(format!("{:.0} Hz", value.as_float().unwrap())),
             "Presence" => Some(format!("{:.1} dB", value.as_float().unwrap())),
             _ => None,
