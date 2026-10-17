@@ -1,5 +1,5 @@
 use crossbeam::channel::Sender;
-use rs_pedalboard::dsp_algorithms::yin::Yin;
+use rs_pedalboard::dsp::yin::Yin;
 use std::{
     io,
     sync::{atomic::AtomicBool, Arc},
@@ -35,7 +35,7 @@ pub fn start_tuner(
                 }
 
                 std::thread::sleep(std::time::Duration::from_millis(
-                    rs_pedalboard::dsp_algorithms::yin::PROCESSOR_UPDATE_FREQ_MS,
+                    rs_pedalboard::dsp::yin::PROCESSOR_UPDATE_FREQ_MS,
                 ));
             }
             tracing::info!("Tuner thread stopped");

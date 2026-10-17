@@ -1,7 +1,7 @@
 use super::ui::{pedal_knob, pedal_switch};
 use super::{PedalParameter, PedalParameterValue, PedalTrait};
-use crate::dsp_algorithms::oscillator::{Oscillator, Sine};
-use crate::dsp_algorithms::variable_delay_phaser::VariableDelayPhaser;
+use crate::dsp::oscillator::{Oscillator, Sine};
+use crate::dsp::variable_delay_phaser::VariableDelayPhaser;
 use eframe::egui::{self, include_image, Vec2};
 use serde::{ser::SerializeMap, Deserialize, Serialize};
 use std::collections::HashMap;

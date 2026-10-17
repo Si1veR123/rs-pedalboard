@@ -4,7 +4,7 @@ use std::iter;
 
 use super::ui::pedal_knob;
 use super::{PedalParameter, PedalParameterValue, PedalTrait};
-use crate::dsp_algorithms::{biquad, eq};
+use crate::dsp::{biquad, eq};
 use crate::pedals::ui::pedal_switch;
 use crate::unique_time_id;
 

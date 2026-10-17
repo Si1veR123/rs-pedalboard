@@ -7,7 +7,7 @@
 use eframe::egui::Color32;
 use egui_plot::PlotPoint;
 
-use crate::dsp_algorithms::frequency_analysis::SPECTRUM_FLOOR_DB;
+use crate::dsp::frequency_analysis::SPECTRUM_FLOOR_DB;
 
 /// The colour of the live frequency plot, used for its curve and its translucent fill and
 /// for the tint of its toggle button.

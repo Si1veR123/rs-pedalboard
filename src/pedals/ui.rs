@@ -1,7 +1,7 @@
 use eframe::egui::{self, Color32, Id, Vec2, WidgetText};
 
 use crate::{
-    dsp_algorithms::oscillator::{self, Oscillator}, pedalboard::ParameterPath, pedals::ActiveFeature,
+    dsp::oscillator::{self, Oscillator}, pedalboard::ParameterPath, pedals::ActiveFeature,
 };
 
 use super::{PedalParameter, PedalParameterValue};

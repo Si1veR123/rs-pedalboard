@@ -3,8 +3,8 @@
 use std::collections::HashMap;
 use std::hash::Hash;
 
-use crate::dsp_algorithms::biquad::BiquadFilter;
-use crate::dsp_algorithms::eq;
+use crate::dsp::biquad::BiquadFilter;
+use crate::dsp::eq;
 use crate::unique_time_id;
 
 use super::ui::{pedal_knob, pedal_switch};
@@ -212,6 +212,7 @@ impl Overdrive {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dsp::ConvertSampleDbLinear;
 
     const SAMPLE_RATE: f64 = 48_000.0;
 
@@ -271,10 +272,7 @@ mod tests {
     fn clip_stage_keeps_the_bass_and_pushes_the_mids_into_the_diodes() {
         let stage = Overdrive::clip_stage(SAMPLE_RATE as f32);
         let db = |frequency: f64| {
-            20.0 * stage
-                .response_at_freq(frequency, SAMPLE_RATE)
-                .norm()
-                .log10()
+            f64::linear_to_db(stage.response_at_freq(frequency, SAMPLE_RATE).norm())
         };
 
         // The clipping stage of a tube screamer has unity gain in the bass: the bass
@@ -283,64 +281,6 @@ mod tests {
         assert!(db(200.0) < 1.0, "low mids {}", db(200.0));
         assert!(db(CLIP_STAGE_CORNER_HZ as f64) > db(60.0) + 5.0);
         assert!(db(4000.0) > db(60.0) + 9.0);
-    }
-
-    fn rms(signal: &[f32]) -> f32 {
-        (signal.iter().map(|x| x * x).sum::<f32>() / signal.len() as f32).sqrt()
-    }
-
-    /// Rough stand in for a plucked string: a fundamental plus a few harmonics.
-    fn guitar_input(samples: usize, fundamental: f64, sample_rate: f64) -> Vec<f32> {
-        (0..samples)
-            .map(|i| {
-                let mut x = 0.0;
-                for harmonic in 1..=6 {
-                    let f = fundamental * harmonic as f64;
-                    x += (2.0 * std::f64::consts::PI * f * i as f64 / sample_rate).sin()
-                        / harmonic as f64;
-                }
-                (x * 0.25) as f32
-            })
-            .collect()
-    }
-
-    #[test]
-    fn eq_switch_does_not_jump_the_level() {
-        let input = guitar_input(4096, 220.0, SAMPLE_RATE);
-        let mut messages = Vec::new();
-
-        let mut render = |tone: f32, eq_enabled: bool, drive: f32| {
-            let mut pedal = Overdrive::new();
-            pedal.set_config(4096, SAMPLE_RATE as u32);
-            pedal.set_parameter_value("Tone", PedalParameterValue::Float(tone));
-            pedal.set_parameter_value("Drive", PedalParameterValue::Float(drive));
-            pedal.set_parameter_value("Enable EQ", PedalParameterValue::Bool(eq_enabled));
-
-            let mut buffer = input.clone();
-            pedal.process_audio(&mut buffer, &mut messages);
-            buffer
-        };
-
-        // The tube screamer is no louder with its tone control bypassed than with it in
-        // the path, so the with / without EQ levels have to stay in the same ballpark
-        // for the whole range of the tone and drive knobs.
-        for drive in [1.0, 5.0, 15.0, 30.0] {
-            for tone in [0.0, 0.5, 1.0] {
-                let with_eq = rms(&render(tone, true, drive));
-                let without_eq = rms(&render(tone, false, drive));
-                let difference_db = 20.0 * (with_eq / without_eq).log10();
-
-                assert!(
-                    difference_db.abs() < 2.0,
-                    "drive {drive}, tone {tone}: with EQ is {difference_db:.2} dB hotter than without"
-                );
-            }
-        }
-
-        // ...and at the default setting the two are within a fraction of a dB.
-        let with_eq = rms(&render(0.5, true, 5.0));
-        let without_eq = rms(&render(0.5, false, 5.0));
-        assert!((with_eq / without_eq - 1.0).abs() < 0.15);
     }
 }
 

@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{gain_knob, SLOT_ASPECT_RATIO, get_band_image_from_value, get_band_type_next_value, get_band_type_from_value};
 use crate::{
-    dsp_algorithms::eq::{Equalizer, GraphicEqualizerBuilder, BandType}, pedalboard::ParameterPath, pedals::{PedalParameter, PedalParameterValue, PedalTrait}, unique_time_id,
+    dsp::eq::{Equalizer, GraphicEqualizerBuilder, BandType}, pedalboard::ParameterPath, pedals::{PedalParameter, PedalParameterValue, PedalTrait}, unique_time_id,
 };
 
 const BAND_FREQS: [f32; 5] = [100.0, 400.0, 1000.0, 3000.0, 6500.0];

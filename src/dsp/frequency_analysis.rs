@@ -3,6 +3,7 @@ use num_complex::Complex32;
 use realfft::{RealFftPlanner, RealToComplex};
 use std::ops::Range;
 use std::sync::Arc;
+use super::ConvertSampleDbLinear;
 
 /// The level, in dBFS, at which the analyser stops reporting quieter bands. The live
 /// frequency plot maps this onto the bottom of its graph and the processor clamps every
@@ -193,7 +194,7 @@ impl FrequencyAnalyser {
 
             // The processor sends dB rather than linear magnitudes because the payload is
             // rounded to two decimals, which would flatten away everything below -46 dB
-            let db = (20.0 * (magnitude + SILENCE_FLOOR).log10()) as f64;
+            let db = f32::linear_to_db(magnitude + SILENCE_FLOOR) as f64;
 
             amplitude_output.push(PlotPoint::new(log2_f, db.max(SPECTRUM_FLOOR_DB)));
         }

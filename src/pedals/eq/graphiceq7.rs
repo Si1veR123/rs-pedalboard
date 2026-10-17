@@ -16,7 +16,7 @@ use super::{
 
 use crate::pedalboard::ParameterPath;
 use crate::{
-    dsp_algorithms::{
+    dsp::{
         eq::{self, Equalizer},
         frequency_analysis::FrequencyAnalyser,
     },

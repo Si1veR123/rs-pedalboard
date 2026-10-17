@@ -1,6 +1,6 @@
 use super::ui::pedal_knob;
 use super::{PedalParameter, PedalParameterValue, PedalTrait};
-use crate::dsp_algorithms::oscillator::{Oscillator, Sine};
+use crate::dsp::oscillator::{Oscillator, Sine};
 use crate::pedals::ui::pedal_switch;
 use crate::unique_time_id;
 use eframe::egui::{self, include_image};

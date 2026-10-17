@@ -10,7 +10,7 @@ use std::{
 };
 
 use rs_pedalboard::{
-    dsp_algorithms::{eq::Equalizer, resampler::Resampler, yin::Yin},
+    dsp::{eq::Equalizer, resampler::Resampler, yin::Yin},
     pedalboard::Pedalboard,
     pedalboard_set::PedalboardSet,
     pedals::{parameters::ParameterUpdate, GraphicEqSettings, Pedal, PedalTrait},

@@ -1,6 +1,6 @@
 use super::{PedalParameter, PedalParameterValue, PedalTrait};
 use crate::{
-    dsp_algorithms::{
+    dsp::{
         oscillator::{Oscillator, Sine},
         variable_delay::VariableDelayLine,
     },

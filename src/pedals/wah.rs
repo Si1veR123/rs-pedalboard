@@ -4,7 +4,7 @@ use std::hash::Hash;
 use super::ui::pedal_knob;
 use super::{PedalParameter, PedalParameterValue, PedalTrait};
 use crate::{
-    dsp_algorithms::moving_bandpass::MovingBandPass, pedals::ui::pedal_switch, unique_time_id,
+    dsp::moving_bandpass::MovingBandPass, pedals::ui::pedal_switch, unique_time_id,
 };
 use serde::{ser::SerializeMap, Deserialize, Serialize};
 

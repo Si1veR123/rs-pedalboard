@@ -1,7 +1,7 @@
 use egui_plot::PlotPoint;
 use num_complex::Complex64;
 
-use super::biquad::BiquadFilter;
+use super::{biquad::BiquadFilter, ConvertSampleDbLinear};
 
 pub struct DynamicEqualizerBuilder {
     pub sample_rate: f32,
@@ -226,7 +226,7 @@ impl Equalizer {
             let f = 2f64.powf(log2_f);
             let complex_response = self.response_at_freq(f, sample_rate);
             let amplitude = complex_response.norm();
-            let amplitude_db = 20.0 * amplitude.log10(); // Convert to dB
+            let amplitude_db = f64::linear_to_db(amplitude);
             response.push(PlotPoint::new(log2_f, amplitude_db));
         }
 

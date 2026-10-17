@@ -1,5 +1,5 @@
-use crate::dsp_algorithms::oscillator::Oscillator;
-use crate::dsp_algorithms::variable_delay::VariableDelayLine;
+use crate::dsp::oscillator::Oscillator;
+use crate::dsp::variable_delay::VariableDelayLine;
 use std::iter::Iterator;
 
 #[derive(Clone)]

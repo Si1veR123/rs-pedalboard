@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{frequency_plot, gain_knob, SLOT_ASPECT_RATIO};
 use crate::{
-    dsp_algorithms::eq::{self, Equalizer}, pedals::{PedalParameter, PedalParameterValue},
+    dsp::eq::{self, Equalizer}, pedals::{PedalParameter, PedalParameterValue}
 };
 
 /// Number of points the response curve is drawn with.
@@ -637,6 +637,7 @@ fn response_plot_ui(ui: &mut egui::Ui, settings: &GraphicEqSettings, id: u32, si
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dsp::ConvertSampleDbLinear;
 
     /// An EQ named after the test it belongs to, with the given bands
     fn eq(gains: [f32; BAND_COUNT], bandwidths: [f32; BAND_COUNT]) -> GraphicEqSettings {
@@ -653,7 +654,7 @@ mod tests {
             .build_eq(EDITOR_SAMPLE_RATE)
             .response_at_freq(freq as f64, EDITOR_SAMPLE_RATE as f64);
 
-        20.0 * response.norm().log10()
+        f64::linear_to_db(response.norm())
     }
 
     /// The bands the editor has, with the given bands at the low end of the range and the bands

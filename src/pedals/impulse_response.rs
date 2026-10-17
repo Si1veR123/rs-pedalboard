@@ -3,7 +3,7 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use crate::dsp_algorithms::impluse_response::IRConvolver;
+use crate::dsp::impluse_response::IRConvolver;
 use crate::pedals::ui::{is_function_active_feature, pedal_switch, set_active_feature, sideways_arrow};
 use crate::pedals::{ActiveFeature, ParameterUILocation, decide_trigger_direction};
 use crate::processor_api::load_wav;

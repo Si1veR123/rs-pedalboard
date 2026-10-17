@@ -5,7 +5,7 @@ use crate::{
     pedalboard::ParameterPath, pedals::{
         ActiveFeature, PedalParameter, ui::{is_parameter_active_feature, set_active_feature}
     },
-    dsp_algorithms::eq
+    dsp::eq
 };
 
 pub mod frequency_plot;

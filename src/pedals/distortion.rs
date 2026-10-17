@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::hash::Hash;
 
-use crate::dsp_algorithms::biquad::BiquadFilter;
+use crate::dsp::biquad::BiquadFilter;
 use crate::unique_time_id;
 
 use super::ui::{pedal_knob, pedal_switch};
@@ -307,14 +307,12 @@ impl Distortion {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dsp::ConvertSampleDbLinear;
 
     const SAMPLE_RATE: f64 = 48_000.0;
 
     fn db(filter: &BiquadFilter, frequency: f64) -> f64 {
-        20.0 * filter
-            .response_at_freq(frequency, SAMPLE_RATE)
-            .norm()
-            .log10()
+        f64::linear_to_db(filter.response_at_freq(frequency, SAMPLE_RATE).norm())
     }
 
     #[test]
@@ -443,7 +441,7 @@ mod tests {
             for tone in [0.0, 0.5, 1.0] {
                 let with_eq = rms(&render(tone, true, drive));
                 let without_eq = rms(&render(tone, false, drive));
-                let difference_db = 20.0 * (with_eq / without_eq).log10();
+                let difference_db = f32::linear_to_db(with_eq / without_eq);
 
                 assert!(
                     difference_db.abs() < 3.0,
@@ -473,7 +471,7 @@ mod tests {
             let settled = &output[SAMPLES / 2..];
             let fundamental = harmonic_amplitude(settled, FUNDAMENTAL, SAMPLE_RATE);
             let second = harmonic_amplitude(settled, FUNDAMENTAL * 2.0, SAMPLE_RATE);
-            20.0 * (second / fundamental).log10()
+            f64::linear_to_db(second / fundamental)
         };
 
         // At noon the two halves of the wave clip at the same level, so the clipper only
@@ -498,7 +496,7 @@ mod tests {
 
         let level_db = |asymmetry: f32| {
             let output = render_clipped_sine(asymmetry, SAMPLES, 200.0, 10.0);
-            20.0 * rms(&output[SAMPLES / 2..]).log10()
+            f32::linear_to_db(rms(&output[SAMPLES / 2..]))
         };
         let dc = |asymmetry: f32| {
             let output = render_clipped_sine(asymmetry, SAMPLES, 200.0, 10.0);

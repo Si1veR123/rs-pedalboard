@@ -3,7 +3,7 @@ use cpal::{traits::DeviceTrait, Device, Stream};
 use cpal::{InputCallbackInfo, OutputCallbackInfo, StreamConfig, SupportedStreamConfig};
 use ringbuf::traits::Split;
 use ringbuf::{traits::Consumer, HeapRb};
-use rs_pedalboard::dsp_algorithms::resampler::Resampler;
+use rs_pedalboard::dsp::resampler::Resampler;
 use rs_pedalboard::pedalboard_set::PedalboardSet;
 use smol::channel::{Receiver, Sender};
 use std::cell::UnsafeCell;

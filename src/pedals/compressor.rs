@@ -1,7 +1,6 @@
-// make threshold 0-1
-// add soft knee
 use crate::pedals::ui::pedal_switch;
 use crate::DEFAULT_REFRESH_DURATION;
+use crate::dsp::ConvertSampleDbLinear;
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::time::{Duration, Instant};
@@ -207,7 +206,7 @@ impl PedalTrait for Compressor {
 
             // Convert envelope to dB
             let env_lin = (self.envelope).max(EPS);
-            let env_db = 20.0 * env_lin.log10();
+            let env_db = f32::linear_to_db(env_lin);
 
             let knee_start = threshold_db - soft_knee_db / 2.0;
             let knee_end = threshold_db + soft_knee_db / 2.0;
@@ -224,7 +223,7 @@ impl PedalTrait for Compressor {
 
             // gain in dB to apply = out_db - env_db (usually <= 0)
             let gain_db = out_db - env_db;
-            let gain_lin = 10f32.powf(gain_db / 20.0);
+            let gain_lin = f32::db_to_linear(gain_db);
 
             let compressed_sample = *sample * gain_lin * level;
 
@@ -416,7 +415,7 @@ impl PedalTrait for Compressor {
 
         draw_compressor_graph(
             &mut graph_ui,
-            20.0 * self.current_envelope.log10(), // dB conversion
+            f32::linear_to_db(self.current_envelope), // dB conversion
             self.parameters["Threshold"].value.as_float().unwrap(),
             self.parameters["Ratio"].value.as_float().unwrap(),
             self.parameters["Soft Knee"].value.as_float().unwrap(),

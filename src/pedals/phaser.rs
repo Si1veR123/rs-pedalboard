@@ -3,8 +3,8 @@ use std::hash::Hash;
 
 use super::ui::pedal_knob;
 use super::{PedalParameter, PedalParameterValue, PedalTrait};
-use crate::dsp_algorithms::oscillator::{Oscillator, Sine};
-use crate::dsp_algorithms::phaser::{Phaser as PhaserAlgorithm, SWEEP_HIGH_HZ, SWEEP_LOW_HZ};
+use crate::dsp::oscillator::{Oscillator, Sine};
+use crate::dsp::phaser::{Phaser as PhaserAlgorithm, SWEEP_HIGH_HZ, SWEEP_LOW_HZ};
 use crate::pedals::ui::pedal_switch;
 use crate::unique_time_id;
 

@@ -3,7 +3,7 @@ use std::time::Instant;
 use eframe::egui::{self, Color32, RichText, Vec2, Widget};
 
 use crate::state::State;
-use rs_pedalboard::dsp_algorithms::yin::{freq_to_note, PROCESSOR_UPDATE_FREQ_MS};
+use rs_pedalboard::dsp::yin::{freq_to_note, PROCESSOR_UPDATE_FREQ_MS};
 
 pub struct TunerWidget {
     pub state: &'static State,

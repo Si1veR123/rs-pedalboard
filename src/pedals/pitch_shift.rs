@@ -1,5 +1,5 @@
-use crate::dsp_algorithms::biquad::BiquadFilter;
-use crate::dsp_algorithms::eq::Equalizer;
+use crate::dsp::biquad::BiquadFilter;
+use crate::dsp::eq::Equalizer;
 use crate::pedals::ui::pedal_switch;
 use crate::unique_time_id;
 use std::collections::HashMap;

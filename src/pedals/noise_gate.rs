@@ -3,6 +3,7 @@ use serde::{ser::SerializeMap, Deserialize, Serialize};
 use std::{collections::HashMap, hash::Hash};
 
 use crate::{pedals::ui::pedal_switch, unique_time_id};
+use crate::dsp::ConvertSampleDbLinear;
 
 use super::{ui::pedal_knob, PedalParameter, PedalParameterValue, PedalTrait};
 
@@ -169,14 +170,14 @@ impl PedalTrait for NoiseGate {
 
             // Estimate signal power (RMS-like)
             level = alpha * level + (1.0 - alpha) * (x * x);
-            let power_db = 10.0 * level.max(1e-12).log10();
+            let power_db = f32::linear_to_db(level);
 
             // Compute gain target based on threshold and ratio
             let mut gain_target = 1.0;
             if power_db < threshold_db {
                 let diff = threshold_db - power_db;
                 let reduction_db = diff * reduction_ratio;
-                gain_target = 10f32.powf(-reduction_db / 20.0);
+                gain_target = f32::db_to_linear(-reduction_db);
             }
 
             // Smoothly approach gain_target using attack/release

@@ -1,4 +1,4 @@
-use crate::{dsp_algorithms::oscillator::Oscillator, pedals::{Pedal, PedalTrait}};
+use crate::{dsp::oscillator::Oscillator, pedals::{Pedal, PedalTrait}};
 use eframe::egui;
 use serde::{Deserialize, Serialize};
 use std::hash::Hash;

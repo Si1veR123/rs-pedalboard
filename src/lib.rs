@@ -3,7 +3,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::path::{Path, PathBuf};
 
 pub mod audio_devices;
-pub mod dsp_algorithms;
+pub mod dsp;
 pub mod pedalboard;
 pub mod pedalboard_set;
 pub mod pedals;
