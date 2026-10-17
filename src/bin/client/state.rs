@@ -543,6 +543,11 @@ impl State {
         self.recording_save_clean.set(clean);
     }
 
+    pub fn set_mute(&self, mute: bool) {
+        let mut socket = self.socket.borrow_mut();
+        socket.send(Command::SetMute(mute));
+    }
+
     pub fn load_state(egui_ctx: eframe::egui::Context, force_pull: bool) -> Self {
         tracing::debug!("State::load_state: loading github sync settings");
         let github_sync_settings = GithubSyncSettings::load_or_default();
@@ -687,6 +692,10 @@ impl State {
                 midi_state.connect_to_auto_connect_ports();
 
                 let client_settings = self.client_settings.borrow();
+                if client_settings.start_on_mute {
+                    self.set_mute(true);
+                }
+
                 self.set_volume_monitor_active_processor(client_settings.show_volume_monitor);
                 self.set_volume_normalization_processor(
                     client_settings.volume_normalization,

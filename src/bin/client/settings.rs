@@ -38,6 +38,8 @@ pub struct ClientSettings {
     pub auto_volume_normalization_decay: f32,
     pub input_volume: f32,
     pub output_volume: f32,
+    #[serde(default)]
+    pub start_on_mute: bool,
     pub show_popups: Option<PopupMessageType>,
     pub nam_folders: Vec<PathBuf>,
     pub ir_folders: Vec<PathBuf>,
@@ -108,6 +110,7 @@ impl Default for ClientSettings {
             auto_volume_normalization_decay: 0.95,
             input_volume: 1.0,
             output_volume: 1.0,
+            start_on_mute: false,
             show_popups: Some(PopupMessageType::Info),
             nam_folders: vec![],
             ir_folders: vec![],
@@ -708,6 +711,10 @@ impl Widget for &mut SettingsScreen {
                             if ui.checkbox(&mut client_settings.show_volume_monitor, "").changed() {
                                 self.state.set_volume_monitor_active_processor(client_settings.show_volume_monitor);
                             }
+                            ui.end_row();
+
+                            ui.label("Start on Mute");
+                            ui.checkbox(&mut client_settings.start_on_mute, "").on_hover_text("Start the processor muted.");
                             ui.end_row();
                         });
 
