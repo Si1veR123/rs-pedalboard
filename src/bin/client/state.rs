@@ -8,8 +8,8 @@ use rs_pedalboard::{
     pedals::{
         parameters::ParameterUpdate, ui::get_active_feature, GraphicEqSettings, Pedal, PedalTrait, ActiveFeature
     },
-    processor_settings::{FloatSettingUpdate, ProcessorSettingsSave},
-    dsp::{ConvertSampleDbLinear, MAXIMUM_DB_INCREASE, MINIMUM_DB},
+    processor_settings::ProcessorSettingsSave,
+    dsp::{MAXIMUM_DB_INCREASE, MINIMUM_DB},
 };
 use strum::IntoDiscriminant;
 use std::{
