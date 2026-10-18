@@ -13,6 +13,7 @@ use crate::pedals::ui::{is_function_active_feature, pedal_switch, set_active_fea
 use crate::pedals::{ActiveFeature, ParameterUILocation, decide_trigger_direction};
 use crate::processor_settings::FloatSettingUpdate;
 use crate::{forward_slash_path, unique_time_id};
+use crate::dsp::ConvertSampleDbLinear;
 
 pub const NAM_SAVE_PATH: &str = r"NAM";
 pub const OVERRIDE_DEFAULT_FOLDERS_ENV_VAR: &str = "RSPEDALBOARD_NAM_FOLDER";
@@ -534,8 +535,12 @@ impl PedalTrait for Nam {
             .as_float()
             .unwrap();
 
+
+        let recommended_input_db_adjustment = self.modeler.recommended_input_db_adjustment().expect("Model is loaded");
+        let recommended_input_level_multiplier = f32::db_to_linear(recommended_input_db_adjustment);
+
         buffer.iter_mut().for_each(|sample| {
-            *sample *= gain;
+            *sample *= gain * recommended_input_level_multiplier;
         });
 
         self.dry_buffer.clear();
@@ -544,9 +549,12 @@ impl PedalTrait for Nam {
             tracing::error!("NAM: Failed to process audio: {}", e);
         }
 
+        let recommended_output_db_adjustment = self.modeler.recommended_output_db_adjustment().expect("Model is loaded");
+        let recommended_output_level_multiplier = f32::db_to_linear(recommended_output_db_adjustment);
+
         for (i, sample) in buffer.iter_mut().enumerate() {
             let mixed_sample = (*sample * dry_wet) + (self.dry_buffer[i] * (1.0 - dry_wet));
-            *sample = mixed_sample * level;
+            *sample = mixed_sample * level * recommended_output_level_multiplier;
         }
     }
 
