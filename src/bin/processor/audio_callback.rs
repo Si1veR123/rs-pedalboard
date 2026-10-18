@@ -549,9 +549,9 @@ pub fn create_linked_streams(
                         processing_buffer: Vec::with_capacity(
                             data.len() << settings_clone.upsample_passes,
                         ),
-                        master_in_volume: 1.0,
-                        master_out_volume: 1.0,
-                        pre_mute_volume: 1.0,
+                        master_in_volume_db: 0.0,
+                        master_out_volume_db: 0.0,
+                        pre_mute_volume_db: 0.0,
                         tuner_handle: None,
                         pedal_command_to_client_buffer: Vec::with_capacity(12),
                         settings: settings_clone.clone(),

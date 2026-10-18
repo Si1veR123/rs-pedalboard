@@ -169,12 +169,12 @@ impl PedalboardStageScreen {
 
         let latest_command = self.command_buffer.last().unwrap();
 
-        // Contains an input and output volume float
-        if let Some((input, output)) = latest_command.split_once(' ') {
-            if let Ok(input_volume) = input.parse::<f32>() {
-                if let Ok(output_volume) = output.parse::<f32>() {
-                    self.volume_monitors.0.set_volume(input_volume);
-                    self.volume_monitors.1.set_volume(output_volume);
+        // Contains an input and output volume float in dB
+        if let Some((input_db_str, output_db_str)) = latest_command.split_once(' ') {
+            if let Ok(input_db) = input_db_str.parse::<f32>() {
+                if let Ok(output_db) = output_db_str.parse::<f32>() {
+                    self.volume_monitors.0.set_volume_db(input_db);
+                    self.volume_monitors.1.set_volume_db(output_db);
                     return;
                 }
             }
@@ -184,12 +184,12 @@ impl PedalboardStageScreen {
         tracing::error!("Invalid volume monitor command format: {}", latest_command);
     }
 
-    pub fn set_input_volume_limit(&mut self, limit: f32) {
-        self.volume_monitors.0.set_volume_limit(limit);
+    pub fn set_input_volume_limit_db(&mut self, limit: f32) {
+        self.volume_monitors.0.set_volume_limit_db(limit);
     }
 
-    pub fn set_output_volume_limit(&mut self, limit: f32) {
-        self.volume_monitors.1.set_volume_limit(limit);
+    pub fn set_output_volume_limit_db(&mut self, limit: f32) {
+        self.volume_monitors.1.set_volume_limit_db(limit);
     }
 
     fn save_song_input_window(
@@ -259,8 +259,8 @@ impl Widget for &mut PedalboardStageScreen {
             ui.ctx()
                 .request_repaint_after(rs_pedalboard::DEFAULT_REFRESH_DURATION);
         }
-        self.set_input_volume_limit(client_settings.input_volume);
-        self.set_output_volume_limit(client_settings.output_volume);
+        self.set_input_volume_limit_db(client_settings.input_volume_db);
+        self.set_output_volume_limit_db(client_settings.output_volume_db);
 
         self.update_xrun_from_commands();
         self.update_clipping_from_commands();

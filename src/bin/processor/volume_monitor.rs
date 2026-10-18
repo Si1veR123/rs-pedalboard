@@ -1,3 +1,5 @@
+use rs_pedalboard::dsp::ConvertSampleDbLinear;
+
 pub struct PeakVolumeMonitor {
     peak: f32,
 }
@@ -20,6 +22,11 @@ impl PeakVolumeMonitor {
         let peak = self.peak;
         self.reset();
         peak
+    }
+
+    pub fn take_peak_db(&mut self) -> f32 {
+        let peak = self.take_peak();
+        f32::linear_to_db(peak)
     }
 
     pub fn reset(&mut self) {

@@ -2,7 +2,7 @@ use std::{path::PathBuf, process::Child, time::Instant};
 
 use cpal::{Host, HostId};
 use eframe::egui::{self, Color32, Layout, Response, RichText, Vec2, Widget};
-use rs_pedalboard::processor_settings::ProcessorSettingsSave;
+use rs_pedalboard::{dsp::{MINIMUM_DB, MAXIMUM_DB_INCREASE}, processor_settings::ProcessorSettingsSave};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
@@ -35,9 +35,12 @@ pub struct ClientSettings {
     pub show_volume_monitor: bool,
     pub volume_normalization: VolumeNormalizationMode,
     // Only used if volume_normalization is set to Automatic
-    pub auto_volume_normalization_decay: f32,
-    pub input_volume: f32,
-    pub output_volume: f32,
+    #[serde(alias = "auto_volume_normalization_decay")]
+    pub auto_volume_normalization_decay_db: f32,
+    #[serde(alias = "input_volume")]
+    pub input_volume_db: f32,
+    #[serde(alias = "output_volume")]
+    pub output_volume_db: f32,
     #[serde(default)]
     pub start_on_mute: bool,
     pub show_popups: Option<PopupMessageType>,
@@ -107,9 +110,9 @@ impl Default for ClientSettings {
             kill_processor_on_close: true,
             show_volume_monitor: true,
             volume_normalization: VolumeNormalizationMode::None,
-            auto_volume_normalization_decay: 0.95,
-            input_volume: 1.0,
-            output_volume: 1.0,
+            auto_volume_normalization_decay_db: -0.03, // Applied per second, about 5mins 30s to decay 10dB
+            input_volume_db: 0.0,
+            output_volume_db: 0.0,
             start_on_mute: false,
             show_popups: Some(PopupMessageType::Info),
             nam_folders: vec![],
@@ -620,7 +623,7 @@ impl Widget for &mut SettingsScreen {
                                 });
 
                             if normalization_mode_change {
-                                self.state.set_volume_normalization_processor(client_settings.volume_normalization, client_settings.auto_volume_normalization_decay);
+                                self.state.set_volume_normalization_processor(client_settings.volume_normalization, client_settings.auto_volume_normalization_decay_db);
                             };
                             ui.end_row();
 
@@ -628,34 +631,35 @@ impl Widget for &mut SettingsScreen {
                                 ui.label("Volume Normalization Decay");
                                 if ui.add_sized(
                                     Vec2::new(ui.available_width(), 45.0),
-                                    egui::Slider::new(&mut client_settings.auto_volume_normalization_decay, 0.9..=1.0)
+                                    egui::Slider::new(&mut client_settings.auto_volume_normalization_decay_db, -1.0..=-0.01)
                                         .show_value(true)
                                         .fixed_decimals(3)
-                                ).on_hover_text("The decay of the peak per second. Lower values respond to decreases in volume quicker but cause more overall fluctuations. 1.0 = Manual.").changed() {
-                                    self.state.set_volume_normalization_processor(client_settings.volume_normalization, client_settings.auto_volume_normalization_decay);
+                                ).on_hover_text("The decay of the peak per second. Lower values respond to decreases in volume quicker but cause more overall fluctuations.").changed() {
+                                    self.state.set_volume_normalization_processor(client_settings.volume_normalization, client_settings.auto_volume_normalization_decay_db);
                                 };
                                 ui.end_row();
                             }
 
                             ui.label("Input Volume");
+
                             if ui.add_sized(
                                 Vec2::new(ui.available_width(), 45.0),
-                                egui::Slider::new(&mut client_settings.input_volume, 0.1..=5.0)
+                                egui::Slider::new(&mut client_settings.input_volume_db, MINIMUM_DB..=MAXIMUM_DB_INCREASE)
                                     .show_value(true)
                                     .fixed_decimals(2)
                             ).changed() {
-                                self.state.master_in_processor(client_settings.input_volume);
+                                self.state.master_in_processor(client_settings.input_volume_db);
                             };
                             ui.end_row();
 
                             ui.label("Output Volume");
                             if ui.add_sized(
                                 Vec2::new(ui.available_width(), 45.0),
-                                egui::Slider::new(&mut client_settings.output_volume, 0.01..=1.0)
+                                egui::Slider::new(&mut client_settings.output_volume_db, MINIMUM_DB..=MAXIMUM_DB_INCREASE)
                                     .show_value(true)
                                     .fixed_decimals(2)
                             ).changed() {
-                                self.state.master_out_processor(client_settings.output_volume);
+                                self.state.master_out_processor(client_settings.output_volume_db);
                             };
                             ui.end_row();
 

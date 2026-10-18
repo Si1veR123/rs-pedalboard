@@ -13,7 +13,7 @@ use crate::pedals::ui::{is_function_active_feature, pedal_switch, set_active_fea
 use crate::pedals::{ActiveFeature, ParameterUILocation, decide_trigger_direction};
 use crate::processor_settings::FloatSettingUpdate;
 use crate::{forward_slash_path, unique_time_id};
-use crate::dsp::ConvertSampleDbLinear;
+use crate::dsp::{ConvertSampleDbLinear, MAXIMUM_DB_INCREASE, MINIMUM_DB};
 
 pub const NAM_SAVE_PATH: &str = r"NAM";
 pub const OVERRIDE_DEFAULT_FOLDERS_ENV_VAR: &str = "RSPEDALBOARD_NAM_FOLDER";
@@ -192,10 +192,10 @@ impl Nam {
         parameters.insert(
             "Gain".to_string(),
             PedalParameter {
-                value: PedalParameterValue::Float(1.0),
-                min: Some(PedalParameterValue::Float(0.00)),
-                max: Some(PedalParameterValue::Float(3.0)),
-                step: Some(PedalParameterValue::Float(0.05)),
+                value: PedalParameterValue::Float(0.0),
+                min: Some(PedalParameterValue::Float(MINIMUM_DB)),
+                max: Some(PedalParameterValue::Float(MAXIMUM_DB_INCREASE)),
+                step: None,
             },
         );
 
@@ -212,10 +212,10 @@ impl Nam {
         parameters.insert(
             "Level".to_string(),
             PedalParameter {
-                value: PedalParameterValue::Float(1.0),
-                min: Some(PedalParameterValue::Float(0.0)),
-                max: Some(PedalParameterValue::Float(3.0)),
-                step: Some(PedalParameterValue::Float(0.05)),
+                value: PedalParameterValue::Float(0.0),
+                min: Some(PedalParameterValue::Float(MINIMUM_DB)),
+                max: Some(PedalParameterValue::Float(MAXIMUM_DB_INCREASE)),
+                step: None
             },
         );
 
@@ -513,13 +513,15 @@ impl PedalTrait for Nam {
             return;
         }
 
-        let gain = self
+        let gain_db = self
             .parameters
             .get("Gain")
             .unwrap()
             .value
             .as_float()
             .unwrap();
+        let gain = f32::db_to_linear(gain_db);
+
         let dry_wet = self
             .parameters
             .get("Dry/Wet")
@@ -527,14 +529,15 @@ impl PedalTrait for Nam {
             .value
             .as_float()
             .unwrap();
-        let level = self
+
+        let level_db = self
             .parameters
             .get("Level")
             .unwrap()
             .value
             .as_float()
             .unwrap();
-
+        let level = f32::db_to_linear(level_db);
 
         let recommended_input_db_adjustment = self.modeler.recommended_input_db_adjustment().expect("Model is loaded");
         let recommended_input_level_multiplier = f32::db_to_linear(recommended_input_db_adjustment);
@@ -574,7 +577,7 @@ impl PedalTrait for Nam {
         value: &PedalParameterValue,
     ) -> Option<String> {
         match name {
-            "Gain" | "Level" => Some(format!("{:.2}x", value.as_float().unwrap())),
+            "Gain" | "Level" => Some(format!("{:.2} dB", value.as_float().unwrap())),
             "Dry/Wet" => Some(format!("{:.0}%", value.as_float().unwrap() * 100.0)),
             _ => None,
         }

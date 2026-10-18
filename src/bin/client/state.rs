@@ -9,6 +9,7 @@ use rs_pedalboard::{
         parameters::ParameterUpdate, ui::get_active_feature, GraphicEqSettings, Pedal, PedalTrait, ActiveFeature
     },
     processor_settings::{FloatSettingUpdate, ProcessorSettingsSave},
+    dsp::{ConvertSampleDbLinear, MAXIMUM_DB_INCREASE, MINIMUM_DB},
 };
 use strum::IntoDiscriminant;
 use std::{
@@ -476,20 +477,14 @@ impl State {
         }
     }
 
-    pub fn master_in_processor(&self, volume: f32) {
+    pub fn master_in_processor(&self, volume_db: f32) {
         let mut socket = self.socket.borrow_mut();
-        let rounded_volume = (volume * 100.0).round() / 100.0;
-        socket.send(Command::MasterIn(FloatSettingUpdate::Absolute(
-            rounded_volume,
-        )));
+        socket.send(Command::MasterInDb(volume_db));
     }
 
-    pub fn master_out_processor(&self, volume: f32) {
+    pub fn master_out_processor(&self, volume_db: f32) {
         let mut socket = self.socket.borrow_mut();
-        let rounded_volume = (volume * 100.0).round() / 100.0;
-        socket.send(Command::MasterOut(FloatSettingUpdate::Absolute(
-            rounded_volume,
-        )));
+        socket.send(Command::MasterOutDb(volume_db));
     }
 
     /// Apply an EQ to the input of the whole signal chain, or `None` to remove the EQ that is
@@ -699,9 +694,9 @@ impl State {
                 self.set_volume_monitor_active_processor(client_settings.show_volume_monitor);
                 self.set_volume_normalization_processor(
                     client_settings.volume_normalization,
-                    client_settings.auto_volume_normalization_decay,
+                    client_settings.auto_volume_normalization_decay_db,
                 );
-                self.master_in_processor(client_settings.input_volume);
+                self.master_in_processor(client_settings.input_volume_db);
                 // The processor starts without an EQ, so the EQs the client has selected have to be
                 // sent along with the rest of the settings
                 self.set_input_global_eq_processor(
@@ -842,19 +837,27 @@ impl State {
                 }
                 Command::MasterIn(vol) => {
                     let mut client_settings = self.client_settings.borrow_mut();
-                    let new_vol = vol.apply(client_settings.input_volume, None); // Volume ranges from 0-1 so keep default range
-                    client_settings.input_volume = new_vol;
+                    let new_vol = vol.apply(client_settings.input_volume_db, Some((MINIMUM_DB, MAXIMUM_DB_INCREASE)));
+                    client_settings.input_volume_db = new_vol;
                 }
                 Command::MasterOut(vol) => {
                     let mut client_settings = self.client_settings.borrow_mut();
-                    let new_vol = vol.apply(client_settings.output_volume, None); // Volume ranges from 0-1 so keep default range
-                    client_settings.output_volume = new_vol;
+                    let new_vol = vol.apply(client_settings.output_volume_db, Some((MINIMUM_DB, MAXIMUM_DB_INCREASE)));
+                    client_settings.output_volume_db = new_vol;
+                }
+                Command::MasterInDb(volume_db) => {
+                    let mut client_settings = self.client_settings.borrow_mut();
+                    client_settings.input_volume_db = volume_db;
+                }
+                Command::MasterOutDb(volume_db) => {
+                    let mut client_settings = self.client_settings.borrow_mut();
+                    client_settings.output_volume_db = volume_db;
                 }
                 Command::VolumeNormalization(mode, decay) => {
                     let mut client_settings = self.client_settings.borrow_mut();
                     client_settings.volume_normalization = mode;
                     if let Some(d) = decay {
-                        client_settings.auto_volume_normalization_decay = d;
+                        client_settings.auto_volume_normalization_decay_db = d;
                     }
                 }
                 Command::SetRecording(active) => {

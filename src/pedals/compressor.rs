@@ -1,6 +1,6 @@
 use crate::pedals::ui::pedal_switch;
 use crate::DEFAULT_REFRESH_DURATION;
-use crate::dsp::ConvertSampleDbLinear;
+use crate::dsp::{ConvertSampleDbLinear, MAXIMUM_DB_INCREASE, MINIMUM_DB};
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::time::{Duration, Instant};
@@ -105,9 +105,9 @@ impl Compressor {
         parameters.insert(
             "Level".into(),
             PedalParameter {
-                value: PedalParameterValue::Float(1.0),
-                min: Some(PedalParameterValue::Float(0.0)),
-                max: Some(PedalParameterValue::Float(5.0)),
+                value: PedalParameterValue::Float(0.0),
+                min: Some(PedalParameterValue::Float(MINIMUM_DB)),
+                max: Some(PedalParameterValue::Float(MAXIMUM_DB_INCREASE)),
                 step: None,
             },
         );
@@ -187,7 +187,7 @@ impl PedalTrait for Compressor {
         let threshold_db = self.parameters["Threshold"].value.as_float().unwrap();
         let attack = self.parameters["Attack"].value.as_float().unwrap();
         let release = self.parameters["Release"].value.as_float().unwrap();
-        let level = self.parameters["Level"].value.as_float().unwrap();
+        let level_db = self.parameters["Level"].value.as_float().unwrap();
         let ratio = self.parameters["Ratio"].value.as_float().unwrap();
         let blend = self.parameters["Dry/Wet"].value.as_float().unwrap();
         let soft_knee_db = self.parameters["Soft Knee"].value.as_float().unwrap();
@@ -225,7 +225,7 @@ impl PedalTrait for Compressor {
             let gain_db = out_db - env_db;
             let gain_lin = f32::db_to_linear(gain_db);
 
-            let compressed_sample = *sample * gain_lin * level;
+            let compressed_sample = *sample * gain_lin * f32::db_to_linear(level_db);
 
             // Blend dry + compressed
             *sample = *sample * (1.0 - blend) + compressed_sample * blend;
@@ -257,7 +257,7 @@ impl PedalTrait for Compressor {
             "Threshold" => Some(format!("{:.1} dB", value.as_float().unwrap())),
             "Attack" => Some(format!("{:.0} ms", value.as_float().unwrap())),
             "Release" => Some(format!("{:.0} ms", value.as_float().unwrap())),
-            "Level" => Some(format!("{:.2}x", value.as_float().unwrap())),
+            "Level" => Some(format!("{:.2} dB", value.as_float().unwrap())),
             "Ratio" => Some(format!("{:.1}:1", value.as_float().unwrap())),
             "Soft Knee" => Some(format!("{:.1} dB", value.as_float().unwrap())),
             "Dry/Wet" => Some(format!("{:.0}%", value.as_float().unwrap() * 100.0)),

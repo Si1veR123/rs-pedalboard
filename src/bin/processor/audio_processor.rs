@@ -10,12 +10,7 @@ use std::{
 };
 
 use rs_pedalboard::{
-    dsp::{eq::Equalizer, resampler::Resampler, yin::Yin},
-    pedalboard::Pedalboard,
-    pedalboard_set::PedalboardSet,
-    pedals::{parameters::ParameterUpdate, GraphicEqSettings, Pedal, PedalTrait},
-    processor_settings::FloatSettingUpdate,
-    DEFAULT_VOLUME_MONITOR_UPDATE_RATE,
+    DEFAULT_VOLUME_MONITOR_UPDATE_RATE, dsp::{ConvertSampleDbLinear, MAXIMUM_DB_INCREASE, MINIMUM_DB, eq::Equalizer, resampler::Resampler, yin::Yin}, pedalboard::Pedalboard, pedalboard_set::PedalboardSet, pedals::{GraphicEqSettings, Pedal, PedalTrait, parameters::ParameterUpdate}, processor_settings::FloatSettingUpdate,
 };
 use tracing::trace_span;
 
@@ -32,9 +27,11 @@ pub struct AudioProcessor {
     pub data_buffer: Vec<f32>,
     pub processing_buffer: Vec<f32>,
     pub pedal_command_to_client_buffer: Vec<String>,
-    pub master_in_volume: f32,
-    pub master_out_volume: f32,
-    pub pre_mute_volume: f32,
+
+    pub master_in_volume_db: f32,
+    pub master_out_volume_db: f32,
+    pub pre_mute_volume_db: f32,
+
     pub settings: ProcessorSettings,
     // If tuner is enabled, this will contain the writer to the tuner buffer,
     // a receiver for frequency updates, and a kill flag
@@ -85,9 +82,10 @@ impl AudioProcessor {
             normalizer.process_buffer(&mut self.data_buffer);
         }
 
+        let master_in_volume_linear = f32::db_to_linear(self.master_in_volume_db);
         self.data_buffer
             .iter_mut()
-            .for_each(|sample| *sample *= self.master_in_volume);
+            .for_each(|sample| *sample *= master_in_volume_linear);
 
         // Update input volume monitor
         self.volume_monitor.3.add_samples(&self.data_buffer);
@@ -127,8 +125,6 @@ impl AudioProcessor {
             let span = trace_span!("process_audio", frames = self.processing_buffer.len());
             let enter = span.enter();
 
-            // A global EQ belongs to the signal chain rather than to a pedal, so the input one
-            // shapes everything the pedalboards are given, before they process it
             if let Some(input_eq) = &mut self.global_input_eq {
                 self.processing_buffer
                     .iter_mut()
@@ -147,17 +143,16 @@ impl AudioProcessor {
                     .process_audio(frame, &mut self.pedal_command_to_client_buffer);
             }
 
-            // And the output one shapes everything the pedalboards output, before the output volume
-            // is applied
             if let Some(output_eq) = &mut self.global_output_eq {
                 self.processing_buffer
                     .iter_mut()
                     .for_each(|sample| *sample = output_eq.process(*sample));
             }
 
+            let master_out_volume_linear = f32::db_to_linear(self.master_out_volume_db);
             self.processing_buffer
                 .iter_mut()
-                .for_each(|sample| *sample *= self.master_out_volume);
+                .for_each(|sample| *sample *= master_out_volume_linear);
 
             drop(enter);
         }
@@ -205,24 +200,21 @@ impl AudioProcessor {
             {
                 self.volume_monitor.1 = Instant::now();
 
-                let in_peak = self.volume_monitor.3.take_peak();
-                let out_peak = self.volume_monitor.4.take_peak();
-
-                let in_peak_round = (in_peak * 1000.0).round() / 1000.0;
-                let out_peak_round = (out_peak * 1000.0).round() / 1000.0;
+                let in_peak = self.volume_monitor.3.take_peak_db();
+                let out_peak = self.volume_monitor.4.take_peak_db();
 
                 // Prevent sending multiple consecutive same values
                 let eps = 5e-3;
-                if !((self.volume_monitor.2 .0 - in_peak_round).abs() < eps
-                    && (self.volume_monitor.2 .1 - out_peak_round).abs() < eps)
+                if !((self.volume_monitor.2.0 - in_peak).abs() < eps
+                    && (self.volume_monitor.2.1 - out_peak).abs() < eps)
                 {
-                    let command = format!("volumemonitor {} {}\n", in_peak_round, out_peak_round);
+                    let command = format!("volumemonitor {:.3} {:.3}\n", in_peak, out_peak);
                     if self.command_sender.try_send(command.into()).is_err() {
                         tracing::error!("Failed to send volume monitor command to client");
                     }
                 }
 
-                self.volume_monitor.2 = (in_peak_round, out_peak_round);
+                self.volume_monitor.2 = (in_peak, out_peak);
             }
         }
 
@@ -497,7 +489,7 @@ impl AudioProcessor {
                     .ok_or_else(|| "masterin: Failed to get volume update".to_string())?;
                 let volume_update: FloatSettingUpdate = serde_json::from_str(volume_update_ser)
                     .map_err(|e| format!("masterin: Failed to deserialize volume update: {e}"))?;
-                self.master_in_volume = volume_update.apply(self.master_in_volume, None);
+                self.master_in_volume_db = volume_update.apply(self.master_in_volume_db, Some((MINIMUM_DB, MAXIMUM_DB_INCREASE)));
             }
             "masterout" => {
                 let volume_update_ser = arguments
@@ -505,7 +497,25 @@ impl AudioProcessor {
                     .ok_or_else(|| "masterout: Failed to get volume update".to_string())?;
                 let volume_update: FloatSettingUpdate = serde_json::from_str(volume_update_ser)
                     .map_err(|e| format!("masterout: Failed to deserialize volume update: {e}"))?;
-                self.master_out_volume = volume_update.apply(self.master_out_volume, None);
+                self.master_out_volume_db = volume_update.apply(self.master_out_volume_db, Some((MINIMUM_DB, MAXIMUM_DB_INCREASE)));
+            }
+            "masterindb" => {
+                let volume_db_str = arguments
+                    .next()
+                    .ok_or_else(|| "masterindb: Failed to get volume db".to_string())?;
+                let volume_db = volume_db_str.parse::<f32>().map_err(|e| {
+                    format!("masterindb: Failed to parse volume db: {e}")
+                })?;
+                self.master_in_volume_db = volume_db;
+            }
+            "masteroutdb" => {
+                let volume_db_str = arguments
+                    .next()
+                    .ok_or_else(|| "masteroutdb: Failed to get volume db".to_string())?;
+                let volume_db = volume_db_str.parse::<f32>().map_err(|e| {
+                    format!("masteroutdb: Failed to parse volume db: {e}")
+                })?;
+                self.master_out_volume_db = volume_db;
             }
             "mute" => {
                 let enable_str = arguments
@@ -513,22 +523,22 @@ impl AudioProcessor {
                     .ok_or_else(|| "mute: Failed to get on/off/toggle".to_string())?;
                 match enable_str {
                     "on" => {
-                        if self.master_out_volume != 0.0 {
-                            self.pre_mute_volume = self.master_out_volume;
-                            self.master_out_volume = 0.0;
+                        if self.master_out_volume_db != MINIMUM_DB {
+                            self.pre_mute_volume_db = self.master_out_volume_db;
+                            self.master_out_volume_db = MINIMUM_DB;
                         }
                     }
                     "off" => {
-                        if self.master_out_volume == 0.0 {
-                            self.master_out_volume = self.pre_mute_volume;
+                        if self.master_out_volume_db == MINIMUM_DB {
+                            self.master_out_volume_db = self.pre_mute_volume_db;
                         }
                     }
                     "toggle" => {
-                        if self.master_out_volume == 0.0 {
-                            self.master_out_volume = self.pre_mute_volume;
+                        if self.master_out_volume_db == MINIMUM_DB {
+                            self.master_out_volume_db = self.pre_mute_volume_db;
                         } else {
-                            self.pre_mute_volume = self.master_out_volume;
-                            self.master_out_volume = 0.0;
+                            self.pre_mute_volume_db = self.master_out_volume_db;
+                            self.master_out_volume_db = MINIMUM_DB;
                         }
                     }
                     _ => {

@@ -1,12 +1,12 @@
 use eframe::egui::{Color32, Rect, Response, Sense, Ui, Vec2, Widget};
-use rs_pedalboard::DEFAULT_VOLUME_MONITOR_UPDATE_RATE;
+use rs_pedalboard::{DEFAULT_VOLUME_MONITOR_UPDATE_RATE, dsp::MINIMUM_DB};
 use std::time::{Duration, Instant};
 
 #[derive(Clone, Debug)]
 pub struct VolumeMonitorWidget {
-    current_volume: f32,
-    target_volume: f32,
-    volume_limit: Option<f32>,
+    current_volume_db: f32,
+    target_volume_db: f32,
+    volume_limit_db: Option<f32>,
     smoothing_factor: f32,
     bar_color: Color32,
     clipping: (bool, Instant),
@@ -17,19 +17,19 @@ impl VolumeMonitorWidget {
         let smoothing_factor = Self::compute_smoothing_factor(DEFAULT_VOLUME_MONITOR_UPDATE_RATE);
 
         Self {
-            current_volume: 0.0,
-            target_volume: 0.0,
-            volume_limit: None,
+            current_volume_db: 0.0,
+            target_volume_db: 0.0,
+            volume_limit_db: None,
             smoothing_factor,
             bar_color,
             clipping: (false, Instant::now()),
         }
     }
 
-    pub fn set_volume(&mut self, volume: f32) {
-        self.target_volume = volume.clamp(0.0, 1.0);
+    pub fn set_volume_db(&mut self, volume_db: f32) {
+        self.target_volume_db = volume_db.clamp(MINIMUM_DB, 0.0);
 
-        if volume >= 1.0 {
+        if volume_db >= 0.0 {
             self.clipping.0 = true;
             self.clipping.1 = Instant::now();
         } else if self.clipping.0
@@ -39,8 +39,8 @@ impl VolumeMonitorWidget {
         }
     }
 
-    pub fn set_volume_limit(&mut self, limit: f32) {
-        self.volume_limit = Some(limit.clamp(0.0, 1.0));
+    pub fn set_volume_limit_db(&mut self, limit_db: f32) {
+        self.volume_limit_db = Some(limit_db.clamp(MINIMUM_DB, 0.0));
     }
 
     fn compute_smoothing_factor(update_interval: Duration) -> f32 {
@@ -50,11 +50,11 @@ impl VolumeMonitorWidget {
     }
 
     fn apply_smoothing(&mut self) {
-        self.current_volume += self.smoothing_factor * (self.target_volume - self.current_volume);
+        self.current_volume_db += self.smoothing_factor * (self.target_volume_db - self.current_volume_db);
     }
 
-    fn draw_bar(ui: &mut Ui, rect: Rect, volume: f32, bar_color: Color32, border: Option<f32>) {
-        let volume_height = rect.height() * volume;
+    fn draw_bar(ui: &mut Ui, rect: Rect, volume_fract: f32, bar_color: Color32, border: Option<f32>) {
+        let volume_height = rect.height() * volume_fract;
         let bar_rect = Rect::from_min_max(
             rect.left_bottom() - Vec2::Y * volume_height,
             rect.right_bottom(),
@@ -84,11 +84,13 @@ impl Widget for &mut VolumeMonitorWidget {
         let padded_rect = rect.shrink2(Vec2::new(0.0, vertical_padding));
 
 
-        if let Some(limit) = self.volume_limit {
-            // Dont draw out of bounds or normal (1) volume limit
-            if limit > 0.0 && limit < 1.0 {
+
+        if let Some(limit_db) = self.volume_limit_db {
+            // Dont draw out of bounds or normal volume limit
+            if limit_db < 0.0 && limit_db > MINIMUM_DB {
                 // Draw a gray bar behind the volume bar to indicate the limit
-                VolumeMonitorWidget::draw_bar(ui, padded_rect, limit, Color32::from_gray(100), None);
+                let limit_fract = (limit_db - MINIMUM_DB) / (0.0 - MINIMUM_DB);
+                VolumeMonitorWidget::draw_bar(ui, padded_rect, limit_fract, Color32::from_gray(100), None);
             }
         }
 
@@ -97,7 +99,8 @@ impl Widget for &mut VolumeMonitorWidget {
         } else {
             (self.bar_color, None)
         };
-        VolumeMonitorWidget::draw_bar(ui, padded_rect, self.current_volume, color, border);
+        let volume_fract = (self.current_volume_db - MINIMUM_DB) / (0.0 - MINIMUM_DB);
+        VolumeMonitorWidget::draw_bar(ui, padded_rect, volume_fract, color, border);
 
         response
     }

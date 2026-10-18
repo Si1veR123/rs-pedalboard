@@ -3,7 +3,7 @@ use serde::{ser::SerializeMap, Deserialize, Serialize};
 use std::{collections::HashMap, hash::Hash};
 
 use crate::{pedals::ui::pedal_switch, unique_time_id};
-use crate::dsp::ConvertSampleDbLinear;
+use crate::dsp::{ConvertSampleDbLinear, MINIMUM_DB};
 
 use super::{ui::pedal_knob, PedalParameter, PedalParameterValue, PedalTrait};
 
@@ -55,10 +55,10 @@ impl NoiseGate {
         let mut parameters = HashMap::new();
 
         parameters.insert(
-            "Threshold Db".to_string(),
+            "Threshold dB".to_string(),
             PedalParameter {
                 value: PedalParameterValue::Float(-50.0),
-                min: Some(PedalParameterValue::Float(-70.0)),
+                min: Some(PedalParameterValue::Float(MINIMUM_DB)),
                 max: Some(PedalParameterValue::Float(0.0)),
                 step: None,
             },

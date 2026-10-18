@@ -134,8 +134,12 @@ pub enum Command {
     // pedalboard id, serialized pedal
     AddPedal(u32, String),
     KillProcessor,
+    // Set master in/out via float setting update (0-1) relative to the range MINIMUM_DB to MAXIMUM_DB_INCREASE
     MasterIn(FloatSettingUpdate),
     MasterOut(FloatSettingUpdate),
+    // Set master in/out via absolute dB value
+    MasterInDb(f32),
+    MasterOutDb(f32),
     // Serialized EQ applied to the input of the signal chain, or none for no EQ at all
     SetInputEq(Option<GraphicEqSettings>),
     // Serialized EQ applied to the output of the signal chain, or none for no EQ at all
@@ -489,6 +493,24 @@ async fn client_socket_event_loop(
                             "masterout|{}\n",
                             serde_json::to_string(&value)
                                 .expect("Failed to serialize master out volume update")
+                        );
+                        if socket_send(&mut stream_writer, &message).await {
+                            break;
+                        }
+                    },
+                    Command::MasterInDb(volume_db) => {
+                        let message = format!(
+                            "masterindb|{:.2}\n",
+                            volume_db
+                        );
+                        if socket_send(&mut stream_writer, &message).await {
+                            break;
+                        }
+                    },
+                    Command::MasterOutDb(volume_db) => {
+                        let message = format!(
+                            "masteroutdb|{:.2}\n",
+                            volume_db
                         );
                         if socket_send(&mut stream_writer, &message).await {
                             break;

@@ -3,7 +3,7 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use crate::dsp::impluse_response::IRConvolver;
+use crate::dsp::{impluse_response::IRConvolver, MAXIMUM_DB_INCREASE, MINIMUM_DB, ConvertSampleDbLinear};
 use crate::pedals::ui::{is_function_active_feature, pedal_switch, set_active_feature, sideways_arrow};
 use crate::pedals::{ActiveFeature, ParameterUILocation, decide_trigger_direction};
 use crate::processor_api::load_wav;
@@ -187,9 +187,9 @@ impl ImpulseResponse {
         parameters.insert(
             "Level".to_string(),
             PedalParameter {
-                value: PedalParameterValue::Float(1.0),
-                min: Some(PedalParameterValue::Float(0.0)),
-                max: Some(PedalParameterValue::Float(3.0)),
+                value: PedalParameterValue::Float(0.0),
+                min: Some(PedalParameterValue::Float(MINIMUM_DB)),
+                max: Some(PedalParameterValue::Float(MAXIMUM_DB_INCREASE)),
                 step: None,
             },
         );
@@ -503,13 +503,14 @@ impl PedalTrait for ImpulseResponse {
             .value
             .as_float()
             .unwrap();
-        let level = self
+        let level_db = self
             .parameters
             .get("Level")
             .unwrap()
             .value
             .as_float()
             .unwrap();
+        let level_linear = f32::db_to_linear(level_db);
 
         self.dry_buffer.clear();
         self.dry_buffer.extend_from_slice(buffer);
@@ -517,7 +518,7 @@ impl PedalTrait for ImpulseResponse {
         self.ir.as_mut().unwrap().process(buffer);
 
         for (i, sample) in buffer.iter_mut().enumerate() {
-            *sample = ((*sample * dry_wet) + (self.dry_buffer[i] * (1.0 - dry_wet))) * level;
+            *sample = ((*sample * dry_wet) + (self.dry_buffer[i] * (1.0 - dry_wet))) * level_linear;
         }
     }
 
@@ -533,7 +534,7 @@ impl PedalTrait for ImpulseResponse {
         value: &PedalParameterValue,
     ) -> Option<String> {
         match name {
-            "Level" => Some(format!("{:.2}x", value.as_float().unwrap())),
+            "Level" => Some(format!("{:.2} dB", value.as_float().unwrap())),
             "Dry/Wet" => Some(format!("{:.0}%", value.as_float().unwrap() * 100.0)),
             _ => None,
         }

@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::hash::Hash;
 
 use crate::unique_time_id;
+use crate::dsp::{ConvertSampleDbLinear, MAXIMUM_DB_INCREASE, MINIMUM_DB};
 
 use super::ui::{pedal_knob, pedal_switch};
 use super::PedalParameter;
@@ -32,9 +33,9 @@ impl Volume {
         parameters.insert(
             "Volume".to_string(),
             PedalParameter {
-                value: PedalParameterValue::Float(1.0),
-                min: Some(PedalParameterValue::Float(0.0)),
-                max: Some(PedalParameterValue::Float(5.0)),
+                value: PedalParameterValue::Float(0.0),
+                min: Some(PedalParameterValue::Float(MINIMUM_DB)),
+                max: Some(PedalParameterValue::Float(MAXIMUM_DB_INCREASE)),
                 step: None,
             },
         );
@@ -66,13 +67,14 @@ impl PedalTrait for Volume {
     }
 
     fn process_audio(&mut self, buffer: &mut [f32], _message_buffer: &mut Vec<String>) {
-        let volume = self
+        let volume_db = self
             .parameters
             .get("Volume")
             .unwrap()
             .value
             .as_float()
             .unwrap();
+        let volume = f32::db_to_linear(volume_db);
 
         for sample in buffer.iter_mut() {
             *sample *= volume;
@@ -85,7 +87,7 @@ impl PedalTrait for Volume {
         value: &PedalParameterValue,
     ) -> Option<String> {
         match name {
-            "Volume" => Some(format!("{:.2}x", value.as_float().unwrap())),
+            "Volume" => Some(format!("{:.2} dB", value.as_float().unwrap())),
             _ => None,
         }
     }

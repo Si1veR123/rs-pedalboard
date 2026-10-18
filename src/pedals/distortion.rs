@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 use std::hash::Hash;
 
+use crate::dsp::{MAXIMUM_DB_INCREASE, MINIMUM_DB, ConvertSampleDbLinear};
 use crate::dsp::biquad::BiquadFilter;
 use crate::unique_time_id;
 
@@ -117,9 +118,9 @@ impl Distortion {
         parameters.insert(
             "Level".to_string(),
             PedalParameter {
-                value: PedalParameterValue::Float(1.0),
-                min: Some(PedalParameterValue::Float(0.0)),
-                max: Some(PedalParameterValue::Float(3.0)),
+                value: PedalParameterValue::Float(0.0),
+                min: Some(PedalParameterValue::Float(MINIMUM_DB)),
+                max: Some(PedalParameterValue::Float(MAXIMUM_DB_INCREASE)),
                 step: None,
             },
         );
@@ -555,13 +556,15 @@ impl PedalTrait for Distortion {
             .value
             .as_float()
             .unwrap();
-        let volume = self
+        let level = self
             .get_parameters()
             .get("Level")
             .unwrap()
             .value
             .as_float()
             .unwrap();
+        let level_multiplier = f32::db_to_linear(level);
+        
         let asymmetry = self
             .get_parameters()
             .get("Asymmetry")
@@ -613,7 +616,7 @@ impl PedalTrait for Distortion {
                 x = filtered * makeup;
             }
 
-            x *= volume;
+            x *= level_multiplier;
             *sample = x;
         }
     }
@@ -641,7 +644,7 @@ impl PedalTrait for Distortion {
         match name {
             "Drive" => Some(format!("{:.1}x", value.as_float().unwrap())),
             "Tone" => Some(format!("{:.0}%", value.as_float().unwrap() * 100.0)),
-            "Level" => Some(format!("{:.2}x", value.as_float().unwrap())),
+            "Level" => Some(format!("{:.2} dB", value.as_float().unwrap())),
             "Asymmetry" => Some(format!("{:.0}%", value.as_float().unwrap() * 100.0)),
             _ => None,
         }

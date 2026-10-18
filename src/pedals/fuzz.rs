@@ -1,3 +1,4 @@
+use crate::dsp::{MAXIMUM_DB_INCREASE, MINIMUM_DB, ConvertSampleDbLinear};
 use crate::pedals::ui::pedal_switch;
 use crate::unique_time_id;
 use std::collections::HashMap;
@@ -40,9 +41,9 @@ impl Fuzz {
         parameters.insert(
             "Level".to_string(),
             PedalParameter {
-                value: PedalParameterValue::Float(1.0),
-                min: Some(PedalParameterValue::Float(0.0)),
-                max: Some(PedalParameterValue::Float(3.0)),
+                value: PedalParameterValue::Float(0.0),
+                min: Some(PedalParameterValue::Float(MINIMUM_DB)),
+                max: Some(PedalParameterValue::Float(MAXIMUM_DB_INCREASE)),
                 step: None,
             },
         );
@@ -99,13 +100,15 @@ impl PedalTrait for Fuzz {
             .value
             .as_float()
             .unwrap();
-        let level = self
+        let level_db = self
             .parameters
             .get("Level")
             .unwrap()
             .value
             .as_float()
             .unwrap();
+        let level_linear = f32::db_to_linear(level_db);
+
         let fuzz_type = self.parameters.get("Type").unwrap().value.as_int().unwrap();
         let dry_wet = self
             .parameters
@@ -137,7 +140,7 @@ impl PedalTrait for Fuzz {
                 }
             };
 
-            *sample = ((unmixed_sample * dry_wet) + (*sample * (1.0 - dry_wet))) * level;
+            *sample = ((unmixed_sample * dry_wet) + (*sample * (1.0 - dry_wet))) * level_linear;
         }
     }
 
@@ -148,7 +151,7 @@ impl PedalTrait for Fuzz {
     ) -> Option<String> {
         match name {
             "Gain" => Some(format!("{:.0}x", value.as_float().unwrap())),
-            "Level" => Some(format!("{:.2}x", value.as_float().unwrap())),
+            "Level" => Some(format!("{:.2} dB", value.as_float().unwrap())),
             "Dry/Wet" => Some(format!("{:.0}%", value.as_float().unwrap() * 100.0)),
             _ => None,
         }
