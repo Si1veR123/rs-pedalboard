@@ -151,7 +151,7 @@ impl PedalTrait for NoiseGate {
             return;
         }
 
-        let threshold_db = self.parameters["Threshold Db"].value.as_float().unwrap();
+        let threshold_db = self.parameters["Threshold dB"].value.as_float().unwrap();
         let reduction_ratio = self.parameters["Reduction"].value.as_float().unwrap();
         let attack_ms = self.parameters["Attack"].value.as_float().unwrap();
         let release_ms = self.parameters["Release"].value.as_float().unwrap();
@@ -204,7 +204,7 @@ impl PedalTrait for NoiseGate {
         value: &PedalParameterValue,
     ) -> Option<String> {
         match name {
-            "Threshold Db" => Some(format!("{:.1} dB", value.as_float().unwrap())),
+            "Threshold dB" => Some(format!("{:.1} dB", value.as_float().unwrap())),
             "Reduction" => Some(format!("{:.1}x", value.as_float().unwrap())),
             "Attack" => Some(format!("{:.0} ms", value.as_float().unwrap())),
             "Release" => Some(format!("{:.0} ms", value.as_float().unwrap())),
@@ -230,17 +230,17 @@ impl PedalTrait for NoiseGate {
 
         let mut to_change = None;
 
-        let threshold_db_param = self.get_parameters().get("Threshold Db").unwrap();
+        let threshold_db_param = self.get_parameters().get("Threshold dB").unwrap();
         if let Some(value) = pedal_knob(
             ui,
             "",
-            "Threshold Db",
+            "Threshold dB",
             threshold_db_param,
             egui::Vec2::new(0.08, 0.03),
             0.35,
             self.id,
         ) {
-            to_change = Some(("Threshold Db".to_string(), value));
+            to_change = Some(("Threshold dB".to_string(), value));
         }
 
         let reduction_param = self.get_parameters().get("Reduction").unwrap();
