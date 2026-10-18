@@ -170,7 +170,7 @@ impl PedalTrait for NoiseGate {
 
             // Estimate signal power (RMS-like)
             level = alpha * level + (1.0 - alpha) * (x * x);
-            let power_db = f32::linear_to_db(level);
+            let power_db = 10.0 * level.max(1e-12).log10();
 
             // Compute gain target based on threshold and ratio
             let mut gain_target = 1.0;
