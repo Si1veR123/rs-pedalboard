@@ -697,6 +697,7 @@ impl State {
                     client_settings.auto_volume_normalization_decay_db,
                 );
                 self.master_in_processor(client_settings.input_volume_db);
+                self.master_out_processor(client_settings.output_volume_db);
                 // The processor starts without an EQ, so the EQs the client has selected have to be
                 // sent along with the rest of the settings
                 self.set_input_global_eq_processor(
