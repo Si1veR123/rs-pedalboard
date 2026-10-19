@@ -163,9 +163,15 @@ impl Delay {
             .map(|p| p.value.as_float().expect("Decay parameter should be float"))
             .unwrap_or(10.0);
 
+        let delay_ms = self
+            .parameters
+            .get("Delay")
+            .map(|p| p.value.as_float().expect("Delay parameter should be float"))
+            .unwrap_or(430.0);
+
         let decay_linear_per_sec = f32::db_to_linear(-decay_db_per_sec);
-        let decay_linear_per_sample = decay_linear_per_sec.powf(1.0 / self.sample_rate.unwrap());
-        self.delay_multiplier = Some(decay_linear_per_sample);
+        let delay_seconds = delay_ms / 1000.0;
+        self.delay_multiplier = Some(decay_linear_per_sec.powf(delay_seconds));
     }
 }
 
@@ -182,7 +188,6 @@ impl PedalTrait for Delay {
         self.sample_rate = Some(sample_rate as f32);
         self.set_warmth_eq();
         self.set_decay_multiplier();
-        
         let delay_ms = self
             .parameters
             .get("Delay")
@@ -276,6 +281,7 @@ impl PedalTrait for Delay {
                                 }
                                 delay_buffer.truncate(delay_samples);
                             }
+                            self.set_decay_multiplier();
                         }
                     }
                 } else if name == "Warmth" {
