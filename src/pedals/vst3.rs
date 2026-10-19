@@ -297,7 +297,15 @@ impl Vst3 {
         let mut id_hasher = DefaultHasher::new();
         id.hash(&mut id_hasher);
         let roots = match Self::get_save_directory() {
-            Some(main_save_dir) => vec![DirectoryNode::from_path(&main_save_dir)],
+            Some(main_save_dir) => {
+                let root = DirectoryNode::try_from_path(&main_save_dir);
+                if let Some(node) = root {
+                    vec![node]
+                } else {
+                    tracing::warn!("Failed to create directory node from main save directory");
+                    vec![]
+                }
+            },
             None => {
                 tracing::warn!("Failed to get main save directory");
                 vec![]

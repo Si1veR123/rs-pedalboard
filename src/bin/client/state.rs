@@ -565,25 +565,25 @@ impl State {
         let nam_root_nodes: Vec<_> = client_settings
             .nam_folders
             .iter()
-            .map(|p| egui_directory_combobox::DirectoryNode::from_path(p))
+            .filter_map(|p| egui_directory_combobox::DirectoryNode::try_from_path(p))
             .collect();
 
         let ir_root_nodes: Vec<_> = client_settings
             .ir_folders
             .iter()
-            .map(|p| egui_directory_combobox::DirectoryNode::from_path(p))
+            .filter_map(|p| egui_directory_combobox::DirectoryNode::try_from_path(p))
             .collect();
 
         let vst2_root_nodes: Vec<_> = client_settings
             .vst2_folders
             .iter()
-            .map(|p| egui_directory_combobox::DirectoryNode::from_path(p))
+            .filter_map(|p| egui_directory_combobox::DirectoryNode::try_from_path(p))
             .collect();
 
         let vst3_root_nodes: Vec<_> = client_settings
             .vst3_folders
             .iter()
-            .map(|p| egui_directory_combobox::DirectoryNode::from_path(p))
+            .filter_map(|p| egui_directory_combobox::DirectoryNode::try_from_path(p))
             .collect();
 
         egui_ctx.memory_mut(|writer| {

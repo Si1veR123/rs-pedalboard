@@ -794,8 +794,8 @@ impl Widget for &mut SettingsScreen {
                         "nam_folders",
                         &mut self.nam_file_dialog
                     ) {
-                        let nam_root_nodes: Vec<_> = client_settings.nam_folders.iter().map(|p| {
-                            egui_directory_combobox::DirectoryNode::from_path(p)
+                        let nam_root_nodes: Vec<_> = client_settings.nam_folders.iter().filter_map(|p| {
+                            egui_directory_combobox::DirectoryNode::try_from_path(p)
                         }).collect();
 
                         ui.ctx().memory_mut(|writer| {
@@ -817,8 +817,8 @@ impl Widget for &mut SettingsScreen {
                         "ir_folders",
                         &mut self.ir_file_dialog
                     ) {
-                        let ir_root_nodes: Vec<_> = client_settings.ir_folders.iter().map(|p| {
-                            egui_directory_combobox::DirectoryNode::from_path(p)
+                        let ir_root_nodes: Vec<_> = client_settings.ir_folders.iter().filter_map(|p| {
+                            egui_directory_combobox::DirectoryNode::try_from_path(p)
                         }).collect();
 
                         ui.ctx().memory_mut(|writer| {
@@ -840,8 +840,8 @@ impl Widget for &mut SettingsScreen {
                         "vst2_folders",
                         &mut self.vst2_file_dialog
                     ) {
-                        let vst2_root_nodes: Vec<_> = client_settings.vst2_folders.iter().map(|p| {
-                            egui_directory_combobox::DirectoryNode::from_path(p)
+                        let vst2_root_nodes: Vec<_> = client_settings.vst2_folders.iter().filter_map(|p| {
+                            egui_directory_combobox::DirectoryNode::try_from_path(p)
                         }).collect();
 
                         ui.ctx().memory_mut(|writer| {
