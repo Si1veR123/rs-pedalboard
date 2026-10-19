@@ -842,7 +842,7 @@ impl State {
                 }
                 Command::MasterOut(vol) => {
                     let mut client_settings = self.client_settings.borrow_mut();
-                    let new_vol = vol.apply(client_settings.output_volume_db, Some((MINIMUM_DB, MAXIMUM_DB_INCREASE)));
+                    let new_vol = vol.apply(client_settings.output_volume_db, Some((MINIMUM_DB, 0.0)));
                     client_settings.output_volume_db = new_vol;
                 }
                 Command::MasterInDb(volume_db) => {
