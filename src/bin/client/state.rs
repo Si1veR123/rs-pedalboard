@@ -935,7 +935,7 @@ impl State {
                     let (mut path, update) = match command {
                         Command::ChangeActiveFeature(update) => {
                             // Get the active parameter path
-                            let (path, update) = match get_active_feature(ctx) {
+                            match get_active_feature(ctx) {
                                 Some(feature) => {
                                     match feature {
                                         ActiveFeature::Parameter { parameter_path } => (parameter_path, update),
@@ -984,18 +984,7 @@ impl State {
                                     }
                                 },
                                 None => continue,
-                            };
-
-                            let active_pedalboard_id = self.midi_state
-                                .borrow()
-                                .active_pedalboard_id
-                                .load(std::sync::atomic::Ordering::Relaxed);
-                            if path.pedalboard_id != Some(active_pedalboard_id) {
-                                // The active feature is not on the active pedalboard, so don't apply the update
-                                continue;
                             }
-
-                            (path, update)
                         }
                         Command::SensibleMidiParameterUpdate(index, update) => {
                             // Get a path to a sensible parameter at this index
@@ -1023,6 +1012,15 @@ impl State {
 
                         if !path.resolve_pedalboard_id(&stage_pedalboards) {
                             tracing::warn!("Unable to resolve pedalboard ID");
+                            continue;
+                        }
+
+                        // If the active feature is not on the active pedalboard, don't apply the update
+                        let active_pedalboard_id = self.midi_state
+                            .borrow()
+                            .active_pedalboard_id
+                            .load(std::sync::atomic::Ordering::Relaxed);
+                        if path.pedalboard_id != Some(active_pedalboard_id) {
                             continue;
                         }
 

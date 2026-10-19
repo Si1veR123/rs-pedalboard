@@ -10,7 +10,7 @@ pub mod variable_delay;
 pub mod variable_delay_phaser;
 pub mod yin;
 
-pub const MINIMUM_DB: f32 = -70.0;
+pub const MINIMUM_DB: f32 = -50.0;
 pub const MAXIMUM_DB_INCREASE: f32 = 40.0; // Used by pedals and settings to limit the maximum volume increase in dB
 
 pub fn hann_window(size: usize) -> Vec<f32> {

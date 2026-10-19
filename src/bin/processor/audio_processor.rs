@@ -497,7 +497,7 @@ impl AudioProcessor {
                     .ok_or_else(|| "masterout: Failed to get volume update".to_string())?;
                 let volume_update: FloatSettingUpdate = serde_json::from_str(volume_update_ser)
                     .map_err(|e| format!("masterout: Failed to deserialize volume update: {e}"))?;
-                self.master_out_volume_db = volume_update.apply(self.master_out_volume_db, Some((MINIMUM_DB, MAXIMUM_DB_INCREASE)));
+                self.master_out_volume_db = volume_update.apply(self.master_out_volume_db, Some((MINIMUM_DB, 0.0)));
             }
             "masterindb" => {
                 let volume_db_str = arguments
@@ -506,7 +506,7 @@ impl AudioProcessor {
                 let volume_db = volume_db_str.parse::<f32>().map_err(|e| {
                     format!("masterindb: Failed to parse volume db: {e}")
                 })?;
-                self.master_in_volume_db = volume_db;
+                self.master_in_volume_db = volume_db.clamp(MINIMUM_DB, MAXIMUM_DB_INCREASE);
             }
             "masteroutdb" => {
                 let volume_db_str = arguments
@@ -515,7 +515,7 @@ impl AudioProcessor {
                 let volume_db = volume_db_str.parse::<f32>().map_err(|e| {
                     format!("masteroutdb: Failed to parse volume db: {e}")
                 })?;
-                self.master_out_volume_db = volume_db;
+                self.master_out_volume_db = volume_db.clamp(MINIMUM_DB, 0.0);
             }
             "mute" => {
                 let enable_str = arguments

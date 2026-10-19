@@ -655,7 +655,7 @@ impl Widget for &mut SettingsScreen {
                             ui.label("Output Volume");
                             if ui.add_sized(
                                 Vec2::new(ui.available_width(), 45.0),
-                                egui::Slider::new(&mut client_settings.output_volume_db, MINIMUM_DB..=MAXIMUM_DB_INCREASE)
+                                egui::Slider::new(&mut client_settings.output_volume_db, MINIMUM_DB..=0.0)
                                     .show_value(true)
                                     .fixed_decimals(2)
                             ).changed() {
