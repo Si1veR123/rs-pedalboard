@@ -31,7 +31,9 @@ fn create_host() -> Arc<Mutex<PedalboardVst2Host>> {
     Arc::new(Mutex::new(PedalboardVst2Host))
 }
 
-static USE_VST2_GLOBAL_HOST: AtomicBool = AtomicBool::new(true);
+// The vst crate uses a process-global pointer while a plugin is being loaded.
+// Keep each load on its own host unless callers explicitly opt into sharing.
+static USE_VST2_GLOBAL_HOST: AtomicBool = AtomicBool::new(false);
 
 pub fn set_use_vst2_global_host(use_global_host: bool) {
     USE_VST2_GLOBAL_HOST.store(use_global_host, Ordering::SeqCst);

@@ -411,16 +411,28 @@ impl Vst3Instance {
             .map(|&count| count.max(0) as usize)
             .sum();
 
-        let (in_buffers, in_pointers) = self.allocate_direction(
+        let (in_buffers, in_pointers) = match self.allocate_direction(
             BusDirections_::kInput as i32,
             &input_channel_counts,
             buffer_size,
-        );
-        let (out_buffers, out_pointers) = self.allocate_direction(
+        ) {
+            Ok(buffers) => buffers,
+            Err(()) => {
+                self.clear_configuration();
+                return;
+            }
+        };
+        let (out_buffers, out_pointers) = match self.allocate_direction(
             BusDirections_::kOutput as i32,
             &output_channel_counts,
             buffer_size,
-        );
+        ) {
+            Ok(buffers) => buffers,
+            Err(()) => {
+                self.clear_configuration();
+                return;
+            }
+        };
 
         self.in_bus_buffers = in_buffers;
         self.in_bus_ptrs = in_pointers;
@@ -437,16 +449,35 @@ impl Vst3Instance {
         // SAFETY: `setup` is valid for the duration of the call.
         if unsafe { self.processor.setupProcessing(&mut setup) } != kResultOk {
             tracing::error!("Failed to set up VST3 processing");
-            self.buffer_size = 0;
-            self.sample_rate = 0.0;
+            self.clear_configuration();
             return;
         }
 
-        // SAFETY: The component and processor are now fully configured.
-        unsafe {
-            self.component.setActive(1);
-            self.processor.setProcessing(1);
+        // VST3 requires the component to be active before processing is enabled.
+        // Check each result because several Linux plugins reject an invalid
+        // activation sequence instead of tolerating it.
+        if unsafe { self.component.setActive(1) } != kResultOk {
+            tracing::error!("Failed to activate VST3 component");
+            self.clear_configuration();
+            return;
         }
+        if unsafe { self.processor.setProcessing(1) } != kResultOk {
+            tracing::error!("Failed to enable VST3 processing");
+            unsafe {
+                self.component.setActive(0);
+            }
+            self.clear_configuration();
+        }
+    }
+
+    fn clear_configuration(&mut self) {
+        self.buffer_size = 0;
+        self.sample_rate = 0.0;
+        self.in_bus_buffers.clear();
+        self.in_bus_ptrs.clear();
+        self.out_bus_buffers.clear();
+        self.out_bus_ptrs.clear();
+        self.output_channel_count = 0;
     }
 
     /// Returns the channel count of each audio bus in the given direction.
@@ -481,19 +512,31 @@ impl Vst3Instance {
         direction: i32,
         channel_counts: &[i32],
         buffer_size: usize,
-    ) -> (Vec<Vec<Box<[f32]>>>, Vec<Vec<*mut f32>>) {
+    ) -> Result<(Vec<Vec<Box<[f32]>>>, Vec<Vec<*mut f32>>), ()> {
         let mut buffers = Vec::with_capacity(channel_counts.len());
         let mut pointers = Vec::with_capacity(channel_counts.len());
 
         for (bus_index, &channel_count) in channel_counts.iter().enumerate() {
             // SAFETY: `bus_index` refers to a bus reported by the component.
-            unsafe {
+            if unsafe {
                 self.component.activateBus(
                     MediaTypes_::kAudio as i32,
                     direction,
                     bus_index as i32,
                     1,
+                )
+            } != kResultOk
+            {
+                tracing::error!(
+                    "Failed to activate VST3 {} audio bus {}",
+                    if direction == BusDirections_::kInput as i32 {
+                        "input"
+                    } else {
+                        "output"
+                    },
+                    bus_index
                 );
+                return Err(());
             }
 
             let channel_count = channel_count.max(1) as usize;
@@ -507,7 +550,7 @@ impl Vst3Instance {
             pointers.push(bus_pointers);
         }
 
-        (buffers, pointers)
+        Ok((buffers, pointers))
     }
 
     /// Processes a mono buffer through the plugin.
