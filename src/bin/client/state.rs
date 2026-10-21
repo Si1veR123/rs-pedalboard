@@ -457,6 +457,16 @@ impl State {
         let mut socket = self.socket.borrow_mut();
         let rounded_volume = (volume * 100.0).round() / 100.0;
         socket.send(Command::Metronome(active, bpm, rounded_volume));
+
+        popup!(
+            self.egui_ctx.clone(),
+            if active {
+                format!("Metronome activated at {} BPM", bpm)
+            } else {
+                "Metronome deactivated".to_string()
+            },
+            Some("metronome-status-change")
+        );
     }
 
     /// Set whether the volume monitor is active on the processor.
@@ -499,11 +509,23 @@ impl State {
     pub fn master_in_processor(&self, volume_db: f32) {
         let mut socket = self.socket.borrow_mut();
         socket.send(Command::MasterInDb(volume_db));
+
+        popup!(
+            self.egui_ctx.clone(),
+            format!("Master In Volume set to {:.2} dB", volume_db),
+            Some("master-in-volume-change")
+        );
     }
 
     pub fn master_out_processor(&self, volume_db: f32) {
         let mut socket = self.socket.borrow_mut();
         socket.send(Command::MasterOutDb(volume_db));
+
+        popup!(
+            self.egui_ctx.clone(),
+            format!("Master Out Volume set to {:.2} dB", volume_db),
+            Some("master-out-volume-change")
+        );
     }
 
     /// Apply an EQ to the input of the whole signal chain, or `None` to remove the EQ that is
@@ -549,6 +571,15 @@ impl State {
         } else {
             self.recording_time.set(None);
         }
+        popup!(
+            self.egui_ctx.clone(),
+            if active {
+                "Recording started"
+            } else {
+                "Recording stopped"
+            },
+            None
+        );
     }
 
     pub fn set_recorder_clean(&self, clean: bool) {
@@ -565,6 +596,16 @@ impl State {
         self.mute_status.set(mute_status);
         let mut socket = self.socket.borrow_mut();
         socket.send(Command::SetMuteStatus(mute_status));
+
+        popup!(
+            self.egui_ctx.clone(),
+            if mute_status.is_muted() {
+                "Muted"
+            } else {
+                "Unmuted"
+            },
+            Some("mute-status-change")
+        );
     }
 
     pub fn load_state(egui_ctx: eframe::egui::Context, force_pull: bool) -> Self {
@@ -837,6 +878,11 @@ impl State {
                     let active_index = pedalboard_set.active_pedalboard;
                     drop(pedalboard_set);
                     self.remove_pedalboard_from_stage(active_index, true);
+                    popup!(
+                        self.egui_ctx.clone(),
+                        "Active pedalboard deleted",
+                        None
+                    );
                 }
                 Command::AddPedalboard(pedalboard_json) => {
                     match serde_json::from_str::<Pedalboard>(&pedalboard_json) {
@@ -953,7 +999,13 @@ impl State {
                         tracing::warn!("Unable to resolve pedalboard ID");
                     }
                 }
-                Command::VolumeNormalizationReset => {}
+                Command::VolumeNormalizationReset => {
+                    popup!(
+                        self.egui_ctx.clone(),
+                        "Volume normalization peak reset",
+                        Some("volume-normalization-reset")
+                    );
+                }
                 Command::SetMuteStatus(mute) => {
                     self.mute_status.set(mute);
                 }

@@ -213,12 +213,6 @@ impl MidiState {
                             Ok(()) => {
                                 if let Some(handle) = &socket_handle {
                                     handle.send_command(command);
-
-                                    if function.should_show_popup() {
-                                        // Do the popup here instead of in state, so that it is only shown when triggered by MIDI
-                                        // A popup shouldnt be shown when the user clicks a button in the UI
-                                        popup!(egui_ctx.clone(), format!("{}: {}", function, change), Some(&format!("midi-{}", function)));
-                                    }
                                 }
                             },
                             Err(e) => {

@@ -83,28 +83,4 @@ impl GlobalMidiFunction {
             }),
         }
     }
-
-    pub fn should_show_popup(&self) -> bool {
-        match self {
-            GlobalMidiFunction::ToggleMute => true,
-            GlobalMidiFunction::SetMasterIn => true,
-            GlobalMidiFunction::SetMasterOut => true,
-            GlobalMidiFunction::NextPedalboard => false,
-            GlobalMidiFunction::PrevPedalboard => false,
-            GlobalMidiFunction::ToggleRecording => true,
-            GlobalMidiFunction::ToggleMetronome => true,
-            GlobalMidiFunction::DeleteActivePedalboard => true,
-            GlobalMidiFunction::StageView => false,
-            GlobalMidiFunction::LibraryView => false,
-            GlobalMidiFunction::UtilitiesView => false,
-            GlobalMidiFunction::SongsView => false,
-            GlobalMidiFunction::SettingsView => false,
-            GlobalMidiFunction::ActiveFeature => false,
-            GlobalMidiFunction::ResetVolumeNormalization => true,
-            GlobalMidiFunction::NextInputEQ => false,
-            GlobalMidiFunction::NextOutputEQ => false,
-            GlobalMidiFunction::PrevInputEQ => false,
-            GlobalMidiFunction::PrevOutputEQ => false,
-        }
-    }
 }
