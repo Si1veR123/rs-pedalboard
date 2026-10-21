@@ -2,13 +2,13 @@ use std::{path::PathBuf, process::Child, time::Instant};
 
 use cpal::{Host, HostId};
 use eframe::egui::{self, Color32, Layout, Response, RichText, Vec2, Widget};
-use rs_pedalboard::{dsp::{MINIMUM_DB, MAXIMUM_DB_INCREASE}, processor_settings::ProcessorSettingsSave};
+use rs_pedalboard::{dsp::{MINIMUM_DB, MAXIMUM_DB_INCREASE}, processor_settings::ProcessorSettingsSave, MuteStatus};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
 use crate::{
-    audio_processor_handler::{StartProcessorResult, start_processor_process}, popup_message::{PopupMessageType, popup},
+    Screen, audio_processor_handler::{StartProcessorResult, start_processor_process}, popup_message::{PopupMessageType, popup}
 };
 use crate::state::State;
 use rs_pedalboard::{
@@ -43,6 +43,8 @@ pub struct ClientSettings {
     pub output_volume_db: f32,
     #[serde(default)]
     pub start_on_mute: bool,
+    #[serde(default)]
+    pub mute_in_tuner: bool,
     pub show_popups: Option<PopupMessageType>,
     pub nam_folders: Vec<PathBuf>,
     pub ir_folders: Vec<PathBuf>,
@@ -114,6 +116,7 @@ impl Default for ClientSettings {
             input_volume_db: 0.0,
             output_volume_db: 0.0,
             start_on_mute: false,
+            mute_in_tuner: false,
             show_popups: Some(PopupMessageType::Info),
             nam_folders: vec![],
             ir_folders: vec![],
@@ -719,6 +722,29 @@ impl Widget for &mut SettingsScreen {
 
                             ui.label("Start on Mute");
                             ui.checkbox(&mut client_settings.start_on_mute, "").on_hover_text("Start the processor muted.");
+                            ui.end_row();
+
+                            ui.label("Mute in Tuner");
+                            if ui.checkbox(&mut client_settings.mute_in_tuner, "").on_hover_text("Mute the output when the tuner is open.").changed() {
+                                if self.state.selected_screen.get() == Screen::Utilities {
+                                    let current_mute_status = self.state.mute_status.get();
+
+                                    if client_settings.mute_in_tuner && !current_mute_status.is_muted_tuner {
+                                        // Tuner is open, we are currently unmuted in tuner, but want to mute in tuner
+                                        self.state.set_mute(MuteStatus {
+                                            is_muted: current_mute_status.is_muted,
+                                            is_muted_tuner: true,
+                                        });
+                                    } else if !client_settings.mute_in_tuner && current_mute_status.is_muted_tuner {
+                                        // Tuner is open, we are currently muted because of tuner, but want to unmute in tuner
+                                        self.state.set_mute(MuteStatus {
+                                            is_muted: current_mute_status.is_muted,
+                                            is_muted_tuner: false,
+                                        });
+                                    }
+                                    
+                                }
+                            };
                             ui.end_row();
                         });
 

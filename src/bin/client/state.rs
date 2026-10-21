@@ -4,6 +4,7 @@ use crate::{
 use crossbeam::channel::Receiver;
 use eframe::egui;
 use rs_pedalboard::{
+    MuteStatus,
     pedalboard::{ParameterPath, Pedalboard},
     pedals::{
         parameters::ParameterUpdate, ui::get_active_feature, GraphicEqSettings, Pedal, PedalTrait, ActiveFeature
@@ -40,6 +41,8 @@ pub struct State {
     pub selected_screen: Cell<Screen>,
 
     pub egui_ctx: egui::Context,
+
+    pub mute_status: Cell<MuteStatus>,
 }
 
 impl State {
@@ -419,12 +422,28 @@ impl State {
 
     /// Set whether the tuner is active.
     ///
-    /// Requires a lock on socket.
+    /// Requires a lock on socket and client settings.
     pub fn set_tuner_active(&self, active: bool) {
         self.tuner_active.set(active);
 
         let mut socket = self.socket.borrow_mut();
         socket.send(Command::Tuner(active));
+        drop(socket);
+
+        let client_settings = self.client_settings.borrow();
+
+        let current_mute_status = self.mute_status.get();
+        if client_settings.mute_in_tuner {
+            self.set_mute(MuteStatus {
+                is_muted: current_mute_status.is_muted,
+                is_muted_tuner: active,
+            });
+        } else if !client_settings.mute_in_tuner {
+            self.set_mute(MuteStatus {
+                is_muted: current_mute_status.is_muted,
+                is_muted_tuner: false,
+            });
+        }
     }
 
     /// Set the metronome settings.
@@ -538,9 +557,14 @@ impl State {
         self.recording_save_clean.set(clean);
     }
 
-    pub fn set_mute(&self, mute: bool) {
+    pub fn set_mute(&self, mute_status: MuteStatus) {
+        if mute_status == self.mute_status.get() {
+            return;
+        }
+
+        self.mute_status.set(mute_status);
         let mut socket = self.socket.borrow_mut();
-        socket.send(Command::SetMute(mute));
+        socket.send(Command::SetMuteStatus(mute_status));
     }
 
     pub fn load_state(egui_ctx: eframe::egui::Context, force_pull: bool) -> Self {
@@ -648,7 +672,8 @@ impl State {
             tuner_active: Cell::new(false),
             prev_selected_screen: Cell::new(None),
             selected_screen: Cell::new(Screen::Stage),
-            egui_ctx
+            egui_ctx,
+            mute_status: Cell::new(MuteStatus::new()),
         }
     }
 
@@ -688,7 +713,10 @@ impl State {
 
                 let client_settings = self.client_settings.borrow();
                 if client_settings.start_on_mute {
-                    self.set_mute(true);
+                    self.set_mute(MuteStatus {
+                        is_muted: true,
+                        is_muted_tuner: self.tuner_active.get() && client_settings.mute_in_tuner,
+                    });
                 }
 
                 self.set_volume_monitor_active_processor(client_settings.show_volume_monitor);
@@ -926,11 +954,11 @@ impl State {
                     }
                 }
                 Command::VolumeNormalizationReset => {}
-                Command::SetMute(mute) => {
-                    tracing::info!("Set mute to {mute}")
+                Command::SetMuteStatus(mute) => {
+                    self.mute_status.set(mute);
                 }
                 Command::ToggleMute => {
-                    tracing::info!("Toggled mute")
+                    self.mute_status.set(self.mute_status.get().toggled());
                 }
                 Command::ChangeActiveFeature(_) | Command::SensibleMidiParameterUpdate(_, _) => {
                     let (mut path, update) = match command {

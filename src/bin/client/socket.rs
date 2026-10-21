@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use futures::{pin_mut, select, FutureExt};
 use ringbuf::traits::{Consumer, Split};
+use rs_pedalboard::MuteStatus;
 use rs_pedalboard::pedals::parameters::ParameterUpdate;
 use rs_pedalboard::pedals::GraphicEqSettings;
 use rs_pedalboard::processor_settings::FloatSettingUpdate;
@@ -162,7 +163,7 @@ pub enum Command {
     NextPedalboard,
     PrevPedalboard,
     RequestSampleRate,
-    SetMute(bool),
+    SetMuteStatus(MuteStatus),
     ToggleMute,
 
     SubscribeToResponses(Sender<String>),
@@ -635,14 +636,14 @@ async fn client_socket_event_loop(
                             break;
                         }
                     },
-                    Command::SetMute(mute) => {
-                        let message = format!("mute|{}\n", if mute { "on" } else { "off" });
+                    Command::SetMuteStatus(mute) => {
+                        let message = format!("mutestatus|{}\n", serde_json::to_string(&mute).expect("Failed to serialize MuteStatus"));
                         if socket_send(&mut stream_writer, &message).await {
                             break;
                         }
                     },
                     Command::ToggleMute => {
-                        let message = "mute|toggle\n";
+                        let message = "mutetoggle\n";
                         if socket_send(&mut stream_writer, message).await {
                             break;
                         }

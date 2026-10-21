@@ -92,3 +92,33 @@ pub fn init_tracing(file_path: &str) {
         .with(file_layer)
         .init();
 }
+
+use serde::{Serialize, Deserialize};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// By storing both whether the user has muted and whether we are muted due to tuner
+/// the previous mute state can be restored when the tuner is deactivated
+pub struct MuteStatus {
+    pub is_muted: bool,
+    pub is_muted_tuner: bool, // muted because tuner is active
+}
+
+impl MuteStatus {
+    pub fn new() -> Self {
+        Self {
+            is_muted: false,
+            is_muted_tuner: false,
+        }
+    }
+
+    pub fn is_muted(&self) -> bool {
+        self.is_muted || self.is_muted_tuner
+    }
+
+    pub fn toggled(&self) -> Self {
+        Self {
+            is_muted: !self.is_muted,
+            is_muted_tuner: self.is_muted_tuner,
+        }
+    }
+}

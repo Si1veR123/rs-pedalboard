@@ -10,12 +10,17 @@ use std::{
 };
 
 use rs_pedalboard::{
-    DEFAULT_VOLUME_MONITOR_UPDATE_RATE, dsp::{ConvertSampleDbLinear, MAXIMUM_DB_INCREASE, MINIMUM_DB, eq::Equalizer, resampler::Resampler, yin::Yin}, pedalboard::Pedalboard, pedalboard_set::PedalboardSet, pedals::{GraphicEqSettings, Pedal, PedalTrait, parameters::ParameterUpdate}, processor_settings::FloatSettingUpdate,
+    DEFAULT_VOLUME_MONITOR_UPDATE_RATE,
+    dsp::{ConvertSampleDbLinear, MAXIMUM_DB_INCREASE, MINIMUM_DB, eq::Equalizer, resampler::Resampler, yin::Yin},
+    pedalboard::Pedalboard,
+    pedalboard_set::PedalboardSet,
+    pedals::{GraphicEqSettings, Pedal, PedalTrait, parameters::ParameterUpdate}, processor_settings::FloatSettingUpdate,
+    MuteStatus
 };
 
 use crate::{
     metronome_player::MetronomePlayer, recording::RecordingHandle, settings::ProcessorSettings,
-    volume_monitor::PeakVolumeMonitor, volume_normalization::PeakNormalizer,
+    volume_monitor::PeakVolumeMonitor, volume_normalization::PeakNormalizer
 };
 
 
@@ -30,7 +35,7 @@ pub struct AudioProcessor {
 
     pub master_in_volume_db: f32,
     pub master_out_volume_db: f32,
-    pub muted: bool,
+    pub mute_status: MuteStatus,
 
     pub settings: ProcessorSettings,
     // If tuner is enabled, this will contain the writer to the tuner buffer,
@@ -79,7 +84,7 @@ impl AudioProcessor {
         self.volume_monitor.3.add_samples(&self.data_buffer);
 
         // Skip audio processing if output is muted 
-        if self.muted {
+        if self.mute_status.is_muted() {
             self.volume_monitor.4.reset();
             self.data_buffer.fill(0.0);
             self.write_data_buffer_to_output();
@@ -563,26 +568,18 @@ impl AudioProcessor {
                 })?;
                 self.master_out_volume_db = volume_db.clamp(MINIMUM_DB, 0.0);
             }
-            "mute" => {
-                let enable_str = arguments
+            "mutestatus" => {
+                let mute_status_str = arguments
                     .next()
-                    .ok_or_else(|| "mute: Failed to get on/off/toggle".to_string())?;
-                match enable_str {
-                    "on" => {
-                        self.muted = true;
-                    }
-                    "off" => {
-                        self.muted = false;
-                    }
-                    "toggle" => {
-                        self.muted = !self.muted;
-                    }
-                    _ => {
-                        return Err(
-                            "Invalid value for mute command, expected on/off/toggle".to_string()
-                        );
-                    }
-                }
+                    .ok_or_else(|| "mutestatus has no argument".to_string())?;
+                let mute_status: MuteStatus = serde_json::from_str(mute_status_str).map_err(|e| {
+                    format!("Failed to deserialize MuteStatus: {}", e)
+                })?;
+
+                self.mute_status = mute_status;
+            }
+            "mutetoggle" => {
+                self.mute_status = self.mute_status.toggled();
             }
             "tuner" => {
                 let enable_str = arguments

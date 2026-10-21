@@ -5,6 +5,7 @@ use ringbuf::traits::Split;
 use ringbuf::{traits::Consumer, HeapRb};
 use rs_pedalboard::dsp::resampler::Resampler;
 use rs_pedalboard::pedalboard_set::PedalboardSet;
+use rs_pedalboard::MuteStatus;
 use smol::channel::{Receiver, Sender};
 use std::cell::UnsafeCell;
 use std::time::Instant;
@@ -551,7 +552,7 @@ pub fn create_linked_streams(
                         ),
                         master_in_volume_db: 0.0,
                         master_out_volume_db: 0.0,
-                        muted: false,
+                        mute_status: MuteStatus::new(),
                         tuner_handle: None,
                         pedal_command_to_client_buffer: Vec::with_capacity(12),
                         settings: settings_clone.clone(),
