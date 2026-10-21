@@ -1,5 +1,6 @@
 use hound::{SampleFormat, WavReader};
 use std::io::Cursor;
+use rs_pedalboard::dsp::ConvertSampleDbLinear;
 
 pub struct MetronomePlayer {
     pub bpm: u32,
@@ -68,14 +69,16 @@ impl MetronomePlayer {
         (seconds_per_beat * self.sample_rate as f32) as usize
     }
 
-    pub fn add_to_buffer(&mut self, buffer: &mut [f32]) {
+    pub fn add_to_buffer(&mut self, buffer: &mut [f32], output_volume_multiplier_db: f32) {
         // Clamp current_position in case parameters have changed
         self.current_position = self.current_position.min(self.samples_per_beat() - 1);
+
+        let output_volume_multiplier = f32::db_to_linear(output_volume_multiplier_db);
 
         for sample in buffer.iter_mut() {
             if self.current_position < self.click_audio.len() {
                 // Write the click sound
-                *sample += self.click_audio[self.current_position] * self.volume;
+                *sample += self.click_audio[self.current_position] * self.volume * output_volume_multiplier;
             }
 
             // Move to the next position

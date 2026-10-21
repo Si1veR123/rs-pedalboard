@@ -111,7 +111,7 @@ impl AudioProcessor {
 
         // Add metronome click
         if self.metronome.0 {
-            self.metronome.1.add_to_buffer(&mut self.data_buffer);
+            self.metronome.1.add_to_buffer(&mut self.data_buffer, self.master_out_volume_db);
         }
 
         self.write_data_buffer_to_output();
