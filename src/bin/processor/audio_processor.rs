@@ -149,11 +149,6 @@ impl AudioProcessor {
                     .for_each(|sample| *sample = output_eq.process(*sample));
             }
 
-            let master_out_volume_linear = f32::db_to_linear(self.master_out_volume_db);
-            self.processing_buffer
-                .iter_mut()
-                .for_each(|sample| *sample *= master_out_volume_linear);
-
             drop(enter);
         }
 
@@ -164,6 +159,11 @@ impl AudioProcessor {
             self.data_buffer.clear();
             self.data_buffer.extend_from_slice(&self.processing_buffer);
         }
+
+        let master_out_volume_linear = f32::db_to_linear(self.master_out_volume_db);
+        self.data_buffer
+            .iter_mut()
+            .for_each(|sample| *sample *= master_out_volume_linear);
 
         if self.recording.is_recording() {
             if let Some(producer) = self.recording.recording_producer() {
