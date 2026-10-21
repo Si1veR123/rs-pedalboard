@@ -23,8 +23,20 @@ pub const CLIENT_SAVE_NAME: &'static str = "client_settings.json";
 pub enum VolumeNormalizationMode {
     #[default]
     None,
-    Manual,
+    #[serde(alias = "Manual")]
     Automatic,
+    AutomaticDecaying,
+}
+
+impl std::fmt::Display for VolumeNormalizationMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name = match self {
+            VolumeNormalizationMode::None => "None",
+            VolumeNormalizationMode::Automatic => "Automatic",
+            VolumeNormalizationMode::AutomaticDecaying => "Automatic Decaying",
+        };
+        write!(f, "{name}")
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -34,7 +46,7 @@ pub struct ClientSettings {
     pub kill_processor_on_close: bool,
     pub show_volume_monitor: bool,
     pub volume_normalization: VolumeNormalizationMode,
-    // Only used if volume_normalization is set to Automatic
+    // Only used if volume_normalization is set to Dynamic
     #[serde(alias = "auto_volume_normalization_decay")]
     pub auto_volume_normalization_decay_db: f32,
     #[serde(alias = "input_volume")]
@@ -615,11 +627,11 @@ impl Widget for &mut SettingsScreen {
                                 .wrap_mode(egui::TextWrapMode::Truncate)
                                 .show_ui(ui, |ui| {
                                     for value in VolumeNormalizationMode::iter() {
-                                        let response = ui.selectable_value(&mut client_settings.volume_normalization, value.clone(), format!("{:?}", value));
+                                        let response = ui.selectable_value(&mut client_settings.volume_normalization, value.clone(), format!("{}", value));
                                         normalization_mode_change |= response.changed();
-                                        if value == VolumeNormalizationMode::Automatic {
+                                        if value == VolumeNormalizationMode::AutomaticDecaying {
                                             response.on_hover_text("Automatically normalize volume based on the peak volume of the audio stream. The peak is decayed to adjust to decreases in input volume.");
-                                        } else if value == VolumeNormalizationMode::Manual {
+                                        } else if value == VolumeNormalizationMode::Automatic {
                                             response.on_hover_text("Volume is normalized using the peak of the input audio stream. If input volume is decreased, the peak must be manually reset.");
                                         }
                                     }
@@ -630,7 +642,7 @@ impl Widget for &mut SettingsScreen {
                             };
                             ui.end_row();
 
-                            if client_settings.volume_normalization == VolumeNormalizationMode::Automatic {
+                            if client_settings.volume_normalization == VolumeNormalizationMode::AutomaticDecaying {
                                 ui.label("Volume Normalization Decay");
                                 if ui.add_sized(
                                     Vec2::new(ui.available_width(), 45.0),
@@ -668,7 +680,7 @@ impl Widget for &mut SettingsScreen {
                             };
                             ui.end_row();
 
-                            if matches!(client_settings.volume_normalization, VolumeNormalizationMode::Manual | VolumeNormalizationMode::Automatic) {
+                            if matches!(client_settings.volume_normalization, VolumeNormalizationMode::Automatic | VolumeNormalizationMode::AutomaticDecaying) {
                                 // Show peak reset button
                                 ui.label("Reset Volume Normalization");
 

@@ -690,12 +690,12 @@ impl AudioProcessor {
             "volumenormalization" => {
                 let mode = arguments
                     .next()
-                    .ok_or_else(|| "volumenormalization: Failed")?;
+                    .ok_or_else(|| "volumenormalization: No arguments given")?;
                 match mode {
                     "none" => {
                         self.volume_normalizer = None;
                     }
-                    "manual" => {
+                    "automatic" => {
                         self.volume_normalizer = Some(PeakNormalizer::new(
                             0.95,
                             1.0,
@@ -703,7 +703,7 @@ impl AudioProcessor {
                             self.processing_sample_rate,
                         ));
                     }
-                    "automatic" => {
+                    "automaticdecaying" => {
                         let decay = arguments
                             .next()
                             .ok_or_else(|| {
@@ -730,7 +730,7 @@ impl AudioProcessor {
                         }
                     }
                     _ => {
-                        return Err("Invalid value for volumenormalization command, expected none/manual/automatic/reset".to_string());
+                        return Err("Invalid value for volumenormalization command, expected none/automatic/automaticdecaying/reset".to_string());
                     }
                 }
             }

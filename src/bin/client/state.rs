@@ -485,9 +485,9 @@ impl State {
         let mut socket = self.socket.borrow_mut();
         let rounded_auto_decay = (auto_decay * 1000.0).round() / 1000.0;
 
-        if matches!(mode, VolumeNormalizationMode::Automatic) {
+        if matches!(mode, VolumeNormalizationMode::AutomaticDecaying) {
             socket.send(Command::VolumeNormalization(
-                VolumeNormalizationMode::Automatic,
+                VolumeNormalizationMode::AutomaticDecaying,
                 Some(rounded_auto_decay),
             ));
         } else {

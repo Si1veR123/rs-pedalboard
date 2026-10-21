@@ -535,14 +535,14 @@ async fn client_socket_event_loop(
                         if let Some(decay) = auto_decay {
                             message = format!("volumenormalization|{}|{}\n", match mode {
                                 VolumeNormalizationMode::None => "none",
-                                VolumeNormalizationMode::Manual => "manual",
-                                VolumeNormalizationMode::Automatic => "automatic"
+                                VolumeNormalizationMode::Automatic => "manual",
+                                VolumeNormalizationMode::AutomaticDecaying => "automatic"
                             }, decay);
                         } else {
                             message = format!("volumenormalization|{}|none\n", match mode {
                                 VolumeNormalizationMode::None => "none",
-                                VolumeNormalizationMode::Manual => "manual",
-                                VolumeNormalizationMode::Automatic => "automatic"
+                                VolumeNormalizationMode::Automatic => "manual",
+                                VolumeNormalizationMode::AutomaticDecaying => "automatic"
                             });
                         }
 
