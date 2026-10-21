@@ -76,9 +76,9 @@ impl AudioProcessor {
         // Volume Normalization
         if let Some(normalizer) = &mut self.volume_normalizer {
             normalizer.process_buffer(&mut self.data_buffer);
+        } else {
+            self.apply_master_in();
         }
-
-        self.apply_master_in();
 
         // Update input volume monitor
         self.volume_monitor.3.add_samples(&self.data_buffer);

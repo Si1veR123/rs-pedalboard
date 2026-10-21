@@ -643,17 +643,19 @@ impl Widget for &mut SettingsScreen {
                                 ui.end_row();
                             }
 
-                            ui.label("Input Volume");
+                            if client_settings.volume_normalization == VolumeNormalizationMode::None {
+                                ui.label("Input Volume");
 
-                            if ui.add_sized(
-                                Vec2::new(ui.available_width(), 45.0),
-                                egui::Slider::new(&mut client_settings.input_volume_db, MINIMUM_DB..=MAXIMUM_DB_INCREASE)
-                                    .show_value(true)
-                                    .fixed_decimals(2)
-                            ).changed() {
-                                self.state.master_in_processor(client_settings.input_volume_db);
-                            };
-                            ui.end_row();
+                                if ui.add_sized(
+                                    Vec2::new(ui.available_width(), 45.0),
+                                    egui::Slider::new(&mut client_settings.input_volume_db, MINIMUM_DB..=MAXIMUM_DB_INCREASE)
+                                        .show_value(true)
+                                        .fixed_decimals(2)
+                                ).changed() {
+                                    self.state.master_in_processor(client_settings.input_volume_db);
+                                };
+                                ui.end_row();
+                            }
 
                             ui.label("Output Volume");
                             if ui.add_sized(
