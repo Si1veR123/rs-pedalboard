@@ -551,7 +551,7 @@ pub fn create_linked_streams(
                         ),
                         master_in_volume_db: 0.0,
                         master_out_volume_db: 0.0,
-                        pre_mute_volume_db: 0.0,
+                        muted: false,
                         tuner_handle: None,
                         pedal_command_to_client_buffer: Vec::with_capacity(12),
                         settings: settings_clone.clone(),

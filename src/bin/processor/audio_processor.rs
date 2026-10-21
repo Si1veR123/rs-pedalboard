@@ -12,12 +12,12 @@ use std::{
 use rs_pedalboard::{
     DEFAULT_VOLUME_MONITOR_UPDATE_RATE, dsp::{ConvertSampleDbLinear, MAXIMUM_DB_INCREASE, MINIMUM_DB, eq::Equalizer, resampler::Resampler, yin::Yin}, pedalboard::Pedalboard, pedalboard_set::PedalboardSet, pedals::{GraphicEqSettings, Pedal, PedalTrait, parameters::ParameterUpdate}, processor_settings::FloatSettingUpdate,
 };
-use tracing::trace_span;
 
 use crate::{
     metronome_player::MetronomePlayer, recording::RecordingHandle, settings::ProcessorSettings,
     volume_monitor::PeakVolumeMonitor, volume_normalization::PeakNormalizer,
 };
+
 
 pub struct AudioProcessor {
     pub pedalboard_set: PedalboardSet,
@@ -30,7 +30,7 @@ pub struct AudioProcessor {
 
     pub master_in_volume_db: f32,
     pub master_out_volume_db: f32,
-    pub pre_mute_volume_db: f32,
+    pub muted: bool,
 
     pub settings: ProcessorSettings,
     // If tuner is enabled, this will contain the writer to the tuner buffer,
@@ -62,46 +62,61 @@ impl AudioProcessor {
     #[tracing::instrument(level = "trace", skip_all)]
     pub fn process_audio(&mut self, data: &[f32]) {
         self.recording.tick();
-        if self.recording.is_recording() {
-            if let Some(producer) = self.recording.clean_recording_producer() {
-                let written = producer.push_slice(data);
-                if written != data.len() {
-                    tracing::warn!(
-                        "RecordingHandle: Recording ring buffer full, dropping samples."
-                    );
-                }
-            }
-        }
-
         self.data_buffer.clear();
         self.data_buffer.extend_from_slice(data);
         self.pedal_command_to_client_buffer.clear();
+
+        self.write_clean_data_to_recording(data);
 
         // Volume Normalization
         if let Some(normalizer) = &mut self.volume_normalizer {
             normalizer.process_buffer(&mut self.data_buffer);
         }
 
-        let master_in_volume_linear = f32::db_to_linear(self.master_in_volume_db);
-        self.data_buffer
-            .iter_mut()
-            .for_each(|sample| *sample *= master_in_volume_linear);
+        self.apply_master_in();
 
         // Update input volume monitor
         self.volume_monitor.3.add_samples(&self.data_buffer);
 
-        // Upsample, if needed, into processing buffer
-        self.processing_buffer.clear();
-        if let Some((upsampler, _)) = &mut self.resamplers {
-            self.processing_buffer.resize(
-                upsampler.upsample_output_buffer_size(self.data_buffer.len()),
-                0.0,
-            );
-            upsampler.upsample(&self.data_buffer, self.processing_buffer.as_mut_slice());
-        } else {
-            self.processing_buffer.extend_from_slice(&self.data_buffer);
+        // Skip audio processing if output is muted 
+        if self.muted {
+            self.volume_monitor.4.reset();
+            self.data_buffer.fill(0.0);
+            self.write_data_buffer_to_output();
+            self.send_volume_monitor_to_client();
+            self.handle_all_commands();
+            return
         }
 
+        self.processing_buffer.clear();
+        self.upsample_into_processing_buffer();
+
+        if self.tuner_handle.is_some() {
+            self.handle_tuner();
+        } else {
+            self.apply_pedalboard_processing();
+        }
+
+        self.downsample_into_data_buffer();
+        self.apply_master_out();
+        self.write_processed_data_to_recording();
+
+        // Update output volume monitor
+        self.volume_monitor.4.add_samples(&self.data_buffer);
+
+        // Add metronome click
+        if self.metronome.0 {
+            self.metronome.1.add_to_buffer(&mut self.data_buffer);
+        }
+
+        self.write_data_buffer_to_output();
+
+        self.send_volume_monitor_to_client();
+        self.send_pedal_commands_to_client();
+        self.handle_all_commands();
+    }
+
+    fn handle_tuner(&mut self) {
         if let Some((tuner_writer, frequency_channel_recv, _kill)) = &mut self.tuner_handle {
             // Tuner
             tuner_writer.push_slice(self.data_buffer.as_slice());
@@ -119,52 +134,86 @@ impl AudioProcessor {
                     }
                 }
             }
-        } else {
-            // Main pedal audio processing
-            // we process the data in chunks of FRAMES_PER_PERIOD
-            let span = trace_span!("process_audio", frames = self.processing_buffer.len());
-            let enter = span.enter();
+        }
+    }
 
-            if let Some(input_eq) = &mut self.global_input_eq {
-                self.processing_buffer
-                    .iter_mut()
-                    .for_each(|sample| *sample = input_eq.process(*sample));
-            }
-
-            for i in 0..(self.processing_buffer.len() as f32
-                / self.settings.frames_per_period as f32)
-                .ceil() as usize
-            {
-                let start = i * self.settings.frames_per_period;
-                let mut end = start + self.settings.frames_per_period;
-                end = end.min(self.processing_buffer.len());
-                let frame = &mut self.processing_buffer[start..end];
-                self.pedalboard_set
-                    .process_audio(frame, &mut self.pedal_command_to_client_buffer);
-            }
-
-            if let Some(output_eq) = &mut self.global_output_eq {
-                self.processing_buffer
-                    .iter_mut()
-                    .for_each(|sample| *sample = output_eq.process(*sample));
-            }
-
-            drop(enter);
+    fn apply_pedalboard_processing(&mut self) {
+        // we process the data in chunks of FRAMES_PER_PERIOD
+        if let Some(input_eq) = &mut self.global_input_eq {
+            self.processing_buffer
+                .iter_mut()
+                .for_each(|sample| *sample = input_eq.process(*sample));
         }
 
-        // Downsample, if needed, back into data buffer
+        for i in 0..(self.processing_buffer.len() as f32
+            / self.settings.frames_per_period as f32)
+            .ceil() as usize
+        {
+            let start = i * self.settings.frames_per_period;
+            let mut end = start + self.settings.frames_per_period;
+            end = end.min(self.processing_buffer.len());
+            let frame = &mut self.processing_buffer[start..end];
+            self.pedalboard_set
+                .process_audio(frame, &mut self.pedal_command_to_client_buffer);
+        }
+
+        if let Some(output_eq) = &mut self.global_output_eq {
+            self.processing_buffer
+                .iter_mut()
+                .for_each(|sample| *sample = output_eq.process(*sample));
+        }
+    }
+
+    fn upsample_into_processing_buffer(&mut self) {
+        self.processing_buffer.clear();
+        if let Some((upsampler, _)) = &mut self.resamplers {
+            self.processing_buffer.resize(
+                upsampler.upsample_output_buffer_size(self.data_buffer.len()),
+                0.0,
+            );
+            upsampler.upsample(&self.data_buffer, self.processing_buffer.as_mut_slice());
+        } else {
+            self.processing_buffer.extend_from_slice(&self.data_buffer);
+        }
+    }
+
+    fn downsample_into_data_buffer(&mut self) {
         if let Some((_, downsampler)) = &mut self.resamplers {
             downsampler.downsample(&self.processing_buffer, self.data_buffer.as_mut_slice());
         } else {
             self.data_buffer.clear();
             self.data_buffer.extend_from_slice(&self.processing_buffer);
         }
+    }
 
+    fn apply_master_in(&mut self) {
+        let master_in_volume_linear = f32::db_to_linear(self.master_in_volume_db);
+        self.data_buffer
+            .iter_mut()
+            .for_each(|sample| *sample *= master_in_volume_linear);
+    }
+
+    fn apply_master_out(&mut self) {
         let master_out_volume_linear = f32::db_to_linear(self.master_out_volume_db);
         self.data_buffer
             .iter_mut()
             .for_each(|sample| *sample *= master_out_volume_linear);
+    }
 
+    fn write_clean_data_to_recording(&mut self, data: &[f32]) {
+        if self.recording.is_recording() {
+            if let Some(producer) = self.recording.clean_recording_producer() {
+                let written = producer.push_slice(data);
+                if written != data.len() {
+                    tracing::warn!(
+                        "RecordingHandle: Recording ring buffer full, dropping samples."
+                    );
+                }
+            }
+        }
+    }
+
+    fn write_processed_data_to_recording(&mut self) {
         if self.recording.is_recording() {
             if let Some(producer) = self.recording.recording_producer() {
                 let written = producer.push_slice(&self.data_buffer);
@@ -175,15 +224,9 @@ impl AudioProcessor {
                 }
             }
         }
+    }
 
-        // Update output volume monitor
-        self.volume_monitor.4.add_samples(&self.data_buffer);
-
-        // Add metronome click
-        if self.metronome.0 {
-            self.metronome.1.add_to_buffer(&mut self.data_buffer);
-        }
-
+    fn write_data_buffer_to_output(&mut self) {
         let written = self.writer.push_slice(&self.data_buffer);
         if written != self.data_buffer.len() {
             // XRun occurred
@@ -192,8 +235,9 @@ impl AudioProcessor {
             }
             tracing::warn!("Failed to write all processed data. Output is behind.")
         }
+    }
 
-        // Send volume monitor to client
+    fn send_volume_monitor_to_client(&mut self) {
         if self.volume_monitor.0 {
             if Instant::now().duration_since(self.volume_monitor.1)
                 >= DEFAULT_VOLUME_MONITOR_UPDATE_RATE
@@ -217,16 +261,18 @@ impl AudioProcessor {
                 self.volume_monitor.2 = (in_peak, out_peak);
             }
         }
+    }
 
-        // Send any commands from pedals to client
+    fn send_pedal_commands_to_client(&mut self) {
         for mut command in self.pedal_command_to_client_buffer.drain(..) {
             command.push('\n');
             if self.command_sender.try_send(command.into()).is_err() {
                 tracing::error!("Failed to send pedal command to client");
             }
         }
+    }
 
-        // Handle commands that have been received
+    fn handle_all_commands(&mut self) {
         while let Ok(command) = self.command_receiver.try_recv() {
             if let Err(e) = self.handle_command(command) {
                 tracing::error!("Failed to handle command: {e}");
@@ -523,23 +569,13 @@ impl AudioProcessor {
                     .ok_or_else(|| "mute: Failed to get on/off/toggle".to_string())?;
                 match enable_str {
                     "on" => {
-                        if self.master_out_volume_db != MINIMUM_DB {
-                            self.pre_mute_volume_db = self.master_out_volume_db;
-                            self.master_out_volume_db = MINIMUM_DB;
-                        }
+                        self.muted = true;
                     }
                     "off" => {
-                        if self.master_out_volume_db == MINIMUM_DB {
-                            self.master_out_volume_db = self.pre_mute_volume_db;
-                        }
+                        self.muted = false;
                     }
                     "toggle" => {
-                        if self.master_out_volume_db == MINIMUM_DB {
-                            self.master_out_volume_db = self.pre_mute_volume_db;
-                        } else {
-                            self.pre_mute_volume_db = self.master_out_volume_db;
-                            self.master_out_volume_db = MINIMUM_DB;
-                        }
+                        self.muted = !self.muted;
                     }
                     _ => {
                         return Err(
