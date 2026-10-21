@@ -457,16 +457,6 @@ impl State {
         let mut socket = self.socket.borrow_mut();
         let rounded_volume = (volume * 100.0).round() / 100.0;
         socket.send(Command::Metronome(active, bpm, rounded_volume));
-
-        popup!(
-            self.egui_ctx.clone(),
-            if active {
-                format!("Metronome activated at {} BPM", bpm)
-            } else {
-                "Metronome deactivated".to_string()
-            },
-            Some("metronome-status-change")
-        );
     }
 
     /// Set whether the volume monitor is active on the processor.
@@ -498,34 +488,16 @@ impl State {
     pub fn reset_volume_normalization_peak(&self) {
         let mut socket = self.socket.borrow_mut();
         socket.send(Command::VolumeNormalizationReset);
-
-        // Show a popup message if not on the settings screen
-        // Likely caused by MIDI, therefore a popup shows the user that the peak has been reset
-        if self.selected_screen.get() != Screen::Settings {
-            popup!(self.egui_ctx.clone(), "Volume normalization peak reset");
-        }
     }
 
     pub fn master_in_processor(&self, volume_db: f32) {
         let mut socket = self.socket.borrow_mut();
         socket.send(Command::MasterInDb(volume_db));
-
-        popup!(
-            self.egui_ctx.clone(),
-            format!("Master In Volume set to {:.2} dB", volume_db),
-            Some("master-in-volume-change")
-        );
     }
 
     pub fn master_out_processor(&self, volume_db: f32) {
         let mut socket = self.socket.borrow_mut();
         socket.send(Command::MasterOutDb(volume_db));
-
-        popup!(
-            self.egui_ctx.clone(),
-            format!("Master Out Volume set to {:.2} dB", volume_db),
-            Some("master-out-volume-change")
-        );
     }
 
     /// Apply an EQ to the input of the whole signal chain, or `None` to remove the EQ that is
@@ -596,16 +568,6 @@ impl State {
         self.mute_status.set(mute_status);
         let mut socket = self.socket.borrow_mut();
         socket.send(Command::SetMuteStatus(mute_status));
-
-        popup!(
-            self.egui_ctx.clone(),
-            if mute_status.is_muted() {
-                "Muted"
-            } else {
-                "Unmuted"
-            },
-            Some("mute-status-change")
-        );
     }
 
     pub fn load_state(egui_ctx: eframe::egui::Context, force_pull: bool) -> Self {
@@ -914,19 +876,43 @@ impl State {
                     let mut client_settings = self.client_settings.borrow_mut();
                     let new_vol = vol.apply(client_settings.input_volume_db, Some((MINIMUM_DB, MAXIMUM_DB_INCREASE)));
                     client_settings.input_volume_db = new_vol;
+
+                    popup!(
+                        self.egui_ctx.clone(),
+                        format!("Master In Volume set to {:.2} dB", new_vol),
+                        Some("master-in-volume-change")
+                    );
                 }
                 Command::MasterOut(vol) => {
                     let mut client_settings = self.client_settings.borrow_mut();
                     let new_vol = vol.apply(client_settings.output_volume_db, Some((MINIMUM_DB, 0.0)));
                     client_settings.output_volume_db = new_vol;
+
+                    popup!(
+                        self.egui_ctx.clone(),
+                        format!("Master Out Volume set to {:.2} dB", new_vol),
+                        Some("master-out-volume-change")
+                    );
                 }
                 Command::MasterInDb(volume_db) => {
                     let mut client_settings = self.client_settings.borrow_mut();
                     client_settings.input_volume_db = volume_db;
+
+                    popup!(
+                        self.egui_ctx.clone(),
+                        format!("Master In Volume set to {:.2} dB", volume_db),
+                        Some("master-in-volume-change")
+                    );
                 }
                 Command::MasterOutDb(volume_db) => {
                     let mut client_settings = self.client_settings.borrow_mut();
                     client_settings.output_volume_db = volume_db;
+
+                    popup!(
+                        self.egui_ctx.clone(),
+                        format!("Master Out Volume set to {:.2} dB", volume_db),
+                        Some("master-out-volume-change")
+                    );
                 }
                 Command::VolumeNormalization(mode, decay) => {
                     let mut client_settings = self.client_settings.borrow_mut();
@@ -934,6 +920,12 @@ impl State {
                     if let Some(d) = decay {
                         client_settings.auto_volume_normalization_decay_db = d;
                     }
+
+                    popup!(
+                        self.egui_ctx.clone(),
+                        format!("Volume normalization mode set to {}", mode),
+                        Some("volume-normalization-mode-change")
+                    );
                 }
                 Command::SetRecording(active) => {
                     if active {
@@ -941,6 +933,16 @@ impl State {
                     } else {
                         self.recording_time.set(None);
                     }
+
+                    popup!(
+                        self.egui_ctx.clone(),
+                        if active {
+                            "Recording started"
+                        } else {
+                            "Recording stopped"
+                        },
+                        None
+                    );
                 }
                 Command::ToggleRecording => {
                     let currently_recording = self.recording_time.get().is_some();
@@ -949,13 +951,41 @@ impl State {
                     } else {
                         self.recording_time.set(Some(Instant::now()));
                     }
+
+                    popup!(
+                        self.egui_ctx.clone(),
+                        if currently_recording {
+                            "Recording stopped"
+                        } else {
+                            "Recording started"
+                        },
+                        None
+                    );
                 }
                 Command::RecordClean(clean) => {
                     self.recording_save_clean.set(clean);
+                    popup!(
+                        self.egui_ctx.clone(),
+                        if clean {
+                            "Recording clean enabled"
+                        } else {
+                            "Recording clean disabled"
+                        },
+                        None
+                    );
                 }
                 Command::ToggleClean => {
                     let currently_clean = self.recording_save_clean.get();
                     self.recording_save_clean.set(!currently_clean);
+                    popup!(
+                        self.egui_ctx.clone(),
+                        if currently_clean {
+                            "Recording clean disabled"
+                        } else {
+                            "Recording clean enabled"
+                        },
+                        None
+                    );
                 }
                 Command::VolumeMonitor(active) => {
                     self.client_settings.borrow_mut().show_volume_monitor = active;
@@ -968,10 +998,30 @@ impl State {
                     self.metronome_active.set(active);
                     self.metronome_bpm.set(bpm);
                     self.metronome_volume.set(volume);
+
+                    popup!(
+                        self.egui_ctx.clone(),
+                        if active {
+                            "Metronome activated"
+                        } else {
+                            "Metronome deactivated"
+                        },
+                        Some("metronome-status-change")
+                    );
                 }
                 Command::ToggleMetronome => {
                     let currently_active = self.metronome_active.get();
                     self.metronome_active.set(!currently_active);
+
+                    popup!(
+                        self.egui_ctx.clone(),
+                        if currently_active {
+                            "Metronome deactivated"
+                        } else {
+                            "Metronome activated"
+                        },
+                        Some("metronome-status-change")
+                    );
                 }
                 Command::Tuner(active) => {
                     self.tuner_active.set(active);
@@ -1008,9 +1058,27 @@ impl State {
                 }
                 Command::SetMuteStatus(mute) => {
                     self.mute_status.set(mute);
+                    popup!(
+                        self.egui_ctx.clone(),
+                        if mute.is_muted() {
+                            "Muted"
+                        } else {
+                            "Unmuted"
+                        },
+                        Some("mute-status-change")
+                    );
                 }
                 Command::ToggleMute => {
                     self.mute_status.set(self.mute_status.get().toggled());
+                    popup!(
+                        self.egui_ctx.clone(),
+                        if self.mute_status.get().is_muted() {
+                            "Muted"
+                        } else {
+                            "Unmuted"
+                        },
+                        Some("mute-status-change")
+                    );
                 }
                 Command::ChangeActiveFeature(_) | Command::SensibleMidiParameterUpdate(_, _) => {
                     let (mut path, update) = match command {
