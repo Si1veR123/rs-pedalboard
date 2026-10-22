@@ -10,9 +10,11 @@ use eframe::egui::{self, Id, Rangef, RichText};
 use egui_extras::{Size, StripBuilder};
 use midir::{MidiInput, MidiInputConnection, MidiInputPort};
 use serde::{ser::SerializeStruct, Deserialize, Deserializer, Serialize, Serializer};
+use std::time::Duration;
 use std::{
     collections::{HashMap, HashSet},
     sync::{atomic::AtomicU32, Arc, Mutex},
+    time::Instant,
 };
 
 use crate::popup_message::popup;
@@ -30,6 +32,56 @@ const UNKNOWN_PORT_NAME: &str = "Unknown";
 
 /// Space added between the sections of the MIDI settings UI.
 const SECTION_SPACE: f32 = 40.0;
+
+fn global_midi_function_selector(ui: &mut egui::Ui, id: egui::Id, functions: &mut Vec<GlobalMidiFunction>) {
+    egui::ComboBox::from_id_salt(id)
+        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+        .selected_text(format!("{} functions", functions.len()))
+        .show_ui(ui, |ui| {
+            let selected_color = ui.visuals().selection.bg_fill;
+
+            for global_function in GlobalMidiFunction::iter() {
+                let is_active = functions.contains(&global_function);
+                let bg_color = if is_active { selected_color } else { ui.visuals().widgets.inactive.bg_fill };
+                if ui.selectable_label(
+                    is_active,
+                    RichText::new(format!("{}", global_function)).background_color(bg_color)
+                ).clicked() {
+                    if is_active {
+                        functions.retain(|f| f != &global_function);
+                    } else {
+                        functions.push(global_function.clone());
+                    }
+                };
+            }
+        });
+}
+
+fn execute_global_midi_functions(
+    functions: &[GlobalMidiFunction],
+    change: &MidiChange,
+    ui_thread_sender: &Sender<Command>,
+    socket_handle: Option<&ClientSocketThreadHandle>,
+) {
+    for function in functions {
+        let command = function.command_from_function(change);
+        if let Some(command) = command {
+            match ui_thread_sender.send(command.clone()) {
+                Ok(()) => {
+                    if let Some(handle) = &socket_handle {
+                        handle.send_command(command);
+                    }
+                },
+                Err(e) => {
+                    tracing::error!(
+                        "Failed to send global MIDI command to UI thread: {}",
+                        e
+                    );
+                }
+            }
+        }
+    }
+}
 
 pub struct MidiState {
     settings: Arc<Mutex<MidiSettings>>,
@@ -187,7 +239,7 @@ impl MidiState {
         egui_ctx.request_repaint();
 
         // Read phase
-        let (function_mode, global_functions, parameter_functions) = {
+        let (function_mode, global_functions, held_global_functions, parameter_functions) = {
             let Some(device) = settings_lock
                 .port_settings
                 .get(port_id)
@@ -199,30 +251,27 @@ impl MidiState {
             (
                 device.function_mode(active_pedalboard_id),
                 device.global_functions.clone(),
+                device.get_held_global_functions().cloned(),
                 device.parameter_functions.clone(),
             )
         };
 
         match function_mode {
             DeviceFunctionMode::Global => {
-                // Activate any global MIDI functions for this device
-                for function in &global_functions {
-                    let command = function.command_from_function(&change);
-                    if let Some(command) = command {
-                        match ui_thread_sender.send(command.clone()) {
-                            Ok(()) => {
-                                if let Some(handle) = &socket_handle {
-                                    handle.send_command(command);
-                                }
-                            },
-                            Err(e) => {
-                                tracing::error!(
-                                    "Failed to send global MIDI command to UI thread: {}",
-                                    e
-                                );
-                            }
-                        }
-                    }
+                if change == MidiChange::Held {
+                    execute_global_midi_functions(
+                        &held_global_functions.unwrap_or_default(),
+                        &change,
+                        ui_thread_sender,
+                        socket_handle,
+                    );
+                } else {
+                    execute_global_midi_functions(
+                        &global_functions,
+                        &change,
+                        ui_thread_sender,
+                        socket_handle,
+                    );
                 }
             }
             DeviceFunctionMode::Parameter => {
@@ -697,13 +746,15 @@ impl MidiState {
                                                                         {
                                                                             device.device_type = MidiDeviceType::Footswitch {
                                                                                 on_value: 127,
-                                                                                momentary_to_latching: false
+                                                                                momentary_to_latching: false,
+                                                                                held_global_functions: Vec::new(),
+                                                                                last_pressed_time: None
                                                                             };
                                                                         }
                                                                     });
                                                                 ui.end_row();
 
-                                                                device.device_type.settings_ui(ui);
+                                                                device.device_type.settings_ui(ui, &device.name);
 
                                                                 ui.label("Use Global Functions:");
 
@@ -719,27 +770,7 @@ impl MidiState {
 
                                                                 if device.use_global {
                                                                     ui.label("");
-                                                                    egui::ComboBox::from_id_salt(&device.name)
-                                                                        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
-                                                                        .selected_text(format!("{} functions", device.global_functions.len()))
-                                                                        .show_ui(ui, |ui| {
-                                                                            let selected_color = ui.visuals().selection.bg_fill;
-
-                                                                            for global_function in GlobalMidiFunction::iter() {
-                                                                                let is_active = device.global_functions.contains(&global_function);
-                                                                                let bg_color = if is_active { selected_color } else { ui.visuals().widgets.inactive.bg_fill };
-                                                                                if ui.selectable_label(
-                                                                                    is_active,
-                                                                                    RichText::new(format!("{}", global_function)).background_color(bg_color)
-                                                                                ).clicked() {
-                                                                                    if is_active {
-                                                                                        device.global_functions.retain(|f| f != &global_function);
-                                                                                    } else {
-                                                                                        device.global_functions.push(global_function.clone());
-                                                                                    }
-                                                                                };
-                                                                            }
-                                                                        });
+                                                                    global_midi_function_selector(ui, egui::Id::new(&device.name).with("normal"), &mut device.global_functions);
                                                                     ui.end_row();
                                                                 } else {
                                                                     // Sensible parameter priority
@@ -949,20 +980,7 @@ impl MidiSettings {
         if let Some(settings) = self.port_settings.get_mut(port_id) {
             Some(settings.devices.entry((cc, channel)).or_insert_with(|| {
                 MidiState::invalidate_device_name_cache(ctx);
-
-                MidiDevice {
-                    id: unique_time_id(),
-                    name: "New Device".to_string(),
-                    device_type: MidiDeviceType::AbsoluteEncoder {
-                        min_value: 0,
-                        max_value: 127,
-                    },
-                    current_value: 0.5,
-                    sensible_parameter_priority: None,
-                    global_functions: Vec::new(),
-                    parameter_functions: HashMap::new(),
-                    use_global: true,
-                }
+                MidiDevice::default()
             }))
         } else {
             None
@@ -1190,6 +1208,7 @@ pub enum MidiChange {
     RelativeValueChange(f32),
     AbsoluteValueChange(f32),
     Toggled,
+    Held, 
     None,
 }
 
@@ -1205,6 +1224,7 @@ impl std::fmt::Display for MidiChange {
             },
             MidiChange::AbsoluteValueChange(v) => write!(f, "{v:.2}"),
             MidiChange::Toggled => write!(f, "Toggle"),
+            MidiChange::Held => write!(f, "Held"),
             MidiChange::None => write!(f, "No Change"),
         }
     }
@@ -1215,7 +1235,7 @@ impl MidiChange {
         match self {
             MidiChange::RelativeValueChange(v) => Some(FloatSettingUpdate::Relative(*v)),
             MidiChange::AbsoluteValueChange(v) => Some(FloatSettingUpdate::Absolute(*v)),
-            MidiChange::Toggled => Some(FloatSettingUpdate::FlipFlop),
+            MidiChange::Toggled | MidiChange::Held => Some(FloatSettingUpdate::FlipFlop),
             MidiChange::None => None,
         }
     }
@@ -1229,7 +1249,7 @@ impl MidiChange {
                 let parameter_value = range.parameter_from_interp(*v);
                 Some(ParameterUpdate::Absolute(parameter_value))
             }
-            MidiChange::Toggled => Some(ParameterUpdate::FlipFlop(Some(range.clone()))),
+            MidiChange::Toggled | MidiChange::Held => Some(ParameterUpdate::FlipFlop(Some(range.clone()))),
             MidiChange::None => None,
         }
     }
@@ -1250,13 +1270,31 @@ pub struct MidiDevice {
     pub sensible_parameter_priority: Option<u32>
 }
 
+impl Default for MidiDevice {
+    fn default() -> Self {
+        MidiDevice {
+            id: unique_time_id(),
+            name: "New Device".to_string(),
+            device_type: MidiDeviceType::AbsoluteEncoder {
+                min_value: 0,
+                max_value: 127,
+            },
+            current_value: 0.5,
+            sensible_parameter_priority: None,
+            global_functions: Vec::new(),
+            parameter_functions: HashMap::new(),
+            use_global: true,
+        }
+    }
+}
+
 impl MidiDevice {
     fn get_sensible_parameter_priority(&self) -> u32 {
         self.sensible_parameter_priority.unwrap_or(u32::MAX)
     }
 
     pub fn change_from_midi_value(&mut self, midi_value: u8) -> MidiChange {
-        match &self.device_type {
+        match &mut self.device_type {
             MidiDeviceType::RelativeEncoder {
                 sensitivity,
                 increment_value,
@@ -1287,7 +1325,27 @@ impl MidiDevice {
             MidiDeviceType::Footswitch {
                 on_value,
                 momentary_to_latching,
+                held_global_functions,
+                last_pressed_time
             } => {
+                if !held_global_functions.is_empty() && self.use_global {
+                    if midi_value == *on_value {
+                        *last_pressed_time = Some(Instant::now());
+                        return MidiChange::None;
+                    } else {
+                        if let Some(pressed_time) = last_pressed_time {
+                            let held_duration = pressed_time.elapsed();
+                            *last_pressed_time = None;
+                            if held_duration >= Duration::from_millis(500) {
+                                return MidiChange::Held;
+                            } else {
+                                // Momentary footswitch was released before the hold threshold
+                                // Treat this as a normal toggle
+                                return MidiChange::Toggled;
+                            }
+                        }
+                    }
+                }
                 let new_state = if *momentary_to_latching {
                     if midi_value == *on_value {
                         if self.current_value == 0.0 {
@@ -1305,16 +1363,13 @@ impl MidiDevice {
                         0.0
                     }
                 };
+
                 let toggled = new_state != self.current_value;
                 self.current_value = new_state;
                 if !toggled {
                     MidiChange::None
-                } else if *momentary_to_latching {
-                    MidiChange::Toggled
                 } else {
-                    // A momentary footswitch follows its position instead of toggling,
-                    // otherwise press and release would each toggle the parameter.
-                    MidiChange::AbsoluteValueChange(new_state)
+                    MidiChange::Toggled
                 }
             }
         }
@@ -1351,6 +1406,19 @@ impl MidiDevice {
             }
         }
     }
+
+    pub fn get_held_global_functions(&self) -> Option<&Vec<GlobalMidiFunction>> {
+        match &self.device_type {
+            MidiDeviceType::Footswitch { held_global_functions, .. } => {
+                if held_global_functions.is_empty() {
+                    None
+                } else {
+                    Some(held_global_functions)
+                }
+            },
+            _ => None,
+        }
+    }
 }
 
 /// Which mappings a [`MidiDevice`]'s messages are routed through.
@@ -1378,6 +1446,11 @@ pub enum MidiDeviceType {
     Footswitch {
         on_value: u8,
         momentary_to_latching: bool,
+        // Global functions which activate when the device is held down
+        #[serde(default)]
+        held_global_functions: Vec<GlobalMidiFunction>,
+        #[serde(skip)]
+        last_pressed_time: Option<Instant>,
     },
 }
 
@@ -1400,7 +1473,7 @@ impl MidiDeviceType {
     }
 
     /// UI is built for an egui Grid with 2 columns.
-    pub fn settings_ui(&mut self, ui: &mut egui::Ui) {
+    pub fn settings_ui(&mut self, ui: &mut egui::Ui, device_name: &str) {
         ui.style_mut().spacing.slider_width = ui.available_width() * 0.8;
         match self {
             MidiDeviceType::RelativeEncoder {
@@ -1432,6 +1505,8 @@ impl MidiDeviceType {
             MidiDeviceType::Footswitch {
                 on_value,
                 momentary_to_latching,
+                held_global_functions,
+                last_pressed_time: _,
             } => {
                 ui.label("On Value:");
                 ui.add(egui::Slider::new(on_value, 0..=127));
@@ -1442,6 +1517,8 @@ impl MidiDeviceType {
                     ui.checkbox(momentary_to_latching, "")
                 });
                 ui.end_row();
+                ui.label("Held Global Functions:");
+                global_midi_function_selector(ui, egui::Id::new(device_name).with("held"), held_global_functions);
             }
         }
     }
