@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 
-use crate::{midi::MidiChange, socket::Command};
+use crate::{midi::device::MidiChange, socket::Command};
 
 #[derive(Debug, Clone, Serialize, Deserialize, EnumIter, PartialEq)]
 pub enum GlobalMidiFunction {
