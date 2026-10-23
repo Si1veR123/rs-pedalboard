@@ -420,7 +420,7 @@ impl State {
         });
     }
 
-    pub fn show_popup_commands(&mut self) {
+    pub fn show_popup_commands(&self) {
         let mut popup_command_buffer = vec![];
         self.get_commands("popup:", &mut popup_command_buffer);
 

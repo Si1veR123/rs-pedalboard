@@ -365,6 +365,7 @@ impl eframe::App for PedalboardClientApp {
         set_font_size(ui.available_width(), &ctx);
 
         self.state.update_socket_responses();
+        self.state.show_popup_commands();
         self.state.handle_other_thread_commands(&ctx);
 
         let mut sr_buf = Vec::new();
