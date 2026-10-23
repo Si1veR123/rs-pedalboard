@@ -103,7 +103,7 @@ impl LooperTrack {
         }
     }
 
-    fn snap_to_length(&mut self, snap_to_samples: usize, tail: Option<Vec<f32>>) {
+    pub fn snap_to_length(&mut self, snap_to_samples: usize, tail: Option<Vec<f32>>) {
         // Strategy:
         // If the snapped length is shorter than the current length, we will push the extra samples into the start of the tail (if it exists), or discard them if not.
         // If the snapped length is longer than the current length, we will pull samples from the start of the tail (if it exists) to fill up to the snapped length, or pad with silence if not.
@@ -141,7 +141,7 @@ impl LooperTrack {
         }
     }
 
-    fn add_track_to_buffer(&mut self, mut buffer: &mut [f32], mut playback_position: usize) {
+    pub fn add_track_to_buffer(&mut self, mut buffer: &mut [f32], mut playback_position: usize) {
         match self.playback_state {
             TrackPlaybackState::Active { started_at, stopping, first_playback } => {
                 let track_length_samples = self.raw_audio.len();
@@ -264,6 +264,24 @@ impl LooperTrack {
             TrackPlaybackState::Stopped => {
                 // Do nothing, track is stopped
             }
+        }
+    }
+
+    pub fn reverse_effect(&mut self) {
+        self.raw_audio.reverse();
+        if let Some(tail) = &mut self.tail {
+            tail.reverse();
+        }
+    }
+
+    pub fn half_speed_effect(&mut self) {
+        let channels = vec![self.raw_audio.clone()];
+        let mut resampled_channels = resample_audio(&channels, self.sample_rate as f32, self.sample_rate as f32 / 2.0).expect("Resampling should not fail");
+        self.raw_audio = resampled_channels.pop().expect("Resampled output should have a channel");
+        if let Some(tail) = &mut self.tail {
+            let channels = vec![tail.clone()];
+            let mut resampled_channels = resample_audio(&channels, self.sample_rate as f32, self.sample_rate as f32 / 2.0).expect("Resampling should not fail");
+            *tail = resampled_channels.pop().expect("Resampled output should have a channel");
         }
     }
 }
