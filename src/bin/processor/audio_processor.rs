@@ -19,8 +19,7 @@ use rs_pedalboard::{
 };
 
 use crate::{
-    metronome_player::MetronomePlayer, recording::RecordingHandle, settings::ProcessorSettings,
-    volume_monitor::PeakVolumeMonitor, volume_normalization::PeakNormalizer
+    looper_processor::LooperProcessor, metronome_player::MetronomePlayer, recording::RecordingHandle, settings::ProcessorSettings, volume_monitor::PeakVolumeMonitor, volume_normalization::PeakNormalizer
 };
 
 
@@ -31,18 +30,22 @@ pub struct AudioProcessor {
     pub writer: HeapProd<f32>,
     pub data_buffer: Vec<f32>,
     pub processing_buffer: Vec<f32>,
-    pub pedal_command_to_client_buffer: Vec<String>,
+    pub command_to_client_buffer: Vec<String>,
 
     pub master_in_volume_db: f32,
     pub master_out_volume_db: f32,
     pub mute_status: MuteStatus,
 
     pub settings: ProcessorSettings,
+
     // If tuner is enabled, this will contain the writer to the tuner buffer,
     // a receiver for frequency updates, and a kill flag
     pub tuner_handle: Option<(HeapProd<f32>, Receiver<f32>, Arc<AtomicBool>)>,
     // Enabled?, metronome
     pub metronome: (bool, MetronomePlayer),
+    // None if it failed to initialize
+    pub looper: Option<LooperProcessor>,
+
     // Enabled?, last sent time, last sent values, input volume monitor, output volume monitor
     pub volume_monitor: (
         bool,
@@ -52,14 +55,13 @@ pub struct AudioProcessor {
         PeakVolumeMonitor,
     ),
     pub volume_normalizer: Option<PeakNormalizer>,
-    /// The EQ applied to the input of the signal chain, shaping what the pedalboards are given,
-    /// and the EQ applied to the output of it, shaping what they output. Both are built for the
-    /// rate audio is processed at, so their bands sit where the client's editor draws them whatever
-    /// the device's rate is.
+
     pub global_input_eq: Option<Equalizer>,
     pub global_output_eq: Option<Equalizer>,
+
     pub processing_sample_rate: u32,
     pub resamplers: Option<(Resampler, Resampler)>,
+
     pub recording: RecordingHandle,
 }
 
@@ -69,7 +71,7 @@ impl AudioProcessor {
         self.recording.tick();
         self.data_buffer.clear();
         self.data_buffer.extend_from_slice(data);
-        self.pedal_command_to_client_buffer.clear();
+        self.command_to_client_buffer.clear();
 
         self.write_clean_data_to_recording(data);
 
@@ -90,6 +92,7 @@ impl AudioProcessor {
             self.write_data_buffer_to_output();
             self.send_volume_monitor_to_client();
             self.handle_all_commands();
+            self.send_commands_to_client();
             return
         }
 
@@ -105,6 +108,7 @@ impl AudioProcessor {
         self.downsample_into_data_buffer();
         self.apply_master_out();
         self.write_processed_data_to_recording();
+        self.looper_pass();
 
         // Update output volume monitor
         self.volume_monitor.4.add_samples(&self.data_buffer);
@@ -117,8 +121,15 @@ impl AudioProcessor {
         self.write_data_buffer_to_output();
 
         self.send_volume_monitor_to_client();
-        self.send_pedal_commands_to_client();
         self.handle_all_commands();
+        self.send_commands_to_client();
+    }
+
+    fn looper_pass(&mut self) {
+        if let Some(looper) = &mut self.looper {
+            looper.push_audio_to_recording_track(&self.data_buffer);
+            looper.add_tracks_to_buffer(&mut self.data_buffer);
+        }
     }
 
     fn handle_tuner(&mut self) {
@@ -159,7 +170,7 @@ impl AudioProcessor {
             end = end.min(self.processing_buffer.len());
             let frame = &mut self.processing_buffer[start..end];
             self.pedalboard_set
-                .process_audio(frame, &mut self.pedal_command_to_client_buffer);
+                .process_audio(frame, &mut self.command_to_client_buffer);
         }
 
         if let Some(output_eq) = &mut self.global_output_eq {
@@ -268,11 +279,11 @@ impl AudioProcessor {
         }
     }
 
-    fn send_pedal_commands_to_client(&mut self) {
-        for mut command in self.pedal_command_to_client_buffer.drain(..) {
+    fn send_commands_to_client(&mut self) {
+        for mut command in self.command_to_client_buffer.drain(..) {
             command.push('\n');
-            if self.command_sender.try_send(command.into()).is_err() {
-                tracing::error!("Failed to send pedal command to client");
+            if let Err(e) = self.command_sender.try_send(command.into()) {
+                tracing::error!("Failed to send command to client: {}", e);
             }
         }
     }
@@ -624,7 +635,7 @@ impl AudioProcessor {
                     if let Err(e) =
                         crate::tuner::start_tuner(yin, kill.clone(), frequency_channel_send)
                     {
-                        tracing::error!("Failed to start tuner thread: {}", e);
+                        return Err(format!("Failed to start tuner thread: {}", e));
                     } else {
                         self.tuner_handle = Some((tuner_writer, frequency_channel_recv, kill));
                     }
@@ -801,7 +812,30 @@ impl AudioProcessor {
                 if dir_path.is_dir() {
                     self.settings.recording_dir = dir_path;
                 } else {
-                    tracing::error!("Invalid directory for setrecordingdir command: {dir_path:?}");
+                    return Err(format!("Invalid directory for setrecordingdir command: {dir_path:?}"));
+                }
+            }
+            "looper" => {
+                if let Some(looper) = &mut self.looper {
+                    if command.len() <= command_name.len() + 1 {
+                        return Err("looper: No subcommand given".to_string());
+                    }
+                    let subcommand = &command[command_name.len() + 1..];
+
+                    let pedalboard = self
+                        .pedalboard_set
+                        .pedalboards
+                        .get_mut(self.pedalboard_set.active_pedalboard)
+                        .ok_or_else(|| {
+                            format!(
+                                "looper: Active pedalboard index {} is out of bounds",
+                                self.pedalboard_set.active_pedalboard
+                            )
+                        })?;
+
+                    looper.handle_client_subcommand(subcommand, &mut self.command_to_client_buffer, pedalboard, self.settings.frames_per_period);
+                } else {
+                    tracing::warn!("Looper is not enabled, cannot handle looper command");
                 }
             }
             _ => return Err(format!("Unknown command: {}", command_name)),

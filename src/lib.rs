@@ -11,6 +11,7 @@ pub mod plugin;
 pub mod processor_api;
 pub mod processor_settings;
 pub mod socket_helper;
+pub mod looper_state;
 
 pub const SAVE_DIR: &str = "rs_pedalboard";
 // Required by both processor and client so define it here

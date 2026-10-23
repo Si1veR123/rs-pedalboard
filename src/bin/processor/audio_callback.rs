@@ -11,6 +11,7 @@ use std::cell::UnsafeCell;
 use std::time::Instant;
 
 use crate::audio_processor::AudioProcessor;
+use crate::looper_processor::LooperProcessor;
 use crate::metronome_player::MetronomePlayer;
 use crate::recording::RecordingHandle;
 use crate::sample_conversion::*;
@@ -554,9 +555,10 @@ pub fn create_linked_streams(
                         master_out_volume_db: 0.0,
                         mute_status: MuteStatus::new(),
                         tuner_handle: None,
-                        pedal_command_to_client_buffer: Vec::with_capacity(12),
+                        command_to_client_buffer: Vec::with_capacity(12),
                         settings: settings_clone.clone(),
                         metronome: (false, MetronomePlayer::new(120, 0.5, used_sample_rate)),
+                        looper: LooperProcessor::load(used_sample_rate).ok(),
                         volume_monitor: (
                             false,
                             Instant::now(),
