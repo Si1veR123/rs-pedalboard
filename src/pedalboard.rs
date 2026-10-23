@@ -1,10 +1,11 @@
 use crate::{
     pedalboard_set,
-    pedals::{Pedal, PedalParameterValue, PedalTrait},
+    pedals::{Pedal, PedalParameterValue, PedalTrait, PedalDiscriminants},
     processor_settings::FloatSettingUpdate,
     unique_time_id,
 };
 use serde::{Deserialize, Serialize};
+use strum::IntoDiscriminant;
 use std::{fmt::Write, hash::Hash};
 
 /// Can uniquely identify a parameter.
@@ -237,6 +238,10 @@ impl Pedalboard {
 
         parameters.append(&mut fallback_parameters);
         parameters
+    }
+
+    pub fn has_time_based_pedal(&self) -> bool {
+        self.pedals.iter().any(|pedal| matches!(pedal.discriminant(), PedalDiscriminants::Delay | PedalDiscriminants::Reverb))
     }
 }
 

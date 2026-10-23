@@ -21,6 +21,7 @@ mod stream_config;
 mod tuner;
 mod volume_monitor;
 mod volume_normalization;
+mod looper;
 use settings::{ProcessorArguments, ProcessorSettings};
 
 use clap::Parser;

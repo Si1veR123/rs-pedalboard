@@ -7,6 +7,68 @@ use crate::pedals::PedalTrait;
 
 pub const PROCESSING_BUFFER_SIZE: usize = 1024;
 
+pub fn deinterleave_audio(input: &[f32], channels: usize) -> Vec<Vec<f32>> {
+    let mut output: Vec<Vec<f32>> = vec![Vec::with_capacity(input.len() / channels); channels];
+
+    for (i, sample) in input.iter().enumerate() {
+        let channel = i % channels;
+        output[channel].push(*sample);
+    }
+
+    output
+}
+
+pub fn resample_audio(
+    input: &[Vec<f32>],
+    input_sample_rate: f32,
+    output_sample_rate: f32
+) -> Result<Vec<Vec<f32>>, String> {
+    let resample_ratio = output_sample_rate / input_sample_rate;
+
+    if resample_ratio == 1.0 {
+        return Ok(input.to_vec());
+    }
+
+    let mut resampler = SincFixedIn::<f32>::new(
+        resample_ratio as f64,
+        1.0,
+        SincInterpolationParameters {
+            sinc_len: 512,
+            f_cutoff: 0.9,
+            oversampling_factor: 128,
+            interpolation: rubato::SincInterpolationType::Linear,
+            window: rubato::WindowFunction::BlackmanHarris2,
+        },
+        input.len(),
+        input.len(), // number of channels
+    )
+    .map_err(|e| e.to_string())?;
+
+    let output = resampler
+        .process(input, None)
+        .map_err(|e| e.to_string())?;
+
+    Ok(output)
+}
+
+/// Normalises audio samples to the range -1.0 to 1.0
+pub fn normalise_audio(input: &mut [Vec<f32>]) {
+    let max_amplitude = input
+        .iter()
+        .flat_map(|channel| channel.iter())
+        .map(|sample| sample.abs())
+        .fold(0.0, f32::max);
+
+    if max_amplitude > 0.0 {
+        let normalisation_factor = 1.0 / max_amplitude;
+        for channel in input.iter_mut() {
+            for sample in channel.iter_mut() {
+                *sample *= normalisation_factor;
+            }
+        }
+    }
+}
+
 pub fn load_wav<P: AsRef<Path>>(
     wav_path: P,
     sample_rate: f32,
@@ -25,8 +87,6 @@ pub fn load_wav<P: AsRef<Path>>(
         return Err("WAV file has more than 32 bits per sample. This is not supported.".into());
     }
 
-    let resample_ratio = sample_rate / spec.sample_rate as f32;
-
     let float_samples = match spec.sample_format {
         hound::SampleFormat::Float => {
             let ir_samples: Result<Vec<f32>, _> = reader.into_samples().collect();
@@ -44,63 +104,20 @@ pub fn load_wav<P: AsRef<Path>>(
 
     float_samples.and_then(|float_samples| {
         let num_channels = spec.channels as usize;
+        let input_sample_rate = spec.sample_rate as f32;
 
-        // Deinterleave samples into a Vec of channels
-        let mut channels: Vec<Vec<f32>> =
-            vec![Vec::with_capacity(float_samples.len() / num_channels); num_channels];
-        for frame in float_samples.chunks_exact(num_channels) {
-            for (i, &sample) in frame.iter().enumerate() {
-                channels[i].push(sample);
-            }
-        }
-
-        let mut resampled_channels;
-        if resample_ratio == 1.0 {
-            resampled_channels = channels;
-        } else {
-            let mut resampler = SincFixedIn::<f32>::new(
-                resample_ratio as f64,
-                1.0,
-                SincInterpolationParameters {
-                    sinc_len: 512,
-                    f_cutoff: 0.9,
-                    oversampling_factor: 128,
-                    interpolation: rubato::SincInterpolationType::Linear,
-                    window: rubato::WindowFunction::BlackmanHarris2,
-                },
-                float_samples.len() / num_channels,
-                num_channels,
-            )
-            .map_err(|e| e.to_string())?;
-
-            let channel_refs: Vec<&[f32]> = channels.iter().map(|ch| ch.as_slice()).collect();
-
-            resampled_channels = resampler
-                .process(&channel_refs, None)
-                .map_err(|e| e.to_string())?;
-        }
+        let channels: Vec<Vec<f32>> = deinterleave_audio(&float_samples, num_channels);
+        let mut resampled_channels = resample_audio(&channels, input_sample_rate, sample_rate)?;
 
         if normalise {
-            // Normalize WAV to -1 to 1 range
-            let max_sample = resampled_channels
-                .iter()
-                .flat_map(|ch| ch.iter())
-                .map(|s| s.abs())
-                .fold(0.0_f32, f32::max);
-            if max_sample > 0.0 {
-                let normalisation_factor = 1.0 / max_sample;
-                for channel in &mut resampled_channels {
-                    for sample in channel {
-                        *sample *= normalisation_factor;
-                    }
-                }
-            }
+            normalise_audio(&mut resampled_channels);
         }
+
         Ok(resampled_channels)
     })
 }
 
-fn save_wav<P: AsRef<std::path::Path>>(
+pub fn save_wav<P: AsRef<std::path::Path>>(
     wav_path: P,
     buffer: &[f32],
     sample_rate: f32,
