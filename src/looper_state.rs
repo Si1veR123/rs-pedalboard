@@ -1,8 +1,9 @@
 use serde::{Serialize, Deserialize};
 
 pub const LOOPER_AUDIO_SAVE_DIR: &str = "looper_audio";
+pub const LOOPER_SETTINGS_FILE: &str = "looper_settings.json";
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct MultitrackInformation {
     pub name: String,
     pub track_count: usize,
@@ -35,7 +36,7 @@ impl MultitrackInformation {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct LooperInformation {
     pub multitracks_information: Vec<MultitrackInformation>,
     pub settings: LooperSettings,
@@ -75,41 +76,16 @@ impl LooperInformation {
             }
         }
 
-        let settings_path = save_dir.join("looper_settings.json");
-        let settings = if settings_path.exists() {
-            let settings_json = std::fs::read_to_string(&settings_path)
-                .map_err(|e| format!("Failed to read settings file: {}", e))?;
-            serde_json::from_str(&settings_json)
-                .map_err(|e| format!("Failed to deserialize settings: {}", e))?
-        } else {
-            tracing::info!("Looper settings file not found, using default");
+        let settings = LooperSettings::load_from_disk().unwrap_or_else(|e| {
+            tracing::warn!("Failed to load looper settings: {}", e);
             LooperSettings::default()
-        };
+        });
 
         Ok(Self { multitracks_information, settings })
     }
-
-    pub fn save_settings(&self) -> Result<(), String> {
-        let save_dir = crate::get_save_dir()
-            .map_err(|e| format!("Failed to get save directory: {}", e))?
-            .join(LOOPER_AUDIO_SAVE_DIR);
-
-        if !save_dir.exists() {
-            std::fs::create_dir_all(&save_dir)
-                .map_err(|e| format!("Failed to create save directory: {}", e))?;
-        }
-
-        let settings_path = save_dir.join("looper_settings.json");
-        let settings_json = serde_json::to_string_pretty(&self.settings)
-            .map_err(|e| format!("Failed to serialize settings: {}", e))?;
-        std::fs::write(&settings_path, settings_json)
-            .map_err(|e| format!("Failed to write settings file: {}", e))?;
-
-        Ok(())
-    }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct LooperSync {
     pub bpm: u16,
     pub beats_per_bar: u8,
@@ -130,10 +106,49 @@ impl LooperSync {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct LooperSettings {
     pub maximum_fractionals: usize,
     pub looper_sync: Option<LooperSync>
+}
+
+impl LooperSettings {
+    pub fn save_to_disk(&self) -> Result<(), String> {
+        let save_dir = crate::get_save_dir()
+            .map_err(|e| format!("Failed to get save directory: {}", e))?
+            .join(LOOPER_AUDIO_SAVE_DIR);
+
+        if !save_dir.exists() {
+            std::fs::create_dir_all(&save_dir)
+                .map_err(|e| format!("Failed to create save directory: {}", e))?;
+        }
+
+        let settings_path = save_dir.join(LOOPER_SETTINGS_FILE);
+        let settings_json = serde_json::to_string_pretty(self)
+            .map_err(|e| format!("Failed to serialize settings: {}", e))?;
+        std::fs::write(&settings_path, settings_json)
+            .map_err(|e| format!("Failed to write settings file: {}", e))?;
+
+        Ok(())
+    }
+
+    pub fn load_from_disk() -> Result<Self, String> {
+        let save_dir = crate::get_save_dir()
+            .map_err(|e| format!("Failed to get save directory: {}", e))?
+            .join(LOOPER_AUDIO_SAVE_DIR);
+
+        let settings_path = save_dir.join(LOOPER_SETTINGS_FILE);
+        if !settings_path.exists() {
+            return Ok(Self::default());
+        }
+
+        let settings_json = std::fs::read_to_string(&settings_path)
+            .map_err(|e| format!("Failed to read settings file: {}", e))?;
+        let settings: Self = serde_json::from_str(&settings_json)
+            .map_err(|e| format!("Failed to deserialize settings: {}", e))?;
+
+        Ok(settings)
+    }
 }
 
 impl Default for LooperSettings {

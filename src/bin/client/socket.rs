@@ -3,6 +3,7 @@ use std::time::Duration;
 use futures::{pin_mut, select, FutureExt};
 use ringbuf::traits::{Consumer, Split};
 use rs_pedalboard::MuteStatus;
+use rs_pedalboard::looper_state::LooperSettings;
 use rs_pedalboard::pedals::parameters::ParameterUpdate;
 use rs_pedalboard::pedals::GraphicEqSettings;
 use rs_pedalboard::processor_settings::FloatSettingUpdate;
@@ -119,6 +120,28 @@ impl ClientSocket {
 }
 
 #[derive(Debug, Clone)]
+pub enum LooperSubcommand {
+    GetInfo,
+    SetActiveMultitrack(String),
+    PrevActiveMultitrack,
+    NextActiveMultitrack,
+    PrevSelectedTrack,
+    NextSelectedTrack,
+    PlaySelectedTrack,
+    StopSelectedTrack,
+    StartRecordingSelectedTrack,
+    PlayAll,
+    PlayTrack(usize),
+    StopAll,
+    StopTrack(usize),
+    StartRecording(usize),
+    StopRecording,
+    ReverseEffect,
+    SlowEffect,
+    SetSettings(LooperSettings)
+}
+
+#[derive(Debug, Clone)]
 pub enum Command {
     // === Processor Commands ===
     ParameterUpdate(ParameterPath, ParameterUpdate),
@@ -165,6 +188,7 @@ pub enum Command {
     RequestSampleRate,
     SetMuteStatus(MuteStatus),
     ToggleMute,
+    Looper(LooperSubcommand),
 
     SubscribeToResponses(Sender<String>),
     ThreadAliveTest,
@@ -645,6 +669,31 @@ async fn client_socket_event_loop(
                     Command::ToggleMute => {
                         let message = "mutetoggle\n";
                         if socket_send(&mut stream_writer, message).await {
+                            break;
+                        }
+                    },
+                    Command::Looper(subcommand) => {
+                        let message = match subcommand {
+                            LooperSubcommand::GetInfo => "looper|getinfo\n".to_string(),
+                            LooperSubcommand::SetActiveMultitrack(name) => format!("looper|setactivemultitrack|{}\n", name),
+                            LooperSubcommand::PlayAll => "looper|playall\n".to_string(),
+                            LooperSubcommand::PlayTrack(index) => format!("looper|playtrack|{}\n", index),
+                            LooperSubcommand::StopAll => "looper|stopall\n".to_string(),
+                            LooperSubcommand::StopTrack(index) => format!("looper|stoptrack|{}\n", index),
+                            LooperSubcommand::StartRecording(index) => format!("looper|startrecording|{}\n", index),
+                            LooperSubcommand::StopRecording => "looper|stoprecording\n".to_string(),
+                            LooperSubcommand::ReverseEffect => "looper|reverseeffect\n".to_string(),
+                            LooperSubcommand::SlowEffect => "looper|sloweffect\n".to_string(),
+                            LooperSubcommand::SetSettings(settings) => format!("looper|setsettings|{}\n", serde_json::to_string(&settings).expect("Failed to serialize LooperSettings")),
+                            LooperSubcommand::PrevActiveMultitrack => "looper|prevactivemultitrack\n".to_string(),
+                            LooperSubcommand::NextActiveMultitrack => "looper|nextactivemultitrack\n".to_string(),
+                            LooperSubcommand::PrevSelectedTrack => "looper|prevselectedtrack\n".to_string(),
+                            LooperSubcommand::NextSelectedTrack => "looper|nextselectedtrack\n".to_string(),
+                            LooperSubcommand::PlaySelectedTrack => "looper|playselectedtrack\n".to_string(),
+                            LooperSubcommand::StopSelectedTrack => "looper|stopselectedtrack\n".to_string(),
+                            LooperSubcommand::StartRecordingSelectedTrack => "looper|startrecordingselectedtrack\n".to_string()
+                        };
+                        if socket_send(&mut stream_writer, &message).await {
                             break;
                         }
                     },

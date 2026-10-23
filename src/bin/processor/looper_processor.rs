@@ -547,6 +547,7 @@ pub struct LooperProcessor {
     // store multitracks by name, load when needed
     pub looper_information: LooperInformation,
     pub active_multitrack: Option<LooperMultitrack>,
+    selected_track_index: Option<usize>,
     sample_rate: u32
 }
 
@@ -555,6 +556,7 @@ impl Default for LooperProcessor {
         Self {
             looper_information: LooperInformation::default(),
             active_multitrack: None,
+            selected_track_index: None,
             sample_rate: 44100
         }
     }
@@ -566,6 +568,7 @@ impl LooperProcessor {
         Ok(Self {
             looper_information,
             active_multitrack: None,
+            selected_track_index: None,
             sample_rate
         })
     }
@@ -642,7 +645,7 @@ impl LooperProcessor {
     }
 
     pub fn handle_client_subcommand(&mut self, subcommand_and_args: &str, client_command_buffer: &mut Vec<String>, pedalboard: &mut Pedalboard, buffer_size: usize) {
-        let subcommand_parts: Vec<&str> = subcommand_and_args.split_whitespace().collect();
+        let subcommand_parts: Vec<&str> = subcommand_and_args.split('|').collect();
         let subcommand = match subcommand_parts.get(0) {
             Some(cmd) => *cmd,
             None => {
@@ -655,6 +658,9 @@ impl LooperProcessor {
             "getinfo" => {
                 let info_json = serde_json::to_string(&self.looper_information).unwrap_or_else(|e| format!("Failed to serialize looper information: {}", e));
                 client_command_buffer.push(format!("looperinfo {}", info_json));
+                // assume if client is asking for getinfo, it has started a new session, so reset the active multitrack to None
+                self.active_multitrack = None;
+                self.selected_track_index = None;
             },
             "setactivemultitrack" => {
                 if let Some(name) = subcommand_parts.get(1) {
@@ -758,6 +764,93 @@ impl LooperProcessor {
                     }
                 } else {
                     tracing::warn!("No settings JSON provided for setsettings command");
+                }
+            },
+            "prevselectedtrack" => {
+                if let Some(active_multitrack) = &mut self.active_multitrack {
+                    if let Some(selected_index) = self.selected_track_index {
+                        if selected_index > 0 {
+                            self.selected_track_index = Some(selected_index - 1);
+                        }
+                    } else {
+                        self.selected_track_index = Some(0);
+                    }
+                } else {
+                    tracing::warn!("No active multitrack to select previous track");
+                }
+            },
+            "nextselectedtrack" => {
+                if let Some(active_multitrack) = &mut self.active_multitrack {
+                    if let Some(selected_index) = self.selected_track_index {
+                        if selected_index + 1 < active_multitrack.tracks.len() {
+                            self.selected_track_index = Some(selected_index + 1);
+                        }
+                    } else {
+                        self.selected_track_index = Some(0);
+                    }
+                } else {
+                    tracing::warn!("No active multitrack to select next track");
+                }
+            },
+            "playselectedtrack" => {
+                if let Some(active_multitrack) = &mut self.active_multitrack {
+                    if let Some(selected_index) = self.selected_track_index {
+                        active_multitrack.play_track(selected_index);
+                    } else {
+                        tracing::warn!("No track selected to play");
+                    }
+                } else {
+                    tracing::warn!("No active multitrack to play selected track");
+                }
+            },
+            "stopselectedtrack" => {
+                if let Some(active_multitrack) = &mut self.active_multitrack {
+                    if let Some(selected_index) = self.selected_track_index {
+                        active_multitrack.stop_track(selected_index);
+                    } else {
+                        tracing::warn!("No track selected to stop");
+                    }
+                } else {
+                    tracing::warn!("No active multitrack to stop selected track");
+                }
+            },
+            "startrecordingselectedtrack" => {
+                if let Some(active_multitrack) = &mut self.active_multitrack {
+                    if let Some(selected_index) = self.selected_track_index {
+                        active_multitrack.start_recording(selected_index);
+                    } else {
+                        tracing::warn!("No track selected to start recording");
+                    }
+                } else {
+                    tracing::warn!("No active multitrack to start recording selected track");
+                }
+            },
+            "prevactivemultitrack" => {
+                if let Some(current_multitrack) = &self.active_multitrack {
+                    let multitrack_names = &self.looper_information.multitracks_information;
+                    if let Some(current_index) = multitrack_names.iter().position(|mt_info| mt_info.name == current_multitrack.name) {
+                        let prev_index = if current_index == 0 {
+                            multitrack_names.len() - 1
+                        } else {
+                            current_index - 1
+                        };
+                        let prev_name = &multitrack_names[prev_index].name.clone();
+                        if let Err(e) = self.set_active_multitrack(prev_name) {
+                            tracing::warn!("Failed to set previous active multitrack: {}", e);
+                        }
+                    }
+                }
+            },
+            "nextactivemultitrack" => {
+                if let Some(current_multitrack) = &self.active_multitrack {
+                    let multitrack_names = &self.looper_information.multitracks_information;
+                    if let Some(current_index) = multitrack_names.iter().position(|mt_info| mt_info.name == current_multitrack.name) {
+                        let next_index = (current_index + 1) % multitrack_names.len();
+                        let next_name = &multitrack_names[next_index].name.clone();
+                        if let Err(e) = self.set_active_multitrack(next_name) {
+                            tracing::warn!("Failed to set next active multitrack: {}", e);
+                        }
+                    }
                 }
             },
             _ => tracing::warn!("Unknown looper subcommand: {}", subcommand),

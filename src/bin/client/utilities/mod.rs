@@ -1,6 +1,7 @@
 pub mod metronome;
 pub mod recorder;
 pub mod tuner;
+pub mod looper;
 
 use eframe::egui::{self, Color32, Layout, RichText, Vec2, Widget};
 

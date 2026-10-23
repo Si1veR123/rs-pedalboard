@@ -1,5 +1,12 @@
 use crate::{
-    Screen, github_sync::GithubSyncSettings, midi::{MidiSettings, MidiState}, popup_message::{PopupMessageType, popup}, saved_pedalboards::SavedPedalboards, settings::{ClientSettings, VolumeNormalizationMode}, socket::{ClientSocket, Command}
+    Screen,
+    github_sync::GithubSyncSettings,
+    midi::{MidiSettings, MidiState},
+    popup_message::{PopupMessageType, popup},
+    saved_pedalboards::SavedPedalboards,
+    settings::{ClientSettings, VolumeNormalizationMode},
+    socket::{ClientSocket, Command, LooperSubcommand},
+    utilities::looper::LooperClientState
 };
 use crossbeam::channel::Receiver;
 use eframe::egui;
@@ -11,6 +18,7 @@ use rs_pedalboard::{
     },
     processor_settings::ProcessorSettingsSave,
     dsp::{MAXIMUM_DB_INCREASE, MINIMUM_DB},
+    looper_state::LooperInformation
 };
 use strum::IntoDiscriminant;
 use std::{
@@ -36,6 +44,7 @@ pub struct State {
     pub metronome_bpm: Cell<u32>,
     pub metronome_volume: Cell<f32>,
     pub tuner_active: Cell<bool>,
+    pub looper_state: RefCell<LooperClientState>,
 
     pub prev_selected_screen: Cell<Option<Screen>>,
     pub selected_screen: Cell<Screen>,
@@ -429,6 +438,29 @@ impl State {
         }
     }
 
+    pub fn set_looper_information_from_command(&self) {
+        let mut looper_state = self.looper_state.borrow_mut();
+        let mut looper_information_buffer = vec![];
+        self.get_commands("looperinfo", &mut looper_information_buffer);
+
+        if !looper_information_buffer.is_empty() {
+            match serde_json::from_str::<LooperInformation>(&looper_information_buffer[0]) {
+                Ok(looper_information) => {
+                    looper_state.set_looper_information(looper_information);
+                    looper_state.remove_active_multitrack();
+                }
+                Err(e) => {
+                    tracing::error!("Failed to parse looper information: {}", e);
+                }
+            }
+        }
+    }
+
+    pub fn save_looper_settings(&self) {
+        let looper_state = self.looper_state.borrow();
+        looper_state.save_settings();
+    }
+
     /// Set whether the tuner is active.
     ///
     /// Requires a lock on socket and client settings.
@@ -682,6 +714,7 @@ impl State {
             metronome_bpm: Cell::new(120),
             metronome_volume: Cell::new(0.5),
             tuner_active: Cell::new(false),
+            looper_state: RefCell::new(LooperClientState::new()),
             prev_selected_screen: Cell::new(None),
             selected_screen: Cell::new(Screen::Stage),
             egui_ctx,
@@ -715,6 +748,7 @@ impl State {
                 popup!(self.egui_ctx.clone(), "Connected to processor", Some("processor-connection-success"), crate::popup_message::PopupMessageType::Info);
 
                 socket.send(Command::RequestSampleRate);
+                socket.send(Command::Looper(LooperSubcommand::GetInfo));
 
                 let new_handle = socket.handle.clone();
                 drop(socket);
@@ -1257,6 +1291,59 @@ impl State {
                 }
                 Command::PrevGlobalOutputEQ => {
                     self.move_global_eq(false, false);
+                }
+                Command::Looper(looper_subcommand) => {
+                    match looper_subcommand {
+                        LooperSubcommand::GetInfo => {
+                            tracing::error!("Unexpected GetInfo command in other thread commands")
+                        }
+                        LooperSubcommand::SetActiveMultitrack(name) => {
+                            self.looper_state.borrow_mut().set_active_multitrack(name);
+                        }
+                        LooperSubcommand::PrevActiveMultitrack => {
+                            self.looper_state.borrow_mut().prev_active_multitrack();
+                        }
+                        LooperSubcommand::NextActiveMultitrack => {
+                            self.looper_state.borrow_mut().next_active_multitrack();
+                        }
+                        LooperSubcommand::NextSelectedTrack => {
+                            self.looper_state.borrow_mut().next_selected_track();
+                        }
+                        LooperSubcommand::PrevSelectedTrack => {
+                            self.looper_state.borrow_mut().prev_selected_track();
+                        }
+                        LooperSubcommand::PlaySelectedTrack => {
+                            self.looper_state.borrow_mut().play_selected_track();
+                        }
+                        LooperSubcommand::StopSelectedTrack => {
+                            self.looper_state.borrow_mut().stop_selected_track();
+                        }
+                        LooperSubcommand::StartRecordingSelectedTrack => {
+                            self.looper_state.borrow_mut().start_recording_selected_track();
+                        }
+                        LooperSubcommand::PlayAll => {
+                            self.looper_state.borrow_mut().play_all_tracks();
+                        }
+                        LooperSubcommand::StopAll => {
+                            self.looper_state.borrow_mut().stop_all_tracks();
+                        }
+                        LooperSubcommand::PlayTrack(track_index) => {
+                            self.looper_state.borrow_mut().play_track(track_index);
+                        }
+                        LooperSubcommand::StopTrack(track_index) => {
+                            self.looper_state.borrow_mut().stop_track(track_index);
+                        }
+                        LooperSubcommand::SetSettings(settings) => {
+                            self.looper_state.borrow_mut().set_settings(settings);
+                        }
+                        LooperSubcommand::StopRecording => {
+                            self.looper_state.borrow_mut().stop_recording();
+                        }
+                        LooperSubcommand::StartRecording(track_index) => {
+                            self.looper_state.borrow_mut().set_recording_track(Some(track_index));
+                        }
+                        LooperSubcommand::ReverseEffect | LooperSubcommand::SlowEffect => {}
+                    }
                 }
 
                 Command::RequestSampleRate => {

@@ -374,6 +374,8 @@ impl eframe::App for PedalboardClientApp {
             tracing::info!("Processor is using sample rate: {}hz", sr_buf[0]);
         }
 
+        self.state.set_looper_information_from_command();
+
         let bottom_window_select_height = ctx.viewport_rect().height() * 0.1;
         let padding = 10.0;
 
@@ -570,6 +572,8 @@ impl eframe::App for PedalboardClientApp {
         } else {
             tracing::info!("State saved successfully");
         }
+
+        self.state.save_looper_settings();
 
         let github_sync_settings = self.state.github_sync_settings.borrow();
         github_sync_settings.push_changes(&self.state.egui_ctx, true);
