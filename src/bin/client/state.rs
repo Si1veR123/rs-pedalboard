@@ -420,6 +420,15 @@ impl State {
         });
     }
 
+    pub fn show_popup_commands(&mut self) {
+        let mut popup_command_buffer = vec![];
+        self.get_commands("popup:", &mut popup_command_buffer);
+
+        for command in popup_command_buffer {
+            popup!(self.egui_ctx.clone(), command, None, PopupMessageType::Info);
+        }
+    }
+
     /// Set whether the tuner is active.
     ///
     /// Requires a lock on socket and client settings.

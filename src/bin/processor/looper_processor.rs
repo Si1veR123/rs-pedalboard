@@ -635,7 +635,7 @@ impl LooperProcessor {
     pub fn set_active_multitrack(&mut self, name: &str) -> Result<(), String> {
         let multitrack = match LooperMultitrack::load_from_directory(name, self.sample_rate) {
             Ok(multitrack) => multitrack,
-            Err(e) => LooperMultitrack::new_and_save_to_disk(name.to_string(), self.sample_rate)?
+            Err(_) => LooperMultitrack::new_and_save_to_disk(name.to_string(), self.sample_rate)?
         };
         self.active_multitrack = Some(multitrack);
         Ok(())
@@ -659,8 +659,8 @@ impl LooperProcessor {
             "setactivemultitrack" => {
                 if let Some(name) = subcommand_parts.get(1) {
                     match self.set_active_multitrack(name) {
-                        Ok(_) => client_command_buffer.push(format!("popup Active multitrack set to {}", name)),
-                        Err(e) => client_command_buffer.push(format!("popup Failed to set active multitrack: {}", e)),
+                        Ok(_) => client_command_buffer.push(format!("popup:Active multitrack set to {}", name)),
+                        Err(e) => client_command_buffer.push(format!("popup:Failed to set active multitrack: {}", e)),
                     }
                 } else {
                     tracing::warn!("No multitrack name provided for setactivemultitrack command");
