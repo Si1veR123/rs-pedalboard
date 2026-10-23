@@ -29,7 +29,7 @@ use std::{
 
 pub struct State {
     pub pedalboards: SavedPedalboards,
-    socket: RefCell<ClientSocket>,
+    pub(crate) socket: RefCell<ClientSocket>,
 
     pub client_settings: RefCell<ClientSettings>,
     pub processor_settings: RefCell<ProcessorSettingsSave>,
@@ -454,6 +454,7 @@ impl State {
                 }
             }
         }
+
     }
 
     pub fn save_looper_settings(&self) {
@@ -1297,6 +1298,8 @@ impl State {
                         LooperSubcommand::GetInfo => {
                             tracing::error!("Unexpected GetInfo command in other thread commands")
                         }
+                        LooperSubcommand::AddMultitrack(_) |
+                        LooperSubcommand::AddTrackToActiveMultitrack => {}
                         LooperSubcommand::SetActiveMultitrack(name) => {
                             self.looper_state.borrow_mut().set_active_multitrack(name);
                         }

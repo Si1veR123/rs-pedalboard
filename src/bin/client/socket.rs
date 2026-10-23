@@ -122,6 +122,8 @@ impl ClientSocket {
 #[derive(Debug, Clone)]
 pub enum LooperSubcommand {
     GetInfo,
+    AddMultitrack(String),
+    AddTrackToActiveMultitrack,
     SetActiveMultitrack(String),
     PrevActiveMultitrack,
     NextActiveMultitrack,
@@ -675,6 +677,8 @@ async fn client_socket_event_loop(
                     Command::Looper(subcommand) => {
                         let message = match subcommand {
                             LooperSubcommand::GetInfo => "looper|getinfo\n".to_string(),
+                            LooperSubcommand::AddMultitrack(name) => format!("looper|addmultitrack|{}\n", name),
+                            LooperSubcommand::AddTrackToActiveMultitrack => "looper|addtracktoactivemultitrack\n".to_string(),
                             LooperSubcommand::SetActiveMultitrack(name) => format!("looper|setactivemultitrack|{}\n", name),
                             LooperSubcommand::PlayAll => "looper|playall\n".to_string(),
                             LooperSubcommand::PlayTrack(index) => format!("looper|playtrack|{}\n", index),

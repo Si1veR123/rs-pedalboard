@@ -1,12 +1,12 @@
 use rs_pedalboard::looper_state::{LooperInformation, LooperSettings};
 
 #[derive(Clone, Debug)]
-struct LooperMultitrackClientState {
-    name: String,
-    track_count: usize,
-    tracks_playing: Vec<usize>,
-    track_recording: Option<usize>,
-    selected_track: Option<usize>,
+pub(crate) struct LooperMultitrackClientState {
+    pub(crate) name: String,
+    pub(crate) track_count: usize,
+    pub(crate) tracks_playing: Vec<usize>,
+    pub(crate) track_recording: Option<usize>,
+    pub(crate) selected_track: Option<usize>,
 }
 
 impl LooperMultitrackClientState {
@@ -24,8 +24,7 @@ impl LooperMultitrackClientState {
 #[derive(Clone, Default, Debug)]
 pub struct LooperClientState {
     looper_information: Option<LooperInformation>,
-    active_multitrack: Option<LooperMultitrackClientState>,
-    settings: LooperSettings
+    active_multitrack: Option<LooperMultitrackClientState>
 }
 
 impl LooperClientState {
@@ -33,7 +32,6 @@ impl LooperClientState {
         Self {
             looper_information: None,
             active_multitrack: None,
-            settings: LooperSettings::default(),
         }
     }
 
@@ -51,6 +49,30 @@ impl LooperClientState {
             info.multitracks_information.iter().find(|mt| mt.name == name).map(|mt| mt.track_count)
         }).unwrap_or(0);
         self.active_multitrack = Some(LooperMultitrackClientState::new(name, track_count));
+    }
+
+    pub(crate) fn add_multitrack(&mut self, name: String) {
+        if let Some(info) = &mut self.looper_information {
+            if info.multitracks_information.iter().any(|item| item.name == name) {
+                return;
+            }
+            info.multitracks_information.push(rs_pedalboard::looper_state::MultitrackInformation {
+                name: name.clone(),
+                track_count: 0,
+            });
+            self.active_multitrack = Some(LooperMultitrackClientState::new(name, 0));
+        }
+    }
+
+    pub(crate) fn add_track_to_active_multitrack(&mut self) {
+        if let Some(active) = &mut self.active_multitrack {
+            active.track_count += 1;
+            if let Some(info) = &mut self.looper_information {
+                if let Some(item) = info.multitracks_information.iter_mut().find(|item| item.name == active.name) {
+                    item.track_count = active.track_count;
+                }
+            }
+        }
     }
 
     pub fn play_all_tracks(&mut self) {
@@ -125,6 +147,10 @@ impl LooperClientState {
 
     pub fn get_looper_information(&self) -> Option<&LooperInformation> {
         self.looper_information.as_ref()
+    }
+
+    pub(crate) fn active_multitrack(&self) -> Option<&LooperMultitrackClientState> {
+        self.active_multitrack.as_ref()
     }
 
     pub fn prev_active_multitrack(&mut self) {
@@ -205,4 +231,3 @@ impl LooperClientState {
         }
     }
 }
-

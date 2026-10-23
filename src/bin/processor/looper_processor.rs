@@ -1,6 +1,6 @@
 use rs_pedalboard::processor_api::{resample_audio, save_wav, load_wav};
 use rs_pedalboard::pedalboard::Pedalboard;
-use rs_pedalboard::looper_state::{LOOPER_AUDIO_SAVE_DIR, LooperInformation, LooperSettings, LooperSync};
+use rs_pedalboard::looper_state::{LOOPER_AUDIO_SAVE_DIR, LooperInformation, LooperSettings, LooperSync, MultitrackInformation};
 
 const TAIL_MIN_RMS: f32 = 0.001; // Minimum RMS for a tail to be considered significant
 
@@ -63,24 +63,6 @@ impl LooperTrack {
 
     pub fn get_length_samples(&self) -> usize {
         self.raw_audio.len()
-    }
-
-    pub fn get_length_seconds(&self) -> f32 {
-        self.raw_audio.len() as f32 / self.sample_rate as f32
-    }
-
-    pub fn resampled(&mut self, new_sample_rate: u32) -> Result<Self, String> {
-        let channels = vec![self.raw_audio.clone()];
-        let mut resampled_channels = resample_audio(&channels, self.sample_rate as f32, new_sample_rate as f32)?;
-
-        let resampled_tail = if let Some(tail) = self.tail.as_ref() {
-            let channels = vec![tail.clone()];
-            let mut resampled_tail_channels = resample_audio(&channels, self.sample_rate as f32, new_sample_rate as f32)?;
-            Some(resampled_tail_channels.pop().expect("Resampled tail should have a channel"))
-        } else {
-            None
-        };
-        Ok(Self::new(resampled_channels.pop().expect("Resampled output should have a channel"), resampled_tail, new_sample_rate))
     }
 
     pub fn save_to_file(&self, path: &std::path::Path) -> Result<(), String> {
@@ -506,7 +488,10 @@ impl LooperMultitrack {
     }
 
     pub fn save_to_directory(&self) -> Result<(), String> {
-        let dir_path = std::path::Path::new(LOOPER_AUDIO_SAVE_DIR).join(&self.name);
+        let dir_path = rs_pedalboard::get_save_dir()
+            .map_err(|e| format!("Failed to get save directory: {}", e))?
+            .join(LOOPER_AUDIO_SAVE_DIR)
+            .join(&self.name);
         std::fs::create_dir_all(&dir_path).map_err(|e| format!("Failed to create directory: {}", e))?;
 
         for (i, track) in self.tracks.iter().enumerate() {
@@ -518,7 +503,10 @@ impl LooperMultitrack {
     }
 
     pub fn load_from_directory(name: &str, sample_rate: u32) -> Result<Self, String> {
-        let dir_path = std::path::Path::new(LOOPER_AUDIO_SAVE_DIR).join(name);
+        let dir_path = rs_pedalboard::get_save_dir()
+            .map_err(|e| format!("Failed to get save directory: {}", e))?
+            .join(LOOPER_AUDIO_SAVE_DIR)
+            .join(name);
         if !dir_path.exists() {
             return Err(format!("Directory {} does not exist", dir_path.display()));
         }
@@ -767,7 +755,7 @@ impl LooperProcessor {
                 }
             },
             "prevselectedtrack" => {
-                if let Some(active_multitrack) = &mut self.active_multitrack {
+                if let Some(_active_multitrack) = &mut self.active_multitrack {
                     if let Some(selected_index) = self.selected_track_index {
                         if selected_index > 0 {
                             self.selected_track_index = Some(selected_index - 1);
@@ -851,6 +839,30 @@ impl LooperProcessor {
                             tracing::warn!("Failed to set next active multitrack: {}", e);
                         }
                     }
+                }
+            },
+            "addmultitrack" => {
+                if let Some(name) = subcommand_parts.get(1) {
+                    if self.looper_information.multitracks_information.iter().any(|mt_info| mt_info.name == *name) {
+                        tracing::warn!("Multitrack with name '{}' already exists", name);
+                    } else {
+                        self.looper_information.multitracks_information.push(MultitrackInformation { name: name.to_string(), track_count: 0 });
+                        if let Err(e) = self.set_active_multitrack(name) {
+                            tracing::warn!("Failed to set new active multitrack: {}", e);
+                        }
+                    }
+                } else {
+                    tracing::warn!("No multitrack name provided for addmultitrack command");
+                }
+            },
+            "addtracktoactivemultitrack" => {
+                if let Some(active_multitrack) = &mut self.active_multitrack {
+                    active_multitrack.tracks.push(LooperTrack::new(Vec::new(), None, self.sample_rate));
+                    if let Some(multitrack_info) = self.looper_information.multitracks_information.iter_mut().find(|mt_info| mt_info.name == active_multitrack.name) {
+                        multitrack_info.track_count += 1;
+                    }
+                } else {
+                    tracing::warn!("No active multitrack to add track to");
                 }
             },
             _ => tracing::warn!("Unknown looper subcommand: {}", subcommand),
