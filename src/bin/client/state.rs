@@ -1344,6 +1344,12 @@ impl State {
                         }
                         LooperSubcommand::StartRecording(track_index) => {
                             self.looper_state.borrow_mut().set_recording_track(Some(track_index));
+                        },
+                        LooperSubcommand::TogglePlaySelectedTrack => {
+                            self.looper_state.borrow_mut().toggle_play_selected_track();
+                        },
+                        LooperSubcommand::ToggleRecordSelectedTrack => {
+                            self.looper_state.borrow_mut().toggle_record_selected_track();
                         }
                         LooperSubcommand::ReverseEffect | LooperSubcommand::SlowEffect => {}
                     }

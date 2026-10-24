@@ -259,4 +259,30 @@ impl LooperClientState {
                 });
         }
     }
+
+    pub fn toggle_play_selected_track(&mut self) {
+        if let Some(active_multitrack) = &mut self.active_multitrack {
+            if let Some(selected_track) = active_multitrack.selected_track {
+                if active_multitrack.tracks_playing.contains(&selected_track) {
+                    active_multitrack
+                        .tracks_playing
+                        .retain(|&i| i != selected_track);
+                } else {
+                    active_multitrack.tracks_playing.push(selected_track);
+                }
+            }
+        }
+    }
+
+    pub fn toggle_record_selected_track(&mut self) {
+        if let Some(active_multitrack) = &mut self.active_multitrack {
+            if let Some(selected_track) = active_multitrack.selected_track {
+                if active_multitrack.track_recording == Some(selected_track) {
+                    active_multitrack.track_recording = None;
+                } else {
+                    active_multitrack.track_recording = Some(selected_track);
+                }
+            }
+        }
+    }
 }

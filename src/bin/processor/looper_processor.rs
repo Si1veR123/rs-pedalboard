@@ -1052,7 +1052,40 @@ impl LooperProcessor {
                 } else {
                     tracing::warn!("No active multitrack to add track to");
                 }
-            }
+            },
+            "toggleplayselectedtrack" => {
+                if let Some(active_multitrack) = &mut self.active_multitrack {
+                    if let Some(selected_index) = self.selected_track_index {
+                        match active_multitrack.tracks[selected_index].playback_state {
+                            TrackPlaybackState::Active { .. } => {
+                                active_multitrack.stop_track(selected_index);
+                            }
+                            _ => {
+                                active_multitrack.play_track(selected_index);
+                            }
+                        }
+                    } else {
+                        tracing::warn!("No track selected to toggle play/stop");
+                    }
+                } else {
+                    tracing::warn!("No active multitrack to toggle play/stop selected track");
+                }
+            },
+            "togglerecordselectedtrack" => {
+                if let Some(active_multitrack) = &mut self.active_multitrack {
+                    if let Some(selected_index) = self.selected_track_index {
+                        if active_multitrack.recording_track == Some(selected_index) {
+                            self.stop_recording(pedalboard, buffer_size);
+                        } else {
+                            active_multitrack.start_recording(selected_index);
+                        }
+                    } else {
+                        tracing::warn!("No track selected to toggle record/stop");
+                    }
+                } else {
+                    tracing::warn!("No active multitrack to toggle record/stop selected track");
+                }
+            },
             _ => tracing::warn!("Unknown looper subcommand: {}", subcommand),
         }
     }

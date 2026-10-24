@@ -62,8 +62,25 @@ fn execute_global_midi_functions(
     change: &MidiChange,
     ui_thread_sender: &Sender<Command>,
     socket_handle: Option<&ClientSocketThreadHandle>,
+    looper_mode: &mut bool,
+    egui_ctx: &egui::Context
 ) {
     for function in functions {
+        if function == &GlobalMidiFunction::ToggleLooperMode {
+            *looper_mode = !*looper_mode;
+            popup!(
+                egui_ctx.clone(),
+                format!("Looper mode {}", if *looper_mode { "enabled" } else { "disabled" }),
+                Some("looper-mode-toggle"),
+                crate::popup_message::PopupMessageType::Info
+            );
+            continue;
+        }
+
+        if function.is_looper_mode_function() ^ *looper_mode {
+            continue;
+        }
+
         let command = function.command_from_function(change);
         if let Some(command) = command {
             match ui_thread_sender.send(command.clone()) {
@@ -91,7 +108,7 @@ pub struct MidiState {
     ui_thread_sender: Sender<Command>,
     socket_handle: Option<ClientSocketThreadHandle>,
     pub active_pedalboard_id: Arc<AtomicU32>,
-    egui_ctx: egui::Context,
+    egui_ctx: egui::Context
 }
 
 impl MidiState {
@@ -114,7 +131,7 @@ impl MidiState {
             socket_handle,
             egui_ctx,
             active_pedalboard_id: Arc::new(AtomicU32::new(active_pedalboard_id)),
-            ui_thread_sender,
+            ui_thread_sender
         }
     }
 
@@ -264,6 +281,8 @@ impl MidiState {
                         &change,
                         ui_thread_sender,
                         socket_handle,
+                        &mut settings_lock.in_looper_mode,
+                        egui_ctx
                     );
                 } else {
                     execute_global_midi_functions(
@@ -271,6 +290,8 @@ impl MidiState {
                         &change,
                         ui_thread_sender,
                         socket_handle,
+                        &mut settings_lock.in_looper_mode,
+                        egui_ctx
                     );
                 }
             }

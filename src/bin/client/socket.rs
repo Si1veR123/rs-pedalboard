@@ -140,7 +140,9 @@ pub enum LooperSubcommand {
     StopRecording,
     ReverseEffect,
     SlowEffect,
-    SetSettings(LooperSettings)
+    SetSettings(LooperSettings),
+    TogglePlaySelectedTrack,
+    ToggleRecordSelectedTrack,
 }
 
 #[derive(Debug, Clone)]
@@ -695,7 +697,9 @@ async fn client_socket_event_loop(
                             LooperSubcommand::NextSelectedTrack => "looper|nextselectedtrack\n".to_string(),
                             LooperSubcommand::PlaySelectedTrack => "looper|playselectedtrack\n".to_string(),
                             LooperSubcommand::StopSelectedTrack => "looper|stopselectedtrack\n".to_string(),
-                            LooperSubcommand::StartRecordingSelectedTrack => "looper|startrecordingselectedtrack\n".to_string()
+                            LooperSubcommand::StartRecordingSelectedTrack => "looper|startrecordingselectedtrack\n".to_string(),
+                            LooperSubcommand::TogglePlaySelectedTrack => "looper|toggleplayselectedtrack\n".to_string(),
+                            LooperSubcommand::ToggleRecordSelectedTrack => "looper|togglerecordselectedtrack\n".to_string(),
                         };
                         if socket_send(&mut stream_writer, &message).await {
                             break;

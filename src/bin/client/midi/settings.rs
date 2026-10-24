@@ -3,6 +3,8 @@ pub struct MidiSettings {
     // Port ID, Settings
     #[serde(default)]
     pub port_settings: HashMap<String, MidiPortSettings>,
+    #[serde(skip)]
+    pub in_looper_mode: bool
 }
 
 impl MidiSettings {
