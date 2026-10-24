@@ -2,9 +2,9 @@ use std::time::Instant;
 
 use eframe::egui::{self, RichText, Vec2, Widget};
 
+use super::{BODY_FONT_SIZE, HEADING_FONT_SIZE, SMALL_BODY_FONT_SIZE};
 use crate::{state::State, FAINT_TEXT_COLOR};
 use rs_pedalboard::dsp::yin::{freq_to_note, PROCESSOR_UPDATE_FREQ_MS};
-use super::{HEADING_FONT_SIZE, SMALL_BODY_FONT_SIZE, BODY_FONT_SIZE};
 
 pub struct TunerWidget {
     pub state: &'static State,
@@ -74,10 +74,7 @@ impl Widget for &mut TunerWidget {
 
         ui.vertical_centered(|ui| {
             ui.add_space(10.0);
-            ui.label(
-                RichText::from("Tuner")
-                    .size(HEADING_FONT_SIZE)
-            );
+            ui.label(RichText::from("Tuner").size(HEADING_FONT_SIZE));
             ui.add_space(7.0);
 
             // Note name
@@ -93,21 +90,27 @@ impl Widget for &mut TunerWidget {
             let needle_im = egui::Image::new(egui::include_image!("../files/tuner_needle.png"))
                 .max_height(bar_height - 10.0)
                 .tint(crate::BACKGROUND_COLOR);
-            let needle_size = match needle_im
-                .load_for_size(ui.ctx(), Vec2::splat(50.0))
-                .expect("Failed to load needle image size")
-                .size()
-            {
-                Some(size) => size,
-                None => {
-                    tracing::warn!("Failed to load needle image size");
+            let needle_size = match needle_im.load_for_size(ui.ctx(), Vec2::splat(50.0)) {
+                Ok(image) => match image.size() {
+                    Some(size) => size,
+                    None => {
+                        tracing::warn!("Loaded needle image has no size");
+                        return;
+                    }
+                },
+                Err(error) => {
+                    tracing::warn!("Failed to load needle image size: {error}");
                     return;
                 }
             };
 
             let bar_width = bg_response.rect.width();
             let needle_x_frac = (cents_offset as f32 + 50.0) / 100.0;
-            let needle_x = (bar_width * needle_x_frac).clamp(0.0, bar_width - needle_size.x);
+            let needle_x = if bar_width > needle_size.x {
+                (bar_width * needle_x_frac).clamp(0.0, bar_width - needle_size.x)
+            } else {
+                bar_width / 2.0
+            };
 
             let min = bg_response.rect.min
                 + Vec2::new(needle_x - needle_size.x / 2.0, bar_height - needle_size.y);
@@ -128,7 +131,11 @@ impl Widget for &mut TunerWidget {
             } else {
                 format!("{}", cents_offset.round() as isize)
             };
-            ui.label(RichText::new(cents_label).size(SMALL_BODY_FONT_SIZE).color(FAINT_TEXT_COLOR));
+            ui.label(
+                RichText::new(cents_label)
+                    .size(SMALL_BODY_FONT_SIZE)
+                    .color(FAINT_TEXT_COLOR),
+            );
 
             ui.add_space(10.0);
         })
