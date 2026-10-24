@@ -123,7 +123,7 @@ impl MidiDevice {
                 held_global_functions,
                 last_pressed_time
             } => {
-                if !held_global_functions.is_empty() && self.use_global {
+                if !held_global_functions.is_empty() {
                     if midi_value == *on_value {
                         *last_pressed_time = Some(Instant::now());
                         return MidiChange::None;
