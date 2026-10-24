@@ -314,6 +314,7 @@ impl MidiDeviceType {
                 ui.end_row();
                 ui.label("Held Global Functions:");
                 global_midi_function_selector(ui, egui::Id::new(device_name).with("held"), held_global_functions);
+                ui.end_row();
             }
         }
     }
