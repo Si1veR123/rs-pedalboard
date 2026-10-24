@@ -21,7 +21,7 @@ pub fn deinterleave_audio(input: &[f32], channels: usize) -> Vec<Vec<f32>> {
 pub fn resample_audio(
     input: &[Vec<f32>],
     input_sample_rate: f32,
-    output_sample_rate: f32
+    output_sample_rate: f32,
 ) -> Result<Vec<Vec<f32>>, String> {
     let resample_ratio = output_sample_rate / input_sample_rate;
 
@@ -29,6 +29,19 @@ pub fn resample_audio(
         return Ok(input.to_vec());
     }
 
+    let chunk_size = input
+        .first()
+        .ok_or_else(|| "Cannot resample audio with no channels".to_string())?
+        .len();
+    if chunk_size == 0 {
+        return Ok(input.to_vec());
+    }
+
+    if input.iter().any(|channel| channel.len() != chunk_size) {
+        return Err("Cannot resample audio with channels of different lengths".to_string());
+    }
+
+    let max_resampled_chunk_size = (chunk_size as f32 * resample_ratio).ceil() as usize;
     let mut resampler = SincFixedIn::<f32>::new(
         resample_ratio as f64,
         1.0,
@@ -39,8 +52,8 @@ pub fn resample_audio(
             interpolation: rubato::SincInterpolationType::Linear,
             window: rubato::WindowFunction::BlackmanHarris2,
         },
-        input.len(),
-        input.len(), // number of channels
+        chunk_size,
+        max_resampled_chunk_size,
     )
     .map_err(|e| e.to_string())?;
 
