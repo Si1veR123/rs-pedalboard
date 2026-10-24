@@ -276,8 +276,13 @@ impl ImpulseResponse {
 
         match load_wav(ir_path.as_ref(), sample_rate, false) {
             Ok(ir) => {
+                let Some(ir_channel) = ir.first().filter(|channel| !channel.is_empty()) else {
+                    tracing::error!("Failed to load IR: WAV file contains no audio samples");
+                    return;
+                };
+
                 self.ir = Some(IRConvolver::new(
-                    ir.first().expect("IR has no channels").as_slice(),
+                    ir_channel.as_slice(),
                     self.max_buffer_size,
                 ));
 
