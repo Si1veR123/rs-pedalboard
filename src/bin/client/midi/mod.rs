@@ -273,29 +273,28 @@ impl MidiState {
             )
         };
 
-        match function_mode {
-            DeviceFunctionMode::Global => {
-                if change == MidiChange::Held {
-                    execute_global_midi_functions(
-                        &held_global_functions.unwrap_or_default(),
-                        &change,
-                        ui_thread_sender,
-                        socket_handle,
-                        &mut settings_lock.in_looper_mode,
-                        egui_ctx
-                    );
-                } else {
-                    execute_global_midi_functions(
-                        &global_functions,
-                        &change,
-                        ui_thread_sender,
-                        socket_handle,
-                        &mut settings_lock.in_looper_mode,
-                        egui_ctx
-                    );
-                }
+        match (function_mode, change.clone()) {
+            (_, MidiChange::Held) => {
+                execute_global_midi_functions(
+                    &held_global_functions.unwrap_or_default(),
+                    &change,
+                    ui_thread_sender,
+                    socket_handle,
+                    &mut settings_lock.in_looper_mode,
+                    egui_ctx
+                );
             }
-            DeviceFunctionMode::Parameter => {
+            (DeviceFunctionMode::Global, _) => {
+                execute_global_midi_functions(
+                    &global_functions,
+                    &change,
+                    ui_thread_sender,
+                    socket_handle,
+                    &mut settings_lock.in_looper_mode,
+                    egui_ctx
+                );
+            }
+            (DeviceFunctionMode::Parameter, _) => {
                 // Activate the parameter functions of this device
                 for (path, function_values) in &parameter_functions {
                     if path.pedalboard_id != Some(active_pedalboard_id) {
@@ -321,7 +320,7 @@ impl MidiState {
                     }
                 }
             }
-            DeviceFunctionMode::Sensible => {
+            (DeviceFunctionMode::Sensible, _) => {
                 // The device has no functions of its own, fall back to a sensible parameter
                 let device_index = settings_lock.get_parameter_device_index(
                     port_id,
