@@ -1,13 +1,20 @@
-use rs_pedalboard::processor_api::{resample_audio, save_wav, load_wav};
+use rs_pedalboard::looper_state::{
+    LooperInformation, LooperSettings, LooperSync, MultitrackInformation, LOOPER_AUDIO_SAVE_DIR,
+};
 use rs_pedalboard::pedalboard::Pedalboard;
-use rs_pedalboard::looper_state::{LOOPER_AUDIO_SAVE_DIR, LooperInformation, LooperSettings, LooperSync, MultitrackInformation};
+use rs_pedalboard::processor_api::{load_wav, resample_audio, save_wav};
 
 const TAIL_MIN_RMS: f32 = 0.001; // Minimum RMS for a tail to be considered significant
 
-
-
-pub fn quantize(base_track_length_samples: usize, track_length_samples: usize, maximum_fractionals: usize) -> usize {
-    if base_track_length_samples <= 0 || track_length_samples <= 0 || base_track_length_samples == track_length_samples {
+pub fn quantize(
+    base_track_length_samples: usize,
+    track_length_samples: usize,
+    maximum_fractionals: usize,
+) -> usize {
+    if base_track_length_samples <= 0
+        || track_length_samples <= 0
+        || base_track_length_samples == track_length_samples
+    {
         return base_track_length_samples;
     }
 
@@ -29,12 +36,12 @@ enum TrackPlaybackState {
     Active {
         started_at: usize,
         stopping: bool, // stop once a full track has been played
-        first_playback: bool
+        first_playback: bool,
     },
     WritingTail {
-        tail_started_at: usize
+        tail_started_at: usize,
     },
-    Stopped
+    Stopped,
 }
 
 impl Default for TrackPlaybackState {
@@ -48,7 +55,7 @@ pub struct LooperTrack {
     // Delay/Reverb tail that is not part of the main loop, but should be played out after the loop ends
     tail: Option<Vec<f32>>,
     sample_rate: u32,
-    playback_state: TrackPlaybackState
+    playback_state: TrackPlaybackState,
 }
 
 impl LooperTrack {
@@ -57,7 +64,7 @@ impl LooperTrack {
             raw_audio,
             sample_rate,
             tail,
-            playback_state: TrackPlaybackState::default()
+            playback_state: TrackPlaybackState::default(),
         }
     }
 
@@ -67,9 +74,12 @@ impl LooperTrack {
 
     pub fn save_to_file(&self, path: &std::path::Path) -> Result<(), String> {
         save_wav(path, &self.raw_audio, self.sample_rate as f32)?;
-        
+
         if let Some(tail) = &self.tail {
-            let tail_path = path.with_file_name(format!("{}_tail.wav", path.file_stem().unwrap().to_string_lossy()));
+            let tail_path = path.with_file_name(format!(
+                "{}_tail.wav",
+                path.file_stem().unwrap().to_string_lossy()
+            ));
             save_wav(&tail_path, tail, self.sample_rate as f32)?;
         }
         Ok(())
@@ -77,12 +87,21 @@ impl LooperTrack {
 
     pub fn load_from_file(path: &std::path::Path, sample_rate: u32) -> Result<Self, String> {
         let mut channels = load_wav(path, sample_rate as f32, false)?;
-        let raw_audio = channels.pop().ok_or_else(|| "No audio channels found in file".to_string())?;
+        let raw_audio = channels
+            .pop()
+            .ok_or_else(|| "No audio channels found in file".to_string())?;
 
-        let tail_path = path.with_file_name(format!("{}_tail.wav", path.file_stem().unwrap().to_string_lossy()));
+        let tail_path = path.with_file_name(format!(
+            "{}_tail.wav",
+            path.file_stem().unwrap().to_string_lossy()
+        ));
         let tail = if tail_path.exists() {
             let mut tail_channels = load_wav(&tail_path, sample_rate as f32, false)?;
-            Some(tail_channels.pop().ok_or_else(|| "No audio channels found in tail file".to_string())?)
+            Some(
+                tail_channels
+                    .pop()
+                    .ok_or_else(|| "No audio channels found in tail file".to_string())?,
+            )
         } else {
             None
         };
@@ -101,17 +120,31 @@ impl LooperTrack {
             return;
         }
 
-        let next_quantised_start = (playback_position as f32 / self.get_length_samples() as f32).ceil() as usize * self.get_length_samples();
-        self.playback_state = TrackPlaybackState::Active { started_at: next_quantised_start, stopping: false, first_playback: true };
+        let next_quantised_start = (playback_position as f32 / self.get_length_samples() as f32)
+            .ceil() as usize
+            * self.get_length_samples();
+        self.playback_state = TrackPlaybackState::Active {
+            started_at: next_quantised_start,
+            stopping: false,
+            first_playback: true,
+        };
     }
 
     pub fn stop_playback(&mut self) {
         match self.playback_state {
-            TrackPlaybackState::Active { started_at, stopping, first_playback: _ } => {
+            TrackPlaybackState::Active {
+                started_at,
+                stopping,
+                first_playback: _,
+            } => {
                 if !stopping {
-                    self.playback_state = TrackPlaybackState::Active { started_at, stopping: true, first_playback: false };
+                    self.playback_state = TrackPlaybackState::Active {
+                        started_at,
+                        stopping: true,
+                        first_playback: false,
+                    };
                 }
-            },
+            }
             _ => {}
         }
     }
@@ -120,7 +153,7 @@ impl LooperTrack {
         // Strategy:
         // If the snapped length is shorter than the current length, we will push the extra samples into the start of the tail (if it exists), or discard them if not.
         // If the snapped length is longer than the current length, we will pull samples from the start of the tail (if it exists) to fill up to the snapped length, or pad with silence if not.
-        
+
         if snap_to_samples < self.raw_audio.len() {
             // Push extra samples from the end of the track into the start of the tail
             if let Some(mut tail) = tail {
@@ -156,7 +189,11 @@ impl LooperTrack {
 
     pub fn add_track_to_buffer(&mut self, mut buffer: &mut [f32], mut playback_position: usize) {
         match self.playback_state {
-            TrackPlaybackState::Active { started_at, stopping, first_playback } => {
+            TrackPlaybackState::Active {
+                started_at,
+                stopping,
+                first_playback,
+            } => {
                 let track_length_samples = self.raw_audio.len();
                 let buffer_length = buffer.len();
                 let original_playback_position = playback_position;
@@ -178,13 +215,16 @@ impl LooperTrack {
                     }
                 }
 
-                let mut track_playback_position = (playback_position - started_at) % track_length_samples;
+                let mut track_playback_position =
+                    (playback_position - started_at) % track_length_samples;
                 let mut ready_to_stop = false;
                 for buffer_chunk in buffer.chunks_mut(track_length_samples) {
                     // Sum from the track playback position to end of track or end of buffer
-                    let samples_to_copy = (track_length_samples - track_playback_position).min(buffer_chunk.len());
+                    let samples_to_copy =
+                        (track_length_samples - track_playback_position).min(buffer_chunk.len());
                     if samples_to_copy > 0 {
-                        let track_slice = &self.raw_audio[track_playback_position..track_playback_position + samples_to_copy];
+                        let track_slice = &self.raw_audio
+                            [track_playback_position..track_playback_position + samples_to_copy];
                         let buffer_slice = &mut buffer_chunk[..samples_to_copy];
                         Self::sum_samples_to_buffer(buffer_slice, track_slice);
 
@@ -192,20 +232,30 @@ impl LooperTrack {
                         if !first_playback {
                             if let Some(tail) = &self.tail {
                                 let tail_length_samples = tail.len();
-                                let tail_slice = &tail[track_playback_position..(track_playback_position + samples_to_copy).min(tail_length_samples)];
-                                Self::sum_samples_to_buffer(&mut buffer_slice[..tail_slice.len()], tail_slice);
+                                let tail_slice = &tail[track_playback_position
+                                    ..(track_playback_position + samples_to_copy)
+                                        .min(tail_length_samples)];
+                                Self::sum_samples_to_buffer(
+                                    &mut buffer_slice[..tail_slice.len()],
+                                    tail_slice,
+                                );
                             }
                         }
 
                         playback_position += samples_to_copy;
-                        track_playback_position = (track_playback_position + samples_to_copy) % track_length_samples;
+                        track_playback_position =
+                            (track_playback_position + samples_to_copy) % track_length_samples;
 
                         if track_playback_position == 0 {
                             // If we have looped back to the start of the track, we are no longer in the first playback
-                            self.playback_state = TrackPlaybackState::Active { started_at, stopping, first_playback: false };
+                            self.playback_state = TrackPlaybackState::Active {
+                                started_at,
+                                stopping,
+                                first_playback: false,
+                            };
                         }
                     }
-                    
+
                     if stopping && track_playback_position == 0 {
                         ready_to_stop = true;
                         break;
@@ -221,8 +271,12 @@ impl LooperTrack {
                             if !first_playback {
                                 if let Some(tail) = &self.tail {
                                     let tail_length_samples = tail.len();
-                                    let tail_slice = &tail[..remaining_samples.min(tail_length_samples)];
-                                    Self::sum_samples_to_buffer(&mut buffer_slice[..tail_slice.len()], tail_slice);
+                                    let tail_slice =
+                                        &tail[..remaining_samples.min(tail_length_samples)];
+                                    Self::sum_samples_to_buffer(
+                                        &mut buffer_slice[..tail_slice.len()],
+                                        tail_slice,
+                                    );
                                 }
                             }
 
@@ -230,19 +284,23 @@ impl LooperTrack {
                             track_playback_position = remaining_samples;
                         }
                     }
-
                 }
 
                 if ready_to_stop {
                     if self.tail.is_some() {
-                        self.playback_state = TrackPlaybackState::WritingTail { tail_started_at: playback_position };
+                        self.playback_state = TrackPlaybackState::WritingTail {
+                            tail_started_at: playback_position,
+                        };
                         // Maybe a little hacky, but we want to start writing the tail in the rest of the buffer
                         let written_samples = playback_position - original_playback_position;
                         let buffer_len = buffer.len();
 
                         // If we still have space in the buffer, write the tail to it
                         if !(written_samples >= buffer_len) {
-                            self.add_track_to_buffer(&mut buffer[written_samples..], playback_position);
+                            self.add_track_to_buffer(
+                                &mut buffer[written_samples..],
+                                playback_position,
+                            );
                         }
                         return;
                     } else {
@@ -257,10 +315,13 @@ impl LooperTrack {
                     let buffer_length = buffer.len();
 
                     let tail_start_index = playback_position.saturating_sub(tail_started_at);
-                    let samples_to_copy = tail_length_samples.saturating_sub(tail_start_index).min(buffer_length);
+                    let samples_to_copy = tail_length_samples
+                        .saturating_sub(tail_start_index)
+                        .min(buffer_length);
 
                     if samples_to_copy > 0 {
-                        let tail_slice = &tail[tail_start_index..tail_start_index + samples_to_copy];
+                        let tail_slice =
+                            &tail[tail_start_index..tail_start_index + samples_to_copy];
                         let buffer_slice = &mut buffer[..samples_to_copy];
                         Self::sum_samples_to_buffer(buffer_slice, tail_slice);
                     }
@@ -273,7 +334,7 @@ impl LooperTrack {
                     // No tail, so we just stop playback
                     self.playback_state = TrackPlaybackState::Stopped;
                 }
-            },
+            }
             TrackPlaybackState::Stopped => {
                 // Do nothing, track is stopped
             }
@@ -289,21 +350,34 @@ impl LooperTrack {
 
     pub fn half_speed_effect(&mut self) {
         let channels = vec![self.raw_audio.clone()];
-        let mut resampled_channels = resample_audio(&channels, self.sample_rate as f32, self.sample_rate as f32 / 2.0).expect("Resampling should not fail");
-        self.raw_audio = resampled_channels.pop().expect("Resampled output should have a channel");
+        let mut resampled_channels = resample_audio(
+            &channels,
+            self.sample_rate as f32,
+            self.sample_rate as f32 / 2.0,
+        )
+        .expect("Resampling should not fail");
+        self.raw_audio = resampled_channels
+            .pop()
+            .expect("Resampled output should have a channel");
         if let Some(tail) = &mut self.tail {
             let channels = vec![tail.clone()];
-            let mut resampled_channels = resample_audio(&channels, self.sample_rate as f32, self.sample_rate as f32 / 2.0).expect("Resampling should not fail");
-            *tail = resampled_channels.pop().expect("Resampled output should have a channel");
+            let mut resampled_channels = resample_audio(
+                &channels,
+                self.sample_rate as f32,
+                self.sample_rate as f32 / 2.0,
+            )
+            .expect("Resampling should not fail");
+            *tail = resampled_channels
+                .pop()
+                .expect("Resampled output should have a channel");
         }
     }
 }
 
-
 #[derive(Debug, Clone)]
 enum MultitrackPlaybackState {
     Playing(usize),
-    Stopped
+    Stopped,
 }
 
 pub struct LooperMultitrack {
@@ -321,7 +395,7 @@ impl LooperMultitrack {
             tracks: Vec::new(),
             recording_track: None,
             sample_rate,
-            playback: MultitrackPlaybackState::Stopped
+            playback: MultitrackPlaybackState::Stopped,
         }
     }
 
@@ -332,11 +406,17 @@ impl LooperMultitrack {
     }
 
     fn tail_is_significant(tail: &[f32]) -> bool {
-        let rms = (tail.iter().map(|&sample| sample * sample).sum::<f32>() / tail.len() as f32).sqrt();
+        let rms =
+            (tail.iter().map(|&sample| sample * sample).sum::<f32>() / tail.len() as f32).sqrt();
         rms >= TAIL_MIN_RMS
     }
 
-    fn capture_tail(&self, pedalboard: &mut Pedalboard, buffer_size: usize, max_tail_samples: usize) -> Option<Vec<f32>> {
+    fn capture_tail(
+        &self,
+        pedalboard: &mut Pedalboard,
+        buffer_size: usize,
+        max_tail_samples: usize,
+    ) -> Option<Vec<f32>> {
         if !pedalboard.has_time_based_pedal() {
             return None;
         }
@@ -371,7 +451,9 @@ impl LooperMultitrack {
 
     /// Track with shortest length in samples, ignoring the track at `ignore` index if provided
     fn get_base_track_length(&self, ignore: Option<usize>) -> Option<usize> {
-        self.tracks.iter().enumerate()
+        self.tracks
+            .iter()
+            .enumerate()
             .filter(|(i, _)| Some(*i) != ignore)
             .map(|(_, track)| track.raw_audio.len())
             .filter(|length| *length > 0)
@@ -380,12 +462,19 @@ impl LooperMultitrack {
 
     pub fn start_recording(&mut self, to: usize) {
         if to >= self.tracks.len() {
-            self.tracks.resize_with(to + 1, || LooperTrack::new(Vec::new(), None, self.sample_rate));
+            self.tracks.resize_with(to + 1, || {
+                LooperTrack::new(Vec::new(), None, self.sample_rate)
+            });
         }
         self.recording_track = Some(to);
     }
 
-    fn stop_recording(&mut self, pedalboard: &mut Pedalboard, buffer_size: usize, quantize_length_samples: usize) {
+    fn stop_recording(
+        &mut self,
+        pedalboard: &mut Pedalboard,
+        buffer_size: usize,
+        quantize_length_samples: usize,
+    ) {
         let recording_track = self.recording_track.take();
 
         if let Some(recording_track) = recording_track {
@@ -394,10 +483,21 @@ impl LooperMultitrack {
         }
     }
 
-    pub fn stop_recording_dynamic_snap(&mut self, pedalboard: &mut Pedalboard, buffer_size: usize, maximum_fractionals: usize) {
+    pub fn stop_recording_dynamic_snap(
+        &mut self,
+        pedalboard: &mut Pedalboard,
+        buffer_size: usize,
+        maximum_fractionals: usize,
+    ) {
         if let Some(recording_track) = self.recording_track {
-            let quantized_length_samples = if let Some(base_track_length) = self.get_base_track_length(Some(recording_track)) {
-                quantize(base_track_length, self.tracks[recording_track].get_length_samples(), maximum_fractionals)
+            let quantized_length_samples = if let Some(base_track_length) =
+                self.get_base_track_length(Some(recording_track))
+            {
+                quantize(
+                    base_track_length,
+                    self.tracks[recording_track].get_length_samples(),
+                    maximum_fractionals,
+                )
             } else {
                 self.tracks[recording_track].get_length_samples()
             };
@@ -406,10 +506,16 @@ impl LooperMultitrack {
         }
     }
 
-    pub fn stop_recording_bpm_snap(&mut self, pedalboard: &mut Pedalboard, buffer_size: usize, looper_sync: &LooperSync) {
+    pub fn stop_recording_bpm_snap(
+        &mut self,
+        pedalboard: &mut Pedalboard,
+        buffer_size: usize,
+        looper_sync: &LooperSync,
+    ) {
         if let Some(recording_track) = self.recording_track {
             let recording_samples = self.tracks[recording_track].get_length_samples();
-            let quantized_length_samples = looper_sync.quantize(recording_samples, self.sample_rate as f32);
+            let quantized_length_samples =
+                looper_sync.quantize(recording_samples, self.sample_rate as f32);
             self.stop_recording(pedalboard, buffer_size, quantized_length_samples);
         }
     }
@@ -421,15 +527,22 @@ impl LooperMultitrack {
     }
 
     pub fn add_tracks_to_buffer(&mut self, buffer: &mut [f32]) {
-        if !matches!(self.playback, MultitrackPlaybackState::Stopped) && self.tracks.iter().any(|track| !matches!(track.playback_state, TrackPlaybackState::Stopped)) {
+        if !matches!(self.playback, MultitrackPlaybackState::Stopped)
+            && self
+                .tracks
+                .iter()
+                .any(|track| !matches!(track.playback_state, TrackPlaybackState::Stopped))
+        {
             for track in &mut self.tracks {
                 match &mut self.playback {
                     MultitrackPlaybackState::Playing(position) => {
                         track.add_track_to_buffer(buffer, *position);
-                        *position += buffer.len();
-                    },
+                    }
                     MultitrackPlaybackState::Stopped => {}
                 }
+            }
+            if let MultitrackPlaybackState::Playing(position) = &mut self.playback {
+                *position += buffer.len();
             }
         } else {
             // All tracks are stopped, so stop multitrack playback
@@ -445,7 +558,7 @@ impl LooperMultitrack {
                         track.start_playback(position);
                     }
                 }
-            },
+            }
             MultitrackPlaybackState::Stopped => {
                 self.playback = MultitrackPlaybackState::Playing(0);
                 for track in &mut self.tracks {
@@ -462,10 +575,13 @@ impl LooperMultitrack {
 
         match self.playback {
             MultitrackPlaybackState::Playing(position) => {
-                if !matches!(self.tracks[track_index].playback_state, TrackPlaybackState::Active { .. }) {
+                if !matches!(
+                    self.tracks[track_index].playback_state,
+                    TrackPlaybackState::Active { .. }
+                ) {
                     self.tracks[track_index].start_playback(position);
                 }
-            },
+            }
             MultitrackPlaybackState::Stopped => {
                 self.playback = MultitrackPlaybackState::Playing(0);
                 self.tracks[track_index].start_playback(0);
@@ -492,7 +608,8 @@ impl LooperMultitrack {
             .map_err(|e| format!("Failed to get save directory: {}", e))?
             .join(LOOPER_AUDIO_SAVE_DIR)
             .join(&self.name);
-        std::fs::create_dir_all(&dir_path).map_err(|e| format!("Failed to create directory: {}", e))?;
+        std::fs::create_dir_all(&dir_path)
+            .map_err(|e| format!("Failed to create directory: {}", e))?;
 
         for (i, track) in self.tracks.iter().enumerate() {
             let track_path = dir_path.join(format!("track_{}.wav", i));
@@ -512,10 +629,18 @@ impl LooperMultitrack {
         }
 
         let mut tracks = Vec::new();
-        for entry in std::fs::read_dir(&dir_path).map_err(|e| format!("Failed to read directory: {}", e))? {
+        for entry in
+            std::fs::read_dir(&dir_path).map_err(|e| format!("Failed to read directory: {}", e))?
+        {
             let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
             let path = entry.path();
-            if path.extension().and_then(|s| s.to_str()) == Some("wav") && !path.file_name().and_then(|s| s.to_str()).unwrap_or("").ends_with("_tail.wav") {
+            if path.extension().and_then(|s| s.to_str()) == Some("wav")
+                && !path
+                    .file_name()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("")
+                    .ends_with("_tail.wav")
+            {
                 let track = LooperTrack::load_from_file(&path, sample_rate)?;
                 tracks.push(track);
             }
@@ -526,7 +651,7 @@ impl LooperMultitrack {
             tracks,
             recording_track: None,
             sample_rate,
-            playback: MultitrackPlaybackState::Stopped
+            playback: MultitrackPlaybackState::Stopped,
         })
     }
 }
@@ -536,7 +661,7 @@ pub struct LooperProcessor {
     pub looper_information: LooperInformation,
     pub active_multitrack: Option<LooperMultitrack>,
     selected_track_index: Option<usize>,
-    sample_rate: u32
+    sample_rate: u32,
 }
 
 impl Default for LooperProcessor {
@@ -545,7 +670,7 @@ impl Default for LooperProcessor {
             looper_information: LooperInformation::default(),
             active_multitrack: None,
             selected_track_index: None,
-            sample_rate: 44100
+            sample_rate: 44100,
         }
     }
 }
@@ -557,7 +682,7 @@ impl LooperProcessor {
             looper_information,
             active_multitrack: None,
             selected_track_index: None,
-            sample_rate
+            sample_rate,
         })
     }
 
@@ -571,13 +696,21 @@ impl LooperProcessor {
         if let Some(active_multitrack) = &mut self.active_multitrack {
             if active_multitrack.tracks.len() > 1 {
                 // If there are multiple tracks, snap according to multiples of the shortest track length
-                active_multitrack.stop_recording_dynamic_snap(pedalboard, buffer_size, self.looper_information.settings.maximum_fractionals);
+                active_multitrack.stop_recording_dynamic_snap(
+                    pedalboard,
+                    buffer_size,
+                    self.looper_information.settings.maximum_fractionals,
+                );
             } else {
                 // This is the first track, so if we have a looper sync, snap to the nearest BPM
                 if let Some(looper_sync) = &self.looper_information.settings.looper_sync {
                     active_multitrack.stop_recording_bpm_snap(pedalboard, buffer_size, looper_sync);
                 } else {
-                    active_multitrack.stop_recording_dynamic_snap(pedalboard, buffer_size, self.looper_information.settings.maximum_fractionals);
+                    active_multitrack.stop_recording_dynamic_snap(
+                        pedalboard,
+                        buffer_size,
+                        self.looper_information.settings.maximum_fractionals,
+                    );
                 }
             }
 
@@ -626,13 +759,19 @@ impl LooperProcessor {
     pub fn set_active_multitrack(&mut self, name: &str) -> Result<(), String> {
         let multitrack = match LooperMultitrack::load_from_directory(name, self.sample_rate) {
             Ok(multitrack) => multitrack,
-            Err(_) => LooperMultitrack::new_and_save_to_disk(name.to_string(), self.sample_rate)?
+            Err(_) => LooperMultitrack::new_and_save_to_disk(name.to_string(), self.sample_rate)?,
         };
         self.active_multitrack = Some(multitrack);
         Ok(())
     }
 
-    pub fn handle_client_subcommand(&mut self, subcommand_and_args: &str, client_command_buffer: &mut Vec<String>, pedalboard: &mut Pedalboard, buffer_size: usize) {
+    pub fn handle_client_subcommand(
+        &mut self,
+        subcommand_and_args: &str,
+        client_command_buffer: &mut Vec<String>,
+        pedalboard: &mut Pedalboard,
+        buffer_size: usize,
+    ) {
         let subcommand_parts: Vec<&str> = subcommand_and_args.split('|').collect();
         let subcommand = match subcommand_parts.get(0) {
             Some(cmd) => *cmd,
@@ -644,64 +783,76 @@ impl LooperProcessor {
 
         match subcommand {
             "getinfo" => {
-                let info_json = serde_json::to_string(&self.looper_information).unwrap_or_else(|e| format!("Failed to serialize looper information: {}", e));
+                let info_json = serde_json::to_string(&self.looper_information)
+                    .unwrap_or_else(|e| format!("Failed to serialize looper information: {}", e));
                 client_command_buffer.push(format!("looperinfo {}", info_json));
                 // assume if client is asking for getinfo, it has started a new session, so reset the active multitrack to None
                 self.active_multitrack = None;
                 self.selected_track_index = None;
-            },
+            }
             "setactivemultitrack" => {
                 if let Some(name) = subcommand_parts.get(1) {
                     match self.set_active_multitrack(name) {
-                        Ok(_) => client_command_buffer.push(format!("popup:Active multitrack set to {}", name)),
-                        Err(e) => client_command_buffer.push(format!("popup:Failed to set active multitrack: {}", e)),
+                        Ok(_) => client_command_buffer
+                            .push(format!("popup:Active multitrack set to {}", name)),
+                        Err(e) => client_command_buffer
+                            .push(format!("popup:Failed to set active multitrack: {}", e)),
                     }
                 } else {
                     tracing::warn!("No multitrack name provided for setactivemultitrack command");
                 }
-            },
+            }
             "playall" => {
                 self.play_all();
-            },
+            }
             "playtrack" => {
                 if let Some(track_index_str) = subcommand_parts.get(1) {
                     if let Ok(track_index) = track_index_str.parse::<usize>() {
                         self.play_track(track_index);
                     } else {
-                        tracing::warn!("Invalid track index provided for playtrack command: {}", track_index_str);
+                        tracing::warn!(
+                            "Invalid track index provided for playtrack command: {}",
+                            track_index_str
+                        );
                     }
                 } else {
                     tracing::warn!("No track index provided for playtrack command");
                 }
-            },
+            }
             "stopall" => {
                 self.stop_all();
-            },
+            }
             "stoptrack" => {
                 if let Some(track_index_str) = subcommand_parts.get(1) {
                     if let Ok(track_index) = track_index_str.parse::<usize>() {
                         self.stop_track(track_index);
                     } else {
-                        tracing::warn!("Invalid track index provided for stoptrack command: {}", track_index_str);
+                        tracing::warn!(
+                            "Invalid track index provided for stoptrack command: {}",
+                            track_index_str
+                        );
                     }
                 } else {
                     tracing::warn!("No track index provided for stoptrack command");
                 }
-            },
+            }
             "startrecording" => {
                 if let Some(track_index_str) = subcommand_parts.get(1) {
                     if let Ok(track_index) = track_index_str.parse::<usize>() {
                         self.start_recording(track_index);
                     } else {
-                        tracing::warn!("Invalid track index provided for startrecording command: {}", track_index_str);
+                        tracing::warn!(
+                            "Invalid track index provided for startrecording command: {}",
+                            track_index_str
+                        );
                     }
                 } else {
                     tracing::warn!("No track index provided for startrecording command");
                 }
-            },
+            }
             "stoprecording" => {
                 self.stop_recording(pedalboard, buffer_size);
-            },
+            }
             "reverseeffect" => {
                 if let Some(track_index_str) = subcommand_parts.get(1) {
                     if let Ok(track_index) = track_index_str.parse::<usize>() {
@@ -709,18 +860,24 @@ impl LooperProcessor {
                             if track_index < active_multitrack.tracks.len() {
                                 active_multitrack.tracks[track_index].reverse_effect();
                             } else {
-                                tracing::warn!("Invalid track index provided for reverseeffect command: {}", track_index);
+                                tracing::warn!(
+                                    "Invalid track index provided for reverseeffect command: {}",
+                                    track_index
+                                );
                             }
                         } else {
                             tracing::warn!("No active multitrack to apply reverseeffect command");
                         }
                     } else {
-                        tracing::warn!("Invalid track index provided for reverseeffect command: {}", track_index_str);
+                        tracing::warn!(
+                            "Invalid track index provided for reverseeffect command: {}",
+                            track_index_str
+                        );
                     }
                 } else {
                     tracing::warn!("No track index provided for reverseeffect command");
                 }
-            },
+            }
             "sloweffect" => {
                 if let Some(track_index_str) = subcommand_parts.get(1) {
                     if let Ok(track_index) = track_index_str.parse::<usize>() {
@@ -728,24 +885,30 @@ impl LooperProcessor {
                             if track_index < active_multitrack.tracks.len() {
                                 active_multitrack.tracks[track_index].half_speed_effect();
                             } else {
-                                tracing::warn!("Invalid track index provided for sloweffect command: {}", track_index);
+                                tracing::warn!(
+                                    "Invalid track index provided for sloweffect command: {}",
+                                    track_index
+                                );
                             }
                         } else {
                             tracing::warn!("No active multitrack to apply sloweffect command");
                         }
                     } else {
-                        tracing::warn!("Invalid track index provided for sloweffect command: {}", track_index_str);
+                        tracing::warn!(
+                            "Invalid track index provided for sloweffect command: {}",
+                            track_index_str
+                        );
                     }
                 } else {
                     tracing::warn!("No track index provided for sloweffect command");
                 }
-            },
+            }
             "setsettings" => {
                 if let Some(settings_json) = subcommand_parts.get(1) {
                     match serde_json::from_str::<LooperSettings>(settings_json) {
                         Ok(new_settings) => {
                             self.looper_information.settings = new_settings;
-                        },
+                        }
                         Err(e) => {
                             tracing::warn!("Failed to parse looper settings JSON: {}", e);
                         }
@@ -753,7 +916,7 @@ impl LooperProcessor {
                 } else {
                     tracing::warn!("No settings JSON provided for setsettings command");
                 }
-            },
+            }
             "prevselectedtrack" => {
                 if let Some(_active_multitrack) = &mut self.active_multitrack {
                     if let Some(selected_index) = self.selected_track_index {
@@ -766,7 +929,7 @@ impl LooperProcessor {
                 } else {
                     tracing::warn!("No active multitrack to select previous track");
                 }
-            },
+            }
             "nextselectedtrack" => {
                 if let Some(active_multitrack) = &mut self.active_multitrack {
                     if let Some(selected_index) = self.selected_track_index {
@@ -779,7 +942,7 @@ impl LooperProcessor {
                 } else {
                     tracing::warn!("No active multitrack to select next track");
                 }
-            },
+            }
             "playselectedtrack" => {
                 if let Some(active_multitrack) = &mut self.active_multitrack {
                     if let Some(selected_index) = self.selected_track_index {
@@ -790,7 +953,7 @@ impl LooperProcessor {
                 } else {
                     tracing::warn!("No active multitrack to play selected track");
                 }
-            },
+            }
             "stopselectedtrack" => {
                 if let Some(active_multitrack) = &mut self.active_multitrack {
                     if let Some(selected_index) = self.selected_track_index {
@@ -801,7 +964,7 @@ impl LooperProcessor {
                 } else {
                     tracing::warn!("No active multitrack to stop selected track");
                 }
-            },
+            }
             "startrecordingselectedtrack" => {
                 if let Some(active_multitrack) = &mut self.active_multitrack {
                     if let Some(selected_index) = self.selected_track_index {
@@ -812,11 +975,14 @@ impl LooperProcessor {
                 } else {
                     tracing::warn!("No active multitrack to start recording selected track");
                 }
-            },
+            }
             "prevactivemultitrack" => {
                 if let Some(current_multitrack) = &self.active_multitrack {
                     let multitrack_names = &self.looper_information.multitracks_information;
-                    if let Some(current_index) = multitrack_names.iter().position(|mt_info| mt_info.name == current_multitrack.name) {
+                    if let Some(current_index) = multitrack_names
+                        .iter()
+                        .position(|mt_info| mt_info.name == current_multitrack.name)
+                    {
                         let prev_index = if current_index == 0 {
                             multitrack_names.len() - 1
                         } else {
@@ -828,11 +994,14 @@ impl LooperProcessor {
                         }
                     }
                 }
-            },
+            }
             "nextactivemultitrack" => {
                 if let Some(current_multitrack) = &self.active_multitrack {
                     let multitrack_names = &self.looper_information.multitracks_information;
-                    if let Some(current_index) = multitrack_names.iter().position(|mt_info| mt_info.name == current_multitrack.name) {
+                    if let Some(current_index) = multitrack_names
+                        .iter()
+                        .position(|mt_info| mt_info.name == current_multitrack.name)
+                    {
                         let next_index = (current_index + 1) % multitrack_names.len();
                         let next_name = &multitrack_names[next_index].name.clone();
                         if let Err(e) = self.set_active_multitrack(next_name) {
@@ -840,13 +1009,23 @@ impl LooperProcessor {
                         }
                     }
                 }
-            },
+            }
             "addmultitrack" => {
                 if let Some(name) = subcommand_parts.get(1) {
-                    if self.looper_information.multitracks_information.iter().any(|mt_info| mt_info.name == *name) {
+                    if self
+                        .looper_information
+                        .multitracks_information
+                        .iter()
+                        .any(|mt_info| mt_info.name == *name)
+                    {
                         tracing::warn!("Multitrack with name '{}' already exists", name);
                     } else {
-                        self.looper_information.multitracks_information.push(MultitrackInformation { name: name.to_string(), track_count: 0 });
+                        self.looper_information.multitracks_information.push(
+                            MultitrackInformation {
+                                name: name.to_string(),
+                                track_count: 0,
+                            },
+                        );
                         if let Err(e) = self.set_active_multitrack(name) {
                             tracing::warn!("Failed to set new active multitrack: {}", e);
                         }
@@ -854,17 +1033,26 @@ impl LooperProcessor {
                 } else {
                     tracing::warn!("No multitrack name provided for addmultitrack command");
                 }
-            },
+            }
             "addtracktoactivemultitrack" => {
                 if let Some(active_multitrack) = &mut self.active_multitrack {
-                    active_multitrack.tracks.push(LooperTrack::new(Vec::new(), None, self.sample_rate));
-                    if let Some(multitrack_info) = self.looper_information.multitracks_information.iter_mut().find(|mt_info| mt_info.name == active_multitrack.name) {
+                    active_multitrack.tracks.push(LooperTrack::new(
+                        Vec::new(),
+                        None,
+                        self.sample_rate,
+                    ));
+                    if let Some(multitrack_info) = self
+                        .looper_information
+                        .multitracks_information
+                        .iter_mut()
+                        .find(|mt_info| mt_info.name == active_multitrack.name)
+                    {
                         multitrack_info.track_count += 1;
                     }
                 } else {
                     tracing::warn!("No active multitrack to add track to");
                 }
-            },
+            }
             _ => tracing::warn!("Unknown looper subcommand: {}", subcommand),
         }
     }

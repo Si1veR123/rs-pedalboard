@@ -53,7 +53,8 @@ impl Widget for &mut UtilitiesScreen {
             .show(ui, |ui| {
                 ui.vertical_centered(|ui| {
                     let spacing = 8.0;
-                    let widget_height = ui.available_height() / 2.0 - spacing * 3.0;
+                    let widget_height =
+                        ((ui.available_height() - spacing * 5.0) / 4.0).max(0.0);
                     ui.add_space(spacing);
                     ui.allocate_ui_with_layout(
                         Vec2::new(ui.available_width(), widget_height),
