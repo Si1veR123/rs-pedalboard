@@ -41,7 +41,6 @@ pub fn resample_audio(
         return Err("Cannot resample audio with channels of different lengths".to_string());
     }
 
-    let max_resampled_chunk_size = (chunk_size as f32 * resample_ratio).ceil() as usize;
     let mut resampler = SincFixedIn::<f32>::new(
         resample_ratio as f64,
         1.0,
@@ -53,7 +52,7 @@ pub fn resample_audio(
             window: rubato::WindowFunction::BlackmanHarris2,
         },
         chunk_size,
-        max_resampled_chunk_size,
+        input.len(),
     )
     .map_err(|e| e.to_string())?;
 
@@ -117,6 +116,9 @@ pub fn load_wav<P: AsRef<Path>>(
 
     float_samples.and_then(|float_samples| {
         let num_channels = spec.channels as usize;
+        if num_channels == 0 {
+            return Err("WAV file has no audio channels".to_string());
+        }
         let input_sample_rate = spec.sample_rate as f32;
 
         let channels: Vec<Vec<f32>> = deinterleave_audio(&float_samples, num_channels);

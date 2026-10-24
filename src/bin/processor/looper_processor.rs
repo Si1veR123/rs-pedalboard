@@ -86,22 +86,19 @@ impl LooperTrack {
     }
 
     pub fn load_from_file(path: &std::path::Path, sample_rate: u32) -> Result<Self, String> {
-        let mut channels = load_wav(path, sample_rate as f32, false)?;
-        let raw_audio = channels
-            .pop()
-            .ok_or_else(|| "No audio channels found in file".to_string())?;
+        let channels = load_wav(path, sample_rate as f32, false)?;
+        let raw_audio = Self::channels_to_mono(channels)?;
 
         let tail_path = path.with_file_name(format!(
             "{}_tail.wav",
             path.file_stem().unwrap().to_string_lossy()
         ));
         let tail = if tail_path.exists() {
-            let mut tail_channels = load_wav(&tail_path, sample_rate as f32, false)?;
-            Some(
-                tail_channels
-                    .pop()
-                    .ok_or_else(|| "No audio channels found in tail file".to_string())?,
-            )
+            Some(Self::channels_to_mono(load_wav(
+                &tail_path,
+                sample_rate as f32,
+                false,
+            )?)?)
         } else {
             None
         };
@@ -109,6 +106,29 @@ impl LooperTrack {
         let track = Self::new(raw_audio, tail, sample_rate);
 
         Ok(track)
+    }
+
+    fn channels_to_mono(channels: Vec<Vec<f32>>) -> Result<Vec<f32>, String> {
+        let channel_count = channels.len();
+        let sample_count = channels
+            .first()
+            .ok_or_else(|| "No audio channels found in file".to_string())?
+            .len();
+
+        if channels
+            .iter()
+            .any(|channel| channel.len() != sample_count)
+        {
+            return Err("Audio channels have different lengths".to_string());
+        }
+
+        let mut mono = vec![0.0; sample_count];
+        for channel in channels {
+            for (sample, channel_sample) in mono.iter_mut().zip(channel) {
+                *sample += channel_sample / channel_count as f32;
+            }
+        }
+        Ok(mono)
     }
 
     pub fn push_audio(&mut self, audio: &[f32]) {
