@@ -22,14 +22,6 @@ use crate::{
     looper_processor::LooperProcessor, metronome_player::MetronomePlayer, recording::RecordingHandle, settings::ProcessorSettings, volume_monitor::PeakVolumeMonitor, volume_normalization::PeakNormalizer
 };
 
-fn peak_sample(samples: &[f32]) -> f32 {
-    samples
-        .iter()
-        .map(|sample| sample.abs())
-        .fold(0.0, f32::max)
-}
-
-
 pub struct AudioProcessor {
     pub pedalboard_set: PedalboardSet,
     pub command_receiver: SmolReceiver<Box<str>>,
@@ -94,21 +86,13 @@ impl AudioProcessor {
 
         // Skip audio processing if output is muted 
         if self.mute_status.is_muted() {
-            let input_peak = peak_sample(&self.data_buffer);
-            if input_peak > 0.0 {
-                tracing::debug!(
-                    "Audio diagnostic: input peak {:.6} was silenced by mute status {:?}",
-                    input_peak,
-                    self.mute_status
-                );
-            }
             self.volume_monitor.4.reset();
             self.data_buffer.fill(0.0);
             self.write_data_buffer_to_output();
             self.send_volume_monitor_to_client();
             self.handle_all_commands();
             self.send_commands_to_client();
-            return;
+            return
         }
 
         self.processing_buffer.clear();
@@ -120,32 +104,10 @@ impl AudioProcessor {
             self.apply_pedalboard_processing();
         }
 
-        let input_peak = peak_sample(&self.data_buffer);
-        let processed_peak = peak_sample(&self.processing_buffer);
-        if input_peak > 0.0 && processed_peak == 0.0 {
-            tracing::debug!(
-                "Audio diagnostic: input peak {:.6}, post-pedalboard peak {:.6}, tuner active {}",
-                input_peak,
-                processed_peak,
-                self.tuner_handle.is_some()
-            );
-        }
-
         self.downsample_into_data_buffer();
         self.apply_master_out();
         self.write_processed_data_to_recording();
         self.looper_pass();
-
-        let output_peak = peak_sample(&self.data_buffer);
-        if input_peak > 0.0 && output_peak == 0.0 {
-            tracing::debug!(
-                "Audio diagnostic: input peak {:.6}, post-pedalboard peak {:.6}, post-looper peak {:.6}, mute status {:?}",
-                input_peak,
-                processed_peak,
-                output_peak,
-                self.mute_status
-            );
-        }
 
         // Update output volume monitor
         self.volume_monitor.4.add_samples(&self.data_buffer);
