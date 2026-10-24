@@ -1,5 +1,9 @@
 use crate::{
-    FAINT_TEXT_COLOR, THEME_COLOR, socket::{Command, LooperSubcommand}, state::State, ui_helpers::integer_selector, utilities::{BODY_FONT_SIZE, HEADING_FONT_SIZE}
+    socket::{Command, LooperSubcommand},
+    state::State,
+    ui_helpers::integer_selector,
+    utilities::{BODY_FONT_SIZE, HEADING_FONT_SIZE},
+    FAINT_TEXT_COLOR, THEME_COLOR,
 };
 use eframe::egui::{self, Color32, RichText, Stroke, Vec2, Widget};
 use rs_pedalboard::looper_state::{LooperSettings, LooperSync};
@@ -96,7 +100,7 @@ impl LooperWidget {
         ui.allocate_ui_with_layout(
             egui::vec2(ui.available_width() * 0.75, 30.0),
             egui::Layout::top_down(egui::Align::Center),
-        |ui| {
+            |ui| {
                 const SETTINGS_VERTICAL_SPACING: f32 = 25.0;
 
                 ui.label(RichText::new("Settings").size(BODY_FONT_SIZE));
@@ -105,7 +109,10 @@ impl LooperWidget {
 
                 let mut maximum_fractionals = settings.maximum_fractionals as u32;
 
-                ui.label(RichText::new(format!("Maximum Fractionals: {}", maximum_fractionals)).size(BODY_FONT_SIZE));
+                ui.label(
+                    RichText::new(format!("Maximum Fractionals: {}", maximum_fractionals))
+                        .size(BODY_FONT_SIZE),
+                );
 
                 if integer_selector(ui, &mut maximum_fractionals, 1..=64) {
                     settings.maximum_fractionals = maximum_fractionals as usize;
@@ -148,7 +155,10 @@ impl LooperWidget {
                     ui.add_space(SETTINGS_VERTICAL_SPACING);
                     let mut beats_per_bar = beats_value as u32;
 
-                    ui.label(RichText::new(format!("{} Beats per Bar", beats_per_bar)).size(BODY_FONT_SIZE));
+                    ui.label(
+                        RichText::new(format!("{} Beats per Bar", beats_per_bar))
+                            .size(BODY_FONT_SIZE),
+                    );
 
                     if integer_selector(ui, &mut beats_per_bar, 1..=32) {
                         if let Some(sync) = settings.looper_sync.as_mut() {
@@ -157,7 +167,7 @@ impl LooperWidget {
                         self.setting_changed(settings.clone());
                     }
                 }
-            }
+            },
         );
     }
 
@@ -267,10 +277,7 @@ impl Widget for &mut LooperWidget {
     fn ui(self, ui: &mut egui::Ui) -> egui::Response {
         ui.vertical_centered(|ui| {
             ui.add_space(10.0);
-            ui.label(
-                RichText::new("Looper")
-                    .size(HEADING_FONT_SIZE)
-            );
+            ui.label(RichText::new("Looper").size(HEADING_FONT_SIZE));
             ui.add_space(10.0);
             self.draw_settings(ui);
 
@@ -296,31 +303,51 @@ impl Widget for &mut LooperWidget {
 
             if let Some(active) = active {
                 ui.allocate_ui_with_layout(
-                    Vec2::new(ui.available_width() * 0.3, 30.0),
+                    Vec2::new(ui.available_width() * 0.4, 30.0),
                     egui::Layout::top_down(egui::Align::Center),
                     |ui| {
                         ui.label(RichText::new(active.name.clone()).size(BODY_FONT_SIZE));
+                        let playback_button_size = Vec2::new(ui.available_width(), 44.0);
+                        if ui
+                            .add_sized(
+                                playback_button_size,
+                                egui::Button::new(RichText::new("Play all").size(BODY_FONT_SIZE)),
+                            )
+                            .clicked()
+                        {
+                            self.send(LooperSubcommand::PlayAll);
+                            self.state.looper_state.borrow_mut().play_all_tracks();
+                        }
 
-                    if ui.add_sized(
-                            Vec2::new(140.0, 44.0),
-                            egui::Button::new(RichText::new("Stop all").size(BODY_FONT_SIZE)),
-                        )
-                        .clicked()
-                    {
-                        self.send(LooperSubcommand::StopAll);
-                        self.state.looper_state.borrow_mut().stop_all_tracks();
-                    }
-                    if ui.add_sized(
-                            Vec2::new(140.0, 44.0),
-                            egui::Button::new(RichText::new("Play all").size(BODY_FONT_SIZE)),
-                        )
-                        .clicked()
-                    {
-                        self.send(LooperSubcommand::PlayAll);
-                        self.state.looper_state.borrow_mut().play_all_tracks();
-                    }
+                        ui.add_space(10.0);
 
-                });
+                        if ui
+                            .add_sized(
+                                playback_button_size,
+                                egui::Button::new(RichText::new("Stop all").size(BODY_FONT_SIZE)),
+                            )
+                            .clicked()
+                        {
+                            self.send(LooperSubcommand::StopAll);
+                            self.state.looper_state.borrow_mut().stop_all_tracks();
+                        }
+
+                        ui.add_space(10.0);
+
+                        if ui
+                            .add_sized(
+                                playback_button_size,
+                                egui::Button::new(
+                                    RichText::new("Stop all immediately").size(BODY_FONT_SIZE),
+                                ),
+                            )
+                            .clicked()
+                        {
+                            self.send(LooperSubcommand::StopAllImmediately);
+                            self.state.looper_state.borrow_mut().stop_all_tracks();
+                        }
+                    },
+                );
                 ui.add_space(10.0);
 
                 if active.track_count == 0 {
@@ -331,7 +358,7 @@ impl Widget for &mut LooperWidget {
                     );
                 } else {
                     ui.allocate_ui_with_layout(
-                        Vec2::new(ui.available_width()*0.75, TRACK_CARD_SIZE.y),
+                        Vec2::new(ui.available_width() * 0.75, TRACK_CARD_SIZE.y),
                         egui::Layout::left_to_right(egui::Align::Min).with_main_wrap(true),
                         |ui| {
                             for index in 0..active.track_count {
@@ -344,24 +371,52 @@ impl Widget for &mut LooperWidget {
                                 );
                                 ui.add_space(8.0);
                             }
-                        }
+                        },
                     );
                 }
 
                 ui.add_space(12.0);
-                if ui
-                    .add_sized(
-                        Vec2::new(190.0, 44.0),
-                        egui::Button::new(RichText::new("Add track").size(BODY_FONT_SIZE)),
-                    )
-                    .clicked()
-                {
-                    self.send(LooperSubcommand::AddTrackToActiveMultitrack);
-                    self.state
-                        .looper_state
-                        .borrow_mut()
-                        .add_track_to_active_multitrack();
-                }
+                ui.allocate_ui_with_layout(
+                    Vec2::new(ui.available_width() * 0.75, 44.0),
+                    egui::Layout::left_to_right(egui::Align::Min),
+                    |ui| {
+                        ui.columns(5, |columns| {
+                            if columns[0].button("Add track").clicked() {
+                                self.send(LooperSubcommand::AddTrackToActiveMultitrack);
+                                self.state
+                                    .looper_state
+                                    .borrow_mut()
+                                    .add_track_to_active_multitrack();
+                            }
+
+                            if columns[1].button("Remove track").clicked() {
+                                if let Some(index) = active.selected_track {
+                                    self.send(LooperSubcommand::RemoveTrackAt(index));
+                                }
+                                self.state.looper_state.borrow_mut().remove_selected_track();
+                            }
+
+                            if columns[2].button("Clear track").clicked() {
+                                if let Some(index) = active.selected_track {
+                                    self.send(LooperSubcommand::ClearTrackAt(index));
+                                }
+                                self.state.looper_state.borrow_mut().clear_selected_track();
+                            }
+
+                            if columns[3].button("Slow FX").clicked() {
+                                if let Some(index) = active.selected_track {
+                                    self.send(LooperSubcommand::SlowEffectAt(index));
+                                }
+                            }
+
+                            if columns[4].button("Reverse FX").clicked() {
+                                if let Some(index) = active.selected_track {
+                                    self.send(LooperSubcommand::ReverseEffectAt(index));
+                                }
+                            }
+                        });
+                    },
+                );
             } else {
                 ui.label(
                     RichText::new("No active multitrack")
@@ -379,17 +434,18 @@ impl Widget for &mut LooperWidget {
             );
             ui.add_space(6.0);
             ui.allocate_ui_with_layout(
-                Vec2::new(ui.available_width() * 0.5, 30.0),
+                Vec2::new(ui.available_width(), 30.0),
                 egui::Layout::top_down(egui::Align::Center),
                 |ui| {
                     ui.add_sized(
-                        Vec2::new(ui.available_width(), 44.0),
+                        Vec2::new(ui.available_width() * 0.5, 44.0),
                         egui::TextEdit::singleline(&mut self.new_multitrack_name)
                             .hint_text("New multitrack name"),
                     );
                     ui.add_space(8.0);
-                    if ui.add_sized(
-                            Vec2::new(ui.available_width(), 44.0),
+                    if ui
+                        .add_sized(
+                            Vec2::new(ui.available_width() * 0.5, 44.0),
                             egui::Button::new(RichText::new("Add multitrack").size(BODY_FONT_SIZE)),
                         )
                         .clicked()
@@ -400,7 +456,7 @@ impl Widget for &mut LooperWidget {
                         self.state.looper_state.borrow_mut().add_multitrack(name);
                         self.new_multitrack_name.clear();
                     }
-                }
+                },
             );
 
             ui.add_space(20.0);
@@ -413,27 +469,54 @@ impl Widget for &mut LooperWidget {
                 );
             } else {
                 for multitrack in library {
-                    if ui
-                        .add_sized(
-                            Vec2::new(ui.available_width() * 0.5, 44.0),
-                            egui::Button::new(
-                                RichText::new(format!(
-                                    "{}  -  {} tracks",
-                                    multitrack.name, multitrack.track_count
-                                ))
-                                .size(BODY_FONT_SIZE),
-                            ),
-                        )
-                        .clicked()
-                    {
-                        self.send(LooperSubcommand::SetActiveMultitrack(
-                            multitrack.name.clone(),
-                        ));
-                        self.state
-                            .looper_state
-                            .borrow_mut()
-                            .set_active_multitrack(multitrack.name);
-                    }
+                    ui.allocate_ui_with_layout(
+                        Vec2::new(ui.available_width(), 44.0),
+                        egui::Layout::top_down(egui::Align::Center),
+                        |ui| {
+                            ui.allocate_ui_with_layout(
+                                Vec2::new(ui.available_width() * 0.5, 44.0),
+                                egui::Layout::left_to_right(egui::Align::Center),
+                                |ui| {
+                                    let selected = ui
+                                        .add_sized(
+                                            Vec2::new(ui.available_width() - 90.0, 44.0),
+                                            egui::Button::new(
+                                                RichText::new(format!(
+                                                    "{}  -  {} tracks",
+                                                    multitrack.name, multitrack.track_count
+                                                ))
+                                                .size(BODY_FONT_SIZE),
+                                            ),
+                                        )
+                                        .clicked();
+                                    if selected {
+                                        self.send(LooperSubcommand::SetActiveMultitrack(
+                                            multitrack.name.clone(),
+                                        ));
+                                        self.state
+                                            .looper_state
+                                            .borrow_mut()
+                                            .set_active_multitrack(multitrack.name.clone());
+                                    }
+                                    if ui
+                                        .add_sized(
+                                            Vec2::new(80.0, 44.0),
+                                            egui::Button::new("Delete"),
+                                        )
+                                        .clicked()
+                                    {
+                                        self.send(LooperSubcommand::DeleteMultitrack(
+                                            multitrack.name.clone(),
+                                        ));
+                                        self.state
+                                            .looper_state
+                                            .borrow_mut()
+                                            .delete_multitrack(&multitrack.name);
+                                    }
+                                },
+                            );
+                        },
+                    );
                     ui.add_space(4.0);
                 }
             }

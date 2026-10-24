@@ -1,7 +1,10 @@
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 
-use crate::{midi::device::MidiChange, socket::{Command, LooperSubcommand}};
+use crate::{
+    midi::device::MidiChange,
+    socket::{Command, LooperSubcommand},
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize, EnumIter, PartialEq)]
 pub enum GlobalMidiFunction {
@@ -34,8 +37,11 @@ pub enum GlobalMidiFunction {
     LooperModeToggleRecordSelectedTrack,
     LooperModePlayAll,
     LooperModeStopAll,
+    LooperModeStopAllImmediately,
+    LooperModeRemoveTrack,
+    LooperModeClearTrack,
     LooperModeReverseEffect,
-    LooperModeSlowEffect
+    LooperModeSlowEffect,
 }
 
 impl std::fmt::Display for GlobalMidiFunction {
@@ -62,16 +68,27 @@ impl std::fmt::Display for GlobalMidiFunction {
             GlobalMidiFunction::PrevOutputEQ => "Previous Output EQ",
             GlobalMidiFunction::ToggleLooperMode => "Toggle Looper Mode",
             GlobalMidiFunction::LooperModeAddTrackToActiveMultitrack => "Looper Mode: Add Track",
-            GlobalMidiFunction::LooperModePrevActiveMultitrack => "Looper Mode: Previous Active Track",
-            GlobalMidiFunction::LooperModeNextActiveMultitrack => "Looper Mode: Next Active Track",
-            GlobalMidiFunction::LooperModePrevSelectedTrack => "Looper Mode: Previous Selected Track",
+            GlobalMidiFunction::LooperModePrevActiveMultitrack => {
+                "Looper Mode: Previous Active Multitrack"
+            }
+            GlobalMidiFunction::LooperModeNextActiveMultitrack => "Looper Mode: Next Active Multitrack",
+            GlobalMidiFunction::LooperModePrevSelectedTrack => {
+                "Looper Mode: Previous Selected Track"
+            }
             GlobalMidiFunction::LooperModeNextSelectedTrack => "Looper Mode: Next Selected Track",
-            GlobalMidiFunction::LooperModeTogglePlaySelectedTrack => "Looper Mode: Toggle Play Selected Track",
-            GlobalMidiFunction::LooperModeToggleRecordSelectedTrack => "Looper Mode: Toggle Record Selected Track",
+            GlobalMidiFunction::LooperModeTogglePlaySelectedTrack => {
+                "Looper Mode: Toggle Play Selected Track"
+            }
+            GlobalMidiFunction::LooperModeToggleRecordSelectedTrack => {
+                "Looper Mode: Toggle Record Selected Track"
+            }
             GlobalMidiFunction::LooperModePlayAll => "Looper Mode: Play All",
             GlobalMidiFunction::LooperModeStopAll => "Looper Mode: Stop All",
+            GlobalMidiFunction::LooperModeStopAllImmediately => "Looper Mode: Stop All Immediately",
+            GlobalMidiFunction::LooperModeRemoveTrack => "Looper Mode: Remove Track",
+            GlobalMidiFunction::LooperModeClearTrack => "Looper Mode: Clear Track",
             GlobalMidiFunction::LooperModeReverseEffect => "Looper Mode: Reverse Effect",
-            GlobalMidiFunction::LooperModeSlowEffect => "Looper Mode: Slow Effect"
+            GlobalMidiFunction::LooperModeSlowEffect => "Looper Mode: Slow Effect",
         };
         write!(f, "{name}")
     }
@@ -101,23 +118,56 @@ impl GlobalMidiFunction {
                     GlobalMidiFunction::ActiveFeature => {
                         Command::ChangeActiveFeature(float_setting_update)
                     }
-                    GlobalMidiFunction::ResetVolumeNormalization => Command::VolumeNormalizationReset,
+                    GlobalMidiFunction::ResetVolumeNormalization => {
+                        Command::VolumeNormalizationReset
+                    }
                     GlobalMidiFunction::NextInputEQ => Command::NextGlobalInputEQ,
                     GlobalMidiFunction::NextOutputEQ => Command::NextGlobalOutputEQ,
                     GlobalMidiFunction::PrevInputEQ => Command::PrevGlobalInputEQ,
                     GlobalMidiFunction::PrevOutputEQ => Command::PrevGlobalOutputEQ,
-                    GlobalMidiFunction::LooperModeAddTrackToActiveMultitrack => Command::Looper(LooperSubcommand::AddTrackToActiveMultitrack),
-                    GlobalMidiFunction::LooperModePrevActiveMultitrack => Command::Looper(LooperSubcommand::PrevActiveMultitrack),
-                    GlobalMidiFunction::LooperModeNextActiveMultitrack => Command::Looper(LooperSubcommand::NextActiveMultitrack),
-                    GlobalMidiFunction::LooperModePrevSelectedTrack => Command::Looper(LooperSubcommand::PrevSelectedTrack),
-                    GlobalMidiFunction::LooperModeNextSelectedTrack => Command::Looper(LooperSubcommand::NextSelectedTrack),
-                    GlobalMidiFunction::LooperModeTogglePlaySelectedTrack => Command::Looper(LooperSubcommand::TogglePlaySelectedTrack),
-                    GlobalMidiFunction::LooperModeToggleRecordSelectedTrack => Command::Looper(LooperSubcommand::ToggleRecordSelectedTrack),
-                    GlobalMidiFunction::LooperModePlayAll => Command::Looper(LooperSubcommand::PlayAll),
-                    GlobalMidiFunction::LooperModeStopAll => Command::Looper(LooperSubcommand::StopAll),
-                    GlobalMidiFunction::LooperModeReverseEffect => Command::Looper(LooperSubcommand::ReverseEffect),
-                    GlobalMidiFunction::LooperModeSlowEffect => Command::Looper(LooperSubcommand::SlowEffect),
-                    GlobalMidiFunction::ToggleLooperMode => return None
+                    GlobalMidiFunction::LooperModeAddTrackToActiveMultitrack => {
+                        Command::Looper(LooperSubcommand::AddTrackToActiveMultitrack)
+                    }
+                    GlobalMidiFunction::LooperModePrevActiveMultitrack => {
+                        Command::Looper(LooperSubcommand::PrevActiveMultitrack)
+                    }
+                    GlobalMidiFunction::LooperModeNextActiveMultitrack => {
+                        Command::Looper(LooperSubcommand::NextActiveMultitrack)
+                    }
+                    GlobalMidiFunction::LooperModePrevSelectedTrack => {
+                        Command::Looper(LooperSubcommand::PrevSelectedTrack)
+                    }
+                    GlobalMidiFunction::LooperModeNextSelectedTrack => {
+                        Command::Looper(LooperSubcommand::NextSelectedTrack)
+                    }
+                    GlobalMidiFunction::LooperModeTogglePlaySelectedTrack => {
+                        Command::Looper(LooperSubcommand::TogglePlaySelectedTrack)
+                    }
+                    GlobalMidiFunction::LooperModeToggleRecordSelectedTrack => {
+                        Command::Looper(LooperSubcommand::ToggleRecordSelectedTrack)
+                    }
+                    GlobalMidiFunction::LooperModePlayAll => {
+                        Command::Looper(LooperSubcommand::PlayAll)
+                    }
+                    GlobalMidiFunction::LooperModeStopAll => {
+                        Command::Looper(LooperSubcommand::StopAll)
+                    }
+                    GlobalMidiFunction::LooperModeStopAllImmediately => {
+                        Command::Looper(LooperSubcommand::StopAllImmediately)
+                    }
+                    GlobalMidiFunction::LooperModeRemoveTrack => {
+                        Command::Looper(LooperSubcommand::RemoveTrack)
+                    }
+                    GlobalMidiFunction::LooperModeClearTrack => {
+                        Command::Looper(LooperSubcommand::ClearTrack)
+                    }
+                    GlobalMidiFunction::LooperModeReverseEffect => {
+                        Command::Looper(LooperSubcommand::ReverseEffect)
+                    }
+                    GlobalMidiFunction::LooperModeSlowEffect => {
+                        Command::Looper(LooperSubcommand::SlowEffect)
+                    }
+                    GlobalMidiFunction::ToggleLooperMode => return None,
                 };
 
                 Some(command)
@@ -137,6 +187,9 @@ impl GlobalMidiFunction {
                 | GlobalMidiFunction::LooperModeToggleRecordSelectedTrack
                 | GlobalMidiFunction::LooperModePlayAll
                 | GlobalMidiFunction::LooperModeStopAll
+                | GlobalMidiFunction::LooperModeStopAllImmediately
+                | GlobalMidiFunction::LooperModeRemoveTrack
+                | GlobalMidiFunction::LooperModeClearTrack
                 | GlobalMidiFunction::LooperModeReverseEffect
                 | GlobalMidiFunction::LooperModeSlowEffect
         )

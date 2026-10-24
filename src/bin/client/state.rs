@@ -1,31 +1,32 @@
 use crate::{
-    Screen,
     github_sync::GithubSyncSettings,
     midi::{MidiSettings, MidiState},
-    popup_message::{PopupMessageType, popup},
+    popup_message::{popup, PopupMessageType},
     saved_pedalboards::SavedPedalboards,
     settings::{ClientSettings, VolumeNormalizationMode},
     socket::{ClientSocket, Command, LooperSubcommand},
-    utilities::looper::LooperClientState
+    utilities::looper::LooperClientState,
+    Screen,
 };
 use crossbeam::channel::Receiver;
 use eframe::egui;
 use rs_pedalboard::{
-    MuteStatus,
+    dsp::{MAXIMUM_DB_INCREASE, MINIMUM_DB},
+    looper_state::LooperInformation,
     pedalboard::{ParameterPath, Pedalboard},
     pedals::{
-        parameters::ParameterUpdate, ui::get_active_feature, GraphicEqSettings, Pedal, PedalTrait, ActiveFeature
+        parameters::ParameterUpdate, ui::get_active_feature, ActiveFeature, GraphicEqSettings,
+        Pedal, PedalTrait,
     },
     processor_settings::ProcessorSettingsSave,
-    dsp::{MAXIMUM_DB_INCREASE, MINIMUM_DB},
-    looper_state::LooperInformation
+    MuteStatus,
 };
-use strum::IntoDiscriminant;
 use std::{
     cell::{Cell, RefCell},
     collections::HashSet,
     time::Instant,
 };
+use strum::IntoDiscriminant;
 
 pub struct State {
     pub pedalboards: SavedPedalboards,
@@ -86,7 +87,12 @@ impl State {
 
         if pedalboard_set.pedalboards.len() <= 1 {
             tracing::warn!("Cannot remove the last pedalboard from the stage");
-            popup!(self.egui_ctx.clone(), "Cannot remove the last pedalboard from the stage", Some("remove-last-pedalboard-error"), crate::popup_message::PopupMessageType::Warning);
+            popup!(
+                self.egui_ctx.clone(),
+                "Cannot remove the last pedalboard from the stage",
+                Some("remove-last-pedalboard-error"),
+                crate::popup_message::PopupMessageType::Warning
+            );
             return;
         }
 
@@ -330,9 +336,14 @@ impl State {
                     .find(|p| p.get_id() == pedal_id)
                 {
                     parameter_update.apply_to_pedal(&mut *pedal, &parameter_name);
-                    let new_value = pedal.get_parameters().get(&parameter_name).map(|p| p.value.clone());
+                    let new_value = pedal
+                        .get_parameters()
+                        .get(&parameter_name)
+                        .map(|p| p.value.clone());
                     new_value_string = new_value.map(|value| {
-                        pedal.parameter_value_display_string(&parameter_name, &value).unwrap_or_else(|| format!("{}", value))
+                        pedal
+                            .parameter_value_display_string(&parameter_name, &value)
+                            .unwrap_or_else(|| format!("{}", value))
                     });
                     pedal_name = Some(pedal.discriminant().display_name());
                 }
@@ -367,8 +378,16 @@ impl State {
         if let Some(value) = new_value_string {
             popup!(
                 self.egui_ctx.clone(),
-                format!("{} - {} set to {}", pedal_name.unwrap_or_else(|| "Unknown".into()), parameter_name, value),
-                Some(&format!("parameter-{}-{}-{}", pedalboard_id, pedal_id, parameter_name))
+                format!(
+                    "{} - {} set to {}",
+                    pedal_name.unwrap_or_else(|| "Unknown".into()),
+                    parameter_name,
+                    value
+                ),
+                Some(&format!(
+                    "parameter-{}-{}-{}",
+                    pedalboard_id, pedal_id, parameter_name
+                ))
             );
         }
     }
@@ -454,7 +473,6 @@ impl State {
                 }
             }
         }
-
     }
 
     pub fn save_looper_settings(&self) {
@@ -561,7 +579,11 @@ impl State {
     pub fn move_global_eq(&self, next: bool, input: bool) {
         let mut settings = self.client_settings.borrow_mut();
 
-        let eq = if input { &mut settings.global_input_eq } else { &mut settings.global_output_eq };
+        let eq = if input {
+            &mut settings.global_input_eq
+        } else {
+            &mut settings.global_output_eq
+        };
         if next {
             eq.next_eq();
         } else {
@@ -570,10 +592,16 @@ impl State {
 
         if input {
             self.set_input_global_eq_processor(eq.selected_eq().cloned());
-            popup!(self.egui_ctx.clone(), format!("Input EQ set to {}", eq.selected_eq_name()));
+            popup!(
+                self.egui_ctx.clone(),
+                format!("Input EQ set to {}", eq.selected_eq_name())
+            );
         } else {
             self.set_output_global_eq_processor(eq.selected_eq().cloned());
-            popup!(self.egui_ctx.clone(), format!("Output EQ set to {}", eq.selected_eq_name()));
+            popup!(
+                self.egui_ctx.clone(),
+                format!("Output EQ set to {}", eq.selected_eq_name())
+            );
         }
     }
 
@@ -736,17 +764,27 @@ impl State {
         let mut socket = self.socket.borrow_mut();
         if !socket.is_connected() {
             match socket.connect() {
-                Ok(()) => {},
+                Ok(()) => {}
                 Err(e) => {
                     // Show popup and log the error
                     let error_msg = format!("Failed to connect to processor: {}", e);
                     tracing::error!(error_msg);
-                    popup!(self.egui_ctx.clone(), error_msg, Some("processor-connection-error"), crate::popup_message::PopupMessageType::Error);
+                    popup!(
+                        self.egui_ctx.clone(),
+                        error_msg,
+                        Some("processor-connection-error"),
+                        crate::popup_message::PopupMessageType::Error
+                    );
                     return Err(e);
                 }
             }
             if socket.is_connected() {
-                popup!(self.egui_ctx.clone(), "Connected to processor", Some("processor-connection-success"), crate::popup_message::PopupMessageType::Info);
+                popup!(
+                    self.egui_ctx.clone(),
+                    "Connected to processor",
+                    Some("processor-connection-success"),
+                    crate::popup_message::PopupMessageType::Info
+                );
 
                 socket.send(Command::RequestSampleRate);
                 socket.send(Command::Looper(LooperSubcommand::GetInfo));
@@ -884,11 +922,7 @@ impl State {
                     let active_index = pedalboard_set.active_pedalboard;
                     drop(pedalboard_set);
                     self.remove_pedalboard_from_stage(active_index, true);
-                    popup!(
-                        self.egui_ctx.clone(),
-                        "Active pedalboard deleted",
-                        None
-                    );
+                    popup!(self.egui_ctx.clone(), "Active pedalboard deleted", None);
                 }
                 Command::AddPedalboard(pedalboard_json) => {
                     match serde_json::from_str::<Pedalboard>(&pedalboard_json) {
@@ -918,7 +952,10 @@ impl State {
                 }
                 Command::MasterIn(vol) => {
                     let mut client_settings = self.client_settings.borrow_mut();
-                    let new_vol = vol.apply(client_settings.input_volume_db, Some((MINIMUM_DB, MAXIMUM_DB_INCREASE)));
+                    let new_vol = vol.apply(
+                        client_settings.input_volume_db,
+                        Some((MINIMUM_DB, MAXIMUM_DB_INCREASE)),
+                    );
                     client_settings.input_volume_db = new_vol;
 
                     popup!(
@@ -929,7 +966,8 @@ impl State {
                 }
                 Command::MasterOut(vol) => {
                     let mut client_settings = self.client_settings.borrow_mut();
-                    let new_vol = vol.apply(client_settings.output_volume_db, Some((MINIMUM_DB, 0.0)));
+                    let new_vol =
+                        vol.apply(client_settings.output_volume_db, Some((MINIMUM_DB, 0.0)));
                     client_settings.output_volume_db = new_vol;
 
                     popup!(
@@ -1104,11 +1142,7 @@ impl State {
                     self.mute_status.set(mute);
                     popup!(
                         self.egui_ctx.clone(),
-                        if mute.is_muted() {
-                            "Muted"
-                        } else {
-                            "Unmuted"
-                        },
+                        if mute.is_muted() { "Muted" } else { "Unmuted" },
                         Some("mute-status-change")
                     );
                 }
@@ -1131,8 +1165,14 @@ impl State {
                             match get_active_feature(ctx) {
                                 Some(feature) => {
                                     match feature {
-                                        ActiveFeature::Parameter { parameter_path } => (parameter_path, update),
-                                        ActiveFeature::Function { pedalboard_id, pedal_id, function_name } => {
+                                        ActiveFeature::Parameter { parameter_path } => {
+                                            (parameter_path, update)
+                                        }
+                                        ActiveFeature::Function {
+                                            pedalboard_id,
+                                            pedal_id,
+                                            function_name,
+                                        } => {
                                             // Slightly hacky way to resolve pedalboard ID by creating a parameter path with an empty parameter name and resolving it
                                             let resolved_pedalboard_id = {
                                                 let mut parameter_path = ParameterPath {
@@ -1140,26 +1180,38 @@ impl State {
                                                     pedal_id,
                                                     parameter_name: String::new(),
                                                 };
-                                                if !parameter_path.resolve_pedalboard_id(&self.pedalboards.active_pedalboardstage.borrow()) {
+                                                if !parameter_path.resolve_pedalboard_id(
+                                                    &self
+                                                        .pedalboards
+                                                        .active_pedalboardstage
+                                                        .borrow(),
+                                                ) {
                                                     tracing::warn!("Functions: Unable to resolve pedalboard ID");
                                                     continue;
                                                 }
-                                                parameter_path.pedalboard_id.expect("Pedalboard ID has been resolved")
+                                                parameter_path
+                                                    .pedalboard_id
+                                                    .expect("Pedalboard ID has been resolved")
                                             };
 
-                                            let mut active_pedalboardstage = self.pedalboards.active_pedalboardstage.borrow_mut();
-                                            let pedal = active_pedalboardstage.find_pedal_mut(
-                                                resolved_pedalboard_id,
-                                                pedal_id
-                                            );
-                                            
+                                            let mut active_pedalboardstage = self
+                                                .pedalboards
+                                                .active_pedalboardstage
+                                                .borrow_mut();
+                                            let pedal = active_pedalboardstage
+                                                .find_pedal_mut(resolved_pedalboard_id, pedal_id);
+
                                             if let Some(pedal) = pedal {
                                                 // Create a list of updated parameters to apply after the function is triggered
                                                 // This is because of RefCell borrow rules
                                                 let mut updated_parameters = Vec::new();
-                                                pedal.trigger_function(function_name.as_str(), Some(update), |name, value| {
-                                                    updated_parameters.push((name, value));
-                                                });
+                                                pedal.trigger_function(
+                                                    function_name.as_str(),
+                                                    Some(update),
+                                                    |name, value| {
+                                                        updated_parameters.push((name, value));
+                                                    },
+                                                );
                                                 drop(active_pedalboardstage);
 
                                                 for (name, value) in updated_parameters {
@@ -1175,7 +1227,7 @@ impl State {
                                             continue;
                                         }
                                     }
-                                },
+                                }
                                 None => continue,
                             }
                         }
@@ -1209,7 +1261,8 @@ impl State {
                         }
 
                         // If the active feature is not on the active pedalboard, don't apply the update
-                        let active_pedalboard_id = self.midi_state
+                        let active_pedalboard_id = self
+                            .midi_state
                             .borrow()
                             .active_pedalboard_id
                             .load(std::sync::atomic::Ordering::Relaxed);
@@ -1217,7 +1270,11 @@ impl State {
                             continue;
                         }
 
-                        stage_pedalboards.find_pedal(path.pedalboard_id.expect("Pedalboard ID has been resolved"), path.pedal_id)
+                        stage_pedalboards
+                            .find_pedal(
+                                path.pedalboard_id.expect("Pedalboard ID has been resolved"),
+                                path.pedal_id,
+                            )
                             .and_then(|pedal| pedal.get_parameters().get(&path.parameter_name))
                             .and_then(|parameter| {
                                 parameter
@@ -1293,67 +1350,88 @@ impl State {
                 Command::PrevGlobalOutputEQ => {
                     self.move_global_eq(false, false);
                 }
-                Command::Looper(looper_subcommand) => {
-                    match looper_subcommand {
-                        LooperSubcommand::GetInfo => {
-                            tracing::error!("Unexpected GetInfo command in other thread commands")
-                        }
-                        LooperSubcommand::AddMultitrack(_) |
-                        LooperSubcommand::AddTrackToActiveMultitrack => {}
-                        LooperSubcommand::SetActiveMultitrack(name) => {
-                            self.looper_state.borrow_mut().set_active_multitrack(name);
-                        }
-                        LooperSubcommand::PrevActiveMultitrack => {
-                            self.looper_state.borrow_mut().prev_active_multitrack();
-                        }
-                        LooperSubcommand::NextActiveMultitrack => {
-                            self.looper_state.borrow_mut().next_active_multitrack();
-                        }
-                        LooperSubcommand::NextSelectedTrack => {
-                            self.looper_state.borrow_mut().next_selected_track();
-                        }
-                        LooperSubcommand::PrevSelectedTrack => {
-                            self.looper_state.borrow_mut().prev_selected_track();
-                        }
-                        LooperSubcommand::PlaySelectedTrack => {
-                            self.looper_state.borrow_mut().play_selected_track();
-                        }
-                        LooperSubcommand::StopSelectedTrack => {
-                            self.looper_state.borrow_mut().stop_selected_track();
-                        }
-                        LooperSubcommand::StartRecordingSelectedTrack => {
-                            self.looper_state.borrow_mut().start_recording_selected_track();
-                        }
-                        LooperSubcommand::PlayAll => {
-                            self.looper_state.borrow_mut().play_all_tracks();
-                        }
-                        LooperSubcommand::StopAll => {
-                            self.looper_state.borrow_mut().stop_all_tracks();
-                        }
-                        LooperSubcommand::PlayTrack(track_index) => {
-                            self.looper_state.borrow_mut().play_track(track_index);
-                        }
-                        LooperSubcommand::StopTrack(track_index) => {
-                            self.looper_state.borrow_mut().stop_track(track_index);
-                        }
-                        LooperSubcommand::SetSettings(settings) => {
-                            self.looper_state.borrow_mut().set_settings(settings);
-                        }
-                        LooperSubcommand::StopRecording => {
-                            self.looper_state.borrow_mut().stop_recording();
-                        }
-                        LooperSubcommand::StartRecording(track_index) => {
-                            self.looper_state.borrow_mut().set_recording_track(Some(track_index));
-                        },
-                        LooperSubcommand::TogglePlaySelectedTrack => {
-                            self.looper_state.borrow_mut().toggle_play_selected_track();
-                        },
-                        LooperSubcommand::ToggleRecordSelectedTrack => {
-                            self.looper_state.borrow_mut().toggle_record_selected_track();
-                        }
-                        LooperSubcommand::ReverseEffect | LooperSubcommand::SlowEffect => {}
+                Command::Looper(looper_subcommand) => match looper_subcommand {
+                    LooperSubcommand::GetInfo => {
+                        tracing::error!("Unexpected GetInfo command in other thread commands")
                     }
-                }
+                    LooperSubcommand::AddMultitrack(_)
+                    | LooperSubcommand::AddTrackToActiveMultitrack => {}
+                    LooperSubcommand::SetActiveMultitrack(name) => {
+                        self.looper_state.borrow_mut().set_active_multitrack(name);
+                    }
+                    LooperSubcommand::PrevActiveMultitrack => {
+                        self.looper_state.borrow_mut().prev_active_multitrack();
+                    }
+                    LooperSubcommand::NextActiveMultitrack => {
+                        self.looper_state.borrow_mut().next_active_multitrack();
+                    }
+                    LooperSubcommand::NextSelectedTrack => {
+                        self.looper_state.borrow_mut().next_selected_track();
+                    }
+                    LooperSubcommand::PrevSelectedTrack => {
+                        self.looper_state.borrow_mut().prev_selected_track();
+                    }
+                    LooperSubcommand::PlaySelectedTrack => {
+                        self.looper_state.borrow_mut().play_selected_track();
+                    }
+                    LooperSubcommand::StopSelectedTrack => {
+                        self.looper_state.borrow_mut().stop_selected_track();
+                    }
+                    LooperSubcommand::StartRecordingSelectedTrack => {
+                        self.looper_state
+                            .borrow_mut()
+                            .start_recording_selected_track();
+                    }
+                    LooperSubcommand::PlayAll => {
+                        self.looper_state.borrow_mut().play_all_tracks();
+                    }
+                    LooperSubcommand::StopAll => {
+                        self.looper_state.borrow_mut().stop_all_tracks();
+                    }
+                    LooperSubcommand::StopAllImmediately => {
+                        self.looper_state.borrow_mut().stop_all_tracks();
+                    }
+                    LooperSubcommand::PlayTrack(track_index) => {
+                        self.looper_state.borrow_mut().play_track(track_index);
+                    }
+                    LooperSubcommand::StopTrack(track_index) => {
+                        self.looper_state.borrow_mut().stop_track(track_index);
+                    }
+                    LooperSubcommand::RemoveTrack => {
+                        self.looper_state.borrow_mut().remove_selected_track();
+                    }
+                    LooperSubcommand::RemoveTrackAt(_) => {}
+                    LooperSubcommand::ClearTrack => {
+                        self.looper_state.borrow_mut().clear_selected_track();
+                    }
+                    LooperSubcommand::ClearTrackAt(_) => {}
+                    LooperSubcommand::DeleteMultitrack(name) => {
+                        self.looper_state.borrow_mut().delete_multitrack(&name);
+                    }
+                    LooperSubcommand::SetSettings(settings) => {
+                        self.looper_state.borrow_mut().set_settings(settings);
+                    }
+                    LooperSubcommand::StopRecording => {
+                        self.looper_state.borrow_mut().stop_recording();
+                    }
+                    LooperSubcommand::StartRecording(track_index) => {
+                        self.looper_state
+                            .borrow_mut()
+                            .set_recording_track(Some(track_index));
+                    }
+                    LooperSubcommand::TogglePlaySelectedTrack => {
+                        self.looper_state.borrow_mut().toggle_play_selected_track();
+                    }
+                    LooperSubcommand::ToggleRecordSelectedTrack => {
+                        self.looper_state
+                            .borrow_mut()
+                            .toggle_record_selected_track();
+                    }
+                    LooperSubcommand::ReverseEffect
+                    | LooperSubcommand::ReverseEffectAt(_)
+                    | LooperSubcommand::SlowEffect
+                    | LooperSubcommand::SlowEffectAt(_) => {}
+                },
 
                 Command::RequestSampleRate => {
                     tracing::error!("Unexpected RequestSampleRate command in other thread commands")
@@ -1376,9 +1454,7 @@ impl State {
 
     pub fn set_popup_level_memory(ctx: &egui::Context, level: Option<PopupMessageType>) {
         ctx.memory_mut(|writer| {
-            writer
-                .data
-                .insert_temp(egui::Id::new("popup_level"), level);
+            writer.data.insert_temp(egui::Id::new("popup_level"), level);
         });
     }
 }

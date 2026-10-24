@@ -10,16 +10,21 @@ use std::{
 };
 
 use rs_pedalboard::{
-    DEFAULT_VOLUME_MONITOR_UPDATE_RATE,
-    dsp::{ConvertSampleDbLinear, MAXIMUM_DB_INCREASE, MINIMUM_DB, eq::Equalizer, resampler::Resampler, yin::Yin},
+    dsp::{
+        eq::Equalizer, resampler::Resampler, yin::Yin, ConvertSampleDbLinear, MAXIMUM_DB_INCREASE,
+        MINIMUM_DB,
+    },
     pedalboard::Pedalboard,
     pedalboard_set::PedalboardSet,
-    pedals::{GraphicEqSettings, Pedal, PedalTrait, parameters::ParameterUpdate}, processor_settings::FloatSettingUpdate,
-    MuteStatus
+    pedals::{parameters::ParameterUpdate, GraphicEqSettings, Pedal, PedalTrait},
+    processor_settings::FloatSettingUpdate,
+    MuteStatus, DEFAULT_VOLUME_MONITOR_UPDATE_RATE,
 };
 
 use crate::{
-    looper_processor::LooperProcessor, metronome_player::MetronomePlayer, recording::RecordingHandle, settings::ProcessorSettings, volume_monitor::PeakVolumeMonitor, volume_normalization::PeakNormalizer
+    looper_processor::LooperProcessor, metronome_player::MetronomePlayer,
+    recording::RecordingHandle, settings::ProcessorSettings, volume_monitor::PeakVolumeMonitor,
+    volume_normalization::PeakNormalizer,
 };
 
 pub struct AudioProcessor {
@@ -84,7 +89,7 @@ impl AudioProcessor {
         // Update input volume monitor
         self.volume_monitor.3.add_samples(&self.data_buffer);
 
-        // Skip audio processing if output is muted 
+        // Skip audio processing if output is muted
         if self.mute_status.is_muted() {
             self.volume_monitor.4.reset();
             self.data_buffer.fill(0.0);
@@ -92,7 +97,7 @@ impl AudioProcessor {
             self.send_volume_monitor_to_client();
             self.handle_all_commands();
             self.send_commands_to_client();
-            return
+            return;
         }
 
         self.processing_buffer.clear();
@@ -105,16 +110,18 @@ impl AudioProcessor {
         }
 
         self.downsample_into_data_buffer();
-        self.apply_master_out();
         self.write_processed_data_to_recording();
         self.looper_pass();
+        self.apply_master_out();
 
         // Update output volume monitor
         self.volume_monitor.4.add_samples(&self.data_buffer);
 
         // Add metronome click
         if self.metronome.0 {
-            self.metronome.1.add_to_buffer(&mut self.data_buffer, self.master_out_volume_db);
+            self.metronome
+                .1
+                .add_to_buffer(&mut self.data_buffer, self.master_out_volume_db);
         }
 
         self.write_data_buffer_to_output();
@@ -160,8 +167,7 @@ impl AudioProcessor {
                 .for_each(|sample| *sample = input_eq.process(*sample));
         }
 
-        for i in 0..(self.processing_buffer.len() as f32
-            / self.settings.frames_per_period as f32)
+        for i in 0..(self.processing_buffer.len() as f32 / self.settings.frames_per_period as f32)
             .ceil() as usize
         {
             let start = i * self.settings.frames_per_period;
@@ -264,8 +270,8 @@ impl AudioProcessor {
 
                 // Prevent sending multiple consecutive same values
                 let eps = 5e-3;
-                if !((self.volume_monitor.2.0 - in_peak).abs() < eps
-                    && (self.volume_monitor.2.1 - out_peak).abs() < eps)
+                if !((self.volume_monitor.2 .0 - in_peak).abs() < eps
+                    && (self.volume_monitor.2 .1 - out_peak).abs() < eps)
                 {
                     let command = format!("volumemonitor {:.3} {:.3}\n", in_peak, out_peak);
                     if self.command_sender.try_send(command.into()).is_err() {
@@ -550,7 +556,10 @@ impl AudioProcessor {
                     .ok_or_else(|| "masterin: Failed to get volume update".to_string())?;
                 let volume_update: FloatSettingUpdate = serde_json::from_str(volume_update_ser)
                     .map_err(|e| format!("masterin: Failed to deserialize volume update: {e}"))?;
-                self.master_in_volume_db = volume_update.apply(self.master_in_volume_db, Some((MINIMUM_DB, MAXIMUM_DB_INCREASE)));
+                self.master_in_volume_db = volume_update.apply(
+                    self.master_in_volume_db,
+                    Some((MINIMUM_DB, MAXIMUM_DB_INCREASE)),
+                );
             }
             "masterout" => {
                 let volume_update_ser = arguments
@@ -558,33 +567,33 @@ impl AudioProcessor {
                     .ok_or_else(|| "masterout: Failed to get volume update".to_string())?;
                 let volume_update: FloatSettingUpdate = serde_json::from_str(volume_update_ser)
                     .map_err(|e| format!("masterout: Failed to deserialize volume update: {e}"))?;
-                self.master_out_volume_db = volume_update.apply(self.master_out_volume_db, Some((MINIMUM_DB, 0.0)));
+                self.master_out_volume_db =
+                    volume_update.apply(self.master_out_volume_db, Some((MINIMUM_DB, 0.0)));
             }
             "masterindb" => {
                 let volume_db_str = arguments
                     .next()
                     .ok_or_else(|| "masterindb: Failed to get volume db".to_string())?;
-                let volume_db = volume_db_str.parse::<f32>().map_err(|e| {
-                    format!("masterindb: Failed to parse volume db: {e}")
-                })?;
+                let volume_db = volume_db_str
+                    .parse::<f32>()
+                    .map_err(|e| format!("masterindb: Failed to parse volume db: {e}"))?;
                 self.master_in_volume_db = volume_db.clamp(MINIMUM_DB, MAXIMUM_DB_INCREASE);
             }
             "masteroutdb" => {
                 let volume_db_str = arguments
                     .next()
                     .ok_or_else(|| "masteroutdb: Failed to get volume db".to_string())?;
-                let volume_db = volume_db_str.parse::<f32>().map_err(|e| {
-                    format!("masteroutdb: Failed to parse volume db: {e}")
-                })?;
+                let volume_db = volume_db_str
+                    .parse::<f32>()
+                    .map_err(|e| format!("masteroutdb: Failed to parse volume db: {e}"))?;
                 self.master_out_volume_db = volume_db.clamp(MINIMUM_DB, 0.0);
             }
             "mutestatus" => {
                 let mute_status_str = arguments
                     .next()
                     .ok_or_else(|| "mutestatus has no argument".to_string())?;
-                let mute_status: MuteStatus = serde_json::from_str(mute_status_str).map_err(|e| {
-                    format!("Failed to deserialize MuteStatus: {}", e)
-                })?;
+                let mute_status: MuteStatus = serde_json::from_str(mute_status_str)
+                    .map_err(|e| format!("Failed to deserialize MuteStatus: {}", e))?;
 
                 self.mute_status = mute_status;
             }
@@ -811,7 +820,9 @@ impl AudioProcessor {
                 if dir_path.is_dir() {
                     self.settings.recording_dir = dir_path;
                 } else {
-                    return Err(format!("Invalid directory for setrecordingdir command: {dir_path:?}"));
+                    return Err(format!(
+                        "Invalid directory for setrecordingdir command: {dir_path:?}"
+                    ));
                 }
             }
             "looper" => {
@@ -832,7 +843,12 @@ impl AudioProcessor {
                             )
                         })?;
 
-                    looper.handle_client_subcommand(subcommand, &mut self.command_to_client_buffer, pedalboard, self.settings.frames_per_period);
+                    looper.handle_client_subcommand(
+                        subcommand,
+                        &mut self.command_to_client_buffer,
+                        pedalboard,
+                        self.settings.frames_per_period,
+                    );
                 } else {
                     tracing::warn!("Looper is not enabled, cannot handle looper command");
                 }

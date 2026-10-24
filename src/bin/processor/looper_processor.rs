@@ -115,10 +115,7 @@ impl LooperTrack {
             .ok_or_else(|| "No audio channels found in file".to_string())?
             .len();
 
-        if channels
-            .iter()
-            .any(|channel| channel.len() != sample_count)
-        {
+        if channels.iter().any(|channel| channel.len() != sample_count) {
             return Err("Audio channels have different lengths".to_string());
         }
 
@@ -486,6 +483,8 @@ impl LooperMultitrack {
                 LooperTrack::new(Vec::new(), None, self.sample_rate)
             });
         }
+        // Start a new recording, so clear the track's audio buffer
+        self.tracks.get_mut(to).expect("Index should be valid").raw_audio.clear();
         self.recording_track = Some(to);
     }
 
@@ -623,6 +622,30 @@ impl LooperMultitrack {
         self.tracks[track_index].stop_playback();
     }
 
+    pub fn stop_all_immediately(&mut self) {
+        for track in &mut self.tracks {
+            track.playback_state = TrackPlaybackState::Stopped;
+        }
+        self.playback = MultitrackPlaybackState::Stopped;
+    }
+
+    pub fn remove_track(&mut self, track_index: usize) {
+        if track_index < self.tracks.len() {
+            self.tracks.remove(track_index);
+            if self.recording_track == Some(track_index) {
+                self.recording_track = None;
+            }
+        }
+    }
+
+    pub fn clear_track(&mut self, track_index: usize) {
+        if let Some(track) = self.tracks.get_mut(track_index) {
+            track.raw_audio.clear();
+            track.tail = None;
+            track.playback_state = TrackPlaybackState::Stopped;
+        }
+    }
+
     pub fn save_to_directory(&self) -> Result<(), String> {
         let dir_path = rs_pedalboard::get_save_dir()
             .map_err(|e| format!("Failed to get save directory: {}", e))?
@@ -630,6 +653,22 @@ impl LooperMultitrack {
             .join(&self.name);
         std::fs::create_dir_all(&dir_path)
             .map_err(|e| format!("Failed to create directory: {}", e))?;
+
+        for entry in
+            std::fs::read_dir(&dir_path).map_err(|e| format!("Failed to read directory: {}", e))?
+        {
+            let path = entry
+                .map_err(|e| format!("Failed to read directory entry: {}", e))?
+                .path();
+            if path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with("track_") && name.ends_with(".wav"))
+            {
+                std::fs::remove_file(path)
+                    .map_err(|e| format!("Failed to remove old track file: {}", e))?;
+            }
+        }
 
         for (i, track) in self.tracks.iter().enumerate() {
             let track_path = dir_path.join(format!("track_{}.wav", i));
@@ -776,6 +815,47 @@ impl LooperProcessor {
         }
     }
 
+    pub fn stop_all_immediately(&mut self) {
+        if let Some(active_multitrack) = &mut self.active_multitrack {
+            active_multitrack.stop_all_immediately();
+        }
+    }
+
+    pub fn remove_track(&mut self, track_index: usize) {
+        if let Some(active_multitrack) = &mut self.active_multitrack {
+            active_multitrack.remove_track(track_index);
+            let _ = active_multitrack.save_to_directory();
+        }
+    }
+
+    pub fn clear_track(&mut self, track_index: usize) {
+        if let Some(active_multitrack) = &mut self.active_multitrack {
+            active_multitrack.clear_track(track_index);
+            let _ = active_multitrack.save_to_directory();
+        }
+    }
+
+    pub fn delete_multitrack(&mut self, name: &str) -> Result<(), String> {
+        let dir = rs_pedalboard::get_save_dir()
+            .map_err(|error| error.to_string())?
+            .join(LOOPER_AUDIO_SAVE_DIR)
+            .join(name);
+        if dir.exists() {
+            std::fs::remove_dir_all(&dir).map_err(|e| e.to_string())?;
+        }
+        self.looper_information
+            .multitracks_information
+            .retain(|info| info.name != name);
+        if self
+            .active_multitrack
+            .as_ref()
+            .is_some_and(|active| active.name == name)
+        {
+            self.active_multitrack = None;
+        }
+        Ok(())
+    }
+
     pub fn set_active_multitrack(&mut self, name: &str) -> Result<(), String> {
         let multitrack = match LooperMultitrack::load_from_directory(name, self.sample_rate) {
             Ok(multitrack) => multitrack,
@@ -842,6 +922,9 @@ impl LooperProcessor {
             "stopall" => {
                 self.stop_all();
             }
+            "stopallimmediately" => {
+                self.stop_all_immediately();
+            }
             "stoptrack" => {
                 if let Some(track_index_str) = subcommand_parts.get(1) {
                     if let Ok(track_index) = track_index_str.parse::<usize>() {
@@ -854,6 +937,31 @@ impl LooperProcessor {
                     }
                 } else {
                     tracing::warn!("No track index provided for stoptrack command");
+                }
+            }
+            "removetrack" => {
+                if let Some(index) = subcommand_parts
+                    .get(1)
+                    .and_then(|value| value.parse().ok())
+                    .or(self.selected_track_index)
+                {
+                    self.remove_track(index);
+                }
+            }
+            "cleartrack" => {
+                if let Some(index) = subcommand_parts
+                    .get(1)
+                    .and_then(|value| value.parse().ok())
+                    .or(self.selected_track_index)
+                {
+                    self.clear_track(index);
+                }
+            }
+            "deletemultitrack" => {
+                if let Some(name) = subcommand_parts.get(1) {
+                    if let Err(error) = self.delete_multitrack(name) {
+                        tracing::warn!("Failed to delete multitrack '{}': {}", name, error);
+                    }
                 }
             }
             "startrecording" => {
@@ -874,53 +982,45 @@ impl LooperProcessor {
                 self.stop_recording(pedalboard, buffer_size);
             }
             "reverseeffect" => {
-                if let Some(track_index_str) = subcommand_parts.get(1) {
-                    if let Ok(track_index) = track_index_str.parse::<usize>() {
-                        if let Some(active_multitrack) = &mut self.active_multitrack {
-                            if track_index < active_multitrack.tracks.len() {
-                                active_multitrack.tracks[track_index].reverse_effect();
-                            } else {
-                                tracing::warn!(
-                                    "Invalid track index provided for reverseeffect command: {}",
-                                    track_index
-                                );
-                            }
+                if let Some(track_index) = self
+                    .selected_track_index
+                    .or_else(|| subcommand_parts.get(1).and_then(|value| value.parse().ok()))
+                {
+                    if let Some(active_multitrack) = &mut self.active_multitrack {
+                        if track_index < active_multitrack.tracks.len() {
+                            active_multitrack.tracks[track_index].reverse_effect();
                         } else {
-                            tracing::warn!("No active multitrack to apply reverseeffect command");
+                            tracing::warn!(
+                                "Invalid track index provided for reverseeffect command: {}",
+                                track_index
+                            );
                         }
                     } else {
-                        tracing::warn!(
-                            "Invalid track index provided for reverseeffect command: {}",
-                            track_index_str
-                        );
+                        tracing::warn!("No active multitrack to apply reverseeffect command");
                     }
                 } else {
-                    tracing::warn!("No track index provided for reverseeffect command");
+                    tracing::warn!("No selected track for reverseeffect command");
                 }
             }
             "sloweffect" => {
-                if let Some(track_index_str) = subcommand_parts.get(1) {
-                    if let Ok(track_index) = track_index_str.parse::<usize>() {
-                        if let Some(active_multitrack) = &mut self.active_multitrack {
-                            if track_index < active_multitrack.tracks.len() {
-                                active_multitrack.tracks[track_index].half_speed_effect();
-                            } else {
-                                tracing::warn!(
-                                    "Invalid track index provided for sloweffect command: {}",
-                                    track_index
-                                );
-                            }
+                if let Some(track_index) = self
+                    .selected_track_index
+                    .or_else(|| subcommand_parts.get(1).and_then(|value| value.parse().ok()))
+                {
+                    if let Some(active_multitrack) = &mut self.active_multitrack {
+                        if track_index < active_multitrack.tracks.len() {
+                            active_multitrack.tracks[track_index].half_speed_effect();
                         } else {
-                            tracing::warn!("No active multitrack to apply sloweffect command");
+                            tracing::warn!(
+                                "Invalid track index provided for sloweffect command: {}",
+                                track_index
+                            );
                         }
                     } else {
-                        tracing::warn!(
-                            "Invalid track index provided for sloweffect command: {}",
-                            track_index_str
-                        );
+                        tracing::warn!("No active multitrack to apply sloweffect command");
                     }
                 } else {
-                    tracing::warn!("No track index provided for sloweffect command");
+                    tracing::warn!("No selected track for sloweffect command");
                 }
             }
             "setsettings" => {
@@ -1072,7 +1172,7 @@ impl LooperProcessor {
                 } else {
                     tracing::warn!("No active multitrack to add track to");
                 }
-            },
+            }
             "toggleplayselectedtrack" => {
                 if let Some(active_multitrack) = &mut self.active_multitrack {
                     if let Some(selected_index) = self.selected_track_index {
@@ -1090,7 +1190,7 @@ impl LooperProcessor {
                 } else {
                     tracing::warn!("No active multitrack to toggle play/stop selected track");
                 }
-            },
+            }
             "togglerecordselectedtrack" => {
                 if let Some(active_multitrack) = &mut self.active_multitrack {
                     if let Some(selected_index) = self.selected_track_index {
@@ -1105,7 +1205,7 @@ impl LooperProcessor {
                 } else {
                     tracing::warn!("No active multitrack to toggle record/stop selected track");
                 }
-            },
+            }
             _ => tracing::warn!("Unknown looper subcommand: {}", subcommand),
         }
     }

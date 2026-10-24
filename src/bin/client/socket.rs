@@ -2,11 +2,11 @@ use std::time::Duration;
 
 use futures::{pin_mut, select, FutureExt};
 use ringbuf::traits::{Consumer, Split};
-use rs_pedalboard::MuteStatus;
 use rs_pedalboard::looper_state::LooperSettings;
 use rs_pedalboard::pedals::parameters::ParameterUpdate;
 use rs_pedalboard::pedals::GraphicEqSettings;
 use rs_pedalboard::processor_settings::FloatSettingUpdate;
+use rs_pedalboard::MuteStatus;
 use smol::channel::{Receiver, Sender, TryRecvError};
 use smol::io::{AsyncWrite, AsyncWriteExt};
 use smol::net::{Ipv4Addr, TcpStream};
@@ -87,7 +87,7 @@ impl ClientSocket {
                     true
                 }
             }
-            None => false
+            None => false,
         }
     }
 
@@ -135,11 +135,19 @@ pub enum LooperSubcommand {
     PlayAll,
     PlayTrack(usize),
     StopAll,
+    StopAllImmediately,
     StopTrack(usize),
+    RemoveTrack,
+    RemoveTrackAt(usize),
+    ClearTrack,
+    ClearTrackAt(usize),
+    DeleteMultitrack(String),
     StartRecording(usize),
     StopRecording,
     ReverseEffect,
+    ReverseEffectAt(usize),
     SlowEffect,
+    SlowEffectAt(usize),
     SetSettings(LooperSettings),
     TogglePlaySelectedTrack,
     ToggleRecordSelectedTrack,
@@ -208,7 +216,7 @@ pub enum Command {
     NextGlobalInputEQ,
     NextGlobalOutputEQ,
     PrevGlobalInputEQ,
-    PrevGlobalOutputEQ
+    PrevGlobalOutputEQ,
 }
 
 pub struct ClientSocketThreadHandle {
@@ -685,11 +693,19 @@ async fn client_socket_event_loop(
                             LooperSubcommand::PlayAll => "looper|playall\n".to_string(),
                             LooperSubcommand::PlayTrack(index) => format!("looper|playtrack|{}\n", index),
                             LooperSubcommand::StopAll => "looper|stopall\n".to_string(),
+                            LooperSubcommand::StopAllImmediately => "looper|stopallimmediately\n".to_string(),
                             LooperSubcommand::StopTrack(index) => format!("looper|stoptrack|{}\n", index),
+                            LooperSubcommand::RemoveTrack => "looper|removetrack\n".to_string(),
+                            LooperSubcommand::RemoveTrackAt(index) => format!("looper|removetrack|{}\n", index),
+                            LooperSubcommand::ClearTrack => "looper|cleartrack\n".to_string(),
+                            LooperSubcommand::ClearTrackAt(index) => format!("looper|cleartrack|{}\n", index),
+                            LooperSubcommand::DeleteMultitrack(name) => format!("looper|deletemultitrack|{}\n", name),
                             LooperSubcommand::StartRecording(index) => format!("looper|startrecording|{}\n", index),
                             LooperSubcommand::StopRecording => "looper|stoprecording\n".to_string(),
                             LooperSubcommand::ReverseEffect => "looper|reverseeffect\n".to_string(),
+                            LooperSubcommand::ReverseEffectAt(index) => format!("looper|reverseeffect|{}\n", index),
                             LooperSubcommand::SlowEffect => "looper|sloweffect\n".to_string(),
+                            LooperSubcommand::SlowEffectAt(index) => format!("looper|sloweffect|{}\n", index),
                             LooperSubcommand::SetSettings(settings) => format!("looper|setsettings|{}\n", serde_json::to_string(&settings).expect("Failed to serialize LooperSettings")),
                             LooperSubcommand::PrevActiveMultitrack => "looper|prevactivemultitrack\n".to_string(),
                             LooperSubcommand::NextActiveMultitrack => "looper|nextactivemultitrack\n".to_string(),

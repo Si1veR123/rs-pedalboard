@@ -67,12 +67,27 @@ impl LooperClientState {
             {
                 return;
             }
+
             info.multitracks_information
                 .push(rs_pedalboard::looper_state::MultitrackInformation {
                     name: name.clone(),
                     track_count: 0,
                 });
             self.active_multitrack = Some(LooperMultitrackClientState::new(name, 0));
+        }
+    }
+
+    pub(crate) fn delete_multitrack(&mut self, name: &str) {
+        if let Some(info) = &mut self.looper_information {
+            info.multitracks_information
+                .retain(|item| item.name != name);
+        }
+        if self
+            .active_multitrack
+            .as_ref()
+            .is_some_and(|active| active.name == name)
+        {
+            self.active_multitrack = None;
         }
     }
 
@@ -100,6 +115,26 @@ impl LooperClientState {
     pub fn stop_all_tracks(&mut self) {
         if let Some(active_multitrack) = &mut self.active_multitrack {
             active_multitrack.tracks_playing.clear();
+        }
+    }
+
+    pub fn remove_selected_track(&mut self) {
+        if let Some(active) = &mut self.active_multitrack {
+            if let Some(index) = active.selected_track {
+                if index < active.track_count {
+                    active.track_count -= 1;
+                    active.tracks_playing.retain(|&track| track != index);
+                    active.selected_track = None;
+                }
+            }
+        }
+    }
+
+    pub fn clear_selected_track(&mut self) {
+        if let Some(active) = &mut self.active_multitrack {
+            if let Some(index) = active.selected_track {
+                active.tracks_playing.retain(|&track| track != index);
+            }
         }
     }
 
