@@ -1,9 +1,10 @@
 use std::time::Instant;
 
-use eframe::egui::{self, Color32, RichText, Vec2, Widget};
+use eframe::egui::{self, RichText, Vec2, Widget};
 
-use crate::state::State;
+use crate::{state::State, FAINT_TEXT_COLOR};
 use rs_pedalboard::dsp::yin::{freq_to_note, PROCESSOR_UPDATE_FREQ_MS};
+use super::{HEADING_FONT_SIZE, SMALL_BODY_FONT_SIZE, BODY_FONT_SIZE};
 
 pub struct TunerWidget {
     pub state: &'static State,
@@ -75,15 +76,14 @@ impl Widget for &mut TunerWidget {
             ui.add_space(10.0);
             ui.label(
                 RichText::from("Tuner")
-                    .size(30.0)
-                    .color(Color32::from_gray(90)),
+                    .size(HEADING_FONT_SIZE)
             );
             ui.add_space(7.0);
 
             // Note name
-            ui.label(RichText::new(format!("{}", note_name)).size(50.0));
+            ui.label(RichText::new(format!("{}", note_name)).size(HEADING_FONT_SIZE));
             // Octave
-            ui.label(RichText::new(octave).size(25.0));
+            ui.label(RichText::new(octave).size(BODY_FONT_SIZE));
 
             // Cents offset
             let bar_height = 50.0;
@@ -128,7 +128,7 @@ impl Widget for &mut TunerWidget {
             } else {
                 format!("{}", cents_offset.round() as isize)
             };
-            ui.label(RichText::new(cents_label).size(20.0));
+            ui.label(RichText::new(cents_label).size(SMALL_BODY_FONT_SIZE).color(FAINT_TEXT_COLOR));
 
             ui.add_space(10.0);
         })

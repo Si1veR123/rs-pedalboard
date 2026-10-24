@@ -24,7 +24,7 @@ impl LooperMultitrackClientState {
 #[derive(Clone, Default, Debug)]
 pub struct LooperClientState {
     looper_information: Option<LooperInformation>,
-    active_multitrack: Option<LooperMultitrackClientState>
+    active_multitrack: Option<LooperMultitrackClientState>,
 }
 
 impl LooperClientState {
@@ -45,21 +45,33 @@ impl LooperClientState {
 
     pub fn set_active_multitrack(&mut self, name: String) {
         // Get track count from looper information
-        let track_count = self.looper_information.as_ref().and_then(|info| {
-            info.multitracks_information.iter().find(|mt| mt.name == name).map(|mt| mt.track_count)
-        }).unwrap_or(0);
+        let track_count = self
+            .looper_information
+            .as_ref()
+            .and_then(|info| {
+                info.multitracks_information
+                    .iter()
+                    .find(|mt| mt.name == name)
+                    .map(|mt| mt.track_count)
+            })
+            .unwrap_or(0);
         self.active_multitrack = Some(LooperMultitrackClientState::new(name, track_count));
     }
 
     pub(crate) fn add_multitrack(&mut self, name: String) {
         if let Some(info) = &mut self.looper_information {
-            if info.multitracks_information.iter().any(|item| item.name == name) {
+            if info
+                .multitracks_information
+                .iter()
+                .any(|item| item.name == name)
+            {
                 return;
             }
-            info.multitracks_information.push(rs_pedalboard::looper_state::MultitrackInformation {
-                name: name.clone(),
-                track_count: 0,
-            });
+            info.multitracks_information
+                .push(rs_pedalboard::looper_state::MultitrackInformation {
+                    name: name.clone(),
+                    track_count: 0,
+                });
             self.active_multitrack = Some(LooperMultitrackClientState::new(name, 0));
         }
     }
@@ -68,7 +80,11 @@ impl LooperClientState {
         if let Some(active) = &mut self.active_multitrack {
             active.track_count += 1;
             if let Some(info) = &mut self.looper_information {
-                if let Some(item) = info.multitracks_information.iter_mut().find(|item| item.name == active.name) {
+                if let Some(item) = info
+                    .multitracks_information
+                    .iter_mut()
+                    .find(|item| item.name == active.name)
+                {
                     item.track_count = active.track_count;
                 }
             }
@@ -97,7 +113,9 @@ impl LooperClientState {
 
     pub fn stop_track(&mut self, track_index: usize) {
         if let Some(active_multitrack) = &mut self.active_multitrack {
-            active_multitrack.tracks_playing.retain(|&i| i != track_index);
+            active_multitrack
+                .tracks_playing
+                .retain(|&i| i != track_index);
         }
     }
 
@@ -132,7 +150,9 @@ impl LooperClientState {
     pub fn stop_selected_track(&mut self) {
         if let Some(active_multitrack) = &mut self.active_multitrack {
             if let Some(selected_track) = active_multitrack.selected_track {
-                active_multitrack.tracks_playing.retain(|&i| i != selected_track);
+                active_multitrack
+                    .tracks_playing
+                    .retain(|&i| i != selected_track);
             }
         }
     }
@@ -157,7 +177,10 @@ impl LooperClientState {
         if let Some(active_multitrack) = &self.active_multitrack {
             if let Some(looper_information) = &self.looper_information {
                 let multitrack_names = &looper_information.multitracks_information;
-                if let Some(current_index) = multitrack_names.iter().position(|mt_info| mt_info.name == active_multitrack.name) {
+                if let Some(current_index) = multitrack_names
+                    .iter()
+                    .position(|mt_info| mt_info.name == active_multitrack.name)
+                {
                     let prev_index = if current_index == 0 {
                         multitrack_names.len() - 1
                     } else {
@@ -174,7 +197,10 @@ impl LooperClientState {
         if let Some(active_multitrack) = &self.active_multitrack {
             if let Some(looper_information) = &self.looper_information {
                 let multitrack_names = &looper_information.multitracks_information;
-                if let Some(current_index) = multitrack_names.iter().position(|mt_info| mt_info.name == active_multitrack.name) {
+                if let Some(current_index) = multitrack_names
+                    .iter()
+                    .position(|mt_info| mt_info.name == active_multitrack.name)
+                {
                     let next_index = (current_index + 1) % multitrack_names.len();
                     let next_name = &multitrack_names[next_index].name.clone();
                     self.set_active_multitrack(next_name.clone());
@@ -225,9 +251,12 @@ impl LooperClientState {
 
     pub fn save_settings(&self) {
         if let Some(looper_information) = &self.looper_information {
-            looper_information.settings.save_to_disk().unwrap_or_else(|e| {
-                tracing::error!("Failed to save looper settings: {}", e);
-            });
+            looper_information
+                .settings
+                .save_to_disk()
+                .unwrap_or_else(|e| {
+                    tracing::error!("Failed to save looper settings: {}", e);
+                });
         }
     }
 }

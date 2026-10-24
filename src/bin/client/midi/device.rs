@@ -308,7 +308,7 @@ impl MidiDeviceType {
                 ui.end_row();
                 ui.label("Convert Momentary To Latching:");
                 ui.scope(|ui| {
-                    crate::settings::set_large_checkbox_style(ui);
+                    crate::ui_helpers::set_large_checkbox_style(ui);
                     ui.checkbox(momentary_to_latching, "")
                 });
                 ui.end_row();

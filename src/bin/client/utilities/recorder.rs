@@ -1,9 +1,8 @@
 use std::time::Instant;
 
-use eframe::egui::{self, Color32, RichText, Vec2, Widget};
+use eframe::egui::{self, RichText, Vec2, Widget};
 
-use super::start_stop_icon;
-use crate::state::State;
+use crate::{FAINT_TEXT_COLOR, state::State, ui_helpers::start_stop_icon, utilities::{BODY_FONT_SIZE, HEADING_FONT_SIZE}};
 
 pub struct RecorderUtility {
     state: &'static State,
@@ -23,8 +22,7 @@ impl Widget for &mut RecorderUtility {
             ui.add_space(10.0);
             ui.label(
                 RichText::from("Record")
-                    .size(28.0)
-                    .color(Color32::from_gray(90)),
+                    .size(HEADING_FONT_SIZE)
             );
             ui.add_space(7.0);
             if let Some(start_time) = recording_time {
@@ -44,7 +42,8 @@ impl Widget for &mut RecorderUtility {
                         elapsed.as_secs() / 60,
                         elapsed.as_secs() % 60
                     ))
-                    .size(30.0),
+                    .size(BODY_FONT_SIZE)
+                    .color(FAINT_TEXT_COLOR),
                 );
 
                 ui.add_space(10.0);
@@ -60,7 +59,7 @@ impl Widget for &mut RecorderUtility {
 
                 let mut save_clean = self.state.recording_save_clean.get();
                 if ui
-                    .checkbox(&mut save_clean, RichText::new("Save clean").size(30.0))
+                    .checkbox(&mut save_clean, RichText::new("Save clean").size(BODY_FONT_SIZE))
                     .on_hover_text("Save the recording with and without pedal effects")
                     .changed()
                 {

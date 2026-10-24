@@ -759,7 +759,7 @@ impl MidiState {
                                                                 ui.label("Use Global Functions:");
 
                                                                 ui.scope(|ui| {
-                                                                    crate::settings::set_large_checkbox_style(ui);
+                                                                    crate::ui_helpers::set_large_checkbox_style(ui);
                                                                     if ui.checkbox(&mut device.use_global, "")
                                                                         .on_hover_text("If enabled, the global functions will be used. If disabled, the parameter functions will be used.")
                                                                         .changed() {

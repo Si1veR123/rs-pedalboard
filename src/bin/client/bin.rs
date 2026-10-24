@@ -21,6 +21,7 @@ mod midi;
 mod popup_message;
 use popup_message::{PopupWidget, popup};
 mod github_sync;
+mod ui_helpers;
 
 #[cfg(feature = "virtual_keyboard")]
 use egui_keyboard::{layouts::KeyboardLayout, Keyboard};

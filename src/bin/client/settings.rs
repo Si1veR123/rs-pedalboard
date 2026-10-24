@@ -8,7 +8,7 @@ use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
 use crate::{
-    Screen, audio_processor_handler::{StartProcessorResult, start_processor_process}, popup_message::{PopupMessageType, popup}
+    Screen, audio_processor_handler::{StartProcessorResult, start_processor_process}, popup_message::{PopupMessageType, popup}, ui_helpers::set_large_checkbox_style
 };
 use crate::state::State;
 use rs_pedalboard::{
@@ -1203,13 +1203,6 @@ fn eq_name_is_taken(presets: &EqPresets, input: &EqNameInput) -> bool {
         .iter()
         .enumerate()
         .any(|(index, eq)| eq.name == input.name.trim() && Some(index) != input.rename)
-}
-
-pub fn set_large_checkbox_style(ui: &mut egui::Ui) {
-    ui.style_mut().spacing.icon_width = 35.0;
-    ui.style_mut().spacing.icon_width_inner = 12.0;
-    ui.style_mut().visuals.widgets.inactive.fg_stroke =
-        egui::Stroke::new(2.0_f32, Color32::from_rgb(200, 200, 200));
 }
 
 #[cfg(test)]

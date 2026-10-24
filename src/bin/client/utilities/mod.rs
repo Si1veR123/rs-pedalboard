@@ -1,11 +1,15 @@
+pub mod looper;
 pub mod metronome;
 pub mod recorder;
 pub mod tuner;
-pub mod looper;
 
 use eframe::egui::{self, Color32, Layout, RichText, Vec2, Widget};
 
-use crate::state::State;
+use crate::{state::State, ui_helpers::set_large_checkbox_style};
+
+pub(super) const HEADING_FONT_SIZE: f32 = 45.0;
+pub(super) const BODY_FONT_SIZE: f32 = 35.0;
+pub(super) const SMALL_BODY_FONT_SIZE: f32 = 25.0;
 
 pub struct UtilitiesScreen {
     pub state: &'static State,
@@ -29,6 +33,8 @@ impl UtilitiesScreen {
 
 impl Widget for &mut UtilitiesScreen {
     fn ui(self, ui: &mut egui::Ui) -> egui::Response {
+        set_large_checkbox_style(ui);
+
         if !self.state.is_connected() {
             return ui
                 .centered_and_justified(|ui| {
@@ -116,16 +122,13 @@ impl Widget for &mut UtilitiesScreen {
                     );
                     ui.add_space(spacing);
                     ui.allocate_ui_with_layout(
-                        Vec2::new(
-                            ui.available_width(),
-                            (ui.available_height() * 0.75).max(450.0),
-                        ),
+                        Vec2::new(ui.available_width(), widget_height),
                         Layout::left_to_right(egui::Align::Center),
                         |ui| {
                             let available_width = ui.available_width();
-                            ui.add_space(available_width * 0.05);
+                            ui.add_space(available_width * 0.15);
                             ui.allocate_ui_with_layout(
-                                Vec2::new(available_width * 0.9, ui.available_height()),
+                                Vec2::new(available_width * 0.7, ui.available_height()),
                                 Layout::top_down(egui::Align::Center),
                                 |ui| {
                                     let rect = ui.add(&mut self.looper).rect;
@@ -144,28 +147,4 @@ impl Widget for &mut UtilitiesScreen {
             })
             .inner
     }
-}
-
-pub fn start_stop_icon(ui: &mut egui::Ui, start: bool, rect: egui::Rect, size: f32) {
-    let icon_size = Vec2::splat(size);
-    let right_arrow_rect = egui::Align2::CENTER_CENTER.align_size_within_rect(icon_size, rect);
-    let points = if start {
-        vec![
-            right_arrow_rect.left_top(),
-            right_arrow_rect.right_center(),
-            right_arrow_rect.left_bottom(),
-        ]
-    } else {
-        vec![
-            right_arrow_rect.left_top(),
-            right_arrow_rect.right_top(),
-            right_arrow_rect.right_bottom(),
-            right_arrow_rect.left_bottom(),
-        ]
-    };
-    ui.painter().add(egui::Shape::convex_polygon(
-        points,
-        Color32::from_gray(200),
-        egui::Stroke::NONE,
-    ));
 }
