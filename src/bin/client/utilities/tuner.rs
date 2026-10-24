@@ -90,19 +90,15 @@ impl Widget for &mut TunerWidget {
             let needle_im = egui::Image::new(egui::include_image!("../files/tuner_needle.png"))
                 .max_height(bar_height - 10.0)
                 .tint(crate::BACKGROUND_COLOR);
-            let needle_size = match needle_im.load_for_size(ui.ctx(), Vec2::splat(50.0)) {
-                Ok(image) => match image.size() {
-                    Some(size) => size,
-                    None => {
-                        tracing::warn!("Loaded needle image has no size");
-                        return;
-                    }
-                },
-                Err(error) => {
-                    tracing::warn!("Failed to load needle image size: {error}");
-                    return;
-                }
-            };
+            let needle_size = needle_im
+                .load_for_size(ui.ctx(), Vec2::splat(50.0))
+                .ok()
+                .and_then(|image| image.size())
+                .unwrap_or_else(|| {
+                    // The embedded image is 8x36. Some Linux renderers cannot report
+                    // its decoded size, but paint_at still works with an explicit size.
+                    Vec2::new(8.0 / 36.0 * (bar_height - 10.0), bar_height - 10.0)
+                });
 
             let bar_width = bg_response.rect.width();
             let needle_x_frac = (cents_offset as f32 + 50.0) / 100.0;
