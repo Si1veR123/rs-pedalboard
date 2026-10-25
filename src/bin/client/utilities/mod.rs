@@ -7,9 +7,9 @@ use eframe::egui::{self, Color32, Layout, RichText, Vec2, Widget};
 
 use crate::{state::State, ui_helpers::set_large_checkbox_style};
 
-pub(super) const HEADING_FONT_SIZE: f32 = 45.0;
-pub(super) const BODY_FONT_SIZE: f32 = 35.0;
-pub(super) const SMALL_BODY_FONT_SIZE: f32 = 25.0;
+pub(super) const HEADING_FONT_SIZE: f32 = 40.0;
+pub(super) const BODY_FONT_SIZE: f32 = 30.0;
+pub(super) const SMALL_BODY_FONT_SIZE: f32 = 20.0;
 
 pub struct UtilitiesScreen {
     pub state: &'static State,

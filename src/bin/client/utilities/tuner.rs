@@ -84,40 +84,29 @@ impl Widget for &mut TunerWidget {
 
             // Cents offset
             let bar_height = 50.0;
+            let bar_width = ui.available_width();
             let bg_im = egui::Image::new(egui::include_image!("../files/tuner_bar.png"))
-                .max_height(bar_height);
+                .fit_to_exact_size(Vec2::new(bar_width, bar_height));
             let bg_response = ui.add(bg_im);
             let needle_im = egui::Image::new(egui::include_image!("../files/tuner_needle.png"))
-                .max_height(bar_height - 10.0)
                 .tint(crate::BACKGROUND_COLOR);
-            let needle_size = needle_im
-                .load_for_size(ui.ctx(), Vec2::splat(50.0))
-                .ok()
-                .and_then(|image| image.size())
-                .unwrap_or_else(|| {
-                    // The embedded image is 8x36. Some Linux renderers cannot report
-                    // its decoded size, but paint_at still works with an explicit size.
-                    Vec2::new(8.0 / 36.0 * (bar_height - 10.0), bar_height - 10.0)
-                });
+            let needle_size = Vec2::new(8.0 / 36.0 * (bar_height - 10.0), bar_height - 10.0);
 
-            let bar_width = bg_response.rect.width();
             let needle_x_frac = (cents_offset as f32 + 50.0) / 100.0;
-            let needle_x = if bar_width > needle_size.x {
-                (bar_width * needle_x_frac).clamp(0.0, bar_width - needle_size.x)
-            } else {
-                bar_width / 2.0
-            };
+            let needle_x = (bar_width * needle_x_frac).clamp(0.0, bar_width - needle_size.x);
 
             let min = bg_response.rect.min
                 + Vec2::new(needle_x - needle_size.x / 2.0, bar_height - needle_size.y);
 
-            needle_im.paint_at(
-                ui,
-                egui::Rect {
-                    min,
-                    max: min + Vec2::new(needle_size.x, needle_size.y),
-                },
-            );
+            needle_im
+                .fit_to_exact_size(needle_size)
+                .paint_at(
+                    ui,
+                    egui::Rect {
+                        min,
+                        max: min + Vec2::new(needle_size.x, needle_size.y),
+                    },
+                );
 
             // Cents offset label
             let cents_label = if cents_offset == 0.0 {
