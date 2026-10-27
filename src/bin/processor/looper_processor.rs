@@ -32,6 +32,26 @@ pub fn quantize(
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::{LooperTrack, TrackPlaybackState};
+
+    #[test]
+    fn add_track_to_buffer_handles_tail_shorter_than_playback_position() {
+        let mut track = LooperTrack::new(vec![1.0; 10], Some(vec![2.0; 2]), 48_000);
+        track.playback_state = TrackPlaybackState::Active {
+            started_at: 0,
+            stopping: false,
+            first_playback: false,
+        };
+        let mut buffer = vec![0.0; 5];
+
+        track.add_track_to_buffer(&mut buffer, 5);
+
+        assert_eq!(buffer, vec![1.0; 5]);
+    }
+}
+
 #[derive(Debug, Clone)]
 enum TrackPlaybackState {
     Active {
@@ -250,13 +270,16 @@ impl LooperTrack {
                         if !first_playback {
                             if let Some(tail) = &self.tail {
                                 let tail_length_samples = tail.len();
-                                let tail_slice = &tail[track_playback_position
-                                    ..(track_playback_position + samples_to_copy)
-                                        .min(tail_length_samples)];
-                                Self::sum_samples_to_buffer(
-                                    &mut buffer_slice[..tail_slice.len()],
-                                    tail_slice,
-                                );
+                                let tail_start = track_playback_position.min(tail_length_samples);
+                                let tail_end =
+                                    (track_playback_position + samples_to_copy).min(tail_length_samples);
+                                if tail_start < tail_end {
+                                    let tail_slice = &tail[tail_start..tail_end];
+                                    Self::sum_samples_to_buffer(
+                                        &mut buffer_slice[..tail_slice.len()],
+                                        tail_slice,
+                                    );
+                                }
                             }
                         }
 
