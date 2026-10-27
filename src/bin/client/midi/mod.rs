@@ -653,6 +653,13 @@ impl MidiState {
                     if let Some(device_settings) = settings_lock.port_settings.get_mut(port_id) {
                         let mut forget_device: Option<(u8, u8)> = None;
 
+                        let mut devices_sorted: Vec<((u8, u8), &mut device::MidiDevice)> = device_settings
+                            .devices
+                            .iter_mut()
+                            .map(|((cc, channel), device)| ((*cc, *channel), device))
+                            .collect();
+                        devices_sorted.sort_by(|(_, device_1), (_, device_2)| device_1.name.cmp(&device_2.name));
+
                         for (i, ((cc, channel), device)) in device_settings.devices.iter_mut().enumerate() {
                             // Device summary row
                             strip.cell(|ui| {
