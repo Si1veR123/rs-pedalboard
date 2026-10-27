@@ -166,8 +166,11 @@ impl GlobalMidiFunction {
                     GlobalMidiFunction::LooperModeReverseEffect => {
                         Command::Looper(LooperSubcommand::ReverseEffect)
                     }
-                    GlobalMidiFunction::LooperModeSlowEffect => {
-                        Command::Looper(LooperSubcommand::SlowEffect)
+                    GlobalMidiFunction::LooperModeHalfSpeedEffect => {
+                        Command::Looper(LooperSubcommand::HalfSpeedEffect)
+                    }
+                    GlobalMidiFunction::LooperModeDoubleSpeedEffect => {
+                        Command::Looper(LooperSubcommand::DoubleSpeedEffect)
                     }
                     GlobalMidiFunction::ToggleLooperMode => return None,
                 };
@@ -193,7 +196,8 @@ impl GlobalMidiFunction {
                 | GlobalMidiFunction::LooperModeRemoveTrack
                 | GlobalMidiFunction::LooperModeClearTrack
                 | GlobalMidiFunction::LooperModeReverseEffect
-                | GlobalMidiFunction::LooperModeSlowEffect
+                | GlobalMidiFunction::LooperModeHalfSpeedEffect
+                | GlobalMidiFunction::LooperModeDoubleSpeedEffect
         )
     }
 }
