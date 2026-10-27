@@ -709,22 +709,35 @@ impl LooperMultitrack {
             return Err(format!("Directory {} does not exist", dir_path.display()));
         }
 
-        let mut tracks = Vec::new();
+        let mut track_paths = Vec::new();
         for entry in
             std::fs::read_dir(&dir_path).map_err(|e| format!("Failed to read directory: {}", e))?
         {
             let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
             let path = entry.path();
-            if path.extension().and_then(|s| s.to_str()) == Some("wav")
-                && !path
-                    .file_name()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or("")
-                    .ends_with("_tail.wav")
-            {
-                let track = LooperTrack::load_from_file(&path, sample_rate)?;
-                tracks.push(track);
+            if path.extension().and_then(|s| s.to_str()) != Some("wav") {
+                continue;
             }
+
+            let Some(file_stem) = path.file_stem().and_then(|s| s.to_str()) else {
+                continue;
+            };
+            let Some(track_index) = file_stem
+                .strip_prefix("track_")
+                .and_then(|index| index.parse::<usize>().ok())
+            else {
+                continue;
+            };
+
+            track_paths.push((track_index, path));
+        }
+
+        track_paths.sort_unstable_by_key(|(track_index, _)| *track_index);
+
+        let mut tracks = Vec::with_capacity(track_paths.len());
+        for (_, path) in track_paths {
+            let track = LooperTrack::load_from_file(&path, sample_rate)?;
+            tracks.push(track);
         }
 
         Ok(Self {
