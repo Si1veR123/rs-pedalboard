@@ -380,7 +380,7 @@ impl Widget for &mut LooperWidget {
                     Vec2::new(ui.available_width() * 0.75, 44.0),
                     egui::Layout::left_to_right(egui::Align::Min),
                     |ui| {
-                        ui.columns(5, |columns| {
+                        ui.columns(6, |columns| {
                             if columns[0].button("Add track").clicked() {
                                 self.send(LooperSubcommand::AddTrackToActiveMultitrack);
                                 self.state
@@ -403,13 +403,19 @@ impl Widget for &mut LooperWidget {
                                 self.state.looper_state.borrow_mut().clear_selected_track();
                             }
 
-                            if columns[3].button("Slow FX").clicked() {
+                            if columns[3].button("Half Speed FX").clicked() {
                                 if let Some(index) = active.selected_track {
-                                    self.send(LooperSubcommand::SlowEffectAt(index));
+                                    self.send(LooperSubcommand::HalfSpeedEffectAt(index));
                                 }
                             }
 
-                            if columns[4].button("Reverse FX").clicked() {
+                            if columns[4].button("Double Speed FX").clicked() {
+                                if let Some(index) = active.selected_track {
+                                    self.send(LooperSubcommand::DoubleSpeedEffectAt(index));
+                                }
+                            }
+
+                            if columns[5].button("Reverse FX").clicked() {
                                 if let Some(index) = active.selected_track {
                                     self.send(LooperSubcommand::ReverseEffectAt(index));
                                 }

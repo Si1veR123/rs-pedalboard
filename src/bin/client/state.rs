@@ -1429,8 +1429,10 @@ impl State {
                     }
                     LooperSubcommand::ReverseEffect
                     | LooperSubcommand::ReverseEffectAt(_)
-                    | LooperSubcommand::SlowEffect
-                    | LooperSubcommand::SlowEffectAt(_) => {}
+                    | LooperSubcommand::HalfSpeedEffect
+                    | LooperSubcommand::HalfSpeedEffectAt(_)
+                    | LooperSubcommand::DoubleSpeedEffect
+                    | LooperSubcommand::DoubleSpeedEffectAt(_) => {}
                 },
 
                 Command::RequestSampleRate => {

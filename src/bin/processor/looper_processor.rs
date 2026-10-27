@@ -1,3 +1,4 @@
+use realfft::num_traits::Inv;
 use rs_pedalboard::looper_state::{
     LooperInformation, LooperSettings, LooperSync, MultitrackInformation, LOOPER_AUDIO_SAVE_DIR,
 };
@@ -366,6 +367,14 @@ impl LooperTrack {
     }
 
     pub fn half_speed_effect(&mut self) {
+        self.speed_effect(0.5);
+    }
+
+    pub fn double_speed_effect(&mut self) {
+        self.speed_effect(2.0);
+    }
+
+    pub fn speed_effect(&mut self, ratio: f32) {
         let channels = vec![self.raw_audio.clone()];
         let mut resampled_channels = resample_audio(
             &channels,
@@ -381,7 +390,7 @@ impl LooperTrack {
             let mut resampled_channels = resample_audio(
                 &channels,
                 self.sample_rate as f32,
-                self.sample_rate as f32 / 2.0,
+                self.sample_rate as f32 * ratio.inv(),
             )
             .expect("Resampling should not fail");
             *tail = resampled_channels
@@ -1018,7 +1027,7 @@ impl LooperProcessor {
                     tracing::warn!("No selected track for reverseeffect command");
                 }
             }
-            "sloweffect" => {
+            "halfspeedeffect" => {
                 if let Some(track_index) = self
                     .selected_track_index
                     .or_else(|| subcommand_parts.get(1).and_then(|value| value.parse().ok()))
@@ -1028,15 +1037,36 @@ impl LooperProcessor {
                             active_multitrack.tracks[track_index].half_speed_effect();
                         } else {
                             tracing::warn!(
-                                "Invalid track index provided for sloweffect command: {}",
+                                "Invalid track index provided for halfspeedeffect command: {}",
                                 track_index
                             );
                         }
                     } else {
-                        tracing::warn!("No active multitrack to apply sloweffect command");
+                        tracing::warn!("No active multitrack to apply halfspeedeffect command");
                     }
                 } else {
-                    tracing::warn!("No selected track for sloweffect command");
+                    tracing::warn!("No selected track for halfspeedeffect command");
+                }
+            }
+            "doublespeedeffect" => {
+                if let Some(track_index) = self
+                    .selected_track_index
+                    .or_else(|| subcommand_parts.get(1).and_then(|value| value.parse().ok()))
+                {
+                    if let Some(active_multitrack) = &mut self.active_multitrack {
+                        if track_index < active_multitrack.tracks.len() {
+                            active_multitrack.tracks[track_index].double_speed_effect();
+                        } else {
+                            tracing::warn!(
+                                "Invalid track index provided for doublespeedeffect command: {}",
+                                track_index
+                            );
+                        }
+                    } else {
+                        tracing::warn!("No active multitrack to apply doublespeedeffect command");
+                    }
+                } else {
+                    tracing::warn!("No selected track for doublespeedeffect command");
                 }
             }
             "setsettings" => {

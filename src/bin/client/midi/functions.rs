@@ -41,7 +41,8 @@ pub enum GlobalMidiFunction {
     LooperModeRemoveTrack,
     LooperModeClearTrack,
     LooperModeReverseEffect,
-    LooperModeSlowEffect,
+    LooperModeHalfSpeedEffect,
+    LooperModeDoubleSpeedEffect,
 }
 
 impl std::fmt::Display for GlobalMidiFunction {
@@ -88,7 +89,8 @@ impl std::fmt::Display for GlobalMidiFunction {
             GlobalMidiFunction::LooperModeRemoveTrack => "Looper Mode: Remove Track",
             GlobalMidiFunction::LooperModeClearTrack => "Looper Mode: Clear Track",
             GlobalMidiFunction::LooperModeReverseEffect => "Looper Mode: Reverse Effect",
-            GlobalMidiFunction::LooperModeSlowEffect => "Looper Mode: Slow Effect",
+            GlobalMidiFunction::LooperModeHalfSpeedEffect => "Looper Mode: Half Speed Effect",
+            GlobalMidiFunction::LooperModeDoubleSpeedEffect => "Looper Mode: Double Speed Effect",
         };
         write!(f, "{name}")
     }
