@@ -105,7 +105,15 @@ impl AudioProcessor {
 
         if self.tuner_handle.is_some() {
             self.handle_tuner();
-        } else {
+        }
+
+        // If looper is playing or recording, we need to process the audio
+        let looper_is_active = self.looper
+            .as_ref()
+            .map(|l| l.is_playing() || l.is_recording())
+            .unwrap_or(false);
+
+        if !self.tuner_handle.is_some() || looper_is_active {
             self.apply_pedalboard_processing();
         }
 

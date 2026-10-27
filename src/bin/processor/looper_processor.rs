@@ -779,6 +779,22 @@ impl LooperProcessor {
         }
     }
 
+    pub fn is_playing(&self) -> bool {
+        if let Some(active_multitrack) = &self.active_multitrack {
+            matches!(active_multitrack.playback, MultitrackPlaybackState::Playing(_))
+        } else {
+            false
+        }
+    }
+
+    pub fn is_recording(&self) -> bool {
+        if let Some(active_multitrack) = &self.active_multitrack {
+            active_multitrack.recording_track.is_some()
+        } else {
+            false
+        }
+    }
+
     pub fn push_audio_to_recording_track(&mut self, audio: &[f32]) {
         if let Some(active_multitrack) = &mut self.active_multitrack {
             active_multitrack.push_audio_to_recording_track(audio);
