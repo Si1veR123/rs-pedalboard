@@ -1,3 +1,4 @@
+use eframe::wgpu::naga::proc;
 use realfft::num_traits::Inv;
 use rs_pedalboard::looper_state::{
     LooperInformation, LooperSettings, LooperSync, MultitrackInformation, LOOPER_AUDIO_SAVE_DIR,
@@ -465,13 +466,14 @@ impl LooperMultitrack {
         pedalboard: &mut Pedalboard,
         buffer_size: usize,
         max_tail_samples: usize,
+        processing_sample_rate: u32
     ) -> Option<Vec<f32>> {
         if !pedalboard.has_time_based_pedal() {
             return None;
         }
 
         // Preallocate 1 second
-        let mut tail_buffer = Vec::with_capacity(self.sample_rate as usize * 1);
+        let mut tail_buffer = Vec::with_capacity(processing_sample_rate as usize * 1);
         let mut processing_buffer = vec![0.0f32; buffer_size];
         let mut null_message_buffer = Vec::new();
 
@@ -494,7 +496,12 @@ impl LooperMultitrack {
             None
         } else {
             tail_buffer.truncate(max_tail_samples);
-            Some(tail_buffer)
+
+            // Resample from processing sample rate to the looper sample rate
+            let channels = vec![tail_buffer.clone()];
+            let resampled = resample_audio(&channels, processing_sample_rate as f32, self.sample_rate as f32).ok()?;
+
+            Some(resampled[0].clone())
         }
     }
 
@@ -524,12 +531,13 @@ impl LooperMultitrack {
         &mut self,
         pedalboard: &mut Pedalboard,
         buffer_size: usize,
+        processing_sample_rate: u32,
         quantize_length_samples: usize,
     ) {
         let recording_track = self.recording_track.take();
 
         if let Some(recording_track) = recording_track {
-            let tail = self.capture_tail(pedalboard, buffer_size, quantize_length_samples);
+            let tail = self.capture_tail(pedalboard, buffer_size, quantize_length_samples, processing_sample_rate);
             self.tracks[recording_track].snap_to_length(quantize_length_samples, tail);
         }
     }
@@ -538,6 +546,7 @@ impl LooperMultitrack {
         &mut self,
         pedalboard: &mut Pedalboard,
         buffer_size: usize,
+        processing_sample_rate: u32,
         maximum_fractionals: usize,
     ) {
         if let Some(recording_track) = self.recording_track {
@@ -553,7 +562,7 @@ impl LooperMultitrack {
                 self.tracks[recording_track].get_length_samples()
             };
 
-            self.stop_recording(pedalboard, buffer_size, quantized_length_samples);
+            self.stop_recording(pedalboard, buffer_size, processing_sample_rate, quantized_length_samples);
         }
     }
 
@@ -561,13 +570,14 @@ impl LooperMultitrack {
         &mut self,
         pedalboard: &mut Pedalboard,
         buffer_size: usize,
+        processing_sample_rate: u32,
         looper_sync: &LooperSync,
     ) {
         if let Some(recording_track) = self.recording_track {
             let recording_samples = self.tracks[recording_track].get_length_samples();
             let quantized_length_samples =
                 looper_sync.quantize(recording_samples, self.sample_rate as f32);
-            self.stop_recording(pedalboard, buffer_size, quantized_length_samples);
+            self.stop_recording(pedalboard, buffer_size, processing_sample_rate, quantized_length_samples);
         }
     }
 
@@ -783,23 +793,25 @@ impl LooperProcessor {
         }
     }
 
-    pub fn stop_recording(&mut self, pedalboard: &mut Pedalboard, buffer_size: usize) {
+    pub fn stop_recording(&mut self, pedalboard: &mut Pedalboard, buffer_size: usize, processing_sample_rate: u32) {
         if let Some(active_multitrack) = &mut self.active_multitrack {
             if active_multitrack.tracks.len() > 1 {
                 // If there are multiple tracks, snap according to multiples of the shortest track length
                 active_multitrack.stop_recording_dynamic_snap(
                     pedalboard,
                     buffer_size,
+                    processing_sample_rate,
                     self.looper_information.settings.maximum_fractionals,
                 );
             } else {
                 // This is the first track, so if we have a looper sync, snap to the nearest BPM
                 if let Some(looper_sync) = &self.looper_information.settings.looper_sync {
-                    active_multitrack.stop_recording_bpm_snap(pedalboard, buffer_size, looper_sync);
+                    active_multitrack.stop_recording_bpm_snap(pedalboard, buffer_size, processing_sample_rate, looper_sync);
                 } else {
                     active_multitrack.stop_recording_dynamic_snap(
                         pedalboard,
                         buffer_size,
+                        processing_sample_rate,
                         self.looper_information.settings.maximum_fractionals,
                     );
                 }
@@ -919,6 +931,7 @@ impl LooperProcessor {
         client_command_buffer: &mut Vec<String>,
         pedalboard: &mut Pedalboard,
         buffer_size: usize,
+        processing_sample_rate: u32
     ) {
         let subcommand_parts: Vec<&str> = subcommand_and_args.split('|').collect();
         let subcommand = match subcommand_parts.get(0) {
@@ -1027,7 +1040,7 @@ impl LooperProcessor {
                 }
             }
             "stoprecording" => {
-                self.stop_recording(pedalboard, buffer_size);
+                self.stop_recording(pedalboard, buffer_size, processing_sample_rate);
             }
             "reverseeffect" => {
                 if let Some(track_index) = self
@@ -1264,7 +1277,7 @@ impl LooperProcessor {
                 if let Some(active_multitrack) = &mut self.active_multitrack {
                     if let Some(selected_index) = self.selected_track_index {
                         if active_multitrack.recording_track == Some(selected_index) {
-                            self.stop_recording(pedalboard, buffer_size);
+                            self.stop_recording(pedalboard, buffer_size, processing_sample_rate);
                         } else {
                             active_multitrack.start_recording(selected_index);
                         }

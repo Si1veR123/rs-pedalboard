@@ -856,6 +856,7 @@ impl AudioProcessor {
                         &mut self.command_to_client_buffer,
                         pedalboard,
                         self.settings.frames_per_period,
+                        self.processing_sample_rate
                     );
                 } else {
                     tracing::warn!("Looper is not enabled, cannot handle looper command");
