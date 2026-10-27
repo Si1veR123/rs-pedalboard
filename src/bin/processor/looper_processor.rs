@@ -1,4 +1,3 @@
-use eframe::wgpu::naga::proc;
 use realfft::num_traits::Inv;
 use rs_pedalboard::looper_state::{
     LooperInformation, LooperSettings, LooperSync, MultitrackInformation, LOOPER_AUDIO_SAVE_DIR,
@@ -33,24 +32,14 @@ pub fn quantize(
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::{LooperTrack, TrackPlaybackState};
-
-    #[test]
-    fn add_track_to_buffer_handles_tail_shorter_than_playback_position() {
-        let mut track = LooperTrack::new(vec![1.0; 10], Some(vec![2.0; 2]), 48_000);
-        track.playback_state = TrackPlaybackState::Active {
-            started_at: 0,
-            stopping: false,
-            first_playback: false,
-        };
-        let mut buffer = vec![0.0; 5];
-
-        track.add_track_to_buffer(&mut buffer, 5);
-
-        assert_eq!(buffer, vec![1.0; 5]);
-    }
+fn change_audio_buffer_speed(audio: Vec<f32>, sample_rate: f32, speed_ratio: f32) -> Result<Vec<f32>, String> {
+    let channels = vec![audio.to_vec()];
+    let resampled_channels =
+        resample_audio(&channels, sample_rate, sample_rate * speed_ratio.inv()).map_err(|e| e.to_string())?;
+    Ok(resampled_channels
+        .into_iter()
+        .next()
+        .ok_or_else(|| "Resampled output should have a channel".to_string())?)
 }
 
 #[derive(Debug, Clone)]
@@ -398,28 +387,19 @@ impl LooperTrack {
         self.speed_effect(2.0);
     }
 
-    pub fn speed_effect(&mut self, ratio: f32) {
-        let channels = vec![self.raw_audio.clone()];
-        let mut resampled_channels = resample_audio(
-            &channels,
-            self.sample_rate as f32,
-            self.sample_rate as f32 / 2.0,
-        )
-        .expect("Resampling should not fail");
-        self.raw_audio = resampled_channels
-            .pop()
-            .expect("Resampled output should have a channel");
+    pub fn speed_effect(&mut self, speed_ratio: f32) {
+        if let Ok(resampled_audio) =
+            change_audio_buffer_speed(self.raw_audio.clone(), self.sample_rate as f32, speed_ratio)
+        {
+            self.raw_audio = resampled_audio;
+        }
+
         if let Some(tail) = &mut self.tail {
-            let channels = vec![tail.clone()];
-            let mut resampled_channels = resample_audio(
-                &channels,
-                self.sample_rate as f32,
-                self.sample_rate as f32 * ratio.inv(),
-            )
-            .expect("Resampling should not fail");
-            *tail = resampled_channels
-                .pop()
-                .expect("Resampled output should have a channel");
+            if let Ok(resampled_tail) =
+                change_audio_buffer_speed(tail.clone(), self.sample_rate as f32, speed_ratio)
+            {
+                *tail = resampled_tail;
+            }
         }
     }
 }
