@@ -166,8 +166,8 @@ impl GraphicEqSettings {
             .with_bands(BAND_FREQS)
             .with_bandwidths(self.bandwidths)
             .with_gains(self.gains)
-            .with_upper_band_type(eq::BandType::Pass)
-            .with_lower_band_type(eq::BandType::Pass)
+            .with_upper_band_type(eq::BandType::Shelf)
+            .with_lower_band_type(eq::BandType::Shelf)
             .build()
     }
 
