@@ -3,7 +3,7 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use crate::dsp::{impluse_response::IRConvolver, MAXIMUM_DB_INCREASE, MINIMUM_DB, ConvertSampleDbLinear};
+use crate::dsp::{impluse_response::PartitionedIRConvolver, MAXIMUM_DB_INCREASE, MINIMUM_DB, ConvertSampleDbLinear};
 use crate::pedals::ui::{is_function_active_feature, pedal_switch, set_active_feature, sideways_arrow};
 use crate::pedals::{ActiveFeature, ParameterUILocation, decide_trigger_direction};
 use crate::processor_api::load_wav;
@@ -33,10 +33,10 @@ pub struct ImpulseResponse {
     id: u32,
 
     // Processor only
-    // IRConvolver requires block size. This is set on the processor after being created, and not set on client at all.
+    // PartitionedIRConvolver requires block size. This is set on the processor after being created, and not set on client at all.
     dry_buffer: Vec<f32>,
     max_buffer_size: usize,
-    ir: Option<IRConvolver>,
+    ir: Option<PartitionedIRConvolver>,
     sample_rate: Option<f32>,
 }
 
@@ -281,9 +281,10 @@ impl ImpulseResponse {
                     return;
                 };
 
-                self.ir = Some(IRConvolver::new(
+                self.ir = Some(PartitionedIRConvolver::new(
                     ir_channel.as_slice(),
                     self.max_buffer_size,
+                    None
                 ));
 
                 // Update combobox to match new selection (in case it was not set from the combobox itself)
