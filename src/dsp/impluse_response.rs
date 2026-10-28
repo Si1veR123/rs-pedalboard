@@ -4,6 +4,10 @@ use realfft::{ComplexToReal, RealFftPlanner, RealToComplex, num_traits::Euclid};
 use std::{collections::VecDeque, sync::Arc};
 
 fn compute_linear_gain(ir: &[f32]) -> f32 {
+    if ir.is_empty() {
+        return 1.0;
+    }
+
     // Linear gain of IR is the RMS of the impulse response
     let sum_squares: f32 = ir.iter().map(|&x| x * x).sum();
     let rms = (sum_squares / ir.len() as f32).sqrt();
@@ -124,6 +128,12 @@ pub struct PartitionedIRConvolver {
     fft: Arc<dyn RealToComplex<f32>>,
     ifft: Arc<dyn ComplexToReal<f32>>,
 
+    // if the input buffer is not a multiple of the partition size, there will be unprocessed samples
+    // we store them here until we have enough to process a full partition
+    // the first call where this happens will return return partial silence
+    partition_chunk_buffer: Vec<f32>,
+    output_buffer: VecDeque<f32>,
+
     time_input_history: Vec<f32>, 
     fft_input_buffer: Vec<f32>,
     scratch_buffer: Vec<Complex<f32>>,
@@ -194,36 +204,51 @@ impl PartitionedIRConvolver {
             time_input_history: vec![0.0; fft_size],
             frequency_domain_computation_result_buffer: vec![Complex::default(); spectrum_size],
             scratch_buffer: vec![Complex::default(); fft_size],
+            partition_chunk_buffer: Vec::with_capacity(partition_size),
+            output_buffer: VecDeque::with_capacity(partition_size),
         }
     }
 
     pub fn process(&mut self, buffer: &mut [f32]) {
-        let mut processed_samples = 0;
-        let total_samples = buffer.len();
+        let mut input_index = 0;
 
-        // Process the buffer in chunks of size `partition_size`
-        while processed_samples < total_samples {
-            let chunk_len = (total_samples - processed_samples).min(self.partition_size);
-            let chunk = &mut buffer[processed_samples..(processed_samples + chunk_len)];
-            
-            self.process_internal(chunk);
+        while input_index < buffer.len() {
+            let remaining_space = self.partition_size - self.partition_chunk_buffer.len();
+            let remaining_input = buffer.len() - input_index;
+            let to_take = remaining_space.min(remaining_input);
 
-            processed_samples += chunk_len;
+            self.partition_chunk_buffer
+                .extend_from_slice(&buffer[input_index..input_index + to_take]);
+
+            input_index += to_take;
+
+            if self.partition_chunk_buffer.len() == self.partition_size {
+                self.process_exact_partition_chunk();
+
+                self.output_buffer
+                    .extend(self.partition_chunk_buffer.iter().copied());
+
+                self.partition_chunk_buffer.clear();
+            }
+        }
+
+        for sample in buffer.iter_mut() {
+            *sample = self.output_buffer.pop_front().unwrap_or(0.0);
         }
     }
 
-    fn process_internal(&mut self, buffer: &mut [f32]) {
-        let b = buffer.len();
-        debug_assert!(b <= self.partition_size, "Buffer size exceeds partition size.");
+    fn process_exact_partition_chunk(&mut self) {
+        let b = self.partition_chunk_buffer.len();
+        debug_assert!(b == self.partition_size, "Buffer size exceeds partition size.");
 
         let fft_size = Self::fft_size(self.partition_size);
 
         // Shift the time-domain history left by B samples
         self.time_input_history.copy_within(b.., 0);
         
-        // Append the new incoming block of B samples to the right side
+        // Append the new incoming chunk of B samples to the right side
         let history_insert_idx = fft_size - b;
-        self.time_input_history[history_insert_idx..].copy_from_slice(buffer);
+        self.time_input_history[history_insert_idx..].copy_from_slice(&self.partition_chunk_buffer);
 
         // Compute the FFT of the historical lookback window
         self.fft_input_buffer.copy_from_slice(&self.time_input_history);
@@ -234,8 +259,10 @@ impl PartitionedIRConvolver {
         ).unwrap();
 
         // Update the frequency-domain delay line
-        self.input_frequency_domain_delay_line.pop_back();
-        self.input_frequency_domain_delay_line.push_front(self.input_fft_out_buffer.clone());
+        let mut old_block = self.input_frequency_domain_delay_line.pop_back().expect("Frequency domain delay line should not be empty");
+        // Reuse the old block's memory
+        old_block.copy_from_slice(&self.input_fft_out_buffer);
+        self.input_frequency_domain_delay_line.push_front(old_block);
 
         // Multiply each IR chunk H_n with spectrum b_n and sum all convolutions
         self.frequency_domain_computation_result_buffer.fill(Complex::default());
@@ -261,9 +288,9 @@ impl PartitionedIRConvolver {
         }
 
         // Discard the first (N - B) samples containing time aliased data
-        // Copy the last B samples to output
+        // Copy the last B samples back to the partition_chunk_buffer for output
         let valid_output_start = fft_size - b;
-        buffer.copy_from_slice(&self.ifft_out_buffer[valid_output_start..fft_size]);
+        self.partition_chunk_buffer.copy_from_slice(&self.ifft_out_buffer[valid_output_start..fft_size]);
     }
 
     pub fn reset(&mut self) {
