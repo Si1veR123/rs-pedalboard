@@ -7,6 +7,7 @@ use std::fs::File;
 #[cfg(target_os = "linux")]
 use std::io::Read;
 
+#[cfg(target_os = "windows")]
 use cpal::traits::{DeviceTrait, HostTrait};
 use cpal::{DeviceNameError, DevicesError, Host};
 use std::error::Error;
