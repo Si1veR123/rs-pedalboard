@@ -10,8 +10,7 @@ fn compute_linear_gain(ir: &[f32]) -> f32 {
 
     // Linear gain of IR is the RMS of the impulse response
     let sum_squares: f32 = ir.iter().map(|&x| x * x).sum();
-    let rms = (sum_squares / ir.len() as f32).sqrt();
-    rms
+    sum_squares.sqrt().max(1e-12)
 }
 
 #[derive(Clone)]
@@ -38,7 +37,6 @@ impl IRConvolver {
 
         let linear_gain = compute_linear_gain(ir);
 
-        // Find maximum gain in frequency response of IR for normalisation
         let mut ir_padded = vec![0.0f32; fft_size];
         ir_padded[..ir.len()].copy_from_slice(ir);
 
